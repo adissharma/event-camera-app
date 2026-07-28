@@ -47,17 +47,16 @@ export function BrandLogo({ variant = 'primary', height = 28, style }: BrandLogo
             borderRadius: radii.sm,
             borderWidth: layout.hairline,
             borderStyle: 'dashed',
-            borderColor: variant === 'light' ? colours.overlayLight : colours.borderStrong,
+            borderColor: colours.borderStrong,
             alignSelf: 'flex-start',
           },
           style,
         ]}
       >
-        <AppText
-          variant="labelLarge"
-          tone={variant === 'light' ? 'onBrand' : 'primary'}
-          style={{ letterSpacing: 0.5 }}
-        >
+        {/* Always `primary`. On this near-black canvas `textPrimary` IS the
+            light tone, so the placeholder reads on every surface including
+            photography. Using `onBrand` here rendered ink on black — invisible. */}
+        <AppText variant="eyebrow" tone="primary" style={{ letterSpacing: 1.4 }}>
           {BRAND_CONFIG.shortName}
         </AppText>
       </View>

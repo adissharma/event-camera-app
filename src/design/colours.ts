@@ -1,47 +1,59 @@
 /**
- * Semantic colour tokens — "Paper & Evergreen".
+ * Semantic colour tokens — "Ink & Ivory".
  *
- * Chosen after the reference and asset audit. See `docs/brand-system.md` for the
- * three directions that were considered and `docs/colour-accessibility.md` for
- * measured contrast ratios (all verified numerically, not estimated).
+ * A near-black canvas with warm off-white type. See `docs/brand-system.md` for
+ * the directions considered and `docs/colour-accessibility.md` for measured
+ * contrast ratios (verified numerically, enforced by `npm run check:contrast`).
+ *
+ * Two decisions that keep this from being a generic dark theme:
+ *
+ * 1. **Nothing is pure.** The canvas is `#0B0B0C`, not `#000000`, and the type
+ *    is `#F5F2ED`, not `#FFFFFF`. Pure black next to pure white glares, crushes
+ *    photographic shadows, and smears on OLED during scroll. A hair of warmth in
+ *    both is most of what separates elegant from stark.
+ * 2. **The primary action is ivory, not a colour.** A saturated accent button on
+ *    black is the generic dark-SaaS move. An ivory fill with ink text is quieter
+ *    and reads as considered.
  *
  * Rules that bind consumers of this module:
  *
- * 1. Never import a raw hex value into a component. Import a semantic token.
- * 2. Never communicate selection, error, locked state or success through colour
- *    alone — always pair with an icon, text, weight or shape change.
- * 3. Photography supplies the colour in this product. Chrome recedes.
+ * - Never import a raw hex value into a component. Import a semantic token.
+ * - Never communicate selection, error, locked state or success through colour
+ *   alone — always pair with an icon, text, weight or shape change.
+ * - Photography supplies the colour in this product. Chrome recedes.
  *
- * Dark mode is not required for the MVP, but the shape of this module is a flat
- * semantic map so a second palette can be swapped in behind a theme provider
- * without touching a single component.
+ * The light palette this replaced is preserved in git history and remains a
+ * valid second theme; every component reads semantic tokens, so reintroducing
+ * it is a provider change, not a screen change.
  */
 
 export interface ColourPalette {
-  /** App canvas. Warm paper, not clinical white and not beige. */
+  /** App canvas. Near-black with a trace of warmth, never pure `#000`. */
   background: string;
   /** Default card / sheet surface. */
   surface: string;
-  /** Raised surface (sheets, popovers) — same fill, separated by shadow. */
+  /** Raised surface (sheets, popovers). On dark, elevation reads as a lighter
+   *  fill — a shadow is invisible against near-black. */
   surfaceRaised: string;
   /** Recessed / inset fill for wells, disabled fields, skeletons. */
   surfaceMuted: string;
 
   textPrimary: string;
   textSecondary: string;
-  /** Text drawn on top of `brandPrimary` / `brandPressed`. */
+  /** Text drawn on top of `brandPrimary` / `brandPressed` — ink on ivory. */
   textOnBrand: string;
 
+  /** The ivory used for primary actions and the brand mark. */
   brandPrimary: string;
   brandPressed: string;
-  /** Low-chroma brand tint for selected states and quiet emphasis. */
+  /** Subtle raised tint for selected states. */
   brandSoft: string;
 
   /**
-   * Reserved for genuinely celebratory moments only — publication success,
-   * reveal unlock, Memory Book. Never for ordinary CTAs or decoration.
-   * Contrast is 3.68:1, so it is valid for large text and UI shapes but MUST
-   * NOT be used for body-size text.
+   * Champagne. Reserved for genuinely celebratory moments — publication
+   * success, reveal unlock, Memory Book. Never for ordinary CTAs. On this
+   * canvas it measures 11.45:1, so unlike the light theme it is safe at body
+   * size; the restriction here is editorial, not technical.
    */
   accentWarm: string;
 
@@ -49,7 +61,7 @@ export interface ColourPalette {
   borderSubtle: string;
   /** Control boundaries (inputs, option cards). Meets 3:1 non-text contrast. */
   borderStrong: string;
-  /** Focus indicator. Meets 3:1 against the canvas. */
+  /** Focus indicator. */
   focusRing: string;
 
   success: string;
@@ -62,40 +74,50 @@ export interface ColourPalette {
   overlayLight: string;
   /** Overlay wash for legible text on dark photography. */
   overlayDark: string;
+  /** Gradient stops laid under text on full-bleed imagery, top to bottom. */
+  imageScrim: readonly [string, string, string];
 }
 
 export const colours: ColourPalette = {
-  background: '#FAF7F2',
-  surface: '#FFFFFF',
-  surfaceRaised: '#FFFFFF',
-  surfaceMuted: '#F1ECE3',
+  background: '#0B0B0C',
+  surface: '#141416',
+  surfaceRaised: '#1C1C1F',
+  surfaceMuted: '#101012',
 
-  textPrimary: '#1B1A17',
-  textSecondary: '#6A635A',
-  textOnBrand: '#F7FBF8',
+  textPrimary: '#F5F2ED',
+  textSecondary: '#A29C94',
+  textOnBrand: '#0B0B0C',
 
-  brandPrimary: '#1F5148',
-  brandPressed: '#163A34',
-  brandSoft: '#E3EDE9',
+  brandPrimary: '#EFE9E0',
+  brandPressed: '#D8D2C8',
+  brandSoft: '#1E1E22',
 
-  accentWarm: '#B4712C',
+  accentWarm: '#D9C39A',
 
-  borderSubtle: '#E6DFD4',
-  borderStrong: '#8F8474',
-  focusRing: '#1F5148',
+  borderSubtle: '#232326',
+  borderStrong: '#66666E',
+  focusRing: '#EFE9E0',
 
-  success: '#256B4E',
-  warning: '#8A5512',
-  error: '#B3261E',
+  success: '#7FB08A',
+  warning: '#D9A76A',
+  error: '#E8776D',
 
-  scrim: 'rgba(27, 26, 23, 0.48)',
-  overlayLight: 'rgba(250, 247, 242, 0.82)',
-  overlayDark: 'rgba(20, 19, 17, 0.55)',
+  scrim: 'rgba(5, 5, 6, 0.72)',
+  overlayLight: 'rgba(245, 242, 237, 0.86)',
+  overlayDark: 'rgba(5, 5, 6, 0.62)',
+
+  // Three stops rather than two: a plain linear fade leaves a visible band
+  // across the middle of a photograph. Weighting the ramp toward the bottom
+  // keeps the subject clear while guaranteeing the text below stays legible.
+  imageScrim: ['rgba(11,11,12,0)', 'rgba(11,11,12,0.55)', 'rgba(11,11,12,0.96)'],
 };
 
 /**
- * Elevation is expressed as shadow, never as a different surface fill, so that
- * raised surfaces keep the same contrast relationship with their text.
+ * Elevation.
+ *
+ * On a near-black canvas a drop shadow is invisible, so elevation is carried by
+ * `surfaceRaised` and by hairline borders. These shadows remain for the few
+ * places something sits above imagery, where a shadow still reads.
  */
 export const elevation = {
   none: {
@@ -106,24 +128,24 @@ export const elevation = {
     elevation: 0,
   },
   low: {
-    shadowColor: '#1B1A17',
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#000000',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
   medium: {
-    shadowColor: '#1B1A17',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
+    shadowColor: '#000000',
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 10 },
     elevation: 6,
   },
   high: {
-    shadowColor: '#1B1A17',
-    shadowOpacity: 0.16,
-    shadowRadius: 36,
-    shadowOffset: { width: 0, height: 16 },
+    shadowColor: '#000000',
+    shadowOpacity: 0.6,
+    shadowRadius: 40,
+    shadowOffset: { width: 0, height: 18 },
     elevation: 12,
   },
 } as const;

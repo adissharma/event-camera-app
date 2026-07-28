@@ -1,28 +1,35 @@
 /**
  * Semantic typography scale.
  *
- * Display: Fraunces (SIL OFL 1.1) — a soft, low-contrast old-style with genuine
- * warmth and a beautiful ampersand. Chosen over the obvious "elegant serif"
- * options because it reads considered rather than default, and because it sits
- * at the opposite end of the serif spectrum from the high-contrast Didone the
- * nearest competitor uses. See `docs/typography.md`.
+ * Display: Instrument Serif (SIL OFL 1.1) — a refined transitional serif with
+ * high-but-not-Didone contrast, slightly narrow proportions and elegant
+ * ballpoint terminals. It ships in a single regular weight, which is the right
+ * constraint on a near-black canvas: white type optically gains weight against
+ * black (halation), so a bold serif reads blunt where a regular reads sharp.
  *
  * Text/UI: Instrument Sans (SIL OFL 1.1) — a neo-grotesque (NOT geometric) with
- * excellent legibility at 14–18pt, open apertures and tabular figures.
+ * excellent legibility at 13–17pt, open apertures and tabular figures.
+ *
+ * These are siblings from one superfamily. That is the rationale for the
+ * pairing — shared skeleton and rhythm — rather than the reflexive
+ * elegant-serif-plus-any-sans pattern the brief rules out.
+ *
+ * The `eyebrow` role is the deliberate counterweight to the serif: wide-tracked
+ * uppercase sans micro-labels. It is what makes the system read as editorial
+ * rather than as the nearest competitor's centred-serif-on-black.
  *
  * Rules:
  * 1. Never use the display face for small labels or long body copy.
  * 2. Prices, counts and dates use `numeric` so figures align in columns.
- * 3. All sizes scale with Dynamic Type — see `useScaledTypography`.
+ * 3. All sizes scale with Dynamic Type, capped per role.
  */
 
 import type { TextStyle } from 'react-native';
 
 export const fontFamilies = {
-  displayRegular: 'Fraunces_400Regular',
-  displayMedium: 'Fraunces_500Medium',
-  displaySemiBold: 'Fraunces_600SemiBold',
-  displayBold: 'Fraunces_700Bold',
+  display: 'InstrumentSerif_400Regular',
+  /** Used sparingly — a single emphasised word, never a whole line. */
+  displayItalic: 'InstrumentSerif_400Regular_Italic',
   textRegular: 'InstrumentSans_400Regular',
   textMedium: 'InstrumentSans_500Medium',
   textSemiBold: 'InstrumentSans_600SemiBold',
@@ -42,41 +49,60 @@ export const fontFallbacks = {
 
 type TypeStyle = Pick<
   TextStyle,
-  'fontFamily' | 'fontSize' | 'lineHeight' | 'letterSpacing' | 'fontVariant'
+  | 'fontFamily'
+  | 'fontSize'
+  | 'lineHeight'
+  | 'letterSpacing'
+  | 'fontVariant'
+  | 'textTransform'
 >;
 
 /** Tabular figures keep prices and counts from shifting as values change. */
 const tabular: Pick<TextStyle, 'fontVariant'> = { fontVariant: ['tabular-nums'] };
 
 export const typography: Record<string, TypeStyle> = {
-  /** Reserved for the welcome and success moments. One per screen, maximum. */
+  /**
+   * Reserved for the welcome and success moments. One per screen, maximum.
+   * Leading is deliberately tighter than the type size would normally take —
+   * a display serif set loose reads as a document, set tight it reads as a
+   * masthead.
+   */
   displayHero: {
-    fontFamily: fontFamilies.displaySemiBold,
-    // 40/44 rather than 44/48: measured on a 375pt screen, 44pt pushed a
-    // five-word statement to three lines and crowded the primary action.
-    fontSize: 40,
-    lineHeight: 44,
-    letterSpacing: -0.8,
+    fontFamily: fontFamilies.display,
+    fontSize: 46,
+    lineHeight: 50,
+    letterSpacing: -0.4,
   },
   /** Step headings in the creation flow. */
   displayLarge: {
-    fontFamily: fontFamilies.displaySemiBold,
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.5,
+    fontFamily: fontFamilies.display,
+    fontSize: 36,
+    lineHeight: 41,
+    letterSpacing: -0.3,
   },
   /** Event names, guest cover titles. */
   titleLarge: {
-    fontFamily: fontFamilies.displayMedium,
-    fontSize: 26,
-    lineHeight: 32,
-    letterSpacing: -0.3,
+    fontFamily: fontFamilies.display,
+    fontSize: 28,
+    lineHeight: 33,
+    letterSpacing: -0.2,
   },
   titleMedium: {
-    fontFamily: fontFamilies.displayMedium,
-    fontSize: 21,
+    fontFamily: fontFamilies.display,
+    fontSize: 22,
     lineHeight: 27,
-    letterSpacing: -0.2,
+  },
+  /**
+   * Wide-tracked uppercase micro-label. Section markers, step counters,
+   * category labels. Short strings only — uppercase at this tracking becomes
+   * hard to read beyond about four words.
+   */
+  eyebrow: {
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 11,
+    lineHeight: 14,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
   },
   /** Section headings inside a screen. Text face — not display. */
   heading: {
@@ -87,7 +113,7 @@ export const typography: Record<string, TypeStyle> = {
   },
   bodyLarge: {
     fontFamily: fontFamilies.textRegular,
-    fontSize: 17,
+    fontSize: 16,
     lineHeight: 25,
   },
   body: {
@@ -119,10 +145,10 @@ export const typography: Record<string, TypeStyle> = {
     letterSpacing: 0.1,
   },
   button: {
-    fontFamily: fontFamilies.textSemiBold,
-    fontSize: 16,
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 15,
     lineHeight: 20,
-    letterSpacing: 0,
+    letterSpacing: 0.3,
   },
   /** Prices, dates, counters, remaining-photo figures. */
   numeric: {
@@ -131,12 +157,14 @@ export const typography: Record<string, TypeStyle> = {
     lineHeight: 20,
     ...tabular,
   },
-  /** Large numeric moments — the remaining-shot counter, the price on a plan. */
+  /**
+   * Large numeric moments — the remaining-shot counter, the price on a plan.
+   * Set in the serif, which is where its old-style figures earn their keep.
+   */
   numericLarge: {
-    fontFamily: fontFamilies.displayMedium,
-    fontSize: 30,
-    lineHeight: 36,
-    letterSpacing: -0.4,
+    fontFamily: fontFamilies.display,
+    fontSize: 34,
+    lineHeight: 38,
     ...tabular,
   },
 };
@@ -146,16 +174,17 @@ export type TypographyToken = keyof typeof typography;
 /**
  * Upper bound on OS font scaling, applied per role.
  *
- * Display roles are capped lower than body roles: at very large accessibility
- * sizes a 44pt display line wraps into an unusable wall, whereas body copy
- * benefits from the full range. Body and label roles are intentionally NOT
- * capped below 1.6 so the app stays usable at large accessibility sizes.
+ * Display roles cap lower than body roles: at very large accessibility sizes a
+ * 46pt display line wraps into an unusable wall, whereas body copy benefits
+ * from the full range. Body and label roles are intentionally NOT capped below
+ * 1.6 so the app stays usable at large accessibility sizes.
  */
 export const maxFontScale: Record<string, number> = {
   displayHero: 1.4,
   displayLarge: 1.5,
   titleLarge: 1.6,
   titleMedium: 1.7,
+  eyebrow: 1.6,
   heading: 1.8,
   bodyLarge: 2,
   body: 2,

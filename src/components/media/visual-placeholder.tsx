@@ -63,7 +63,7 @@ export function VisualPlaceholder({
         style,
       ]}
     >
-      <AppText variant="label" tone="secondary" align="center">
+      <AppText variant="eyebrow" tone="secondary" align="center">
         Image placeholder
       </AppText>
       <AppText variant="caption" tone="secondary" align="center">

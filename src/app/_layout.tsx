@@ -6,11 +6,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
-  Fraunces_400Regular,
-  Fraunces_500Medium,
-  Fraunces_600SemiBold,
-  Fraunces_700Bold,
-} from '@expo-google-fonts/fraunces';
+  InstrumentSerif_400Regular,
+  InstrumentSerif_400Regular_Italic,
+} from '@expo-google-fonts/instrument-serif';
 import {
   InstrumentSans_400Regular,
   InstrumentSans_500Medium,
@@ -28,10 +26,8 @@ void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Fraunces_400Regular,
-    Fraunces_500Medium,
-    Fraunces_600SemiBold,
-    Fraunces_700Bold,
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
     InstrumentSans_400Regular,
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,
@@ -54,7 +50,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="dark" />
+          {/* Light glyphs — the canvas is near-black on every screen. */}
+          <StatusBar style="light" />
           <Stack
             screenOptions={{
               headerShown: false,

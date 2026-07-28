@@ -6,33 +6,36 @@
  * palette change cannot silently break accessibility.
  */
 
+/** Must stay in sync with `src/design/colours.ts`. */
 const PALETTE = {
-  background: '#FAF7F2',
-  surface: '#FFFFFF',
-  surfaceMuted: '#F1ECE3',
-  textPrimary: '#1B1A17',
-  textSecondary: '#6A635A',
-  textOnBrand: '#F7FBF8',
-  brandPrimary: '#1F5148',
-  brandPressed: '#163A34',
-  brandSoft: '#E3EDE9',
-  accentWarm: '#B4712C',
-  borderStrong: '#8F8474',
-  success: '#256B4E',
-  warning: '#8A5512',
-  error: '#B3261E',
+  background: '#0B0B0C',
+  surface: '#141416',
+  surfaceRaised: '#1C1C1F',
+  surfaceMuted: '#101012',
+  textPrimary: '#F5F2ED',
+  textSecondary: '#A29C94',
+  textOnBrand: '#0B0B0C',
+  brandPrimary: '#EFE9E0',
+  brandPressed: '#D8D2C8',
+  brandSoft: '#1E1E22',
+  accentWarm: '#D9C39A',
+  borderStrong: '#66666E',
+  success: '#7FB08A',
+  warning: '#D9A76A',
+  error: '#E8776D',
 };
 
 /** [foreground, background, minimum ratio, why]. */
 const REQUIREMENTS = [
   ['textPrimary', 'background', 7, 'body text AAA'],
   ['textPrimary', 'surface', 7, 'body text AAA'],
+  ['textPrimary', 'surfaceRaised', 7, 'body text AAA'],
   ['textPrimary', 'surfaceMuted', 7, 'body text AAA'],
   ['textPrimary', 'brandSoft', 7, 'text on selected option card'],
   ['textSecondary', 'background', 4.5, 'supporting copy AA'],
   ['textSecondary', 'surface', 4.5, 'supporting copy AA'],
-  ['textSecondary', 'surfaceMuted', 4.5, 'supporting copy AA'],
-  ['textOnBrand', 'brandPrimary', 4.5, 'primary button label'],
+  ['textSecondary', 'surfaceRaised', 4.5, 'supporting copy AA'],
+  ['textOnBrand', 'brandPrimary', 4.5, 'primary button label (ink on ivory)'],
   ['textOnBrand', 'brandPressed', 4.5, 'pressed button label'],
   ['brandPrimary', 'background', 4.5, 'quiet button label'],
   ['brandPrimary', 'surface', 4.5, 'quiet button label on card'],
@@ -42,8 +45,7 @@ const REQUIREMENTS = [
   ['warning', 'background', 4.5, 'warning message'],
   // 1.4.11: non-text contrast for the visual boundary of a control.
   ['borderStrong', 'background', 3, 'control boundary (WCAG 1.4.11)'],
-  // Large text / UI shapes only — never body-size text.
-  ['accentWarm', 'background', 3, 'celebratory accent, large formats only'],
+  ['accentWarm', 'background', 3, 'celebratory accent'],
 ];
 
 const channels = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
