@@ -55,7 +55,9 @@ enable_signup = false
 [analytics]
 enabled = false
 
-[inbucket]
-# Local mail catcher, so OTP emails are readable during development.
+[local_smtp]
+# Local mail catcher, so OTP emails are readable during development without
+# consuming the hosted project's email rate limit.
+# (Replaces the deprecated [inbucket] section.)
 enabled = true
 port = 54324

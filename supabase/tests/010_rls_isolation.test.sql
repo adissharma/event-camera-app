@@ -229,19 +229,35 @@ select is(
 set local role anon;
 set local request.jwt.claims = '{"role":"anon"}';
 
-select is(
-  (select count(*)::int from public.celebrations), 0,
-  'anonymous requests cannot enumerate celebrations'
+-- These assert `throws_ok`, not "returns zero rows", and the distinction is the
+-- point. Anonymous access is denied at the PRIVILEGE layer (42501) before RLS is
+-- ever consulted, so the query is refused outright rather than filtered to
+-- nothing. That is the stronger of the two guarantees: a policy added by mistake
+-- later still cannot expose these tables to anon.
+--
+-- An earlier version of this suite asserted a zero count, and passed on the
+-- hosted project purely because the implicit default grants there let the query
+-- run and RLS filter it. The privilege denial is what we actually want.
+
+select throws_ok(
+  'select count(*) from public.celebrations',
+  '42501',
+  null,
+  'anonymous requests are refused celebrations at the privilege layer'
 );
 
-select is(
-  (select count(*)::int from public.guest_sessions), 0,
-  'anonymous requests cannot enumerate guest sessions'
+select throws_ok(
+  'select count(*) from public.guest_sessions',
+  '42501',
+  null,
+  'anonymous requests are refused guest sessions at the privilege layer'
 );
 
-select is(
-  (select count(*)::int from public.access_links), 0,
-  'anonymous requests cannot enumerate access links'
+select throws_ok(
+  'select count(*) from public.access_links',
+  '42501',
+  null,
+  'anonymous requests are refused access links at the privilege layer'
 );
 
 -- The catalogue is deliberately public — it contains no user data and the guest

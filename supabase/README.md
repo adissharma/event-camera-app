@@ -4,14 +4,11 @@ Migrations, policies, seed data and tests for the backend.
 
 ## Prerequisites
 
-The Supabase CLI needs Docker to run the local stack. Neither is installed on
-the current development machine, so **these migrations have been authored and
-reviewed but not yet applied**. See "Verification status" below.
-
 ```bash
-brew install supabase/tap/supabase   # or: npm i -g supabase
-# Docker Desktop: https://www.docker.com/products/docker-desktop
+brew install supabase/tap/supabase   # or use the local devDependency via npx
 ```
+
+Docker is required for the local stack and for `supabase test db`.
 
 ## Local development
 
@@ -34,14 +31,17 @@ psql "$DATABASE_URL" -f supabase/seed.sql   # catalogue and themes
 
 ## Regenerating TypeScript types
 
-`src/types/database.ts` is hand-written to match these migrations exactly. Once
-the CLI can run against a database, replace it with generated output:
+`src/types/database.generated.ts` is generated and is the source of truth. Never
+edit it. Regenerate after every migration:
 
 ```bash
-supabase gen types typescript --local > src/types/database.ts
-# or, against the hosted project:
-supabase gen types typescript --project-id <ref> > src/types/database.ts
+npx supabase gen types typescript --linked > src/types/database.generated.ts
 ```
+
+`src/types/database.ts` holds only derived aliases over it (`CelebrationRow`
+rather than `Database['public']['Tables']['celebrations']['Row']`). Because
+every alias is derived rather than restated, a schema change that breaks an
+assumption surfaces as a type error instead of drifting silently.
 
 ## Layout
 
@@ -55,6 +55,8 @@ migrations/
   20260728100500_functions.sql              auth helpers, bootstrap, atomic RPC
   20260728100600_rls.sql                    row level security
   20260728100700_storage.sql                private buckets and their policies
+  20260728100800_entitlement_combination.sql  how plan + add-on grants combine
+  20260728100900_explicit_grants.sql        explicit table privileges
 seed.sql                                    themes and commercial catalogue
 tests/                                      pgTAP suites
 ```
@@ -104,11 +106,37 @@ errors that surface on invoices.
 
 | | Status |
 |---|---|
-| SQL authored and reviewed | ✅ |
-| Applied to a database | ❌ — needs Docker or a hosted project |
-| pgTAP suites executed | ❌ — needs `supabase test db` |
-| Types generated from a live schema | ❌ — hand-written for now |
+| Applied to a local stack | ✅ all 10 migrations |
+| Applied to the hosted project | ✅ |
+| pgTAP suites executed | ✅ **35/35 passing** |
+| Types generated from the live schema | ✅ `database.generated.ts` |
+| Anon lockout verified over REST | ✅ hosted, with the shipping anon key |
 
-The tests are written and committed, but **they have not been run**. Treat them
-as unverified until `supabase test db` passes. Running them is the first task
-once Docker or hosted credentials are available.
+Re-run with:
+
+```bash
+npx supabase test db
+```
+
+### What the run found
+
+Two real defects, both fixed:
+
+**1. Privileges were environment-dependent.** The RLS migration only ever
+`REVOKE`d, leaving the grant side to Supabase's `alter default privileges`
+setup. That is not identical everywhere: the same schema returned `[]` for
+`public.celebrations` on the hosted project (grant present, RLS filtering) and
+`permission denied` locally (no grant at all). Privileges are now stated
+explicitly in `20260728100900_explicit_grants.sql`, so the schema means the same
+thing in every environment.
+
+**2. A test asserted the weaker guarantee.** The anonymous-access tests checked
+for *zero rows*, which passed on the hosted project only because the implicit
+grants let the query run and RLS filter it. They now assert `42501` — anon is
+refused at the privilege layer, before RLS is consulted. A policy added by
+mistake later still cannot expose those tables.
+
+The lesson worth keeping: the suite passing against one environment proved less
+than it appeared to. It was running the schema locally, where the defaults
+differ, that exposed both.
+
