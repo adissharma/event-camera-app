@@ -68,64 +68,65 @@ on conflict (slug) do update set
 -- Entitlement definitions
 -- ---------------------------------------------------------------------------
 
-insert into public.entitlement_definitions (key, name, description, value_kind, default_value)
+insert into public.entitlement_definitions (key, name, description, value_kind, default_value, combine_strategy)
 values
   ('participant_limit', 'Guest limit',
    'Maximum number of guest sessions for one event session.',
-   'integer', '30'::jsonb),
+   'integer', '30'::jsonb, 'sum'),
 
   ('photo_limit_options', 'Photo limit options',
    'Per-guest shot limits the host may choose from.',
-   'integer_array', '[5,10,15]'::jsonb),
+   'integer_array', '[5,10,15]'::jsonb, 'union'),
 
   ('unlimited_photos', 'Unlimited photos',
    'Allows the host to remove the per-guest shot limit entirely.',
-   'boolean', 'false'::jsonb),
+   'boolean', 'false'::jsonb, 'any_true'),
 
   ('camera_roll_uploads', 'Camera-roll uploads',
    'Guests may add photos from their camera roll as well as capturing live.',
-   'boolean', 'true'::jsonb),
+   'boolean', 'true'::jsonb, 'any_true'),
 
   ('camera_roll_upload_limit', 'Camera-roll upload limit',
    'How many camera-roll photos each guest may add.',
-   'integer', '5'::jsonb),
+   'integer', '5'::jsonb, 'max'),
 
   ('media_types', 'Contribution formats',
    'Which media types guests may contribute.',
-   'string_array', '["photo"]'::jsonb),
+   'string_array', '["photo"]'::jsonb, 'union'),
 
   ('audio_guestbook', 'Audio Guestbook',
    'Guests may leave a short spoken message.',
-   'boolean', 'false'::jsonb),
+   'boolean', 'false'::jsonb, 'any_true'),
 
   ('memory_book', 'Memory Book',
    'The organised final output combining photos, text, audio and video.',
-   'boolean', 'false'::jsonb),
+   'boolean', 'false'::jsonb, 'any_true'),
 
   ('moderation', 'Host approval',
    'Host reviews contributions before they appear in the gallery.',
-   'boolean', 'false'::jsonb),
+   'boolean', 'false'::jsonb, 'any_true'),
 
   ('cohost_count', 'Co-hosts',
    'How many additional people may help manage the event.',
-   'integer', '0'::jsonb),
+   'integer', '0'::jsonb, 'max'),
 
   ('qr_templates', 'QR templates',
    'Which printable and shareable QR designs are available.',
-   'string_array', '["digital_card"]'::jsonb),
+   'string_array', '["digital_card"]'::jsonb, 'union'),
 
   ('gallery_retention_days', 'Gallery availability',
    'How long the gallery stays available after the event closes.',
-   'integer', '90'::jsonb),
+   'integer', '90'::jsonb, 'sum'),
 
   ('support_level', 'Support',
    'Support tier for the host.',
-   'string', '"standard"'::jsonb)
+   'string', '"standard"'::jsonb, 'override')
 on conflict (key) do update set
   name = excluded.name,
   description = excluded.description,
   value_kind = excluded.value_kind,
-  default_value = excluded.default_value;
+  default_value = excluded.default_value,
+  combine_strategy = excluded.combine_strategy;
 
 -- ---------------------------------------------------------------------------
 -- Plans

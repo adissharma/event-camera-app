@@ -76,6 +76,10 @@ export type PurchaseStatus = 'pending' | 'verified' | 'failed' | 'refunded' | 'r
 export type EntitlementValueKind =
   | 'boolean' | 'integer' | 'unlimited' | 'string' | 'string_array' | 'integer_array';
 
+/** How a plan grant and add-on grants for one key are reconciled. */
+export type EntitlementCombineStrategy =
+  | 'max' | 'sum' | 'any_true' | 'union' | 'override';
+
 /* -------------------------------------------------------------------------- */
 /* Row shapes                                                                  */
 /* -------------------------------------------------------------------------- */
@@ -309,6 +313,7 @@ export interface EntitlementDefinitionRow {
   description: string | null;
   value_kind: EntitlementValueKind;
   default_value: Json;
+  combine_strategy: EntitlementCombineStrategy;
   created_at: string;
 }
 
@@ -453,6 +458,7 @@ export interface Database {
       purchase_platform: PurchasePlatform;
       purchase_status: PurchaseStatus;
       entitlement_value_kind: EntitlementValueKind;
+      entitlement_combine_strategy: EntitlementCombineStrategy;
     };
     CompositeTypes: Record<string, never>;
   };

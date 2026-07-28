@@ -9,6 +9,7 @@ import { BackgroundVideo } from '@/components/media/background-video';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, spacing } from '@/design';
+import { copy } from '@/i18n';
 
 /**
  * Welcome — design checkpoint screen 1.
@@ -58,10 +59,10 @@ export default function WelcomeScreen() {
         >
           <Reveal index={1} step={70} style={{ gap: spacing.base }}>
             <AppText variant="eyebrow" tone="secondary">
-              Shared event camera
+              {copy.welcome.eyebrow}
             </AppText>
 
-            <AppText variant="displayHero">The night, from every side.</AppText>
+            <AppText variant="displayHero">{copy.welcome.statement}</AppText>
 
             {/* One hairline, full measure. `borderSubtle` is tuned for flat
                 surfaces and disappears entirely over a scrimmed photograph, so
@@ -75,14 +76,18 @@ export default function WelcomeScreen() {
             />
 
             <AppText variant="bodyLarge" tone="secondary" style={{ maxWidth: 420 }}>
-              Guests scan a code and start shooting. No app, no account. You keep every photo.
+              {copy.welcome.supporting}
             </AppText>
           </Reveal>
 
           <Reveal index={2} step={70} style={{ gap: spacing.sm }}>
-            <Button label="Create an event" haptic onPress={() => router.push('/create')} />
             <Button
-              label="I already have an account"
+              label={copy.welcome.createEvent}
+              haptic
+              onPress={() => router.push('/create')}
+            />
+            <Button
+              label={copy.welcome.signIn}
               variant="quiet"
               onPress={() => router.push('/sign-in')}
             />

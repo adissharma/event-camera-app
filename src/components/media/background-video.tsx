@@ -67,8 +67,12 @@ export function BackgroundVideo({ assetKey, fadeMs = 900 }: BackgroundVideoProps
   useEffect(() => {
     if (!isReady) return;
     if (motion.reduceMotion) {
+      // Pause only — deliberately no seek back to the start. Holding the
+      // current frame means enabling reduce-motion mid-playback simply stops
+      // the movement, rather than jumping the image, which is itself motion.
+      // (Assigning `player.currentTime` would also mutate a hook return value,
+      // which the React Compiler correctly rejects.)
       player.pause();
-      player.currentTime = 0;
     } else {
       player.play();
     }
