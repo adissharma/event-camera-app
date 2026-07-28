@@ -1324,7 +1324,89 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_media_upload_intent: {
+        Args: {
+          p_captured_at?: string
+          p_client_media_id: string
+          p_event_session_id: string
+          p_file_extension?: string
+          p_guest_token?: string
+          p_media_type?: Database["public"]["Enums"]["media_type"]
+          p_mime_type?: string
+          p_size_bytes?: number
+          p_source?: Database["public"]["Enums"]["media_source"]
+        }
+        Returns: Database["public"]["CompositeTypes"]["media_upload_intent"]
+        SetofOptions: {
+          from: "*"
+          to: "media_upload_intent"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       ensure_personal_workspace: { Args: never; Returns: string }
+      finalise_media_upload: {
+        Args: {
+          p_actual_size_bytes?: number
+          p_checksum_algorithm?: string
+          p_checksum_value?: string
+          p_guest_token?: string
+          p_media_item_id: string
+          p_upload_intent_id: string
+        }
+        Returns: {
+          captured_at: string | null
+          checksum_algorithm: string | null
+          checksum_value: string | null
+          client_media_id: string
+          created_at: string
+          deleted_at: string | null
+          duration_ms: number | null
+          event_session_id: string
+          failure_code: string | null
+          failure_message: string | null
+          file_size_bytes: number | null
+          guest_session_id: string | null
+          height: number | null
+          id: string
+          media_type: Database["public"]["Enums"]["media_type"]
+          metadata: Json
+          mime_type: string | null
+          moderated_at: string | null
+          original_filename: string | null
+          original_storage_path: string | null
+          processing_started_at: string | null
+          ready_at: string | null
+          source: Database["public"]["Enums"]["media_source"]
+          status: Database["public"]["Enums"]["media_status"]
+          updated_at: string
+          uploaded_at: string | null
+          uploaded_by_user_id: string | null
+          verified_at: string | null
+          width: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "media_items"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      join_event_session: {
+        Args: {
+          p_access_token: string
+          p_device_fingerprint?: string
+          p_display_name?: string
+          p_pin?: string
+        }
+        Returns: Database["public"]["CompositeTypes"]["joined_guest_session"]
+        SetofOptions: {
+          from: "*"
+          to: "joined_guest_session"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       access_link_kind: "guest" | "host_preview" | "cohost_invite"
@@ -1433,6 +1515,24 @@ export type Database = {
         access_link_id: string | null
         public_slug: string | null
         guest_access_token: string | null
+      }
+      joined_guest_session: {
+        guest_session_id: string | null
+        event_session_id: string | null
+        celebration_id: string | null
+        guest_token: string | null
+        display_name: string | null
+        shot_limit_per_guest: number | null
+        shots_used: number | null
+      }
+      media_upload_intent: {
+        media_item_id: string | null
+        upload_intent_id: string | null
+        bucket: string | null
+        storage_path: string | null
+        protocol: Database["public"]["Enums"]["upload_protocol"] | null
+        expires_at: string | null
+        is_existing: boolean | null
       }
     }
   }
