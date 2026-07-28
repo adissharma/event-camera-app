@@ -44,3 +44,6 @@ example
 
 # Defensive: a plain .env is not matched by ".env*.local"
 .env
+
+# Generated bundle for manual SQL-editor application
+.tmp/
