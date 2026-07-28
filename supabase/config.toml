@@ -1,0 +1,61 @@
+# Supabase local development configuration.
+#
+# `project_id` is the local container namespace, not the hosted project ref.
+project_id = "event-camera-app"
+
+[api]
+enabled = true
+port = 54321
+# `private` is deliberately absent. Its helper functions are SECURITY DEFINER
+# and must never be callable over PostgREST.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.pooler]
+enabled = false
+
+[storage]
+enabled = true
+# Sized for future video. Per-bucket limits in the storage migration are
+# tighter and are what actually applies.
+file_size_limit = "500MiB"
+
+[auth]
+enabled = true
+site_url = "eventcamera://"
+additional_redirect_urls = [
+  "eventcamera://auth/callback",
+  "http://localhost:8081",
+  "http://localhost:8081/auth/callback",
+]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+# Passwordless only. No password sign-in surface exists in the app.
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+# Six-digit OTP rather than a magic link: it survives the email-client
+# link-prefetch problem and works when the mail app cannot open the app.
+otp_length = 6
+otp_expiry = 3600
+
+[auth.sms]
+enable_signup = false
+
+[analytics]
+enabled = false
+
+[inbucket]
+# Local mail catcher, so OTP emails are readable during development.
+enabled = true
+port = 54324
