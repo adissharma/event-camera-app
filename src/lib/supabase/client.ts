@@ -87,20 +87,44 @@ async function clearChunks(key: string): Promise<void> {
 }
 
 /**
+ * True while rendering on a server rather than in a browser or on a device.
+ *
+ * `app.json` sets `web.output: "static"`, so Expo Router server-renders every
+ * web route in Node. There is no `window` there, and AsyncStorage reaches for
+ * `window.localStorage` the moment the auth client tries to restore a session —
+ * which crashed the dev server outright with `ReferenceError: window is not
+ * defined`, and would equally break a production static export.
+ */
+const isServerRendering = typeof window === 'undefined' && Platform.OS === 'web';
+
+/** No-op storage for the server pass. There is no session to restore there. */
+const noopStorage = {
+  getItem: async () => null,
+  setItem: async () => undefined,
+  removeItem: async () => undefined,
+};
+
+/**
  * Web has no SecureStore. AsyncStorage maps to localStorage, which is readable
  * by any script on the origin — acceptable for the local development preview,
  * NOT acceptable for a production web deployment. Shipping the guest web app
  * will need httpOnly cookie-based auth instead.
  */
-const storage = Platform.OS === 'web' ? AsyncStorage : secureStoreAdapter;
+const storage = isServerRendering
+  ? noopStorage
+  : Platform.OS === 'web'
+    ? AsyncStorage
+    : secureStoreAdapter;
 
 /** Null when no credentials are configured. Guard with `isBackendConfigured`. */
 export const supabase: SupabaseClient<Database> | null = HAS_SUPABASE_CREDENTIALS
   ? createClient<Database>(SUPABASE_CONFIG.url!, SUPABASE_CONFIG.anonKey!, {
       auth: {
         storage,
-        autoRefreshToken: true,
-        persistSession: true,
+        // Both off during server rendering: there is no session to keep alive
+        // and no timer worth starting for a pass that is thrown away.
+        autoRefreshToken: !isServerRendering,
+        persistSession: !isServerRendering,
         // The app handles the deep-link callback itself; letting the library
         // also parse the URL causes it to consume the code twice.
         detectSessionInUrl: false,

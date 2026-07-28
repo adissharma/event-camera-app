@@ -49,6 +49,25 @@ enable_confirmations = true
 otp_length = 6
 otp_expiry = 3600
 
+# Both templates are overridden because the stock ones carry only
+# {{ .ConfirmationURL }} and no {{ .Token }}. Without a code in the email,
+# verifyOtp can never succeed.
+#
+# A first-time address goes through `confirmation` (sign-up) and a returning one
+# through `magic_link`, so BOTH must carry the code or sign-in works only for
+# one of the two.
+#
+# These apply to the LOCAL stack only. The hosted project's templates are edited
+# in the dashboard — see docs/auth-setup.md.
+
+[auth.email.template.confirmation]
+subject = "Your sign-in code"
+content_path = "./supabase/templates/otp.html"
+
+[auth.email.template.magic_link]
+subject = "Your sign-in code"
+content_path = "./supabase/templates/otp.html"
+
 [auth.sms]
 enable_signup = false
 
