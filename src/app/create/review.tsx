@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -10,6 +11,8 @@ import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { resolveReveal, type CreationStep } from '@/features/celebrations/draft/types';
 import { canPublish, validateStep } from '@/features/celebrations/draft/validation';
 import { LOCALE_CONFIG } from '@/config/app-config';
+import { publishDraft, PublicationError } from '@/services/publication';
+import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
 import { colours, layout, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
 
@@ -23,6 +26,31 @@ import { copy } from '@/i18n';
 export default function ReviewStep() {
   const router = useRouter();
   const { draft } = useCreationDraft();
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+
+  async function handlePublish() {
+    setIsPublishing(true);
+    setPublishError(null);
+    try {
+      const result = await publishDraft(draft);
+      setPublicationResult(result);
+      router.replace('/create/success');
+    } catch (error) {
+      // Stage-aware, because "your card was declined" and "we could not reach
+      // the server" need entirely different reactions from the host.
+      const stage = error instanceof PublicationError ? error.stage : null;
+      setPublishError(
+        stage === 'purchase'
+          ? 'That payment did not go through. Nothing has been charged.'
+          : stage === 'publish'
+            ? 'Your event was saved but could not be published. Try again.'
+            : 'We could not create your event. Check your connection and try again.',
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  }
 
   const date = (iso: string | null) =>
     iso
@@ -93,14 +121,18 @@ export default function ReviewStep() {
               {blocking}
             </AppText>
           ) : null}
+          {publishError ? (
+            <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">
+              {publishError}
+            </AppText>
+          ) : null}
           <Button
             label={copy.create.publish}
             disabled={!ready}
+            loading={isPublishing}
             disabledReason={blocking ?? undefined}
             haptic
-            // Publication and payment are Phase 6. The control is disabled with
-            // an honest reason rather than pretending to work.
-            onPress={() => {}}
+            onPress={() => void handlePublish()}
           />
         </View>
       }
@@ -151,11 +183,11 @@ export default function ReviewStep() {
           }}
         >
           <AppText variant="eyebrow" tone="secondary">
-            Next
+            Before you publish
           </AppText>
           <AppText variant="bodySmall" tone="secondary">
-            Payment, publication and QR generation arrive in the next phase. Nothing
-            here is charged yet.
+            Real payments are not connected yet, so nothing is charged. Your event is
+            created and shareable straight away.
           </AppText>
         </View>
       </View>

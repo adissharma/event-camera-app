@@ -1392,6 +1392,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_guest_access_link: {
+        Args: { p_event_session_id: string }
+        Returns: {
+          access_link_id: string
+          expires_at: string
+          is_active: boolean
+        }[]
+      }
       join_event_session: {
         Args: {
           p_access_token: string
@@ -1403,6 +1411,16 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "joined_guest_session"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      publish_celebration: {
+        Args: { p_celebration_id: string; p_plan_key?: string }
+        Returns: Database["public"]["CompositeTypes"]["published_celebration"]
+        SetofOptions: {
+          from: "*"
+          to: "published_celebration"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1533,6 +1551,13 @@ export type Database = {
         protocol: Database["public"]["Enums"]["upload_protocol"] | null
         expires_at: string | null
         is_existing: boolean | null
+      }
+      published_celebration: {
+        celebration_id: string | null
+        event_session_id: string | null
+        public_slug: string | null
+        published_at: string | null
+        was_already_published: boolean | null
       }
     }
   }

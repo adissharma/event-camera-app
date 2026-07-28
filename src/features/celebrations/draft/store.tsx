@@ -101,10 +101,34 @@ export function CreationDraftProvider({ children }: { children: ReactNode }) {
   const [isRestoring, setIsRestoring] = useState(true);
   const [wasRestored, setWasRestored] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasRestored = useRef(false);
+
+  /**
+   * Which user's draft has finished loading from disk.
+   *
+   * `undefined` means "no restore has completed for the current userId yet".
+   * Autosave is blocked until this matches, and that guard is load-bearing:
+   *
+   * Auth restores asynchronously, so this provider mounts with `userId === null`
+   * and flips to the real id a moment later. Without the guard, the autosave
+   * effect fires on that change and writes the CURRENT (empty) draft under the
+   * real user's key — overwriting their saved work before the async read of it
+   * has even returned. Observed in practice: a host's event title silently
+   * vanished between steps.
+   *
+   * A ref rather than state: setting state synchronously inside an effect body
+   * triggers cascading renders. A ref is sufficient because the autosave effect
+   * already re-runs whenever `draft` changes, and the restore dispatches a
+   * replace the moment it finds something — so the save fires on that change
+   * with the guard already satisfied. If the restore finds nothing, there is
+   * nothing worth saving anyway.
+   */
+  const restoredForUser = useRef<string | null | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;
+    // Cleared synchronously so a userId change blocks saves immediately, before
+    // the async read below has had a chance to run.
+    restoredForUser.current = undefined;
 
     async function restore() {
       try {
@@ -125,7 +149,7 @@ export function CreationDraftProvider({ children }: { children: ReactNode }) {
         // crashing on the create screen is not.
       } finally {
         if (!cancelled) {
-          hasRestored.current = true;
+          restoredForUser.current = userId;
           setIsRestoring(false);
         }
       }
@@ -137,10 +161,11 @@ export function CreationDraftProvider({ children }: { children: ReactNode }) {
     };
   }, [userId]);
 
-  // Debounced autosave. Skipped until the restore has finished, so an empty
-  // initial draft never overwrites a saved one during the first render.
+  // Debounced autosave, blocked until the restore for THIS user has completed.
+  // See `restoredForUser` above — without that check this effect destroys the
+  // very draft the restore is in the middle of reading.
   useEffect(() => {
-    if (!hasRestored.current) return;
+    if (restoredForUser.current !== userId) return;
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
