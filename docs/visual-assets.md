@@ -64,6 +64,78 @@ centre in a portrait crop; centre-cropping is what produces careless face crops.
 
 No screen changes.
 
+## Motion assets
+
+Manifest: `MOTION_ASSETS` in `src/config/visual-assets.ts`. Component:
+`BackgroundVideo`.
+
+Keep this list very short — every entry ships inside the binary and is paid for
+in download size by every user.
+
+| Key | File | Size | Screen |
+|---|---|---:|---|
+| `welcome_ambient` | `assets/video/welcome-hero.mp4` (720×1280, 30fps) | 1.26 MB | Welcome |
+
+### Licence — `welcome_ambient`
+
+| | |
+|---|---|
+| Source | Pexels — [video 19492425](https://www.pexels.com/video/a-person-holding-a-sparkler-in-the-dark-19492425/) |
+| Author | Beyza Koeken |
+| Licence | Pexels License — free to use |
+| Commercial use | Permitted |
+| Attribution | Not required (credited here regardless) |
+
+The Pexels License permits commercial use and modification without attribution.
+It does **not** permit reselling the footage itself, or using identifiable
+people in a way that implies endorsement. Neither applies to background use.
+
+**This is placeholder footage** (`isPlaceholder: true`). It is correctly
+licensed and atmospheric, but it is stock — not this product's own material, and
+some competitor could legitimately use the same clip. Replace it with real event
+footage before launch. The manifest entry is the only thing that changes.
+
+Deliberately avoided: Pexels' `aigc-bundle` AI-generated clips. Generic
+AI-generated celebration content is exactly what makes a premium product read as
+cheap.
+
+### Behaviour
+
+- Muted, looping, not interactive, hidden from assistive technology — it is
+  wallpaper, and it must never interrupt the user's own music
+  (`audioMixingMode: 'mixWithOthers'`).
+- Fades up over 900ms once the player reports `readyToPlay`, so it never
+  cross-fades into an undecoded black rectangle. The canvas beneath is
+  near-black and so is the footage, so there is no flash.
+- Falls back to the manifest's `fallbackAssetKey` placeholder on error.
+
+### Reduce motion
+
+A looping background video is precisely the content **WCAG 2.2.2 (Pause, Stop,
+Hide)** addresses — it moves indefinitely and the user cannot stop it. It is
+also a common migraine and vestibular trigger.
+
+When reduce-motion is enabled the video is **paused on its first frame**, not
+removed. The composition, scrim and crop are preserved, so a reduce-motion user
+gets the same image everyone else gets — it simply does not move. Removing it
+would hand them a visibly poorer screen, which is not the point of the setting.
+
+The listener is live, so toggling the system setting takes effect immediately
+rather than only at next launch.
+
+> Not yet verified by toggling the real OS setting — the code path is
+> implemented and typechecked, but confirming it needs a device or simulator.
+> On the Phase 8 QA list.
+
+### Implementation note
+
+`VideoView` renders at the video's own intrinsic dimensions rather than its
+container's. `StyleSheet.absoluteFill` alone does not constrain it, and the
+footage spills outside the app bounds on any viewport smaller than the source —
+observed directly as raw video appearing beyond the scrim. The fix is explicit
+`width: '100%', height: '100%'` on the view plus `overflow: 'hidden'` on its
+wrapper.
+
 ## Overlays
 
 Text over photography uses `overlayDark` (0.55) or `overlayLight` (0.82), never

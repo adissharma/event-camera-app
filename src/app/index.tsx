@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandLogo } from '@/components/brand/brand-logo';
 import { Reveal } from '@/components/feedback/reveal';
-import { VisualPlaceholder } from '@/components/media/visual-placeholder';
+import { BackgroundVideo } from '@/components/media/background-video';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, spacing } from '@/design';
@@ -32,10 +32,9 @@ export default function WelcomeScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colours.background }}>
-      {/* Full-bleed photography. */}
-      <View style={StyleSheet.absoluteFill}>
-        <VisualPlaceholder assetKey="welcome_hero" fill radius="none" style={{ borderWidth: 0 }} />
-      </View>
+      {/* Full-bleed ambient footage, fading up from the canvas. Paused on its
+          first frame when reduce-motion is on — see BackgroundVideo. */}
+      <BackgroundVideo assetKey="welcome_ambient" />
 
       {/* Scrim. Weighted toward the bottom so the subject stays clear while the
           type below stays legible on any photograph. */}
