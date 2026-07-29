@@ -75,6 +75,14 @@ export interface CreationDraft {
   supportingLine: string;
   /** What the guest cover displays. May differ from the closing date. */
   displayDate: string | null;
+  /**
+   * Free text shown where the date sits on the cover.
+   *
+   * Deliberately a string rather than a date: hosts write things a formatter
+   * cannot produce — "Saturday, at last", "The big day", a venue name. When
+   * null the cover falls back to the formatted closing date.
+   */
+  coverDateLabel: string | null;
 
   // Step 4. `null` means unlimited.
   shotLimitPerGuest: number | null;
@@ -116,7 +124,9 @@ export interface CreationDraft {
   furthestStep: CreationStep;
 }
 
-export const DRAFT_VERSION = 1;
+// 2: added coverDateLabel. A persisted v1 draft is discarded rather than
+// migrated — see the restore in store.tsx. Cheap now, while nobody has one.
+export const DRAFT_VERSION = 2;
 
 export function createEmptyDraft(userId: string | null, timezone: string): CreationDraft {
   const now = new Date().toISOString();
@@ -138,6 +148,7 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
     coverStoragePath: null,
     supportingLine: '',
     displayDate: null,
+    coverDateLabel: null,
 
     shotLimitPerGuest: 20,
 

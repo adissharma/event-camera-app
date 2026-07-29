@@ -1,30 +1,42 @@
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { TextField } from '@/components/forms/text-field';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { DeviceFrame } from '@/components/media/device-frame';
-import { GuestCoverPreview } from '@/features/celebrations/creation/guest-cover-preview';
+import { ThemeCarousel } from '@/features/celebrations/creation/theme-carousel';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { listThemes, themeKeys } from '@/services/themes';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, spacing } from '@/design';
 import { copy } from '@/i18n';
 
+type Editing = 'image' | 'title' | 'date' | null;
+
+/**
+ * The cover step.
+ *
+ * Deliberately almost nothing but the preview. Every control that used to sit
+ * below it — choose a photo, take a photo, a theme chip row, a supporting-line
+ * field — has moved into the cover itself, reachable through a pencil anchored
+ * to the thing it changes. The host is looking at what a guest will see, and
+ * editing it in place, rather than filling in a form that describes it.
+ */
 export default function CoverStep() {
   const { draft, update } = useCreationDraft();
-  const [pickerError, setPickerError] = useState<string | undefined>();
+  const [editing, setEditing] = useState<Editing>(null);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
 
-  const { data: themes = [] } = useQuery({
+  const { data: themes = [], isLoading } = useQuery({
     queryKey: themeKeys.list(),
     queryFn: listThemes,
   });
 
   async function pickImage(source: 'library' | 'camera') {
-    setPickerError(undefined);
+    setPermissionError(null);
 
     const permission =
       source === 'camera'
@@ -32,8 +44,8 @@ export default function CoverStep() {
         : await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      // Explains what to do rather than only reporting refusal.
-      setPickerError(
+      // Says what to do, not merely that it was refused.
+      setPermissionError(
         source === 'camera'
           ? 'Allow camera access in Settings to take a cover photo.'
           : 'Allow photo access in Settings to choose a cover.',
@@ -43,18 +55,19 @@ export default function CoverStep() {
 
     const result =
       source === 'camera'
-        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [3, 4], quality: 0.9 })
+        ? await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [9, 16], quality: 0.9 })
         : await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ['images'],
             allowsEditing: true,
-            aspect: [3, 4],
+            aspect: [9, 16],
             quality: 0.9,
           });
 
     if (!result.canceled && result.assets[0]) {
-      // Stored as a local URI only. The upload happens at publication, so a
-      // host who abandons the draft has not consumed storage.
+      // A local URI only. The upload happens at publication, so a host who
+      // abandons the draft has consumed no storage.
       update({ coverLocalUri: result.assets[0].uri });
+      setEditing(null);
     }
   }
 
@@ -63,110 +76,110 @@ export default function CoverStep() {
       step="cover"
       heading={copy.create.coverHeading}
       supporting={copy.create.coverSupporting}
+      // The carousel scrolls horizontally and fills the remaining height.
+      scrollable={false}
     >
-      <View style={{ gap: spacing.xl }}>
-        {/* Deliberately smaller than the review screen's frame. Measured on a
-            375pt device: at the default width the frame pushed every control
-            below the fold, so the host had to scroll away from the preview to
-            change the thing they were previewing. */}
-        <DeviceFrame width={168}>
-          <GuestCoverPreview draft={draft} />
-        </DeviceFrame>
+      <View style={{ flex: 1 }}>
+        {isLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator color={colours.textSecondary} />
+          </View>
+        ) : (
+          <ThemeCarousel
+            draft={draft}
+            themes={themes}
+            selectedSlug={draft.themeSlug ?? themes[0]?.slug ?? null}
+            onSelect={(themeSlug) => update({ themeSlug })}
+            onEditImage={() => setEditing('image')}
+            onEditTitle={() => setEditing('title')}
+            onEditDate={() => setEditing('date')}
+          />
+        )}
+      </View>
 
-        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+      <BottomSheet
+        visible={editing === 'image'}
+        onClose={() => setEditing(null)}
+        title="Cover photo"
+      >
+        <View style={{ gap: spacing.sm }}>
           <Button
             label={copy.create.choosePhoto}
             variant="secondary"
-            size="medium"
-            fullWidth={false}
-            style={{ flex: 1 }}
             onPress={() => void pickImage('library')}
           />
           <Button
             label={copy.create.takePhoto}
             variant="secondary"
-            size="medium"
-            fullWidth={false}
-            style={{ flex: 1 }}
             onPress={() => void pickImage('camera')}
           />
-        </View>
+          {draft.coverLocalUri ? (
+            <Button
+              label={copy.create.removePhoto}
+              variant="quiet"
+              onPress={() => {
+                update({ coverLocalUri: null });
+                setEditing(null);
+              }}
+            />
+          ) : null}
 
-        {draft.coverLocalUri ? (
-          <Button
-            label={copy.create.removePhoto}
-            variant="quiet"
-            size="small"
-            fullWidth={false}
-            onPress={() => update({ coverLocalUri: null })}
-          />
-        ) : null}
-
-        {pickerError ? (
-          <AppText variant="caption" tone="warning" accessibilityLiveRegion="polite">
-            {pickerError}
-          </AppText>
-        ) : null}
-
-        {themes.length > 0 ? (
-          <View style={{ gap: spacing.sm }}>
-            <AppText variant="eyebrow" tone="secondary">
-              Theme
+          {permissionError ? (
+            <AppText variant="caption" tone="warning" accessibilityLiveRegion="polite">
+              {permissionError}
             </AppText>
-            {/* Horizontal, so choosing a theme never pushes the preview off
-                screen — the whole point is watching the preview change. */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.lg }}
-            >
-              {themes.map((theme) => {
-                const selected = draft.themeSlug === theme.slug;
-                return (
-                  <Button
-                    key={theme.slug}
-                    label={theme.name}
-                    variant={selected ? 'primary' : 'secondary'}
-                    size="small"
-                    fullWidth={false}
-                    onPress={() => update({ themeSlug: theme.slug })}
-                  />
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
+      </BottomSheet>
 
+      <BottomSheet
+        visible={editing === 'title'}
+        onClose={() => setEditing(null)}
+        title="Event name"
+      >
         <View style={{ gap: spacing.base }}>
+          <TextField
+            label={copy.create.nameLabel}
+            placeholder={copy.create.namePlaceholder}
+            value={draft.title}
+            onChangeText={(title) => update({ title })}
+            autoFocus
+            maxLength={200}
+            returnKeyType="done"
+            onSubmitEditing={() => setEditing(null)}
+          />
           <TextField
             label="Supporting line"
             placeholder="Add your photos to our day"
             value={draft.supportingLine}
             onChangeText={(supportingLine) => update({ supportingLine })}
             maxLength={140}
-            hint="Sits under the title on the guest cover."
+            hint="Optional. Sits under the name."
           />
+          <Button label={copy.common.done} onPress={() => setEditing(null)} />
         </View>
+      </BottomSheet>
 
-        <View
-          style={{
-            padding: spacing.base,
-            borderRadius: radii.lg,
-            borderWidth: layout.hairline,
-            borderColor: colours.borderSubtle,
-            backgroundColor: colours.surface,
-            gap: spacing.xxs,
-          }}
-        >
-          <AppText variant="eyebrow" tone="secondary">
-            Camera and gallery previews
-          </AppText>
-          <AppText variant="bodySmall" tone="secondary">
-            You will see the full guest experience — camera, counter and gallery — on
-            the review step.
-          </AppText>
+      <BottomSheet
+        visible={editing === 'date'}
+        onClose={() => setEditing(null)}
+        title="Date line"
+      >
+        <View style={{ gap: spacing.base }}>
+          <TextField
+            label="What it should say"
+            placeholder="15 August 2026"
+            value={draft.coverDateLabel ?? ''}
+            onChangeText={(text) => update({ coverDateLabel: text.length > 0 ? text : null })}
+            autoFocus
+            maxLength={60}
+            hint="Anything you like. Leave it empty to show your closing date."
+            returnKeyType="done"
+            onSubmitEditing={() => setEditing(null)}
+          />
+          <Button label={copy.common.done} onPress={() => setEditing(null)} />
         </View>
-      </View>
+      </BottomSheet>
     </CreationStepScreen>
   );
 }
