@@ -21,17 +21,20 @@ not built, and knowing which parts matters more than the summary.
 | Event creation (12 steps) | Walked in browser; catalogue loads from Postgres |
 | Publication | Published a real event; DB shows published status, slug, link, 11 entitlements |
 | Dashboard + editing | Edited a live event; change persisted |
+| **iOS native build** | Compiled and launched on iPhone 17 Pro simulator (iOS 26.5); real taps, navigation and keyboard verified |
 | Guest join / upload intent / finalisation RPCs | 30 pgTAP assertions over the §23 failure matrix |
 
 ### Built but NOT verified end to end
 
 - **Cover upload.** Code path exists and typechecks; never exercised with a real
-  image, because Expo Go cannot reach a device photo library in this setup.
-- **Reduce-motion behaviour.** Implemented throughout; never confirmed by
-  toggling the OS setting, which needs a device or simulator.
-- **Haptics.** Called correctly; unverifiable on web.
-- **QR scanning.** The code renders and is well-formed; never scanned by a real
-  camera at a real distance.
+  image from a photo library.
+- **Reduce-motion behaviour.** Implemented throughout; not yet confirmed by
+  toggling the simulator's Accessibility setting.
+- **Haptics.** Called correctly; the simulator does not produce haptic feedback,
+  so this needs a physical device.
+- **QR scanning.** The code renders a well-formed code; never scanned by a real
+  camera at a real distance across a dim room.
+- **Android.** Never compiled — no Android SDK or JDK installed.
 
 ### NOT built
 
@@ -45,7 +48,7 @@ not built, and knowing which parts matters more than the summary.
 | **Video, audio, Memory Book** | Schema and entitlements ready; correctly labelled "coming later". |
 | **Re-issuing a guest link** | A host who loses their link has no recovery path. Needs a `regenerate_access_link` RPC. |
 | **QR export to file/print** | Share sends text only. Needs `react-native-view-shot` and a dev build. |
-| **iOS / Android builds** | Never compiled. No Xcode, no Android SDK on the development machine. |
+| **Android build** | Never compiled. No Android SDK or JDK on the development machine. iOS now builds and runs. |
 
 ### ⚠️ Must not ship as-is
 
@@ -215,7 +218,8 @@ service-role key must never appear here** — it belongs in Edge Function secret
 
 ## 10. iOS
 
-**Never compiled.** No Xcode on the development machine.
+**Builds and runs.** Xcode 26.6, iOS 26.5 simulator runtime, CocoaPods 1.17.0
+(installed via Homebrew). Verified on an iPhone 17 Pro simulator.
 
 ```bash
 npx expo start            # then scan the QR with Expo Go
@@ -289,8 +293,8 @@ app needs httpOnly cookies.
 ## 15. Known limitations
 
 - Guests cannot upload; the guest app does not exist.
-- No iOS or Android build has ever been produced.
-- Reduce-motion, haptics and QR scanning are unverified on real hardware.
+- No Android build has ever been produced.
+- Reduce-motion and QR scanning are unverified; haptics need a physical device.
 - No production photography; every image is a labelled placeholder.
 - No logo; `BrandLogo` renders a placeholder rather than a fabricated mark.
 - Background video is correctly licensed stock, marked `isPlaceholder`.
