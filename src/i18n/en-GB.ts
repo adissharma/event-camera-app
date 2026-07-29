@@ -57,13 +57,13 @@ export const enGB = {
     nameHeading: 'What should we call your event?',
     nameSupporting: 'This is the name your guests will see when they join.',
     nameLabel: 'Event name',
-    namePlaceholder: 'Priya & Arjun',
+    namePlaceholder: "What's the occasion?",
     nameRequired: 'Give your event a name so guests know where they have landed',
 
     // Step 2
-    closingHeading: 'When should this event close?',
+    closingHeading: 'When does your event end?',
     closingSupporting:
-      'Guests can join as soon as you share it. Choose the last date and time they can capture photos.',
+      'Guests can start snapping as soon as you share the QR code, and keep going until then.',
     closingDateLabel: 'Closing date',
     closingTimeLabel: 'Closing time',
     timezoneLabel: 'Time zone',

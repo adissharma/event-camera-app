@@ -7,6 +7,7 @@ import { TextField } from '@/components/forms/text-field';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { useAuth } from '@/features/auth/context';
+import { fetchMyProfile, firstNameFrom } from '@/services/profile';
 import { layout, spacing } from '@/design';
 import { copy, t } from '@/i18n';
 
@@ -50,7 +51,15 @@ export default function VerifyScreen() {
       return;
     }
 
-    router.replace('/home');
+    // Ask for a first name once, and only if we do not already have one. It
+    // powers the event-name suggestions; a returning host is never asked again.
+    try {
+      const profile = await fetchMyProfile();
+      router.replace(firstNameFrom(profile) ? '/home' : '/your-name');
+    } catch {
+      // Never block sign-in on this — the name is a nicety, not a requirement.
+      router.replace('/home');
+    }
   }
 
   async function handleResend() {

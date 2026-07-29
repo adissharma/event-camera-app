@@ -23,6 +23,15 @@ export interface CreationStepScreenProps {
   nextLabel?: string;
   /** Replaces the default Next button entirely (used by review). */
   action?: ReactNode;
+  /**
+   * Set false when the step contains its own scrolling list.
+   *
+   * A VirtualizedList inside a ScrollView loses virtualisation entirely: every
+   * row renders at once, `getItemLayout` stops being used, and fast flicking
+   * stutters. React Native warns about it, and on the calendar step it defeats
+   * the whole point of a scrollable calendar.
+   */
+  scrollable?: boolean;
 }
 
 /**
@@ -46,6 +55,7 @@ export function CreationStepScreen({
   nextHref,
   nextLabel,
   action,
+  scrollable = true,
 }: CreationStepScreenProps) {
   const router = useRouter();
   const { draft, markStepReached } = useCreationDraft();
@@ -63,6 +73,8 @@ export function CreationStepScreen({
 
   return (
     <Screen
+      scrollable={scrollable}
+      contentStyle={scrollable ? undefined : { flex: 1 }}
       stickyAction={
         action ?? (
           <View style={{ gap: spacing.sm }}>
@@ -86,7 +98,7 @@ export function CreationStepScreen({
         )
       }
     >
-      <View style={{ gap: spacing.xl }}>
+      <View style={[{ gap: spacing.xl }, scrollable ? null : { flex: 1 }]}>
         <View style={{ gap: spacing.base }}>
           <ProgressThread current={index + 1} total={total} />
           <AppText variant="eyebrow" tone="secondary">
@@ -103,7 +115,9 @@ export function CreationStepScreen({
           ) : null}
         </Reveal>
 
-        <Reveal index={1}>{children}</Reveal>
+        <Reveal index={1} style={scrollable ? undefined : { flex: 1 }}>
+          {children}
+        </Reveal>
       </View>
     </Screen>
   );
