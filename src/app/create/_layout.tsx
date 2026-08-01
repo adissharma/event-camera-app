@@ -10,14 +10,12 @@ import { colours } from '@/design';
  */
 export default function CreateLayout() {
   return (
-    <CreationDraftProvider>
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: colours.background },
-          animation: 'slide_from_right',
-        }}
-      />
-    </CreationDraftProvider>
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colours.background },
+        animation: 'slide_from_right',
+      }}
+    />
   );
 }

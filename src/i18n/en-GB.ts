@@ -56,7 +56,7 @@ export const enGB = {
     // Step 1
     nameHeading: 'What should we call your event?',
     nameSupporting: 'This is the name your guests will see when they join.',
-    nameLabel: 'Event name',
+    nameLabel: 'Cover title',
     namePlaceholder: "What's the occasion?",
     nameRequired: 'Give your event a name so guests know where they have landed',
 
@@ -85,42 +85,39 @@ export const enGB = {
       'A limit makes people think before they shoot. It tends to produce better photos, not fewer.',
     photoLimitUnlimited: 'Unlimited',
     photoLimitCount: '{count} photos',
+    cameraRollToggle: 'Let guests add from their camera roll',
+    cameraRollToggleDescription: 'As well as taking photos in the app.',
+    cameraRollAnytime: 'Any time',
+    cameraRollAnytimeDescription: 'Guests can add camera-roll photos whenever they like.',
+    cameraRollAfterClose: 'Only after the event ends',
+    cameraRollAfterCloseDescription: 'Guests shoot live during the event, and add extras once it closes.',
 
-    // Step 5 — deliberately not called "loosen restrictions"
-    olderPhotosHeading: 'Allow older photos',
-    olderPhotosSupporting: 'Guests can upload relevant photos taken before the event.',
-    cameraRollAfterClose: 'Allow uploads after the event closes',
-    cameraRollLimit: 'Camera-roll uploads per guest',
-
-    // Step 6
-    formatsHeading: 'How can guests contribute?',
-    formatsSupporting: 'Photos are included with every event.',
-    formatPhoto: 'Photos',
-    formatVideo: 'Short video',
-    formatAudio: 'Audio Guestbook',
-    formatMessages: 'Written messages',
-    formatMemoryBook: 'Memory Book',
-    comingLater: 'Coming later',
-
-    // Step 7
-    privacyHeading: 'Who can see the photos?',
+    // Step 7 — kept for post-publish editing, where the finer-grained
+    // own-photos-only option still applies. The creation flow itself now only
+    // offers the two-state toggle below.
     privacyAllGuests: 'Everyone can see all revealed photos',
     privacyOwnOnly: 'Guests see only their own photos',
     privacyHostsOnly: 'Only you, until you share them',
-    pinRequired: 'Require a PIN to join',
     guestDownloads: 'Let guests download photos',
-    hostApproval: 'Approve photos before they appear',
 
-    // Step 8
-    revealHeading: 'When should the photos appear?',
+    // Step 7/8, merged: when photos appear, and who they appear for. Framed
+    // entirely around the guest experience — the host isn't waiting on this
+    // the way a guest is, so the copy never implies otherwise.
+    revealHeading: 'When should photos appear in the gallery?',
+    revealSupporting:
+      "This is for guests only. You'll be able to see the photos immediately as they come through.",
+    guestsCanViewGallery: 'Guests can view the gallery',
+    guestsCanViewGalleryDescription:
+      'Including photos taken by other guests.',
     revealDuring: 'During the event',
+    revealDuringDescription: 'Photos appear as guests take them.',
     revealAtClose: 'When the event closes',
-    reveal12h: '12 hours after',
-    reveal24h: '24 hours after',
-    revealCustom: 'At a time I choose',
-    revealManual: 'When I decide',
+    revealAtCloseDescription: 'Everything appears the moment your event ends.',
+    revealCustom: 'A custom day and time',
+    revealCustomDescription: '',
     revealDeveloping: 'Developing',
     revealReturnAt: 'Come back at {time}',
+    revealEditableNote: 'You can change any of this later, once your event is live.',
 
     // Step 9
     treatmentHeading: 'How should the photos look?',

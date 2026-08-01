@@ -1,13 +1,16 @@
-import { StyleSheet, View } from 'react-native';
+import { useEffect } from 'react';
+import { StyleSheet, View, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { BrandLogo } from '@/components/brand/brand-logo';
 import { Reveal } from '@/components/feedback/reveal';
 import { BackgroundVideo } from '@/components/media/background-video';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
+import { listCelebrations } from '@/services/celebrations';
 import { colours, layout, spacing } from '@/design';
 import { copy } from '@/i18n';
 
@@ -31,6 +34,24 @@ export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  useEffect(() => {
+    let active = true;
+    async function checkExistingEvents() {
+      try {
+        const list = await listCelebrations();
+        if (list.length > 0 && active) {
+          router.replace('/home');
+        }
+      } catch (e) {
+        console.warn('Failed to check existing celebrations in welcome screen:', e);
+      }
+    }
+    void checkExistingEvents();
+    return () => {
+      active = false;
+    };
+  }, [router]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colours.background }}>
       {/* Full-bleed ambient footage, fading up from the canvas. Paused on its
@@ -47,7 +68,7 @@ export default function WelcomeScreen() {
 
       <View style={{ flex: 1, justifyContent: 'space-between' }}>
         <View style={{ paddingTop: insets.top + spacing.base, paddingHorizontal: layout.gutter }}>
-          <BrandLogo height={24} variant="light" />
+          <BrandLogo height={28} variant="light" />
         </View>
 
         <View
@@ -91,6 +112,30 @@ export default function WelcomeScreen() {
               variant="quiet"
               onPress={() => router.push('/sign-in')}
             />
+
+            {/* Dev/Testing Mode Links */}
+            <View style={{ marginTop: spacing.md, gap: spacing.xs, alignItems: 'center' }}>
+              <Pressable
+                onPress={async () => {
+                  await AsyncStorage.setItem('__dev_role', 'host');
+                  router.push('/home');
+                }}
+              >
+                <AppText style={{ fontSize: 12, color: colours.textSecondary, textDecorationLine: 'underline', fontFamily: 'InstrumentSans_400Regular' }}>
+                  Dev: View Dashboard as Host
+                </AppText>
+              </Pressable>
+              <Pressable
+                onPress={async () => {
+                  await AsyncStorage.setItem('__dev_role', 'guest');
+                  router.push('/home');
+                }}
+              >
+                <AppText style={{ fontSize: 12, color: colours.textSecondary, textDecorationLine: 'underline', fontFamily: 'InstrumentSans_400Regular' }}>
+                  Dev: View Dashboard as Guest (Normal User)
+                </AppText>
+              </Pressable>
+            </View>
           </Reveal>
         </View>
       </View>

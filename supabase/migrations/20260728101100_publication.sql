@@ -53,7 +53,8 @@ create type public.published_celebration as (
 
 create or replace function public.publish_celebration(
   p_celebration_id uuid,
-  p_plan_key text default null
+  p_plan_key text default null,
+  p_add_on_keys text[] default array[]::text[]
 )
 returns public.published_celebration
 language plpgsql
@@ -65,6 +66,9 @@ declare
   v_session public.event_sessions%rowtype;
   v_plan public.plans%rowtype;
   v_purchase_id uuid;
+  v_add_on_key text;
+  v_add_on public.add_ons%rowtype;
+  v_add_on_purchase_id uuid;
 begin
   if (select auth.uid()) is null then
     raise exception 'authentication required' using errcode = '42501';
@@ -157,6 +161,47 @@ begin
     returning id into v_purchase_id;
 
     perform private.activate_plan_entitlements(p_celebration_id, v_plan.id, v_purchase_id);
+  end if;
+
+  -- Activate add-ons if provided
+  if p_add_on_keys is not null and array_length(p_add_on_keys, 1) > 0 then
+    foreach v_add_on_key in array p_add_on_keys
+    loop
+      select * into v_add_on from public.add_ons where key = v_add_on_key and is_active;
+      if found then
+        -- Insert purchase for the add-on
+        insert into public.purchases (
+          celebration_id, purchased_by, platform, platform_product_id,
+          platform_transaction_id, add_on_id, status,
+          price_minor_units, currency, failure_code
+        )
+        values (
+          p_celebration_id, (select auth.uid()), 'web',
+          coalesce(v_add_on.web_product_id, v_add_on.key),
+          'dev-' || p_celebration_id::text || '-' || v_add_on.key,
+          v_add_on.id, 'pending',
+          v_add_on.price_minor_units, v_add_on.currency,
+          'unverified_development_purchase'
+        )
+        on conflict (platform, platform_transaction_id) do update
+          set updated_at = now()
+        returning id into v_add_on_purchase_id;
+
+        -- Copy add-on entitlements onto celebration
+        insert into public.celebration_entitlements (
+          celebration_id, entitlement_key, value,
+          granted_by_add_on_id, granted_by_purchase_id
+        )
+        select p_celebration_id, ae.entitlement_key, ae.value, v_add_on.id, v_add_on_purchase_id
+        from public.add_on_entitlements ae
+        where ae.add_on_id = v_add_on.id
+        on conflict (celebration_id, entitlement_key) do update
+          set value = excluded.value,
+              granted_by_add_on_id = excluded.granted_by_add_on_id,
+              granted_by_purchase_id = excluded.granted_by_purchase_id,
+              granted_at = now();
+      end if;
+    end loop;
   end if;
 
   update public.celebrations

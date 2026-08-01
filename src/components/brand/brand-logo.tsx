@@ -27,7 +27,7 @@ export interface BrandLogoProps {
  * - With no asset at all, an accessible, clearly-labelled text lockup is shown.
  *   A fabricated final logo is never rendered.
  */
-export function BrandLogo({ variant = 'primary', height = 28, style }: BrandLogoProps) {
+export function BrandLogo({ variant = 'primary', height = 32, style }: BrandLogoProps) {
   const source =
     (variant === 'light' ? BRAND_ASSETS.logoLight : undefined) ??
     (variant === 'mark' ? BRAND_ASSETS.logoMark : undefined) ??
@@ -70,7 +70,7 @@ export function BrandLogo({ variant = 'primary', height = 28, style }: BrandLogo
       accessibilityLabel={BRAND_CONFIG.appName}
       source={source}
       contentFit="contain"
-      style={[{ height, aspectRatio: undefined, width: undefined }, style]}
+      style={[{ height, aspectRatio: 3.6, width: height * 3.6 }, style]}
     />
   );
 }

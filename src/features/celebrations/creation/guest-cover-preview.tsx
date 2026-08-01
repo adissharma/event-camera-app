@@ -1,12 +1,12 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppText } from '@/components/ui/text';
-import { PencilIcon } from '@/components/ui/icons';
+import { CloseIcon, EyeIcon, PencilIcon } from '@/components/ui/icons';
 import { BrandLogo } from '@/components/brand/brand-logo';
 import { PremiumImage } from '@/components/media/premium-image';
-import { VisualPlaceholder } from '@/components/media/visual-placeholder';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, radii, spacing } from '@/design';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import type { CreationDraft } from '../draft/types';
 
@@ -47,11 +47,10 @@ export interface GuestCoverPreviewProps {
   theme?: CoverTheme;
   /** Scales type down for a small peeking frame. */
   compact?: boolean;
-  /** Shows the pencil affordances. Off for the peeking cards. */
+  /** Shows the single cover-edit affordance. Off for the peeking cards. */
   editable?: boolean;
-  onEditImage?: () => void;
-  onEditTitle?: () => void;
-  onEditDate?: () => void;
+  onEditCover?: () => void;
+  isFullScreen?: boolean;
 }
 
 /**
@@ -66,20 +65,56 @@ export interface GuestCoverPreviewProps {
  * serif over its cover, and matching that composition would make the product a
  * copy regardless of the typeface.
  *
- * When `editable`, a pencil is anchored to each thing that can be changed. They
- * are anchored rather than collected into a toolbar because the anchor is what
- * says *what* is editable — a row of generic buttons needs a legend.
+ * When `editable`, a single pencil opens the cover editor. The preview stays
+ * clean, and the sheet can carry the image and text controls together.
  */
 export function GuestCoverPreview({
   draft,
   theme,
   compact = false,
   editable = false,
-  onEditImage,
-  onEditTitle,
-  onEditDate,
+  onEditCover,
+  isFullScreen = false,
 }: GuestCoverPreviewProps) {
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
   const displayDate = draft.displayDate ?? draft.endsAt;
+
+  // Swipe down to dismiss gesture handling for full-screen preview
+  const translateY = useMemo(() => new Animated.Value(0), []);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: (_, gestureState) => {
+          return gestureState.dy > 10;
+        },
+        onPanResponderMove: (_, gestureState) => {
+          if (gestureState.dy > 0) {
+            translateY.setValue(gestureState.dy);
+          }
+        },
+        onPanResponderRelease: (_, gestureState) => {
+          if (gestureState.dy > 120 || gestureState.vy > 0.5) {
+            Animated.timing(translateY, {
+              toValue: 800,
+              duration: 200,
+              useNativeDriver: true,
+            }).start(() => {
+              setIsPreviewVisible(false);
+              translateY.setValue(0);
+            });
+          } else {
+            Animated.spring(translateY, {
+              toValue: 0,
+              useNativeDriver: true,
+              tension: 40,
+              friction: 5,
+            }).start();
+          }
+        },
+      }),
+    [translateY]
+  );
 
   // A host-written label wins over the formatted date. Falling back rather than
   // requiring one means the cover reads sensibly before it is ever touched.
@@ -94,7 +129,7 @@ export function GuestCoverPreview({
         }).format(new Date(displayDate))
       : null);
 
-  const scale = compact ? 0.72 : 1;
+  const scale = isFullScreen ? 1.625 : (compact ? 0.72 : 1);
   const accent = theme?.accent ?? colours.brandPrimary;
   const isCentred = theme?.align === 'centre';
 
@@ -117,14 +152,12 @@ export function GuestCoverPreview({
           radius="none"
         />
       ) : (
-        <View style={StyleSheet.absoluteFill}>
-          <VisualPlaceholder
-            assetKey="create_event_cover"
-            fill
-            radius="none"
-            style={{ borderWidth: 0 }}
-          />
-        </View>
+        <PremiumImage
+          assetKey="create_event_cover"
+          accessibilityLabel="Default cover photograph"
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          radius="none"
+        />
       )}
 
       <LinearGradient
@@ -133,57 +166,81 @@ export function GuestCoverPreview({
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Image pencil, floated over the photograph itself. */}
+      {/* Single edit entry point for the whole cover. */}
       {editable ? (
-        <View style={{ position: 'absolute', top: spacing.xl, right: spacing.md }}>
-          <EditBadge label="Change the cover photo" onPress={onEditImage} prominent />
+        <View
+          style={{
+            position: 'absolute',
+            top: spacing.xl,
+            right: spacing.md,
+            flexDirection: 'row',
+            gap: spacing.sm,
+            zIndex: 10,
+          }}
+        >
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Preview cover"
+            onPress={() => setIsPreviewVisible(true)}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <EyeIcon size={16} color="#fff" />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit cover"
+            onPress={onEditCover}
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 16,
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <PencilIcon size={16} color="#fff" />
+          </Pressable>
         </View>
       ) : null}
 
-      <View style={{ flex: 1, justifyContent: 'space-between', padding: spacing.md }}>
-        <BrandLogo height={compact ? 11 : 14} />
+      <View style={{ flex: 1, justifyContent: 'space-between', padding: spacing.md * scale }}>
+        <BrandLogo height={18 * scale} />
 
-        <View style={{ gap: spacing.xs, alignItems: isCentred ? 'center' : 'stretch' }}>
+        <View style={{ gap: spacing.xs * scale, alignItems: isCentred ? 'center' : 'stretch' }}>
           {dateLine ? (
-            <EditableRow editable={editable} onPress={onEditDate} label="Change the date line">
-              <AppText
-                variant="eyebrow"
-                tone="secondary"
-                style={{ fontSize: 8 * scale, letterSpacing: 1.2 }}
-              >
-                {dateLine}
-              </AppText>
-            </EditableRow>
-          ) : null}
-
-          <EditableRow editable={editable} onPress={onEditTitle} label="Change the event name">
             <AppText
-              variant="titleMedium"
-              numberOfLines={3}
-              style={{ fontSize: 18 * scale, lineHeight: 22 * scale, flexShrink: 1 }}
-            >
-              {draft.title.trim() || 'Your event'}
-            </AppText>
-          </EditableRow>
-
-          {draft.supportingLine.trim() ? (
-            <AppText
-              variant="caption"
+              variant="eyebrow"
               tone="secondary"
-              numberOfLines={2}
-              style={{ fontSize: 9 * scale }}
+              style={{ fontSize: 8 * scale, letterSpacing: 1.2 * scale }}
             >
-              {draft.supportingLine.trim()}
+              {dateLine}
             </AppText>
           ) : null}
+
+          <AppText
+            variant="titleMedium"
+            numberOfLines={3}
+            style={{ fontSize: 18 * scale, lineHeight: 22 * scale, flexShrink: 1 }}
+          >
+            {draft.title.trim() || 'Your event'}
+          </AppText>
 
           {/* The guest's action. Present so the host can see that joining is one
               tap and needs no account. */}
           <View
             style={{
-              marginTop: spacing.sm,
-              paddingVertical: spacing.sm,
-              borderRadius: radii.md,
+              marginTop: spacing.sm * scale,
+              paddingVertical: spacing.sm * scale,
+              borderRadius: radii.md * scale,
               backgroundColor: accent,
               alignItems: 'center',
               alignSelf: 'stretch',
@@ -201,73 +258,53 @@ export function GuestCoverPreview({
           </View>
         </View>
       </View>
+
+      <Modal
+        visible={isPreviewVisible}
+        animationType="fade"
+        transparent={false}
+        statusBarTranslucent
+        onRequestClose={() => setIsPreviewVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <Animated.View
+            {...panResponder.panHandlers}
+            style={{
+              flex: 1,
+              transform: [{ translateY }],
+            }}
+          >
+            <GuestCoverPreview
+              draft={draft}
+              theme={theme}
+              compact={false}
+              editable={false}
+              isFullScreen={true}
+            />
+            {/* Close button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Close preview"
+              onPress={() => setIsPreviewVisible(false)}
+              style={{
+                position: 'absolute',
+                top: Platform.OS === 'ios' ? 60 : 30,
+                right: spacing.md,
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: 'rgba(0, 0, 0, 0.6)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999,
+              }}
+            >
+              <CloseIcon size={18} color="#fff" />
+            </Pressable>
+          </Animated.View>
+        </View>
+      </Modal>
     </View>
-  );
-}
-
-/** Wraps a line of cover text with a trailing pencil when editing. */
-function EditableRow({
-  editable,
-  onPress,
-  label,
-  children,
-}: {
-  editable: boolean;
-  onPress?: () => void;
-  label: string;
-  children: React.ReactNode;
-}) {
-  if (!editable) return <>{children}</>;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}
-    >
-      {children}
-      <EditBadge label={label} onPress={onPress} />
-    </Pressable>
-  );
-}
-
-function EditBadge({
-  label,
-  onPress,
-  prominent = false,
-}: {
-  label: string;
-  onPress?: () => void;
-  prominent?: boolean;
-}) {
-  const size = prominent ? 32 : 20;
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      onPress={onPress}
-      // Small badges are below the 48pt target, so the tappable area is
-      // extended rather than the badge being drawn larger and dominating the
-      // cover it sits on.
-      hitSlop={prominent ? 8 : 16}
-      style={{
-        width: size,
-        height: size,
-        borderRadius: radii.pill,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: prominent ? colours.overlayLight : 'transparent',
-        borderWidth: prominent ? 0 : layout.hairline,
-        borderColor: colours.borderStrong,
-      }}
-    >
-      <PencilIcon
-        size={prominent ? 16 : 11}
-        color={prominent ? colours.textOnBrand : colours.textSecondary}
-      />
-    </Pressable>
   );
 }
 

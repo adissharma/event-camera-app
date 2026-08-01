@@ -1,18 +1,21 @@
-import { useEffect, type ReactNode } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { View, Alert, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
 import { ProgressThread } from '@/components/feedback/progress-thread';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { layout, spacing } from '@/design';
+import { colours, layout, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
 import { validateStep } from '../draft/validation';
-
+import { updateEventSettings, resolveReveal, celebrationDetailKeys } from '@/services/celebration-detail';
+import { celebrationKeys } from '@/services/celebrations';
+import Svg, { Path } from 'react-native-svg';
 export interface CreationStepScreenProps {
   step: CreationStep;
   heading: string;
@@ -25,13 +28,10 @@ export interface CreationStepScreenProps {
   action?: ReactNode;
   /**
    * Set false when the step contains its own scrolling list.
-   *
-   * A VirtualizedList inside a ScrollView loses virtualisation entirely: every
-   * row renders at once, `getItemLayout` stops being used, and fast flicking
-   * stutters. React Native warns about it, and on the calendar step it defeats
-   * the whole point of a scrollable calendar.
    */
   scrollable?: boolean;
+  /** Custom save operation for edit mode. */
+  onSave?: () => Promise<void>;
 }
 
 /**
@@ -47,6 +47,20 @@ export interface CreationStepScreenProps {
  * - when the action is unavailable, the reason is announced AND displayed — a
  *   disabled Next with no explanation is a dead end.
  */
+function BackChevronIcon({ size = 18, color = '#A1A1AA' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M15 18l-6-6 6-6"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function CreationStepScreen({
   step,
   heading,
@@ -56,9 +70,13 @@ export function CreationStepScreen({
   nextLabel,
   action,
   scrollable = true,
+  onSave,
 }: CreationStepScreenProps) {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { draft, markStepReached } = useCreationDraft();
+
+  const [saving, setSaving] = useState(false);
 
   const index = CREATION_STEPS.indexOf(step);
   const total = CREATION_STEPS.length;
@@ -71,6 +89,56 @@ export function CreationStepScreen({
   const resolvedNext =
     nextHref ?? (index < total - 1 ? `/create/${CREATION_STEPS[index + 1]}` : undefined);
 
+  const isEditing = Boolean(draft.editCelebrationId);
+
+  async function defaultSave() {
+    if (!draft.editCelebrationId || !draft.editSessionId) return;
+    const patch: any = {};
+    if (step === 'name') {
+      patch.title = draft.title;
+    } else if (step === 'closing') {
+      patch.endsAt = draft.endsAt;
+    } else if (step === 'photo-limit') {
+      patch.shotLimitPerGuest = draft.shotLimitPerGuest;
+    } else if (step === 'reveal') {
+      const modeAndReveal = resolveReveal(
+        draft.guestRevealChoice,
+        draft.endsAt,
+        draft.guestCustomRevealAt
+      );
+      patch.revealMode = modeAndReveal.mode;
+      patch.revealAt = modeAndReveal.revealAt;
+    } else if (step === 'treatment') {
+      patch.photoTreatment = draft.photoTreatment;
+    }
+    
+    await updateEventSettings(draft.editCelebrationId, draft.editSessionId, patch);
+  }
+
+  const handlePress = async () => {
+    if (isEditing) {
+      setSaving(true);
+      try {
+        if (onSave) {
+          await onSave();
+        } else {
+          await defaultSave();
+        }
+        await queryClient.invalidateQueries({
+          queryKey: celebrationDetailKeys.detail(draft.editCelebrationId!),
+        });
+        await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
+        router.replace(`/celebration/${draft.editCelebrationId}/edit`);
+      } catch (e: any) {
+        Alert.alert('Error', e.message || 'Failed to save changes.');
+      } finally {
+        setSaving(false);
+      }
+    } else {
+      if (resolvedNext) router.push(resolvedNext as never);
+    }
+  };
+
   return (
     <Screen
       scrollable={scrollable}
@@ -78,33 +146,37 @@ export function CreationStepScreen({
       stickyAction={
         action ?? (
           <View style={{ gap: spacing.sm }}>
-            {/* Shown, not only announced. A screen-reader hint alone leaves a
-                sighted user staring at a dead button. */}
             {blockingError ? (
               <AppText variant="caption" tone="warning" accessibilityLiveRegion="polite">
                 {blockingError}
               </AppText>
             ) : null}
             <Button
-              label={nextLabel ?? copy.common.next}
-              disabled={blockingError !== null || !resolvedNext}
+              label={isEditing ? 'Save' : (nextLabel ?? copy.common.next)}
+              disabled={blockingError !== null}
               disabledReason={blockingError ?? undefined}
+              loading={saving}
               haptic
-              onPress={() => {
-                if (resolvedNext) router.push(resolvedNext as never);
-              }}
+              onPress={handlePress}
             />
           </View>
         )
       }
     >
       <View style={[{ gap: spacing.xl }, scrollable ? null : { flex: 1 }]}>
-        <View style={{ gap: spacing.base }}>
-          <ProgressThread current={index + 1} total={total} />
-          <AppText variant="eyebrow" tone="secondary">
-            Step {index + 1} of {total}
-          </AppText>
+        <View style={styles.topNav}>
+          <Pressable 
+            onPress={() => router.back()} 
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <BackChevronIcon color={colours.textSecondary} />
+            <AppText style={styles.backBtnText}>Back</AppText>
+          </Pressable>
         </View>
+
+        {!isEditing && <ProgressThread current={index + 1} total={total} />}
 
         <Reveal index={0} style={{ gap: spacing.md, maxWidth: layout.maxReadableWidth }}>
           <AppText variant="displayLarge">{heading}</AppText>
@@ -122,3 +194,25 @@ export function CreationStepScreen({
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  topNav: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: spacing.xs,
+    marginBottom: -spacing.md,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingVertical: spacing.xs,
+    paddingRight: spacing.sm,
+    marginLeft: -4,
+  },
+  backBtnText: {
+    fontSize: 14,
+    fontFamily: 'InstrumentSans_500Medium',
+    color: colours.textSecondary,
+  },
+});

@@ -9,8 +9,12 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.example.eventcamera",
-      "supportsTablet": false
+      "bundleIdentifier": "com.potoevents.eventcamera",
+      "supportsTablet": false,
+      "associatedDomains": [
+        "applinks:poto.events",
+        "applinks:staging.poto.events"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -20,7 +24,29 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.example.eventcamera"
+      "package": "com.potoevents.eventcamera",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "poto.events",
+              "pathPrefix": "/j"
+            },
+            {
+              "scheme": "https",
+              "host": "staging.poto.events",
+              "pathPrefix": "/j"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
     },
     "web": {
       "output": "static",
@@ -39,7 +65,13 @@
       "expo-secure-store",
       "expo-sharing",
       "@react-native-community/datetimepicker",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

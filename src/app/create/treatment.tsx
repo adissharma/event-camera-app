@@ -1,9 +1,7 @@
 import { View } from 'react-native';
 
 import { OptionCard } from '@/components/forms/option-card';
-import { ToggleRow } from '@/components/forms/toggle-row';
-import { AppText } from '@/components/ui/text';
-import { VisualPlaceholder } from '@/components/media/visual-placeholder';
+import { OverlappingPreviews } from '@/features/celebrations/creation/overlapping-previews';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { spacing } from '@/design';
@@ -27,9 +25,7 @@ export default function TreatmentStep() {
       supporting={copy.create.treatmentSupporting}
     >
       <View style={{ gap: spacing.base }}>
-        {/* One sample photograph, so the comparison is between treatments
-            rather than between different images. */}
-        <VisualPlaceholder assetKey="theme_film" aspectRatio={4 / 3} />
+        <OverlappingPreviews treatment={draft.photoTreatment} />
 
         {TREATMENTS.map((treatment) => (
           <OptionCard
@@ -37,23 +33,14 @@ export default function TreatmentStep() {
             label={treatment.label}
             description={treatment.description}
             selected={draft.photoTreatment === treatment.value}
-            onPress={() => update({ photoTreatment: treatment.value })}
+            onPress={() => {
+              update({
+                photoTreatment: treatment.value,
+                dateStampEnabled: treatment.value === 'disposable',
+              });
+            }}
           />
         ))}
-
-        {draft.photoTreatment === 'disposable' ? (
-          <ToggleRow
-            label={copy.create.dateStamp}
-            description="The little orange date in the corner."
-            value={draft.dateStampEnabled}
-            onValueChange={(dateStampEnabled) => update({ dateStampEnabled })}
-          />
-        ) : null}
-
-        <AppText variant="bodySmall" tone="secondary" style={{ paddingTop: spacing.sm }}>
-          Your originals are always kept, untouched. A treatment can be changed or
-          removed at any time, even after the event.
-        </AppText>
       </View>
     </CreationStepScreen>
   );

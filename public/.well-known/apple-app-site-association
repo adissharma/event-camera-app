@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "AL3AF36W3B.com.example.eventcamera",
+        "paths": ["/e/*"]
+      }
+    ]
+  },
+  "appclips": {
+    "apps": [
+      "AL3AF36W3B.com.example.eventcamera.Clip"
+    ]
+  }
+}

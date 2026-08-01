@@ -27,26 +27,15 @@ export const CREATION_STEPS = [
   'closing',
   'cover',
   'photo-limit',
-  'camera-roll',
-  'formats',
-  'privacy',
   'reveal',
   'treatment',
   'package',
-  'qr',
-  'review',
 ] as const;
 
 export type CreationStep = (typeof CREATION_STEPS)[number];
 
 /** Reveal choices as presented to the host, mapped to the database model. */
-export type RevealChoice =
-  | 'during'
-  | 'at_close'
-  | 'after_12h'
-  | 'after_24h'
-  | 'custom'
-  | 'manual';
+export type RevealChoice = 'during' | 'at_close' | 'custom';
 
 export interface CreationDraft {
   /** Bumped when the shape changes so a stale persisted draft is discarded. */
@@ -55,6 +44,7 @@ export interface CreationDraft {
   userId: string | null;
   createdAt: string;
   updatedAt: string;
+  editCelebrationId: string | null;
 
   // Step 1
   title: string;
@@ -90,7 +80,8 @@ export interface CreationDraft {
   // Step 5
   cameraRollUploadsEnabled: boolean;
   cameraRollUploadLimit: number;
-  cameraRollUploadsAfterClose: boolean;
+  /** Only meaningful when `cameraRollUploadsEnabled`. */
+  cameraRollAnytime: boolean;
   allowMediaFromAnyDate: boolean;
 
   // Step 6
@@ -99,15 +90,17 @@ export interface CreationDraft {
 
   // Step 7
   galleryVisibility: GalleryVisibility;
-  pinRequired: boolean;
-  pin: string | null;
   guestDownloadsEnabled: boolean;
-  moderationEnabled: boolean;
 
   // Step 8
   revealChoice: RevealChoice;
   /** Only when revealChoice is 'custom'. */
   customRevealAt: string | null;
+
+  hostRevealChoice: RevealChoice;
+  hostCustomRevealAt: string | null;
+  guestRevealChoice: RevealChoice;
+  guestCustomRevealAt: string | null;
 
   // Step 9
   photoTreatment: PhotoTreatment;
@@ -122,11 +115,12 @@ export interface CreationDraft {
 
   /** Furthest step reached, so resuming lands where the host left off. */
   furthestStep: CreationStep;
+  editCelebrationId?: string | null;
+  editSessionId?: string | null;
 }
 
-// 2: added coverDateLabel. A persisted v1 draft is discarded rather than
-// migrated — see the restore in store.tsx. Cheap now, while nobody has one.
-export const DRAFT_VERSION = 2;
+// 6: added hostRevealChoice, hostCustomRevealAt, guestRevealChoice, guestCustomRevealAt
+export const DRAFT_VERSION = 6;
 
 export function createEmptyDraft(userId: string | null, timezone: string): CreationDraft {
   const now = new Date().toISOString();
@@ -154,20 +148,22 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
 
     cameraRollUploadsEnabled: true,
     cameraRollUploadLimit: 5,
-    cameraRollUploadsAfterClose: true,
+    cameraRollAnytime: true,
     allowMediaFromAnyDate: false,
 
     allowedMediaTypes: ['photo'],
     captureMode: 'camera_and_library',
 
     galleryVisibility: 'all_guests',
-    pinRequired: false,
-    pin: null,
     guestDownloadsEnabled: true,
-    moderationEnabled: false,
 
-    revealChoice: 'after_12h',
+    revealChoice: 'at_close',
     customRevealAt: null,
+
+    hostRevealChoice: 'at_close',
+    hostCustomRevealAt: null,
+    guestRevealChoice: 'at_close',
+    guestCustomRevealAt: null,
 
     photoTreatment: 'original',
     dateStampEnabled: false,
@@ -178,6 +174,8 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
     qrTemplateKey: 'digital_card',
 
     furthestStep: 'name',
+    editCelebrationId: null,
+    editSessionId: null,
   };
 }
 
@@ -196,24 +194,18 @@ export function resolveReveal(
   switch (choice) {
     case 'during':
       return { mode: 'instant', revealAt: null };
-    case 'manual':
-      return { mode: 'manual', revealAt: null };
-    case 'custom':
-      return customRevealAt
-        ? { mode: 'scheduled', revealAt: customRevealAt }
-        : // Falling back to manual rather than inventing a time: a wrong reveal
-          // time is worse than asking the host to press a button.
-          { mode: 'manual', revealAt: null };
     case 'at_close':
       return endsAt
         ? { mode: 'scheduled', revealAt: endsAt }
-        : { mode: 'manual', revealAt: null };
-    case 'after_12h':
-    case 'after_24h': {
-      if (!endsAt) return { mode: 'manual', revealAt: null };
-      const hours = choice === 'after_12h' ? 12 : 24;
-      const at = new Date(new Date(endsAt).getTime() + hours * 3_600_000);
-      return { mode: 'scheduled', revealAt: at.toISOString() };
-    }
+        : // Falling back to manual rather than inventing a time: nothing to
+          // schedule against yet if the closing time isn't set.
+          { mode: 'manual', revealAt: null };
+    case 'custom':
+      return customRevealAt
+        ? { mode: 'scheduled', revealAt: customRevealAt }
+        : // A wrong reveal time is worse than asking the host to press a
+          // button, so a custom choice with nothing picked yet falls back
+          // to manual rather than inventing a time.
+          { mode: 'manual', revealAt: null };
   }
 }

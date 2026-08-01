@@ -1,0 +1,253 @@
+import { useEffect, useState } from 'react';
+import { StyleSheet, View, Pressable, ScrollView, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+import { Screen } from '@/components/layout/screen';
+import { AppText } from '@/components/ui/text';
+import { Button } from '@/components/ui/button';
+import { useCreationDraft } from '@/features/celebrations/draft/store';
+import { colours, layout, radii, spacing } from '@/design';
+import Svg, { Path } from 'react-native-svg';
+
+type Challenge = {
+  id: string;
+  label: string;
+  icon: string;
+  photo?: string | null;
+};
+
+const DEFAULT_CHALLENGES: Challenge[] = [
+  { id: 'c1', label: 'First Dance',      icon: 'firstDance' },
+  { id: 'c2', label: 'Wedding Rings',    icon: 'rings' },
+  { id: 'c3', label: 'Best Group Photo', icon: 'group' },
+  { id: 'c4', label: 'Decor Details',    icon: 'decor' },
+  { id: 'c5', label: 'Candlelight',      icon: 'candle' },
+];
+
+const EXTRA_CHALLENGES = [
+  { label: 'Champagne Toast', icon: 'champagne' },
+  { label: 'Wedding Cake',    icon: 'cake' },
+  { label: 'Bridal Party',    icon: 'bouquet' },
+  { label: 'Gifts & Cards',   icon: 'gift' },
+  { label: 'Confetti',        icon: 'confetti' },
+];
+
+function TrashIcon({ size = 18, color = '#EF4444' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 6h18m-2 0v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6m3 0V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function PlusIcon({ size = 16, color = colours.textPrimary }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 5v14M5 12h14"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export default function ChallengesStep() {
+  const router = useRouter();
+  const { draft } = useCreationDraft();
+  const [challenges, setChallenges] = useState<Challenge[]>(DEFAULT_CHALLENGES);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (draft.editCelebrationId) {
+      (async () => {
+        const key = `__mock_challenges_${draft.editCelebrationId}`;
+        const stored = await AsyncStorage.getItem(key);
+        if (stored) {
+          try {
+            setChallenges(JSON.parse(stored) as Challenge[]);
+          } catch {}
+        }
+      })();
+    }
+  }, [draft.editCelebrationId]);
+
+  function handleDelete(id: string) {
+    if (challenges.length <= 1) {
+      Alert.alert('Cannot delete', 'An event must have at least one active challenge.');
+      return;
+    }
+    setChallenges((prev) => prev.filter((c) => c.id !== id));
+  }
+
+  function handleAddChallenge() {
+    const existing = new Set(challenges.map((c) => c.label));
+    const options = EXTRA_CHALLENGES.filter((c) => !existing.has(c.label));
+
+    if (options.length === 0) {
+      Alert.alert('No options left', 'You have already added all available challenges.');
+      return;
+    }
+
+    Alert.alert(
+      'Add Challenge',
+      'Choose an additional photography prompt for your guests.',
+      [
+        ...options.slice(0, 5).map((opt) => ({
+          text: opt.label,
+          onPress: () => {
+            setChallenges((prev) => [
+              ...prev,
+              { id: `c${Date.now()}`, label: opt.label, icon: opt.icon },
+            ]);
+          },
+        })),
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  }
+
+  async function handleSave() {
+    if (!draft.editCelebrationId) {
+      // Creation flow fallback
+      router.back();
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const key = `__mock_challenges_${draft.editCelebrationId}`;
+      await AsyncStorage.setItem(key, JSON.stringify(challenges));
+      router.replace(`/celebration/${draft.editCelebrationId}/edit`);
+    } catch {
+      Alert.alert('Error', 'Failed to save challenges.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Screen
+      stickyAction={
+        <View style={{ gap: spacing.sm }}>
+          <Button
+            label={draft.editCelebrationId ? 'Save' : 'Done'}
+            loading={saving}
+            haptic
+            onPress={handleSave}
+          />
+          <Button
+            label="Cancel"
+            variant="quiet"
+            onPress={() => router.back()}
+          />
+        </View>
+      }
+    >
+      <View style={{ gap: spacing.xl }}>
+        <View style={{ gap: spacing.xs }}>
+          <AppText variant="eyebrow" tone="secondary">
+            Guest Prompts
+          </AppText>
+          <AppText variant="displayLarge">Manage Challenges</AppText>
+          <AppText variant="bodyLarge" tone="secondary">
+            Challenges encourage your guests to look out for key moments and photograph them.
+          </AppText>
+        </View>
+
+        <View style={styles.card}>
+          <Pressable onPress={handleAddChallenge} style={styles.row}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+              <View style={styles.plusCircle}>
+                <PlusIcon size={16} color="#0B0B0C" />
+              </View>
+              <AppText style={styles.addText}>Add new challenge...</AppText>
+            </View>
+          </Pressable>
+
+          {challenges.map((c, idx) => (
+            <View key={c.id}>
+              <View style={styles.separator} />
+              <View style={styles.row}>
+                <View style={styles.rowLabelContainer}>
+                  <AppText style={styles.rowLabel}>{c.label}</AppText>
+                  {c.photo ? (
+                    <AppText style={[styles.rowValue, { color: colours.brandPrimary }]}>
+                      Completed
+                    </AppText>
+                  ) : (
+                    <AppText style={styles.rowValue}>Not captured yet</AppText>
+                  )}
+                </View>
+                <Pressable onPress={() => handleDelete(c.id)} style={styles.deleteButton}>
+                  <TrashIcon />
+                </Pressable>
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    </Screen>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: colours.surfaceRaised,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    borderWidth: layout.hairline,
+    borderColor: colours.borderSubtle,
+    marginTop: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
+  },
+  rowLabelContainer: {
+    flex: 1,
+    gap: 2,
+  },
+  rowLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colours.textPrimary,
+  },
+  rowValue: {
+    fontSize: 12,
+    color: colours.textSecondary,
+  },
+  addText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colours.textPrimary,
+  },
+  plusCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#EFE9E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButton: {
+    padding: spacing.xs,
+  },
+  separator: {
+    height: layout.hairline,
+    backgroundColor: colours.borderSubtle,
+    marginHorizontal: spacing.base,
+  },
+});

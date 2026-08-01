@@ -68,6 +68,7 @@ export const VISUAL_ASSETS = {
       'The default editorial cover offered when a host has not chosen their own image. Beautiful but neutral — string lights, a table, a room — no identifiable faces, so it flatters any celebration.',
     accessibilityLabel: 'A softly lit celebration venue',
     intendedScreen: 'Create — live cover editor default',
+    source: require('../../assets/images/placeholders/create_event_cover.png'),
   },
   success_hero: {
     aspectRatio: 1,
@@ -113,6 +114,22 @@ export const VISUAL_ASSETS = {
       'Theme preview: botanical without becoming a wedding-stationery cliché. Photographic, not illustrated.',
     accessibilityLabel: 'Floral theme preview',
     intendedScreen: 'Theme carousel',
+  },
+  hindu_wedding: {
+    aspectRatio: 9 / 16,
+    focalPoint: { x: 0.5, y: 0.5 },
+    artDirection: 'Candid Hindu wedding portrait',
+    accessibilityLabel: 'Candid Hindu wedding photo',
+    intendedScreen: 'Treatment selection carousel',
+    source: require('../../assets/images/placeholders/hindu_wedding.png'),
+  },
+  christian_wedding: {
+    aspectRatio: 9 / 16,
+    focalPoint: { x: 0.5, y: 0.5 },
+    artDirection: 'Candid Christian wedding portrait',
+    accessibilityLabel: 'Candid Christian wedding photo',
+    intendedScreen: 'Treatment selection carousel',
+    source: require('../../assets/images/placeholders/christian_wedding.png'),
   },
 } as const satisfies Record<string, VisualAsset>;
 

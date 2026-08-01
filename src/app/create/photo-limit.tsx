@@ -1,12 +1,20 @@
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 
-import { OptionCard } from '@/components/forms/option-card';
+import { ToggleRow } from '@/components/forms/toggle-row';
 import { AppText } from '@/components/ui/text';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
-import { PHOTO_LIMIT_OPTIONS } from '@/config/app-config';
-import { spacing } from '@/design';
-import { copy, t } from '@/i18n';
+import { LOCALE_CONFIG } from '@/config/app-config';
+import { colours, layout, radii, spacing } from '@/design';
+import { copy } from '@/i18n';
+
+/** The numbered choices, shown as a compact row rather than a full-width list. */
+const COUNT_OPTIONS = [5, 10, 15, 25] as const;
+
+/** The unlimited add-on price, by currency. Only these two exist today. */
+const UNLIMITED_PRICE_BY_CURRENCY: Record<string, string> = { GBP: '+£4.99', USD: '+$7.99' };
+const UNLIMITED_PRICE = UNLIMITED_PRICE_BY_CURRENCY[LOCALE_CONFIG.currency] ?? '+£4.99';
 
 export default function PhotoLimitStep() {
   const { draft, update } = useCreationDraft();
@@ -18,35 +26,181 @@ export default function PhotoLimitStep() {
       supporting={copy.create.photoLimitSupporting}
     >
       <View style={{ gap: spacing.base }}>
-        {PHOTO_LIMIT_OPTIONS.map((option) => {
-          const isUnlimited = option === null;
-          return (
-            <OptionCard
-              key={String(option)}
-              label={
-                isUnlimited
-                  ? copy.create.photoLimitUnlimited
-                  : t(copy.create.photoLimitCount, { count: option })
-              }
-              description={
-                isUnlimited
-                  ? 'Guests shoot as much as they like'
-                  : undefined
-              }
-              // Labelled honestly rather than hidden. The host can still choose
-              // it; the package step is where it is actually paid for, and
-              // saying so here avoids a surprise two screens later.
-              lockedReason={isUnlimited ? 'Included with Signature and above' : undefined}
+        {/* The number itself is the whole label — "photos" is implied by the
+            heading above, and spelling it out on every chip left no room to
+            keep all four on one row. */}
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {COUNT_OPTIONS.map((option) => (
+            <CountChip
+              key={option}
+              count={option}
               selected={draft.shotLimitPerGuest === option}
               onPress={() => update({ shotLimitPerGuest: option })}
             />
-          );
-        })}
+          ))}
+        </View>
 
-        <AppText variant="bodySmall" tone="secondary" style={{ paddingTop: spacing.sm }}>
-          You can change this later, right up until your event closes.
-        </AppText>
+        <UnlimitedCard
+          selected={draft.shotLimitPerGuest === null}
+          onPress={() => update({ shotLimitPerGuest: null })}
+        />
+
+        <View
+          style={{
+            height: layout.hairline,
+            backgroundColor: colours.borderSubtle,
+            marginVertical: spacing.xs,
+          }}
+        />
+
+        <ToggleRow
+          label={copy.create.cameraRollToggle}
+          description={copy.create.cameraRollToggleDescription}
+          value={draft.cameraRollUploadsEnabled}
+          onValueChange={(cameraRollUploadsEnabled) =>
+            update({
+              cameraRollUploadsEnabled,
+              captureMode: cameraRollUploadsEnabled ? 'camera_and_library' : 'camera_only',
+              cameraRollAnytime: true,
+            })
+          }
+        />
+
+        <View
+          style={{
+            height: layout.hairline,
+            backgroundColor: colours.borderSubtle,
+            marginVertical: spacing.xs,
+          }}
+        />
+
+        <ToggleRow
+          label="Let guests view photos taken by others"
+          value={draft.galleryVisibility === 'all_guests'}
+          onValueChange={(allowed) =>
+            update({ galleryVisibility: allowed ? 'all_guests' : 'own_only' })
+          }
+        />
+
+        {Boolean(draft.editCelebrationId) && draft.shotLimitPerGuest !== null ? (
+          <View style={{ backgroundColor: '#1C1C1E', padding: spacing.base, borderRadius: radii.md, marginTop: spacing.sm }}>
+            <AppText variant="caption" tone="warning">
+              Note: Downgrading from Unlimited is allowed, but no refund will be issued for the package.
+            </AppText>
+          </View>
+        ) : null}
       </View>
     </CreationStepScreen>
+  );
+}
+
+/** One number in the compact row. */
+function CountChip({
+  count,
+  selected,
+  onPress,
+}: {
+  count: number;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${count} photos per guest`}
+      onPress={() => {
+        void Haptics.selectionAsync().catch(() => {});
+        onPress();
+      }}
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: spacing.base,
+        borderRadius: radii.lg,
+        backgroundColor: selected ? colours.brandSoft : colours.surface,
+        borderWidth: selected ? 2 : layout.hairline,
+        borderColor: selected ? colours.brandPrimary : colours.borderStrong,
+      }}
+    >
+      <AppText variant="labelLarge">{count}</AppText>
+    </Pressable>
+  );
+}
+
+/**
+ * The unlimited option, called out as the option the host is nudged toward.
+ *
+ * Visually distinct even when unselected — the accent border and "Popular"
+ * tag are always there, not just on selection — because the point is to draw
+ * the eye here first, not to wait until it's already chosen.
+ */
+function UnlimitedCard({ selected, onPress }: { selected: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${copy.create.photoLimitUnlimited}. Guests shoot as much as they like. ${UNLIMITED_PRICE}.`}
+      onPress={() => {
+        void Haptics.selectionAsync().catch(() => {});
+        onPress();
+      }}
+      style={{
+        padding: spacing.base,
+        borderRadius: radii.lg,
+        backgroundColor: selected ? colours.brandSoft : colours.surface,
+        borderWidth: 2,
+        borderColor: colours.brandPrimary,
+        gap: spacing.xxs,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+          <AppText variant="labelLarge">{copy.create.photoLimitUnlimited}</AppText>
+          <View
+            style={{
+              paddingHorizontal: spacing.sm,
+              paddingVertical: 2,
+              borderRadius: radii.pill,
+              backgroundColor: colours.brandPrimary,
+            }}
+          >
+            <AppText variant="caption" tone="onBrand">
+              Popular
+            </AppText>
+          </View>
+        </View>
+
+        {/* The non-colour selection signal every other card in this flow
+            uses — a ring when unselected, a filled tick when selected. */}
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: selected ? 0 : layout.hairline,
+            borderColor: colours.borderStrong,
+            backgroundColor: selected ? colours.brandPrimary : 'transparent',
+          }}
+        >
+          {selected ? (
+            <AppText variant="caption" tone="onBrand">
+              ✓
+            </AppText>
+          ) : null}
+        </View>
+      </View>
+
+      <AppText variant="bodySmall" tone="secondary">
+        Guests shoot as much as they like
+      </AppText>
+
+      <AppText variant="labelLarge" tone="brand">
+        {UNLIMITED_PRICE}
+      </AppText>
+    </Pressable>
   );
 }

@@ -137,29 +137,17 @@ on conflict (key) do update set
 
 insert into public.plans (
   key, name, description, tier_rank, price_minor_units, currency,
-  apple_product_id, google_product_id, web_product_id, sort_order
+  apple_product_id, google_product_id, web_product_id, sort_order, is_active
 )
 values
-  ('essential', 'Essential',
-   'Everything you need for one celebration.',
-   1, 4900, 'GBP',
-   'com.example.eventcamera.plan.essential',
-   'plan_essential',
-   'web_plan_essential', 10),
-
-  ('signature', 'Signature',
-   'More guests, more photos, more ways to contribute.',
-   2, 7900, 'GBP',
-   'com.example.eventcamera.plan.signature',
-   'plan_signature',
-   'web_plan_signature', 20),
-
-  ('heirloom', 'Heirloom',
-   'The complete record of the day, kept for good.',
-   3, 14900, 'GBP',
-   'com.example.eventcamera.plan.heirloom',
-   'plan_heirloom',
-   'web_plan_heirloom', 30)
+  ('guests_5', '5 Guests', 'Up to 5 guests can join.', 1, 200, 'USD', 'com.example.eventcamera.plan.guests5', 'plan_guests_5', 'web_plan_guests_5', 10, true),
+  ('guests_10', '10 Guests', 'Up to 10 guests can join.', 2, 1500, 'USD', 'com.example.eventcamera.plan.guests10', 'plan_guests_10', 'web_plan_guests_10', 20, true),
+  ('guests_25', '25 Guests', 'Up to 25 guests can join.', 3, 3000, 'USD', 'com.example.eventcamera.plan.guests25', 'plan_guests_25', 'web_plan_guests_25', 30, true),
+  ('guests_50', '50 Guests', 'Up to 50 guests can join.', 4, 5000, 'USD', 'com.example.eventcamera.plan.guests50', 'plan_guests_50', 'web_plan_guests_50', 40, true),
+  ('guests_100', '100 Guests', 'Up to 100 guests can join.', 5, 10000, 'USD', 'com.example.eventcamera.plan.guests100', 'plan_guests_100', 'web_plan_guests_100', 50, true),
+  ('guests_150', '150 Guests', 'Up to 150 guests can join.', 6, 15000, 'USD', 'com.example.eventcamera.plan.guests150', 'plan_guests_150', 'web_plan_guests_150', 60, true),
+  ('guests_200', '200 Guests', 'Up to 200 guests can join.', 7, 20000, 'USD', 'com.example.eventcamera.plan.guests200', 'plan_guests_200', 'web_plan_guests_200', 70, true),
+  ('guests_unlimited', 'Unlimited Guests', 'Unlimited guests can join.', 8, 10000, 'USD', 'com.example.eventcamera.plan.guestsunlimited', 'plan_guests_unlimited', 'web_plan_guests_unlimited', 80, true)
 on conflict (key) do update set
   name = excluded.name,
   description = excluded.description,
@@ -169,58 +157,105 @@ on conflict (key) do update set
   apple_product_id = excluded.apple_product_id,
   google_product_id = excluded.google_product_id,
   web_product_id = excluded.web_product_id,
-  sort_order = excluded.sort_order;
+  sort_order = excluded.sort_order,
+  is_active = excluded.is_active;
 
 -- ---------------------------------------------------------------------------
 -- Plan entitlements
 -- ---------------------------------------------------------------------------
 
 with plan_ids as (
-  select key, id from public.plans where key in ('essential', 'signature', 'heirloom')
+  select key, id from public.plans where key like 'guests_%'
 ),
 grants (plan_key, entitlement_key, value) as (
   values
-    -- Essential
-    ('essential', 'participant_limit',        '50'::jsonb),
-    ('essential', 'photo_limit_options',      '[5,10,15,25]'::jsonb),
-    ('essential', 'unlimited_photos',         'false'::jsonb),
-    ('essential', 'camera_roll_uploads',      'true'::jsonb),
-    ('essential', 'camera_roll_upload_limit', '5'::jsonb),
-    ('essential', 'media_types',              '["photo"]'::jsonb),
-    ('essential', 'cohost_count',             '1'::jsonb),
-    ('essential', 'qr_templates',             '["digital_card","a4_poster"]'::jsonb),
-    ('essential', 'gallery_retention_days',   '90'::jsonb),
-    ('essential', 'support_level',            '"standard"'::jsonb),
+    ('guests_5', 'participant_limit', '5'::jsonb),
+    ('guests_5', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_5', 'unlimited_photos', 'true'::jsonb),
+    ('guests_5', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_5', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_5', 'media_types', '["photo"]'::jsonb),
+    ('guests_5', 'cohost_count', '2'::jsonb),
+    ('guests_5', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_5', 'gallery_retention_days', '365'::jsonb),
+    ('guests_5', 'support_level', '"standard"'::jsonb),
 
-    -- Signature
-    ('signature', 'participant_limit',        '150'::jsonb),
-    ('signature', 'photo_limit_options',      '[5,10,15,25]'::jsonb),
-    ('signature', 'unlimited_photos',         'true'::jsonb),
-    ('signature', 'camera_roll_uploads',      'true'::jsonb),
-    ('signature', 'camera_roll_upload_limit', '15'::jsonb),
-    ('signature', 'media_types',              '["photo"]'::jsonb),
-    ('signature', 'moderation',               'true'::jsonb),
-    ('signature', 'cohost_count',             '3'::jsonb),
-    ('signature', 'qr_templates',             '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
-    ('signature', 'gallery_retention_days',   '365'::jsonb),
-    ('signature', 'support_level',            '"priority"'::jsonb),
+    ('guests_10', 'participant_limit', '10'::jsonb),
+    ('guests_10', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_10', 'unlimited_photos', 'true'::jsonb),
+    ('guests_10', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_10', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_10', 'media_types', '["photo"]'::jsonb),
+    ('guests_10', 'cohost_count', '2'::jsonb),
+    ('guests_10', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_10', 'gallery_retention_days', '365'::jsonb),
+    ('guests_10', 'support_level', '"standard"'::jsonb),
 
-    -- Heirloom
-    ('heirloom',  'participant_limit',        '500'::jsonb),
-    ('heirloom',  'photo_limit_options',      '[5,10,15,25]'::jsonb),
-    ('heirloom',  'unlimited_photos',         'true'::jsonb),
-    ('heirloom',  'camera_roll_uploads',      'true'::jsonb),
-    ('heirloom',  'camera_roll_upload_limit', '50'::jsonb),
-    -- Video and audio are granted here but remain hidden behind feature flags
-    -- until they actually ship. The interface must label them honestly as
-    -- coming later rather than render a control that fails.
-    ('heirloom',  'media_types',              '["photo"]'::jsonb),
-    ('heirloom',  'moderation',               'true'::jsonb),
-    ('heirloom',  'memory_book',              'false'::jsonb),
-    ('heirloom',  'cohost_count',             '10'::jsonb),
-    ('heirloom',  'qr_templates',             '["digital_card","a4_poster","a5_sign","table_card","square_social","venue_screen"]'::jsonb),
-    ('heirloom',  'gallery_retention_days',   '3650'::jsonb),
-    ('heirloom',  'support_level',            '"priority"'::jsonb)
+    ('guests_25', 'participant_limit', '25'::jsonb),
+    ('guests_25', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_25', 'unlimited_photos', 'true'::jsonb),
+    ('guests_25', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_25', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_25', 'media_types', '["photo"]'::jsonb),
+    ('guests_25', 'cohost_count', '2'::jsonb),
+    ('guests_25', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_25', 'gallery_retention_days', '365'::jsonb),
+    ('guests_25', 'support_level', '"standard"'::jsonb),
+
+    ('guests_50', 'participant_limit', '50'::jsonb),
+    ('guests_50', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_50', 'unlimited_photos', 'true'::jsonb),
+    ('guests_50', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_50', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_50', 'media_types', '["photo"]'::jsonb),
+    ('guests_50', 'cohost_count', '2'::jsonb),
+    ('guests_50', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_50', 'gallery_retention_days', '365'::jsonb),
+    ('guests_50', 'support_level', '"standard"'::jsonb),
+
+    ('guests_100', 'participant_limit', '100'::jsonb),
+    ('guests_100', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_100', 'unlimited_photos', 'true'::jsonb),
+    ('guests_100', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_100', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_100', 'media_types', '["photo"]'::jsonb),
+    ('guests_100', 'cohost_count', '2'::jsonb),
+    ('guests_100', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_100', 'gallery_retention_days', '365'::jsonb),
+    ('guests_100', 'support_level', '"standard"'::jsonb),
+
+    ('guests_150', 'participant_limit', '150'::jsonb),
+    ('guests_150', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_150', 'unlimited_photos', 'true'::jsonb),
+    ('guests_150', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_150', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_150', 'media_types', '["photo"]'::jsonb),
+    ('guests_150', 'cohost_count', '2'::jsonb),
+    ('guests_150', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_150', 'gallery_retention_days', '365'::jsonb),
+    ('guests_150', 'support_level', '"standard"'::jsonb),
+
+    ('guests_200', 'participant_limit', '200'::jsonb),
+    ('guests_200', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_200', 'unlimited_photos', 'true'::jsonb),
+    ('guests_200', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_200', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_200', 'media_types', '["photo"]'::jsonb),
+    ('guests_200', 'cohost_count', '2'::jsonb),
+    ('guests_200', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_200', 'gallery_retention_days', '365'::jsonb),
+    ('guests_200', 'support_level', '"standard"'::jsonb),
+
+    ('guests_unlimited', 'participant_limit', 'null'::jsonb),
+    ('guests_unlimited', 'photo_limit_options', '[5,10,15,25]'::jsonb),
+    ('guests_unlimited', 'unlimited_photos', 'true'::jsonb),
+    ('guests_unlimited', 'camera_roll_uploads', 'true'::jsonb),
+    ('guests_unlimited', 'camera_roll_upload_limit', '15'::jsonb),
+    ('guests_unlimited', 'media_types', '["photo"]'::jsonb),
+    ('guests_unlimited', 'cohost_count', '2'::jsonb),
+    ('guests_unlimited', 'qr_templates', '["digital_card","a4_poster","a5_sign","table_card"]'::jsonb),
+    ('guests_unlimited', 'gallery_retention_days', '365'::jsonb),
+    ('guests_unlimited', 'support_level', '"standard"'::jsonb)
 )
 insert into public.plan_entitlements (plan_id, entitlement_key, value)
 select p.id, g.entitlement_key, g.value
@@ -237,23 +272,21 @@ insert into public.add_ons (
   apple_product_id, google_product_id, web_product_id, sort_order, is_active
 )
 values
-  ('extra_guests_100', 'Extra guests',
-   'Raises the guest limit by 100.',
-   1900, 'GBP',
-   'com.example.eventcamera.addon.extraguests100',
-   'addon_extra_guests_100',
-   'web_addon_extra_guests_100', 10, true),
-
-  ('extended_gallery', 'Extended gallery',
-   'Keeps the gallery available for a further two years.',
-   2900, 'GBP',
-   'com.example.eventcamera.addon.extendedgallery',
-   'addon_extended_gallery',
-   'web_addon_extended_gallery', 20, true)
+  ('media_bundle', 'Media Bundle',
+   'Unlock Audio Guestbook & Video Uploads.',
+   1500, 'USD',
+   'com.example.eventcamera.addon.mediabundle',
+   'addon_media_bundle',
+   'web_addon_media_bundle', 10, true)
 on conflict (key) do update set
   name = excluded.name,
   description = excluded.description,
   price_minor_units = excluded.price_minor_units,
+  currency = excluded.currency,
+  apple_product_id = excluded.apple_product_id,
+  google_product_id = excluded.google_product_id,
+  web_product_id = excluded.web_product_id,
+  sort_order = excluded.sort_order,
   is_active = excluded.is_active;
 
 with add_on_ids as (
@@ -261,11 +294,96 @@ with add_on_ids as (
 ),
 grants (add_on_key, entitlement_key, value) as (
   values
-    ('extra_guests_100', 'participant_limit',      '100'::jsonb),
-    ('extended_gallery', 'gallery_retention_days', '730'::jsonb)
+    ('media_bundle', 'audio_guestbook', 'true'::jsonb),
+    ('media_bundle', 'media_types', '["photo", "video"]'::jsonb)
 )
 insert into public.add_on_entitlements (add_on_id, entitlement_key, value)
 select a.id, g.entitlement_key, g.value
 from grants g
 join add_on_ids a on a.key = g.add_on_key
 on conflict (add_on_id, entitlement_key) do update set value = excluded.value;
+
+-- ---------------------------------------------------------------------------
+-- Local Test Celebration Seed
+-- ---------------------------------------------------------------------------
+
+-- 1. Insert a dummy owner user in auth.users
+insert into auth.users (id, email, raw_user_meta_data, raw_app_meta_data, aud, role)
+values (
+  '00000000-0000-0000-0000-000000000001',
+  'test-owner@example.com',
+  '{"display_name": "Test Owner"}'::jsonb,
+  '{"provider": "email", "providers": ["email"]}'::jsonb,
+  'authenticated',
+  'authenticated'
+)
+on conflict (id) do nothing;
+
+-- 2. Insert a workspace
+insert into public.workspaces (id, name, created_by, created_at, updated_at)
+values (
+  '00000000-0000-0000-0000-000000000002',
+  'Test Workspace',
+  '00000000-0000-0000-0000-000000000001',
+  now(),
+  now()
+)
+on conflict (id) do nothing;
+
+-- 3. Insert workspace member link
+insert into public.workspace_members (workspace_id, user_id, role)
+values (
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000001',
+  'owner'
+)
+on conflict do nothing;
+
+-- 4. Insert celebration with target test slug: leavingdo2026
+insert into public.celebrations (
+  id, workspace_id, created_by, title, status, public_slug, starts_at, ends_at, timezone, default_theme_id
+)
+values (
+  '00000000-0000-0000-0000-000000000003',
+  '00000000-0000-0000-0000-000000000002',
+  '00000000-0000-0000-0000-000000000001',
+  'Arjun''s Leaving Do',
+  'published',
+  'leavingdo2026',
+  now(),
+  now() + interval '7 days',
+  'Europe/London',
+  (select id from public.themes where slug = 'editorial' limit 1)
+)
+on conflict (id) do nothing;
+
+-- 5. Insert event session
+insert into public.event_sessions (
+  id, celebration_id, name, status, sequence_number, starts_at, ends_at, reveal_mode, reveal_at, shot_limit_per_guest
+)
+values (
+  '00000000-0000-0000-0000-000000000004',
+  '00000000-0000-0000-0000-000000000003',
+  'Main event',
+  'published',
+  1,
+  now(),
+  now() + interval '7 days',
+  'instant',
+  null,
+  10
+)
+on conflict (id) do nothing;
+
+-- 6. Insert access link for guests
+insert into public.access_links (
+  id, event_session_id, kind, token_hash, is_active
+)
+values (
+  '00000000-0000-0000-0000-000000000005',
+  '00000000-0000-0000-0000-000000000004',
+  'guest',
+  private.digest_token('test_guest_access_token'),
+  true
+)
+on conflict (id) do nothing;

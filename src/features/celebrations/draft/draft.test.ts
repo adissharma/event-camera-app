@@ -13,27 +13,11 @@ describe('reveal resolution', () => {
     expect(resolveReveal('during', CLOSE, null)).toEqual({ mode: 'instant', revealAt: null });
   });
 
-  it('maps "when I decide" to manual', () => {
-    expect(resolveReveal('manual', CLOSE, null)).toEqual({ mode: 'manual', revealAt: null });
-  });
-
   it('reveals at the closing time', () => {
-    expect(resolveReveal('at_close', CLOSE, null)).toEqual({ mode: 'scheduled', revealAt: CLOSE });
-  });
-
-  it('adds exactly 12 and 24 hours', () => {
-    expect(resolveReveal('after_12h', CLOSE, null).revealAt).toBe('2026-08-16T10:00:00.000Z');
-    expect(resolveReveal('after_24h', CLOSE, null).revealAt).toBe('2026-08-16T22:00:00.000Z');
-  });
-
-  it('adds absolute hours across a daylight-saving boundary', () => {
-    // UK clocks go back at 02:00 on 26 October 2026. "12 hours after" has to
-    // mean twelve actual hours, not the same wall-clock time — a guest told to
-    // come back at 10am must not find the gallery still developing.
-    const beforeChange = '2026-10-25T00:30:00.000Z';
-    expect(resolveReveal('after_12h', beforeChange, null).revealAt).toBe(
-      '2026-10-25T12:30:00.000Z',
-    );
+    expect(resolveReveal('at_close', CLOSE, null)).toEqual({
+      mode: 'scheduled',
+      revealAt: CLOSE,
+    });
   });
 
   it('uses the custom time when one is set', () => {
@@ -47,7 +31,6 @@ describe('reveal resolution', () => {
   it('falls back to manual rather than inventing a time', () => {
     // A wrong reveal time is worse than asking the host to press a button.
     expect(resolveReveal('custom', CLOSE, null)).toEqual({ mode: 'manual', revealAt: null });
-    expect(resolveReveal('after_12h', null, null)).toEqual({ mode: 'manual', revealAt: null });
     expect(resolveReveal('at_close', null, null)).toEqual({ mode: 'manual', revealAt: null });
   });
 });
@@ -88,51 +71,93 @@ describe('step validation', () => {
     });
   });
 
-  describe('privacy', () => {
-    it('requires a PIN when one is switched on', () => {
-      expect(validateStep('privacy', draftWith({ pinRequired: true, pin: null }))).toMatch(/PIN/);
-      expect(validateStep('privacy', draftWith({ pinRequired: true, pin: '12' }))).not.toBeNull();
-    });
-
-    it('accepts a 4 to 8 digit PIN', () => {
-      expect(validateStep('privacy', draftWith({ pinRequired: true, pin: '1234' }))).toBeNull();
-      expect(validateStep('privacy', draftWith({ pinRequired: true, pin: '12345678' }))).toBeNull();
-    });
-
-    it('ignores a stale PIN when the toggle is off', () => {
-      expect(validateStep('privacy', draftWith({ pinRequired: false, pin: null }))).toBeNull();
-    });
-  });
-
   describe('reveal', () => {
-    it('requires a time for a custom reveal', () => {
+    it('accepts "during" for both me and guests', () => {
       expect(
-        validateStep('reveal', draftWith({ revealChoice: 'custom', customRevealAt: null })),
-      ).not.toBeNull();
+        validateStep(
+          'reveal',
+          draftWith({ hostRevealChoice: 'during', guestRevealChoice: 'during' }),
+        ),
+      ).toBeNull();
     });
 
-    it('rejects a reveal before the event closes', () => {
-      // Guests seeing the gallery while still shooting contradicts the entire
-      // delayed-reveal promise.
-      const error = validateStep(
-        'reveal',
-        draftWith({
-          revealChoice: 'custom',
-          endsAt: CLOSE,
-          customRevealAt: '2026-08-15T18:00:00.000Z',
-        }),
-      );
-      expect(error).toMatch(/cannot be before/);
+    it('rejects when guest is during but host is at close', () => {
+      expect(
+        validateStep(
+          'reveal',
+          draftWith({ hostRevealChoice: 'at_close', guestRevealChoice: 'during' }),
+        ),
+      ).toMatch(/Guests cannot view photos before you/);
     });
 
-    it('accepts a reveal after the event closes', () => {
+    it('rejects when host is custom but guest is not custom', () => {
       expect(
         validateStep(
           'reveal',
           draftWith({
-            revealChoice: 'custom',
-            endsAt: CLOSE,
-            customRevealAt: '2026-08-16T09:00:00.000Z',
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: new Date(Date.now() + 3600000).toISOString(),
+            guestRevealChoice: 'at_close',
+          }),
+        ),
+      ).toMatch(/Guests must have a custom reveal/);
+    });
+
+    it('rejects a custom reveal with null times', () => {
+      expect(
+        validateStep(
+          'reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: null,
+            guestRevealChoice: 'custom',
+            guestCustomRevealAt: null,
+          }),
+        ),
+      ).toMatch(/Choose a day and time/);
+    });
+
+    it('rejects a custom reveal in the past', () => {
+      expect(
+        validateStep(
+          'reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: '2020-01-01T00:00:00.000Z',
+            guestRevealChoice: 'custom',
+            guestCustomRevealAt: '2020-01-01T00:00:00.000Z',
+          }),
+        ),
+      ).toMatch(/future/);
+    });
+
+    it('rejects when guest custom reveal is before host custom reveal', () => {
+      const hostTime = new Date(Date.now() + 86_400_000);
+      const guestTime = new Date(hostTime.getTime() - 3600_000); // 1 hour earlier
+      expect(
+        validateStep(
+          'reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: hostTime.toISOString(),
+            guestRevealChoice: 'custom',
+            guestCustomRevealAt: guestTime.toISOString(),
+          }),
+        ),
+      ).toMatch(/Guests cannot view photos before you do/);
+    });
+
+    it('accepts future custom reveals where guest is at or after host', () => {
+      const hostTime = new Date(Date.now() + 86_400_000);
+      const guestTime = new Date(hostTime.getTime() + 3600_000); // 1 hour later
+      expect(
+        validateStep(
+          'reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: hostTime.toISOString(),
+            guestRevealChoice: 'custom',
+            guestCustomRevealAt: guestTime.toISOString(),
           }),
         ),
       ).toBeNull();
@@ -155,7 +180,7 @@ describe('publishability', () => {
     draftWith({
       title: 'Priya & Arjun',
       endsAt: new Date(Date.now() + 86_400_000).toISOString(),
-      planKey: 'signature',
+      planKey: 'guests_50',
     });
 
   it('is publishable once name, closing time, formats and package are set', () => {
@@ -181,7 +206,6 @@ describe('publishability', () => {
     expect(incomplete).toContain('package');
     // Steps with a valid default must not be nagged about.
     expect(incomplete).not.toContain('treatment');
-    expect(incomplete).not.toContain('qr');
   });
 
   it('reports nothing incomplete for a finished draft', () => {
@@ -195,7 +219,8 @@ describe('empty draft defaults', () => {
     expect(draft.allowedMediaTypes).toEqual(['photo']);
     expect(draft.captureMode).toBe('camera_and_library');
     expect(draft.galleryVisibility).toBe('all_guests');
-    expect(draft.revealChoice).toBe('after_12h');
+    expect(draft.hostRevealChoice).toBe('at_close');
+    expect(draft.guestRevealChoice).toBe('at_close');
     expect(draft.photoTreatment).toBe('original');
     expect(draft.furthestStep).toBe('name');
   });

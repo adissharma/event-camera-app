@@ -13,12 +13,13 @@
  */
 
 export const BRAND_CONFIG = {
-  appName: 'Koto',
-  shortName: 'Koto',
+  appName: 'Candidly',
+  shortName: 'Candidly',
   tagline: 'Every guest. Every angle.',
   supportEmail: 'support@example.com',
   websiteUrl: 'https://example.com',
-  guestDomain: 'https://example.com',
+  /** Must match the Universal Link / App Link domain in `app.json`. */
+  guestDomain: 'http://localhost:8081',
 } as const;
 
 export type BrandConfig = typeof BRAND_CONFIG;
@@ -31,15 +32,13 @@ export type BrandConfig = typeof BRAND_CONFIG;
  * back to an accessible text lockup instead.
  */
 export const BRAND_ASSETS: {
-  logoPrimary: number | undefined;
-  logoLight: number | undefined;
-  logoMark: number | undefined;
+  logoPrimary: any;
+  logoLight: any;
+  logoMark: any;
 } = {
-  // No logo has been supplied yet. `BrandLogo` renders a clearly labelled
-  // placeholder lockup until a real asset is dropped into assets/brand/.
-  logoPrimary: undefined,
-  logoLight: undefined,
-  logoMark: undefined,
+  logoPrimary: require('../../assets/brand/logo.png'),
+  logoLight: require('../../assets/brand/logo.png'),
+  logoMark: require('../../assets/brand/logo.png'),
 };
 
 /** True when a real logo asset exists; drives placeholder vs. image rendering. */

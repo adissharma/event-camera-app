@@ -56,7 +56,6 @@ describe('copy deck', () => {
     });
 
     it('labels unavailable features honestly rather than hiding a dead control', () => {
-      expect(copy.create.comingLater).toBeTruthy();
       expect(copy.dashboard.addFunctionComingLater).toBeTruthy();
     });
   });

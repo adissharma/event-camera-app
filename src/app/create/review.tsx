@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
@@ -12,7 +13,7 @@ import { resolveReveal, type CreationStep } from '@/features/celebrations/draft/
 import { canPublish, validateStep } from '@/features/celebrations/draft/validation';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { publishDraft, PublicationError } from '@/services/publication';
-import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
+import { celebrationKeys } from '@/services/celebrations';
 import { colours, layout, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
 
@@ -25,7 +26,8 @@ import { copy } from '@/i18n';
  */
 export default function ReviewStep() {
   const router = useRouter();
-  const { draft } = useCreationDraft();
+  const queryClient = useQueryClient();
+  const { draft, reset } = useCreationDraft();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
 
@@ -33,9 +35,10 @@ export default function ReviewStep() {
     setIsPublishing(true);
     setPublishError(null);
     try {
-      const result = await publishDraft(draft);
-      setPublicationResult(result);
-      router.replace('/create/success');
+      await publishDraft(draft);
+      await reset();
+      await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
+      router.replace('/home');
     } catch (error) {
       // Stage-aware, because "your card was declined" and "we could not reach
       // the server" need entirely different reactions from the host.
@@ -60,10 +63,11 @@ export default function ReviewStep() {
         }).format(new Date(iso))
       : 'Not set';
 
-  const reveal = resolveReveal(draft.revealChoice, draft.endsAt, draft.customRevealAt);
+  const hostReveal = resolveReveal(draft.hostRevealChoice, draft.endsAt, draft.hostCustomRevealAt);
+  const guestReveal = resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
 
   const rows: { step: CreationStep; label: string; value: string }[] = [
-    { step: 'name', label: 'Event name', value: draft.title.trim() || 'Not set' },
+    { step: 'name', label: 'Cover title', value: draft.title.trim() || 'Not set' },
     { step: 'closing', label: 'Closes', value: date(draft.endsAt) },
     { step: 'cover', label: 'Cover', value: draft.coverLocalUri ? 'Your photo' : 'Default image' },
     { step: 'cover', label: 'Theme', value: draft.themeSlug ?? 'Editorial' },
@@ -73,37 +77,32 @@ export default function ReviewStep() {
       value: draft.shotLimitPerGuest === null ? 'Unlimited' : String(draft.shotLimitPerGuest),
     },
     {
-      step: 'camera-roll',
+      step: 'photo-limit',
       label: 'Camera roll',
-      value: draft.cameraRollUploadsEnabled
-        ? `${draft.cameraRollUploadLimit} each`
-        : 'Not allowed',
+      value: draft.cameraRollUploadsEnabled ? 'Allowed' : 'Not allowed',
     },
-    { step: 'formats', label: 'Formats', value: draft.allowedMediaTypes.join(', ') },
-    {
-      step: 'privacy',
-      label: 'Who sees photos',
-      value:
-        draft.galleryVisibility === 'all_guests'
-          ? 'Everyone'
-          : draft.galleryVisibility === 'own_only'
-            ? 'Own photos only'
-            : 'Only you',
-    },
-    { step: 'privacy', label: 'PIN', value: draft.pinRequired ? 'Required' : 'Not required' },
     {
       step: 'reveal',
-      label: 'Photos appear',
+      label: 'My access',
       value:
-        reveal.mode === 'instant'
+        hostReveal.mode === 'instant'
           ? 'During the event'
-          : reveal.mode === 'manual'
-            ? 'When you choose'
-            : date(reveal.revealAt),
+          : hostReveal.mode === 'manual'
+            ? 'Not set yet'
+            : date(hostReveal.revealAt),
+    },
+    {
+      step: 'reveal',
+      label: 'Guests’ access',
+      value:
+        guestReveal.mode === 'instant'
+          ? 'During the event'
+          : guestReveal.mode === 'manual'
+            ? 'Not set yet'
+            : date(guestReveal.revealAt),
     },
     { step: 'treatment', label: 'Look', value: draft.photoTreatment.replace(/_/g, ' ') },
     { step: 'package', label: 'Package', value: draft.planKey ?? 'Not chosen' },
-    { step: 'qr', label: 'QR design', value: draft.qrTemplateKey.replace(/_/g, ' ') },
   ];
 
   const blocking = validateStep('review', draft);

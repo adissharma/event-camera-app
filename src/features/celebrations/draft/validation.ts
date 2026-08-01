@@ -34,11 +34,7 @@ export const closingSchema = z
     },
   );
 
-export const coverSchema = z.object({
-  // The cover image is genuinely optional — a host who has not chosen one gets
-  // the default editorial image rather than being blocked.
-  supportingLine: z.string().max(140, 'Keep this short — it sits under the title').optional(),
-});
+export const coverSchema = z.object({});
 
 export const photoLimitSchema = z.object({
   // null is unlimited, which is a valid choice when the plan grants it.
@@ -49,55 +45,76 @@ export const photoLimitSchema = z.object({
     .nullable(),
 });
 
-export const cameraRollSchema = z.object({
-  cameraRollUploadLimit: z
-    .number()
-    .int()
-    .min(0, 'This cannot be negative')
-    .max(500, 'That is more than a guest will realistically upload'),
-});
-
 export const formatsSchema = z.object({
   allowedMediaTypes: z
     .array(z.enum(['photo', 'video', 'audio']))
     .min(1, 'Guests need at least one way to contribute'),
 });
 
-export const privacySchema = z
-  .object({
-    galleryVisibility: z.enum(['all_guests', 'own_only', 'hosts_only']),
-    pinRequired: z.boolean(),
-    pin: z.string().nullable(),
-  })
-  .refine(
-    (value) => !value.pinRequired || (value.pin !== null && /^\d{4,8}$/.test(value.pin)),
-    {
-      message: 'Choose a PIN of 4 to 8 digits, or turn the PIN off',
-      path: ['pin'],
-    },
-  );
+export const privacySchema = z.object({
+  galleryVisibility: z.enum(['all_guests', 'own_only', 'hosts_only']),
+});
 
 export const revealSchema = z
   .object({
-    revealChoice: z.enum(['during', 'at_close', 'after_12h', 'after_24h', 'custom', 'manual']),
-    customRevealAt: z.string().nullable(),
-    endsAt: z.string().nullable(),
-  })
-  .refine((value) => value.revealChoice !== 'custom' || value.customRevealAt !== null, {
-    message: 'Choose when the photos should appear',
-    path: ['customRevealAt'],
+    hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
+    hostCustomRevealAt: z.string().nullable(),
+    guestRevealChoice: z.enum(['during', 'at_close', 'custom']),
+    guestCustomRevealAt: z.string().nullable(),
   })
   .refine(
-    (value) => {
-      // A reveal before the event closes means guests see the gallery while
-      // still shooting, which contradicts the delayed-reveal promise.
-      if (value.revealChoice !== 'custom' || !value.customRevealAt || !value.endsAt) return true;
-      return new Date(value.customRevealAt).getTime() >= new Date(value.endsAt).getTime();
+    (val) => val.hostRevealChoice !== 'custom' || val.hostCustomRevealAt !== null,
+    { message: 'Choose a day and time for your custom reveal', path: ['hostCustomRevealAt'] }
+  )
+  .refine(
+    (val) => val.guestRevealChoice !== 'custom' || val.guestCustomRevealAt !== null,
+    { message: 'Choose a day and time for the guest custom reveal', path: ['guestCustomRevealAt'] }
+  )
+  .refine(
+    (val) =>
+      val.hostRevealChoice !== 'custom' ||
+      !val.hostCustomRevealAt ||
+      new Date(val.hostCustomRevealAt).getTime() > Date.now(),
+    { message: 'Choose a reveal time in the future for yourself', path: ['hostCustomRevealAt'] }
+  )
+  .refine(
+    (val) =>
+      val.guestRevealChoice !== 'custom' ||
+      !val.guestCustomRevealAt ||
+      new Date(val.guestCustomRevealAt).getTime() > Date.now(),
+    { message: 'Choose a reveal time in the future for guests', path: ['guestCustomRevealAt'] }
+  )
+  .refine(
+    (val) => {
+      if (val.hostRevealChoice === 'at_close' && val.guestRevealChoice === 'during') {
+        return false;
+      }
+      return true;
     },
-    {
-      message: 'The reveal cannot be before your event closes',
-      path: ['customRevealAt'],
+    { message: 'Guests cannot view photos before you can view them', path: ['guestRevealChoice'] }
+  )
+  .refine(
+    (val) => {
+      if (val.hostRevealChoice === 'custom' && val.guestRevealChoice !== 'custom') {
+        return false;
+      }
+      return true;
     },
+    { message: 'Guests must have a custom reveal if yours is custom', path: ['guestRevealChoice'] }
+  )
+  .refine(
+    (val) => {
+      if (
+        val.hostRevealChoice === 'custom' &&
+        val.guestRevealChoice === 'custom' &&
+        val.hostCustomRevealAt &&
+        val.guestCustomRevealAt
+      ) {
+        return new Date(val.guestCustomRevealAt).getTime() >= new Date(val.hostCustomRevealAt).getTime();
+      }
+      return true;
+    },
+    { message: 'Guests cannot view photos before you do', path: ['guestCustomRevealAt'] }
   );
 
 export const packageSchema = z.object({
@@ -117,40 +134,21 @@ const STEP_VALIDATORS: Record<CreationStep, (draft: CreationDraft) => string | n
   name: (d) => firstError(nameSchema.safeParse({ title: d.title })),
   closing: (d) =>
     firstError(closingSchema.safeParse({ endsAt: d.endsAt ?? '', timezone: d.timezone })),
-  cover: (d) => firstError(coverSchema.safeParse({ supportingLine: d.supportingLine })),
+  cover: () => firstError(coverSchema.safeParse({})),
   'photo-limit': (d) =>
     firstError(photoLimitSchema.safeParse({ shotLimitPerGuest: d.shotLimitPerGuest })),
-  'camera-roll': (d) =>
-    firstError(cameraRollSchema.safeParse({ cameraRollUploadLimit: d.cameraRollUploadLimit })),
-  formats: (d) => firstError(formatsSchema.safeParse({ allowedMediaTypes: d.allowedMediaTypes })),
-  privacy: (d) =>
-    firstError(
-      privacySchema.safeParse({
-        galleryVisibility: d.galleryVisibility,
-        pinRequired: d.pinRequired,
-        pin: d.pin,
-      }),
-    ),
   reveal: (d) =>
     firstError(
       revealSchema.safeParse({
-        revealChoice: d.revealChoice,
-        customRevealAt: d.customRevealAt,
-        endsAt: d.endsAt,
+        hostRevealChoice: d.hostRevealChoice,
+        hostCustomRevealAt: d.hostCustomRevealAt,
+        guestRevealChoice: d.guestRevealChoice,
+        guestCustomRevealAt: d.guestCustomRevealAt,
       }),
-    ),
+    ) ??
+    firstError(privacySchema.safeParse({ galleryVisibility: d.galleryVisibility })),
   treatment: () => null,
   package: (d) => firstError(packageSchema.safeParse({ planKey: d.planKey ?? '' })),
-  qr: () => null,
-  review: (d) =>
-    firstError(
-      publishSchema.safeParse({
-        title: d.title,
-        endsAt: d.endsAt ?? '',
-        planKey: d.planKey ?? '',
-        allowedMediaTypes: d.allowedMediaTypes,
-      }),
-    ),
 };
 
 /**
@@ -173,13 +171,20 @@ export function validateStep(step: CreationStep, draft: CreationDraft): string |
   return STEP_VALIDATORS[step](draft);
 }
 
-/** Every step that is not yet valid. Used by the review screen. */
+/** Every step that is not yet valid. */
 export function incompleteSteps(draft: CreationDraft): CreationStep[] {
   return CREATION_STEPS.filter(
-    (step) => step !== 'review' && validateStep(step, draft) !== null,
+    (step) => validateStep(step, draft) !== null,
   );
 }
 
 export function canPublish(draft: CreationDraft): boolean {
-  return validateStep('review', draft) === null;
+  return firstError(
+    publishSchema.safeParse({
+      title: draft.title,
+      endsAt: draft.endsAt ?? '',
+      planKey: draft.planKey ?? '',
+      allowedMediaTypes: draft.allowedMediaTypes,
+    }),
+  ) === null;
 }

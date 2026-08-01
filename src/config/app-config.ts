@@ -55,7 +55,7 @@ export const STORAGE_BUCKETS = {
 export const EVENT_DEFAULTS = {
   shotLimitPerGuest: 20,
   cameraRollUploadLimit: 5,
-  cameraRollUploadsAfterClose: true,
+  cameraRollAnytime: true,
   allowMediaFromAnyDate: false,
   captureMode: 'camera_and_library',
   allowedMediaTypes: ['photo'],
@@ -64,8 +64,6 @@ export const EVENT_DEFAULTS = {
   revealDelayHours: 12,
   galleryVisibility: 'all_guests',
   guestDownloadsEnabled: true,
-  moderationEnabled: false,
-  pinRequired: false,
   photoTreatment: 'original',
   dateStampEnabled: false,
   sequenceNumber: 1,

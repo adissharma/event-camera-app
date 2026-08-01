@@ -39,6 +39,13 @@ export default function ClosingStep() {
     });
   }
 
+  const timezoneCode = new Intl.DateTimeFormat('en-GB', {
+    timeZone: draft.timezone,
+    timeZoneName: 'short',
+  })
+    .formatToParts(selected ?? new Date())
+    .find((part) => part.type === 'timeZoneName')?.value;
+
   return (
     <CreationStepScreen
       step="closing"
@@ -87,10 +94,17 @@ export default function ClosingStep() {
               borderColor: showTimePicker ? colours.focusRing : colours.borderStrong,
             }}
           >
-            {/* Displayed as am/pm; the picker below runs in 24-hour. */}
-            <AppText variant="numeric">
-              {selected ? formatTime12h(selected) : '11:59 pm'}
-            </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs }}>
+              {/* Displayed as am/pm; the picker below runs in 24-hour. */}
+              <AppText variant="numeric">
+                {selected ? formatTime12h(selected) : '11:59 pm'}
+              </AppText>
+              {timezoneCode ? (
+                <AppText variant="caption" tone="secondary">
+                  {timezoneCode}
+                </AppText>
+              ) : null}
+            </View>
           </Pressable>
         </View>
 
@@ -140,12 +154,6 @@ export default function ClosingStep() {
           minimumDate={new Date()}
           fill
         />
-
-        <View style={{ gap: spacing.xxs, paddingTop: spacing.xs }}>
-          <AppText variant="caption" tone="secondary">
-            Times are in {draft.timezone.replace(/_/g, ' ')}.
-          </AppText>
-        </View>
       </View>
     </CreationStepScreen>
   );

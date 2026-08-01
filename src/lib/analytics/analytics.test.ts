@@ -42,7 +42,7 @@ describe('analytics redaction', () => {
 
     it('drops links and slugs, since a guest link is a bearer credential', () => {
       const result = redact({
-        guest_url: 'https://example.com/j/abc#t=secret',
+        guest_url: 'https://example.com/e/abc#t=secret',
         public_slug: 'ee75761514ae0aece5af2dc8310bf030',
         signedUrl: 'https://storage/x',
         durationMs: 400,
@@ -54,7 +54,7 @@ describe('analytics redaction', () => {
 
   describe('value-shaped detection', () => {
     it('drops a URL even under an innocent key', () => {
-      expect(redact({ destination: 'https://example.com/j/abc' })).toEqual({});
+      expect(redact({ destination: 'https://example.com/e/abc' })).toEqual({});
       expect(redact({ target: 'http://localhost/x' })).toEqual({});
     });
 
@@ -106,7 +106,7 @@ describe('analytics redaction', () => {
 
       track('event_published', {
         event_title: 'Secret Wedding',
-        guest_url: 'https://example.com/j/abc#t=tok',
+        guest_url: 'https://example.com/e/abc#t=tok',
         planTier: 3,
       });
 

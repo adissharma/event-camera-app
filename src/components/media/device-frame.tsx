@@ -48,19 +48,6 @@ export function DeviceFrame({ children, width = 240 }: DeviceFrameProps) {
       >
         {children}
       </View>
-
-      {/* Notch. Enough to read as a phone, not enough to imitate a specific one. */}
-      <View
-        style={{
-          position: 'absolute',
-          top: bezel + 6,
-          alignSelf: 'center',
-          width: width * 0.3,
-          height: 18,
-          borderRadius: radii.pill,
-          backgroundColor: colours.surfaceRaised,
-        }}
-      />
     </View>
   );
 }

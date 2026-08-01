@@ -39,7 +39,7 @@ export function QrCard({ value, eventName, supportingLine, size = 200 }: QrCardP
         borderColor: colours.borderStrong,
       }}
     >
-      <BrandLogo height={18} />
+      <BrandLogo height={22} />
 
       <View
         style={{

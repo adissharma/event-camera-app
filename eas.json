@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 12.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "ios": {
+        "buildType": "simulator"
+      }
+    },
+    "staging": {
+      "ios": {
+        "buildType": "archive"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "YOUR_STAGING_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "YOUR_STAGING_SUPABASE_ANON_KEY"
+      }
+    },
+    "production": {
+      "ios": {
+        "buildType": "archive"
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "YOUR_PROD_SUPABASE_URL",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "YOUR_PROD_SUPABASE_ANON_KEY"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "ascAppId": "YOUR_APP_ID",
+        "appleTeamId": "YOUR_TEAM_ID",
+        "appleId": "YOUR_APPLE_ID",
+        "appleIdPassword": "@prompt"
+      }
+    },
+    "staging": {
+      "ios": {
+        "ascAppId": "YOUR_APP_ID",
+        "appleTeamId": "YOUR_TEAM_ID",
+        "appleId": "YOUR_APPLE_ID",
+        "appleIdPassword": "@prompt"
+      }
+    }
+  }
+}

@@ -29,9 +29,7 @@ export interface ThemeCarouselProps {
   themes: ThemeRow[];
   selectedSlug: string | null;
   onSelect: (slug: string) => void;
-  onEditImage: () => void;
-  onEditTitle: () => void;
-  onEditDate: () => void;
+  onEditCover: () => void;
 }
 
 /**
@@ -47,14 +45,18 @@ export function ThemeCarousel({
   themes,
   selectedSlug,
   onSelect,
-  onEditImage,
-  onEditTitle,
-  onEditDate,
+  onEditCover,
 }: ThemeCarouselProps) {
   const { width } = useWindowDimensions();
   const motion = useMotion();
+  const selectedIndex = Math.max(
+    0,
+    themes.findIndex((theme) => theme.slug === selectedSlug),
+  );
   const scrollRef = useRef<ScrollView>(null);
   const hasNudged = useRef(false);
+  const activeIndexRef = useRef(selectedIndex);
+  const selectedSlugRef = useRef<string | null>(selectedSlug);
 
   /**
    * Measured height of the carousel row.
@@ -73,9 +75,12 @@ export function ThemeCarousel({
   // leaves the next card peeking rather than filling the viewport.
   const heightDerivedWidth = rowHeight > 0 ? Math.floor(rowHeight / DEVICE_RATIO) : 0;
   const cardWidth = Math.max(140, Math.min(heightDerivedWidth || 200, Math.round(width * 0.62)));
+  // The dots below already signal that more themes exist, so the next card only
+  // needs a gentle peek. A small offset keeps the phone optically centred
+  // without letting the neighbour pull it as far left as the old layout did.
   const sidePadding = Math.max(
     spacing.base,
-    Math.round((width - cardWidth) / 2) - Math.round(cardWidth * 0.28),
+    Math.round((width - cardWidth) / 2) - Math.round(cardWidth * 0.12),
   );
   const snapInterval = cardWidth + gap;
 
@@ -84,11 +89,21 @@ export function ThemeCarousel({
     if (measured > 0 && measured !== rowHeight) setRowHeight(measured);
   }
 
-  const selectedIndex = Math.max(
-    0,
-    themes.findIndex((theme) => theme.slug === selectedSlug),
-  );
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
+
+  useEffect(() => {
+    if (selectedIndex !== activeIndexRef.current) {
+      setActiveIndex(selectedIndex);
+    }
+  }, [selectedIndex]);
+
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
+  useEffect(() => {
+    selectedSlugRef.current = selectedSlug;
+  }, [selectedSlug]);
 
   const nudge = useSharedValue(0);
 
@@ -119,16 +134,44 @@ export function ThemeCarousel({
     transform: [{ translateX: nudge.value }],
   }));
 
-  function handleMomentumEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const index = Math.round(event.nativeEvent.contentOffset.x / snapInterval);
+  function clampIndex(index: number) {
+    return Math.max(0, Math.min(themes.length - 1, index));
+  }
+
+  function selectIndex(index: number) {
     const theme = themes[index];
     if (!theme) return;
 
-    setActiveIndex(index);
-    if (theme.slug !== selectedSlug) {
+    if (index !== activeIndexRef.current) {
+      activeIndexRef.current = index;
+      setActiveIndex(index);
       void Haptics.selectionAsync().catch(() => {});
+    }
+
+    if (theme.slug !== selectedSlugRef.current) {
+      selectedSlugRef.current = theme.slug;
       onSelect(theme.slug);
     }
+  }
+
+  function nearestIndex(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    return clampIndex(Math.round(event.nativeEvent.contentOffset.x / snapInterval));
+  }
+
+  // Deliberately not driven by `onScroll`: recomputing the active card on every
+  // scroll frame — each of which used to update state, fire a haptic, and push
+  // the theme choice into the draft store — was the cause of the visible
+  // freeze while dragging. The card only needs to know which one is active
+  // once the gesture actually settles.
+  //
+  // Also deliberately NOT calling `scrollTo` here: `snapToInterval` already
+  // makes the native scroll view come to rest exactly on a card boundary.
+  // Layering a manual `scrollTo` on top of that fought the native settle —
+  // the two disagreed by a frame or two and produced the stutter/jitter
+  // reported as "buggy" scrolling. This only ever needs to read where the
+  // view already landed, not move it again.
+  function handleScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    selectIndex(nearestIndex(event));
   }
 
   return (
@@ -140,10 +183,16 @@ export function ThemeCarousel({
           showsHorizontalScrollIndicator={false}
           // Snapping rather than paging: paging assumes one card per screen
           // width, which would hide the peek that makes this discoverable.
+          // Not `disableIntervalMomentum` — that clamps every gesture to a
+          // single card regardless of how hard it's flicked, which reads as
+          // unresponsive on a real swipe. A strong flick should be able to
+          // carry past more than one card, same as it would natively.
           snapToInterval={snapInterval}
+          snapToAlignment="start"
           decelerationRate="fast"
           contentOffset={{ x: selectedIndex * snapInterval, y: 0 }}
-          onMomentumScrollEnd={handleMomentumEnd}
+          onScrollEndDrag={handleScrollEnd}
+          onMomentumScrollEnd={handleScrollEnd}
           contentContainerStyle={{
             paddingHorizontal: Math.max(spacing.base, sidePadding),
             gap,
@@ -152,31 +201,52 @@ export function ThemeCarousel({
         >
           {(rowHeight === 0 ? [] : themes).map((theme, index) => {
             const isActive = index === activeIndex;
+            const card = (
+              <DeviceFrame width={cardWidth}>
+                <GuestCoverPreview
+                  draft={draft}
+                  theme={parseCoverTheme(theme.design_tokens)}
+                  compact={false}
+                  // Only the focused card shows the edit affordance. A pencil
+                  // on a half-visible neighbour would invite a tap that scrolls
+                  // it into view instead of editing it.
+                  editable={isActive}
+                  onEditCover={onEditCover}
+                />
+              </DeviceFrame>
+            );
+
+            if (isActive) {
+              // The whole card opens the editor, not just its pencil badge —
+              // a host looking at the cover shouldn't have to find a small
+              // target to change it. Rendered in-flow with the rest of the
+              // card content, this scrolls with it rather than sitting at a
+              // fixed screen position while the theme underneath it changes.
+              return (
+                <Pressable
+                  key={theme.slug}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit cover"
+                  onPress={onEditCover}
+                  style={{ width: cardWidth }}
+                >
+                  {card}
+                </Pressable>
+              );
+            }
+
             return (
               <Pressable
                 key={theme.slug}
                 accessibilityRole="button"
-                accessibilityState={{ selected: isActive }}
+                accessibilityState={{ selected: false }}
                 accessibilityLabel={`${theme.name} theme`}
                 onPress={() => {
                   scrollRef.current?.scrollTo({ x: index * snapInterval, animated: true });
                 }}
-                style={{ width: cardWidth, opacity: isActive ? 1 : 0.55 }}
+                style={{ width: cardWidth, opacity: 0.55 }}
               >
-                <DeviceFrame width={cardWidth}>
-                  <GuestCoverPreview
-                    draft={draft}
-                    theme={parseCoverTheme(theme.design_tokens)}
-                    compact={!isActive}
-                    // Only the focused card is editable. Pencils on a
-                    // half-visible neighbour would invite taps that scroll it
-                    // into view instead of editing.
-                    editable={isActive}
-                    onEditImage={onEditImage}
-                    onEditTitle={onEditTitle}
-                    onEditDate={onEditDate}
-                  />
-                </DeviceFrame>
+                {card}
               </Pressable>
             );
           })}

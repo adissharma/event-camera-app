@@ -33,8 +33,8 @@ export interface CalendarPickerProps {
 }
 
 const ROW_HEIGHT = 44;
-/** Breathing space between months. No label — see `renderSectionHeader`. */
-const MONTH_HEADER_HEIGHT = 20;
+/** Breathing space between months with a month label. */
+const MONTH_HEADER_HEIGHT = 36;
 /** 6 rows, fixed — see `buildMonth`. */
 const MONTH_BODY_HEIGHT = ROW_HEIGHT * 6;
 
@@ -59,7 +59,7 @@ export function CalendarPicker({
   selected,
   onSelect,
   minimumDate,
-  monthCount = 24,
+  monthCount = 12,
   height = 320,
   fill = false,
 }: CalendarPickerProps) {
@@ -87,7 +87,12 @@ export function CalendarPicker({
   function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
     const offset = event.nativeEvent.contentOffset.y;
     const monthHeight = MONTH_HEADER_HEIGHT + MONTH_BODY_HEIGHT;
-    const index = Math.min(months.length - 1, Math.max(0, Math.floor(offset / monthHeight)));
+    // Shift threshold by one row height so that the title transitions to the next month
+    // as soon as the viewport scrolls into the last week of the current month.
+    const index = Math.min(
+      months.length - 1,
+      Math.max(0, Math.floor((offset + ROW_HEIGHT) / monthHeight)),
+    );
     if (index !== pinnedIndex) setPinnedIndex(index);
   }
 
@@ -147,29 +152,60 @@ export function CalendarPicker({
           initialNumToRender={12}
           windowSize={11}
           removeClippedSubviews
-          getItemLayout={(_data, index) => ({
-            length: ROW_HEIGHT,
-            offset: ROW_HEIGHT * index,
-            index,
-          })}
+          getItemLayout={(_data, index) => {
+            const itemsPerSection = 7; // 1 header + 6 weeks
+            const sectionIndex = Math.floor(index / itemsPerSection);
+            const itemIndexInSection = index % itemsPerSection;
+            const sectionHeight = MONTH_HEADER_HEIGHT + MONTH_BODY_HEIGHT;
+
+            let length = ROW_HEIGHT;
+            let offset = 0;
+
+            if (itemIndexInSection === 0) {
+              length = MONTH_HEADER_HEIGHT;
+              offset = sectionIndex * sectionHeight;
+            } else {
+              length = ROW_HEIGHT;
+              offset =
+                sectionIndex * sectionHeight +
+                MONTH_HEADER_HEIGHT +
+                (itemIndexInSection - 1) * ROW_HEIGHT;
+            }
+
+            return {
+              length,
+              offset,
+              index,
+            };
+          }}
           renderSectionHeader={({ section }) => (
-            // A separator, not a label. The month name is already pinned above;
-            // repeating it here read as a duplicate rather than as structure.
             <View
               accessibilityLabel={section.label}
               style={{
                 height: MONTH_HEADER_HEIGHT,
                 justifyContent: 'center',
                 backgroundColor: colours.surface,
+                paddingHorizontal: spacing.base,
               }}
             >
               <View
                 style={{
-                  height: layout.hairline,
-                  marginHorizontal: spacing.base,
-                  backgroundColor: colours.borderSubtle,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: spacing.sm,
                 }}
-              />
+              >
+                <AppText variant="eyebrow" tone="secondary">
+                  {section.label}
+                </AppText>
+                <View
+                  style={{
+                    flex: 1,
+                    height: layout.hairline,
+                    backgroundColor: colours.borderSubtle,
+                  }}
+                />
+              </View>
             </View>
           )}
           renderItem={({ item: week }) => (

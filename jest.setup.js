@@ -23,3 +23,7 @@ jest.mock('expo-secure-store', () => ({
   setItemAsync: jest.fn(async () => undefined),
   deleteItemAsync: jest.fn(async () => undefined),
 }));
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock')
+);
