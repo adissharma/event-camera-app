@@ -13,8 +13,13 @@
       "supportsTablet": false,
       "associatedDomains": [
         "applinks:poto.events",
+        "applinks:staging.poto.events",
+        "applinks:poto.events",
         "applinks:staging.poto.events"
-      ]
+      ],
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -46,6 +51,10 @@
             "DEFAULT"
           ]
         }
+      ],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -76,6 +85,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "dd58ddcc-e04f-4ae4-a667-05bc4cd64a85"
+      }
     }
   }
 }

@@ -37,12 +37,13 @@ export const closingSchema = z
 export const coverSchema = z.object({});
 
 export const photoLimitSchema = z.object({
-  // null is unlimited, which is a valid choice when the plan grants it.
+  // Must select a limit (number) or unlimited (null). Cannot be undefined.
   shotLimitPerGuest: z
-    .number()
-    .int()
-    .positive('A limit has to be at least one photo')
-    .nullable(),
+    .union([
+      z.number().int().positive('A limit has to be at least one photo'),
+      z.null(),
+    ])
+    .refine((val) => val !== undefined, 'Select a photo limit for each guest'),
 });
 
 export const formatsSchema = z.object({

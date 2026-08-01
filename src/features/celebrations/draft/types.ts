@@ -74,8 +74,8 @@ export interface CreationDraft {
    */
   coverDateLabel: string | null;
 
-  // Step 4. `null` means unlimited.
-  shotLimitPerGuest: number | null;
+  // Step 4. `null` means unlimited. `undefined` means not yet selected.
+  shotLimitPerGuest: number | null | undefined;
 
   // Step 5
   cameraRollUploadsEnabled: boolean;
@@ -144,7 +144,7 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
     displayDate: null,
     coverDateLabel: null,
 
-    shotLimitPerGuest: 20,
+    shotLimitPerGuest: undefined,
 
     cameraRollUploadsEnabled: true,
     cameraRollUploadLimit: 5,
