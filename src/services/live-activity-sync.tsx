@@ -52,7 +52,8 @@ export function LiveActivitySyncManager() {
           currentActiveIds.add(event.id);
 
           // Get photo limit and taken count
-          const limit = event.primarySession?.shot_limit_per_guest ?? 25;
+          // null = unlimited, number = specific limit
+          const limit = event.primarySession?.shot_limit_per_guest;
           const key = `__mock_photos_${event.id}`;
           let takenCount = 0;
           try {
@@ -65,7 +66,8 @@ export function LiveActivitySyncManager() {
             console.error('Error loading taken photos count:', e);
           }
 
-          const remaining = Math.max(0, limit - takenCount);
+          // If unlimited (null), show -1 to indicate unlimited in the live activity
+          const remaining = limit === null ? -1 : Math.max(0, limit - takenCount);
 
           if (!activeActivitiesRef.current.has(event.id)) {
             console.log(`[LiveActivitySync] Starting Live Activity for "${event.title}" with remaining count = ${remaining}`);
