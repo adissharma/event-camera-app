@@ -14,7 +14,7 @@
     },
     "production": {
       "ios": {
-        "distribution": "app-store"
+        "distribution": "store"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hzmyhrzshtzmyfrmvevw.supabase.co",
