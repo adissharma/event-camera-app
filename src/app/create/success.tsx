@@ -58,10 +58,8 @@ export default function SuccessScreen() {
       }).format(new Date(result.endsAt))
     : null;
 
-  const shareMessage = t(copy.create.shareMessage, {
-    eventName: result.eventName || 'our event',
-    link: result.guestUrl,
-  });
+  // Share message includes event code for easy manual sharing
+  const shareMessage = `You've been invited to ${result.eventName || 'our event'}!\n\nEvent Code: ${result.eventCode}\n\n${result.guestUrl}`;
 
   return (
     <Screen
@@ -93,7 +91,29 @@ export default function SuccessScreen() {
           </AppText>
         </Reveal>
 
-        <Reveal index={1} step={70}>
+        <Reveal index={1} step={70} style={{ gap: spacing.md }}>
+          <View style={{ gap: spacing.sm }}>
+            <AppText variant="eyebrow" tone="secondary">Event Code</AppText>
+            <View
+              style={{
+                paddingHorizontal: spacing.lg,
+                paddingVertical: spacing.md,
+                borderRadius: radii.lg,
+                backgroundColor: colours.surface,
+                borderWidth: layout.hairline,
+                borderColor: colours.borderSubtle,
+                alignItems: 'center',
+              }}
+            >
+              <AppText variant="displayLarge" style={{ fontFamily: 'InstrumentSans_700Bold', letterSpacing: 3 }}>
+                {result.eventCode}
+              </AppText>
+              <AppText variant="caption" tone="secondary" style={{ marginTop: spacing.xs }}>
+                Guests can use this code to join
+              </AppText>
+            </View>
+          </View>
+
           <QrCard
             value={result.guestUrl}
             eventName={result.eventName || 'Your event'}
@@ -134,8 +154,8 @@ export default function SuccessScreen() {
               plainly, because a host who understands that will not post it
               publicly. */}
           <AppText variant="caption" tone="secondary">
-            Anyone with this link can join your event, so share it with your guests
-            rather than posting it publicly.
+            Share the QR code, event code, or link with your guests. Anyone with any
+            of these can join, so keep them private.
           </AppText>
         </Reveal>
       </View>
