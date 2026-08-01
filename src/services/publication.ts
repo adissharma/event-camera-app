@@ -13,6 +13,7 @@ export interface PublishedEvent {
   celebrationId: string;
   eventSessionId: string;
   publicSlug: string;
+  eventCode: string;
   /** The full link a guest opens. Contains the token — treat as a secret. */
   guestUrl: string;
   wasAlreadyPublished: boolean;
@@ -45,9 +46,11 @@ export class PublicationError extends Error {
  * `Referer` header when the guest page loads third-party resources, and out of
  * any analytics that record full paths. For a bearer credential printed on a
  * poster, that matters.
+ *
+ * Uses event code (6-char random) instead of public slug for better security.
  */
-export function buildGuestUrl(publicSlug: string, token: string): string {
-  return `${BRAND_CONFIG.guestDomain}/e/${publicSlug}#t=${token}`;
+export function buildGuestUrl(eventCode: string, token: string): string {
+  return `${BRAND_CONFIG.guestDomain}/j/${eventCode}#t=${token}`;
 }
 
 /**
@@ -161,6 +164,7 @@ export async function publishDraft(
       celebration_id: string;
       event_session_id: string;
       public_slug: string;
+      event_code: string;
       was_already_published: boolean;
     };
 
@@ -168,7 +172,8 @@ export async function publishDraft(
       celebrationId: published.celebration_id ?? celebrationId!,
       eventSessionId: published.event_session_id ?? eventSessionId!,
       publicSlug: published.public_slug ?? publicSlug!,
-      guestUrl: buildGuestUrl(published.public_slug ?? publicSlug!, guestToken ?? ''),
+      eventCode: published.event_code,
+      guestUrl: buildGuestUrl(published.event_code, guestToken ?? ''),
       wasAlreadyPublished: published.was_already_published ?? false,
       eventName: draft.title.trim(),
       supportingLine: draft.supportingLine.trim() || null,
@@ -180,6 +185,7 @@ export async function publishDraft(
     
     const mockId = 'celebration-' + Math.random().toString(36).substring(2, 11);
     const mockSlug = 'slug-' + Math.random().toString(36).substring(2, 11);
+    const mockEventCode = 'ABC' + Math.random().toString(36).substring(2, 5).toUpperCase();
     const mockSessionId = 'session-' + Math.random().toString(36).substring(2, 11);
     
     const newMockEvent = {
@@ -216,7 +222,8 @@ export async function publishDraft(
       celebrationId: mockId,
       eventSessionId: mockSessionId,
       publicSlug: mockSlug,
-      guestUrl: `${BRAND_CONFIG.guestDomain}/e/${mockSlug}#t=local_token`,
+      eventCode: mockEventCode,
+      guestUrl: `${BRAND_CONFIG.guestDomain}/j/${mockEventCode}#t=local_token`,
       wasAlreadyPublished: false,
       eventName: draft.title.trim(),
       supportingLine: draft.supportingLine.trim() || null,

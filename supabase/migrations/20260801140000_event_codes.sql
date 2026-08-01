@@ -111,6 +111,7 @@ begin
       v_celebration.id,
       v_session.id,
       v_celebration.public_slug,
+      v_celebration.event_code,
       v_session.published_at,
       true
     )::public.published_celebration;
@@ -163,6 +164,7 @@ begin
     v_celebration.id,
     v_session.id,
     v_celebration.public_slug,
+    v_celebration.event_code,
     now(),
     false
   )::public.published_celebration;
