@@ -43,8 +43,7 @@ function storageKey(userId: string | null): string {
 type DraftAction =
   | { type: 'patch'; patch: Partial<CreationDraft> }
   | { type: 'replace'; draft: CreationDraft }
-  | { type: 'reset'; userId: string | null; timezone: string }
-  | { type: 'reachedStep'; step: CreationStep };
+  | { type: 'reset'; userId: string | null; timezone: string };
 
 function reducer(state: CreationDraft, action: DraftAction): CreationDraft {
   switch (action.type) {
@@ -56,15 +55,6 @@ function reducer(state: CreationDraft, action: DraftAction): CreationDraft {
 
     case 'reset':
       return createEmptyDraft(action.userId, action.timezone);
-
-    case 'reachedStep': {
-      // Only ever moves forward. Navigating back to an earlier step must not
-      // discard the fact that later steps were already answered.
-      const current = CREATION_STEPS.indexOf(state.furthestStep);
-      const next = CREATION_STEPS.indexOf(action.step);
-      if (next <= current) return state;
-      return { ...state, furthestStep: action.step, updatedAt: new Date().toISOString() };
-    }
   }
 }
 
@@ -75,7 +65,6 @@ interface DraftContextValue {
   /** True when a previously saved draft was found and restored. */
   wasRestored: boolean;
   update: (patch: Partial<CreationDraft>) => void;
-  markStepReached: (step: CreationStep) => void;
   reset: () => Promise<void>;
 }
 
@@ -184,18 +173,14 @@ export function CreationDraftProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'patch', patch });
   }, []);
 
-  const markStepReached = useCallback((step: CreationStep) => {
-    dispatch({ type: 'reachedStep', step });
-  }, []);
-
   const reset = useCallback(async () => {
     dispatch({ type: 'reset', userId, timezone: deviceTimezone() });
     await AsyncStorage.removeItem(storageKey(userId)).catch(() => {});
   }, [userId]);
 
   const value = useMemo<DraftContextValue>(
-    () => ({ draft, isRestoring, wasRestored, update, markStepReached, reset }),
-    [draft, isRestoring, wasRestored, update, markStepReached, reset],
+    () => ({ draft, isRestoring, wasRestored, update, reset }),
+    [draft, isRestoring, wasRestored, update, reset],
   );
 
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;

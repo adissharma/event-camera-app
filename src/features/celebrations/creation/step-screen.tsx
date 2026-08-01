@@ -74,17 +74,13 @@ export function CreationStepScreen({
 }: CreationStepScreenProps) {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { draft, markStepReached } = useCreationDraft();
+  const { draft } = useCreationDraft();
 
   const [saving, setSaving] = useState(false);
 
   const index = CREATION_STEPS.indexOf(step);
   const total = CREATION_STEPS.length;
   const blockingError = validateStep(step, draft);
-
-  useEffect(() => {
-    markStepReached(step);
-  }, [step, markStepReached]);
 
   const resolvedNext =
     nextHref ?? (index < total - 1 ? `/create/${CREATION_STEPS[index + 1]}` : undefined);

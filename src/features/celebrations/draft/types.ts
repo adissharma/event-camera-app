@@ -113,8 +113,6 @@ export interface CreationDraft {
   // Step 11
   qrTemplateKey: string;
 
-  /** Furthest step reached, so resuming lands where the host left off. */
-  furthestStep: CreationStep;
   editCelebrationId?: string | null;
   editSessionId?: string | null;
 }
@@ -173,7 +171,6 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
 
     qrTemplateKey: 'digital_card',
 
-    furthestStep: 'name',
     editCelebrationId: null,
     editSessionId: null,
   };
