@@ -1,5 +1,6 @@
 import { Pressable, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { ToggleRow } from '@/components/forms/toggle-row';
 import { AppText } from '@/components/ui/text';
@@ -132,29 +133,39 @@ function CountChip({
 /**
  * The unlimited option, called out as the option the host is nudged toward.
  *
- * Visually distinct even when unselected — the accent border and "Popular"
- * tag are always there, not just on selection — because the point is to draw
- * the eye here first, not to wait until it's already chosen.
+ * Visually distinct even when unselected — the Instagram gradient border and
+ * "Popular" tag are always there, not just on selection — because the point
+ * is to draw the eye here first, not to wait until it's already chosen.
  */
 function UnlimitedCard({ selected, onPress }: { selected: boolean; onPress: () => void }) {
+  // Instagram-style gradient border (same as challenge highlights)
+  const GRADIENT_COLORS = ['#C13584', '#E1306C', '#F77737', '#FCAF45'] as const;
+
   return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={`${copy.create.photoLimitUnlimited}. Guests shoot as much as they like. ${UNLIMITED_PRICE}.`}
-      onPress={() => {
-        void Haptics.selectionAsync().catch(() => {});
-        onPress();
-      }}
+    <LinearGradient
+      colors={GRADIENT_COLORS}
+      start={{ x: 0, y: 1 }}
+      end={{ x: 1, y: 0 }}
       style={{
-        padding: spacing.base,
         borderRadius: radii.lg,
-        backgroundColor: selected ? colours.brandSoft : colours.surface,
-        borderWidth: 2,
-        borderColor: colours.brandPrimary,
-        gap: spacing.xxs,
+        padding: 2,
       }}
     >
+      <Pressable
+        accessibilityRole="radio"
+        accessibilityState={{ selected }}
+        accessibilityLabel={`${copy.create.photoLimitUnlimited}. Guests shoot as much as they like. ${UNLIMITED_PRICE}.`}
+        onPress={() => {
+          void Haptics.selectionAsync().catch(() => {});
+          onPress();
+        }}
+        style={{
+          padding: spacing.base,
+          borderRadius: radii.lg,
+          backgroundColor: selected ? colours.brandSoft : colours.surface,
+          gap: spacing.xxs,
+        }}
+      >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
           <AppText variant="labelLarge">{copy.create.photoLimitUnlimited}</AppText>
@@ -201,6 +212,7 @@ function UnlimitedCard({ selected, onPress }: { selected: boolean; onPress: () =
       <AppText variant="labelLarge" tone="brand">
         {UNLIMITED_PRICE}
       </AppText>
-    </Pressable>
+      </Pressable>
+    </LinearGradient>
   );
 }

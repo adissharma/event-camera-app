@@ -43,7 +43,7 @@ export const photoLimitSchema = z.object({
       z.number().int().positive('A limit has to be at least one photo'),
       z.null(),
     ])
-    .refine((val) => val !== undefined, 'Select a photo limit for each guest'),
+    .refine((val) => val !== undefined, 'Choose how many photos each guest can take'),
 });
 
 export const formatsSchema = z.object({
