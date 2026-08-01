@@ -5,7 +5,7 @@
   "build": {
     "staging": {
       "ios": {
-        "distribution": "internal"
+        "distribution": "store"
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hzmyhrzshtzmyfrmvevw.supabase.co",
