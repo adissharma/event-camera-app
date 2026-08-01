@@ -37,6 +37,7 @@ import { isBackendConfigured } from '@/lib/supabase/client';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { BRAND_CONFIG } from '@/config/brand';
 import { shouldShowHostControls } from '@/lib/platform-guards';
+import { loadStoredGuestSession } from '@/services/guest-session';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { QrCodeIcon, CloseIcon, LockIcon } from '@/components/ui/icons';
@@ -588,9 +589,21 @@ function EventDetailView({
   
   // Dev Override Role check
   const [devRole, setDevRole] = useState<string | null>(null);
+  const [guestName, setGuestName] = useState<string | null>(null);
+
   useEffect(() => {
     AsyncStorage.getItem('__dev_role').then(setDevRole);
   }, []);
+
+  // Load guest name if this device joined as a guest
+  useEffect(() => {
+    if (!celebration || isHost) return;
+    void loadStoredGuestSession(celebration.public_slug ?? celebration.id).then((session) => {
+      if (session?.displayName) {
+        setGuestName(session.displayName);
+      }
+    });
+  }, [celebration, isHost]);
 
   const roleIsHost = devRole === 'guest'
     ? false
@@ -1222,14 +1235,19 @@ function EventDetailView({
 
           {/* Floating nav icons */}
           <View style={[S.navBar, { paddingTop: insets.top + 6 }]}>
-            <Pressable
-              style={S.navBtn}
-              onPress={() => router.replace('/home')}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-            >
-              <BackChevron />
-            </Pressable>
+            {/* Back button: only show for hosts */}
+            {isHost ? (
+              <Pressable
+                style={S.navBtn}
+                onPress={() => router.replace('/home')}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+              >
+                <BackChevron />
+              </Pressable>
+            ) : (
+              <View style={S.navBtn} />
+            )}
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable
                 style={S.navBtn}
@@ -1239,14 +1257,17 @@ function EventDetailView({
               >
                 <ShareTrayIcon />
               </Pressable>
-              <Pressable
-                style={S.navBtn}
-                onPress={() => router.push(`/celebration/${celebration.id}/edit` as never)}
-                accessibilityRole="button"
-                accessibilityLabel="Event settings"
-              >
-                <SettingsIcon />
-              </Pressable>
+              {/* Settings: only show for hosts */}
+              {isHost && (
+                <Pressable
+                  style={S.navBtn}
+                  onPress={() => router.push(`/celebration/${celebration.id}/edit` as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Event settings"
+                >
+                  <SettingsIcon />
+                </Pressable>
+              )}
             </View>
           </View>
 
@@ -1304,6 +1325,18 @@ function EventDetailView({
             </View>
           </View>
         </View>
+
+        {/* ── PERSONALIZED GUEST WELCOME ─── */}
+        {!isHost && guestName && (
+          <View style={S.guestWelcome}>
+            <AppText variant="eyebrow" tone="secondary" style={S.guestWelcomeEyebrow}>
+              Welcome back
+            </AppText>
+            <AppText variant="displaySmall" style={S.guestWelcomeName}>
+              {guestName}
+            </AppText>
+          </View>
+        )}
 
         {/* ── CHALLENGE CHIPS (Instagram Highlights Style) ─── */}
         <ScrollView
@@ -2479,5 +2512,18 @@ const S = StyleSheet.create({
     fontFamily: 'InstrumentSans_600SemiBold',
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.65)',
+  },
+  guestWelcome: {
+    paddingHorizontal: layout.gutter,
+    paddingVertical: spacing.lg,
+    gap: spacing.xs,
+  },
+  guestWelcomeEyebrow: {
+    color: colours.textSecondary,
+    fontSize: 12,
+    letterSpacing: 1.2,
+  },
+  guestWelcomeName: {
+    color: colours.textPrimary,
   },
 });
