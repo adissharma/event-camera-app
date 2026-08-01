@@ -231,17 +231,16 @@ export default function SuccessScreen() {
         >
           <Reveal index={2} step={70} style={{ gap: spacing.sm }}>
             <Button
-            label="Share Event"
-            onPress={() => {
-              void Share.share({ message: shareMessage }).catch(() => {});
-            }}
-          />
-          <Button
-            label="Go to Event"
-            variant="secondary"
-            onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
-          />
-            </Button>
+              label="Share Event"
+              onPress={() => {
+                void Share.share({ message: shareMessage }).catch(() => {});
+              }}
+            />
+            <Button
+              label="Go to Event"
+              variant="secondary"
+              onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
+            />
           </Reveal>
         </Animated.View>
       </View>
