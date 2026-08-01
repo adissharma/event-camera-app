@@ -1309,7 +1309,7 @@ function EventDetailView({
               <View style={S.statusItem}>
                 <PeopleSmall />
                 <AppText style={S.statusText}>
-                  {guestsJoined} {guestsJoined === 1 ? 'GUEST JOINED' : 'GUESTS JOINED'}
+                  {guestsJoined} JOINED
                 </AppText>
               </View>
 

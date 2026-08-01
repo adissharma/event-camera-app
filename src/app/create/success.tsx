@@ -1,35 +1,49 @@
 import { useEffect, useState } from 'react';
-import { Share, View } from 'react-native';
+import { Share, View, Image, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Screen } from '@/components/layout/screen';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { QrCard } from '@/features/sharing/qr-card';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   clearPublicationResult,
   getPublicationResult,
 } from '@/features/celebrations/creation/publication-result';
 import { celebrationKeys } from '@/services/celebrations';
-import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, layout, radii, spacing } from '@/design';
-import { copy, t } from '@/i18n';
+import { copy } from '@/i18n';
+
+const COVER_MAP: Record<string, ReturnType<typeof require>> = {
+  modern:      require('../../../../assets/images/placeholders/christian_wedding.png'),
+  classic:     require('../../../../assets/images/placeholders/christian_wedding.png'),
+  retro:       require('../../../../assets/images/placeholders/treatment_preview_1.png'),
+  film:        require('../../../../assets/images/placeholders/treatment_preview_1.png'),
+  editorial:   require('../../../../assets/images/placeholders/treatment_preview_2.png'),
+  documentary: require('../../../../assets/images/placeholders/gallery_blurred_half.png'),
+  vibrant:     require('../../../../assets/images/placeholders/hindu_wedding.png'),
+};
+
+const GALLERY_PRESETS = [
+  { id: 'preset_1', source: require('../../../../assets/images/placeholders/christian_wedding.png') },
+  { id: 'preset_2', source: require('../../../../assets/images/placeholders/hindu_wedding.png') },
+  { id: 'preset_3', source: require('../../../../assets/images/placeholders/treatment_preview_1.png') },
+  { id: 'preset_4', source: require('../../../../assets/images/placeholders/treatment_preview_2.png') },
+];
 
 export default function SuccessScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const { reset } = useCreationDraft();
   const [copied, setCopied] = useState(false);
 
   const result = getPublicationResult();
 
   useEffect(() => {
-    // The event now exists on the server, so the local draft is finished with.
-    // Held until this screen so a failed publish never discards the host's work.
     void reset();
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
     return () => clearPublicationResult();
@@ -37,128 +51,159 @@ export default function SuccessScreen() {
 
   if (!result) {
     return (
-      <Screen>
-        <View style={{ gap: spacing.md }}>
-          <AppText variant="displayLarge">Nothing to show</AppText>
-          <AppText variant="body" tone="secondary">
-            This page is shown after publishing an event.
-          </AppText>
-          <Button label="Back to home" onPress={() => router.replace('/home')} />
-        </View>
-      </Screen>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <AppText variant="displayLarge">Nothing to show</AppText>
+      </View>
     );
   }
 
-  // Everything below reads from `result`, never from the draft — the effect
-  // above has already cleared it.
-  const closingLabel = result.endsAt
-    ? new Intl.DateTimeFormat(LOCALE_CONFIG.locale, {
-        weekday: 'long', day: 'numeric', month: 'long',
-        hour: '2-digit', minute: '2-digit', timeZone: result.timezone,
-      }).format(new Date(result.endsAt))
-    : null;
+  function getCoverSource() {
+    const sum = result.celebrationId.split('').reduce((s, c) => s + c.charCodeAt(0), 0);
+    return GALLERY_PRESETS[sum % GALLERY_PRESETS.length].source;
+  }
 
-  // Share message includes event code for easy manual sharing
   const shareMessage = `You've been invited to ${result.eventName || 'our event'}!\n\nEvent Code: ${result.eventCode}\n\n${result.guestUrl}`;
 
   return (
-    <Screen
-      stickyAction={
-        <View style={{ gap: spacing.sm }}>
-          <Button
-            label={copy.create.shareLink}
-            haptic
-            onPress={() => {
-              void Share.share({ message: shareMessage }).catch(() => {});
-            }}
-          />
-          <Button
-            label={copy.create.openDashboard}
-            variant="quiet"
-            onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
-          />
-        </View>
-      }
+    <ScrollView
+      style={{ flex: 1, backgroundColor: colours.background }}
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingBottom: 200 }}
     >
-      <View style={{ gap: spacing.xl }}>
-        <Reveal index={0} step={70} style={{ gap: spacing.md }}>
+      {/* Hero Section with Cover Image */}
+      <View style={{ height: 400, position: 'relative', overflow: 'hidden' }}>
+        <Image
+          source={getCoverSource()}
+          style={{
+            width: '100%',
+            height: '100%',
+          }}
+          resizeMode="cover"
+        />
+        {/* Dark scrim overlay */}
+        <View
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          }}
+        />
+
+        {/* Content overlay */}
+        <View
+          style={{
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            paddingHorizontal: spacing.lg,
+            paddingBottom: spacing.xl,
+            gap: spacing.sm,
+          }}
+        >
           <AppText variant="eyebrow" tone="secondary">
-            {result.wasAlreadyPublished ? 'Already live' : 'Live'}
+            IT'S HAPPENING
           </AppText>
-          <AppText variant="displayHero">{copy.create.successHeading}</AppText>
-          <AppText variant="bodyLarge" tone="secondary">
-            {copy.create.successSupporting}
+          <AppText variant="displayHero" numberOfLines={3}>
+            {result.eventName}
           </AppText>
-        </Reveal>
+        </View>
+      </View>
 
-        <Reveal index={1} step={70} style={{ gap: spacing.md }}>
-          <View style={{ gap: spacing.sm }}>
-            <AppText variant="eyebrow" tone="secondary">Event Code</AppText>
-            <View
-              style={{
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.md,
-                borderRadius: radii.lg,
-                backgroundColor: colours.surface,
-                borderWidth: layout.hairline,
-                borderColor: colours.borderSubtle,
-                alignItems: 'center',
-              }}
+      {/* Content Section */}
+      <View
+        style={{
+          paddingHorizontal: spacing.lg,
+          paddingTop: spacing.xl,
+          gap: spacing.xl,
+        }}
+      >
+        {/* Event Code Card */}
+        <Reveal index={0} step={70} style={{ gap: spacing.sm }}>
+          <AppText variant="eyebrow" tone="secondary">Event Code</AppText>
+          <Pressable
+            style={{
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
+              borderRadius: radii.lg,
+              backgroundColor: colours.surface,
+              borderWidth: layout.hairline,
+              borderColor: colours.borderSubtle,
+              alignItems: 'center',
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+            }}
+            onPress={async () => {
+              await Clipboard.setStringAsync(result.eventCode);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 2000);
+            }}
+          >
+            <AppText
+              variant="displayLarge"
+              style={{ fontFamily: 'InstrumentSans_700Bold', letterSpacing: 3 }}
             >
-              <AppText variant="displayLarge" style={{ fontFamily: 'InstrumentSans_700Bold', letterSpacing: 3 }}>
-                {result.eventCode}
-              </AppText>
-              <AppText variant="caption" tone="secondary" style={{ marginTop: spacing.xs }}>
-                Guests can use this code to join
-              </AppText>
-            </View>
-          </View>
-
-          <QrCard
-            value={result.guestUrl}
-            eventName={result.eventName || 'Your event'}
-            supportingLine={result.supportingLine ?? undefined}
-          />
+              {result.eventCode}
+            </AppText>
+            <AppText variant="labelSmall" tone="secondary">
+              {copied ? '✓' : 'copy'}
+            </AppText>
+          </Pressable>
         </Reveal>
 
-        <Reveal index={2} step={70} style={{ gap: spacing.base }}>
-          <Button
-            label={copied ? 'Link copied' : 'Copy guest link'}
-            variant="secondary"
+        {/* Guest Link Card */}
+        <Reveal index={1} step={70} style={{ gap: spacing.sm }}>
+          <AppText variant="eyebrow" tone="secondary">Guest Link</AppText>
+          <Pressable
+            style={{
+              paddingHorizontal: spacing.lg,
+              paddingVertical: spacing.md,
+              borderRadius: radii.lg,
+              backgroundColor: colours.surface,
+              borderWidth: layout.hairline,
+              borderColor: colours.borderSubtle,
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+            }}
             onPress={async () => {
               await Clipboard.setStringAsync(result.guestUrl);
               setCopied(true);
               setTimeout(() => setCopied(false), 2000);
             }}
-          />
-
-          {closingLabel ? (
-            <View
-              style={{
-                padding: spacing.base,
-                borderRadius: radii.lg,
-                borderWidth: layout.hairline,
-                borderColor: colours.borderSubtle,
-                backgroundColor: colours.surface,
-                gap: spacing.xxs,
-              }}
+          >
+            <AppText
+              variant="labelSmall"
+              tone="secondary"
+              style={{ flex: 1, marginRight: spacing.sm }}
+              numberOfLines={1}
             >
-              <AppText variant="eyebrow" tone="secondary">
-                Closes
-              </AppText>
-              <AppText variant="labelLarge">{closingLabel}</AppText>
-            </View>
-          ) : null}
+              {result.guestUrl.replace('http://', '').replace('https://', '')}
+            </AppText>
+            <AppText variant="labelSmall" tone="secondary">
+              {copied ? '✓' : 'copy'}
+            </AppText>
+          </Pressable>
+        </Reveal>
 
-          {/* The link is a bearer credential: anyone holding it can join. Said
-              plainly, because a host who understands that will not post it
-              publicly. */}
-          <AppText variant="caption" tone="secondary">
-            Share the QR code, event code, or link with your guests. Anyone with any
-            of these can join, so keep them private.
-          </AppText>
+        {/* Action Buttons */}
+        <Reveal index={2} step={70} style={{ gap: spacing.sm }}>
+          <Button
+            label="Share Event"
+            onPress={() => {
+              void Share.share({ message: shareMessage }).catch(() => {});
+            }}
+          />
+          <Button
+            label="Go to Event"
+            variant="secondary"
+            onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
+          />
         </Reveal>
       </View>
-    </Screen>
+    </ScrollView>
   );
 }
