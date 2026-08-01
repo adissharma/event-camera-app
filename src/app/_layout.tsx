@@ -25,6 +25,7 @@ import { CreationDraftProvider } from '@/features/celebrations/draft/store';
 import { LiveActivitySyncManager } from '@/services/live-activity-sync';
 import { AppText } from '@/components/ui/text';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
+import { seedMockDataIfNeeded } from '@/lib/mock-data-seed';
 
 // Keep the splash up until fonts are ready, so no screen ever renders with a
 // fallback face and then reflows into the real one.
@@ -114,6 +115,11 @@ export default function RootLayout() {
       void SplashScreen.hideAsync();
     }
   }, [fontsLoaded, fontError]);
+
+  useEffect(() => {
+    // Auto-seed mock data on web for development testing
+    void seedMockDataIfNeeded();
+  }, []);
 
   if (!fontsLoaded && !fontError) {
     return null;
