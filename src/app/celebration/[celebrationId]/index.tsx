@@ -20,6 +20,7 @@ import {
   ScrollView,
   PanResponder,
   Dimensions,
+  Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -35,6 +36,7 @@ import { useAuth } from '@/features/auth/context';
 import { isBackendConfigured } from '@/lib/supabase/client';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { BRAND_CONFIG } from '@/config/brand';
+import { shouldShowHostControls } from '@/lib/platform-guards';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { QrCodeIcon, CloseIcon, LockIcon } from '@/components/ui/icons';
@@ -590,15 +592,18 @@ function EventDetailView({
     AsyncStorage.getItem('__dev_role').then(setDevRole);
   }, []);
 
-  const isHost = devRole === 'guest' 
-    ? false 
-    : (devRole === 'host' 
-        ? true 
-        : (!isBackendConfigured 
-            ? true 
+  const roleIsHost = devRole === 'guest'
+    ? false
+    : (devRole === 'host'
+        ? true
+        : (!isBackendConfigured
+            ? true
             : (session ? session.user.id === celebration.created_by : false)
           )
       );
+
+  // On web, never show host controls. On native, respect the user's role.
+  const isHost = shouldShowHostControls(roleIsHost ? 'host' : 'guest');
 
   const showGuestbook = isHost || detail.hasAudioGuestbook !== false;
 

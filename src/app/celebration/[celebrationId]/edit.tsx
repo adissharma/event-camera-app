@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 
@@ -12,6 +12,7 @@ import {
 } from '@/services/celebration-detail';
 import { colours, layout, spacing, radii } from '@/design';
 import { copy } from '@/i18n';
+import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import Svg, { Path } from 'react-native-svg';
 
 function ChevronRightIcon({ size = 16, color = '#6B7280' }) {
@@ -32,6 +33,12 @@ export default function EditEventScreen() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
   const { update } = useCreationDraft();
+
+  useEffect(() => {
+    if (shouldBlockHostRouteOnWeb(Platform.OS)) {
+      router.replace(`/celebration/${celebrationId}`);
+    }
+  }, [router, celebrationId]);
 
   const { data, isLoading } = useQuery({
     queryKey: celebrationDetailKeys.detail(String(celebrationId)),

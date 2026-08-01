@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform, StyleSheet, View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -22,6 +23,8 @@ import { queryClient } from '@/lib/query-client';
 import { AuthContextProvider, useAuth } from '@/features/auth/context';
 import { CreationDraftProvider } from '@/features/celebrations/draft/store';
 import { LiveActivitySyncManager } from '@/services/live-activity-sync';
+import { AppText } from '@/components/ui/text';
+import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 
 // Keep the splash up until fonts are ready, so no screen ever renders with a
 // fallback face and then reflows into the real one.
@@ -31,6 +34,29 @@ void SplashScreen.preventAutoHideAsync();
 const PUBLIC_ROUTES = new Set(['index', 'sign-in', 'verify', 'create']);
 
 function RootNavigator() {
+  // ── WEB ACCESS GUARD ──
+  // On web, only guest-facing routes are allowed. Block host-only routes.
+  const segments = useSegments();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!shouldBlockHostRouteOnWeb(Platform.OS)) return;
+
+    const current: string = segments[0] ?? 'index';
+    const hostOnlyRoutes = new Set([
+      'index', // Welcome/home selector
+      'home', // Host dashboard
+      'sign-in', // Host sign-in
+      'verify', // Email verification
+      'your-name', // Name entry
+      'create', // Event creation wizard
+    ]);
+
+    if (hostOnlyRoutes.has(current)) {
+      router.replace('/j/');
+    }
+  }, [segments, router]);
+
   // ── AUTH BYPASSED FOR TESTING ──
   // The auth redirect logic is temporarily disabled so that every screen is
   // reachable without signing in. Remove this block and restore the original
