@@ -4,7 +4,7 @@ import { useCreationDraft } from '@/features/celebrations/draft/store';
 
 /**
  * Entry point for creation.
- * Always starts fresh — no draft resumption.
+ * Always starts fresh — redirects immediately to first step with no blank screen.
  */
 export default function CreateEntryScreen() {
   const router = useRouter();
@@ -12,12 +12,10 @@ export default function CreateEntryScreen() {
 
   useEffect(() => {
     if (isRestoring) return;
-    // Always start fresh
-    reset().then(() => {
-      router.replace('/create/name');
-    });
+    // Reset and navigate immediately without waiting
+    void reset();
+    router.replace('/create/name');
   }, [isRestoring, router, reset]);
 
-  // Loading state while resetting
   return null;
 }
