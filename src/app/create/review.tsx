@@ -13,6 +13,7 @@ import { resolveReveal, type CreationStep } from '@/features/celebrations/draft/
 import { canPublish, validateStep } from '@/features/celebrations/draft/validation';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { publishDraft, PublicationError } from '@/services/publication';
+import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
 import { celebrationKeys } from '@/services/celebrations';
 import { colours, layout, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
@@ -35,10 +36,10 @@ export default function ReviewStep() {
     setIsPublishing(true);
     setPublishError(null);
     try {
-      await publishDraft(draft);
-      await reset();
+      const result = await publishDraft(draft);
+      setPublicationResult(result);
       await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
-      router.replace('/home');
+      router.replace('/create/success');
     } catch (error) {
       // Stage-aware, because "your card was declined" and "we could not reach
       // the server" need entirely different reactions from the host.

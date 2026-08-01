@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Share, View, Pressable, ScrollView } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { Share, View, Pressable, ScrollView, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
@@ -22,13 +22,77 @@ export default function SuccessScreen() {
   const { reset } = useCreationDraft();
   const [copied, setCopied] = useState(false);
 
+  // Animation values
+  const heroScale = useRef(new Animated.Value(0.8)).current;
+  const heroOpacity = useRef(new Animated.Value(0)).current;
+  const card1Translate = useRef(new Animated.Value(50)).current;
+  const card1Opacity = useRef(new Animated.Value(0)).current;
+  const card2Translate = useRef(new Animated.Value(50)).current;
+  const card2Opacity = useRef(new Animated.Value(0)).current;
+  const buttonsTranslate = useRef(new Animated.Value(50)).current;
+  const buttonsOpacity = useRef(new Animated.Value(0)).current;
+
   const result = getPublicationResult();
 
   useEffect(() => {
     void reset();
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
+
+    // Trigger entrance animations
+    Animated.sequence([
+      Animated.parallel([
+        Animated.spring(heroScale, {
+          toValue: 1,
+          friction: 7,
+          tension: 40,
+          useNativeDriver: true,
+        }),
+        Animated.timing(heroOpacity, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(card1Translate, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(card1Opacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(card2Translate, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(card2Opacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+      Animated.parallel([
+        Animated.timing(buttonsTranslate, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.timing(buttonsOpacity, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+      ]),
+    ]).start();
+
     return () => clearPublicationResult();
-  }, [reset, queryClient]);
+  }, [reset, queryClient, heroScale, heroOpacity, card1Translate, card1Opacity, card2Translate, card2Opacity, buttonsTranslate, buttonsOpacity]);
 
   if (!result) {
     return (
@@ -47,19 +111,26 @@ export default function SuccessScreen() {
       contentContainerStyle={{ paddingBottom: 200 }}
     >
       {/* Hero Section with Gradient */}
-      <LinearGradient
-        colors={['rgba(139, 90, 43, 0.4)', 'rgba(101, 67, 33, 0.6)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ height: 360, justifyContent: 'flex-end', paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm }}
+      <Animated.View
+        style={{
+          transform: [{ scale: heroScale }],
+          opacity: heroOpacity,
+        }}
       >
+        <LinearGradient
+          colors={['rgba(139, 90, 43, 0.4)', 'rgba(101, 67, 33, 0.6)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ height: 360, justifyContent: 'flex-end', paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, gap: spacing.sm }}
+        >
         <AppText variant="eyebrow" tone="secondary">
           IT'S HAPPENING
         </AppText>
         <AppText variant="displayHero" numberOfLines={3}>
           {result.eventName}
         </AppText>
-      </LinearGradient>
+        </LinearGradient>
+      </Animated.View>
 
       {/* Content Section */}
       <View
@@ -70,9 +141,15 @@ export default function SuccessScreen() {
         }}
       >
         {/* Event Code Card */}
-        <Reveal index={0} step={70} style={{ gap: spacing.sm }}>
-          <AppText variant="eyebrow" tone="secondary">Event Code</AppText>
-          <Pressable
+        <Animated.View
+          style={{
+            transform: [{ translateY: card1Translate }],
+            opacity: card1Opacity,
+          }}
+        >
+          <Reveal index={0} step={70} style={{ gap: spacing.sm }}>
+            <AppText variant="eyebrow" tone="secondary">Event Code</AppText>
+            <Pressable
             style={{
               paddingHorizontal: spacing.lg,
               paddingVertical: spacing.md,
@@ -99,13 +176,20 @@ export default function SuccessScreen() {
             <AppText variant="labelSmall" tone="secondary">
               {copied ? '✓' : 'copy'}
             </AppText>
-          </Pressable>
-        </Reveal>
+            </Pressable>
+          </Reveal>
+        </Animated.View>
 
         {/* Guest Link Card */}
-        <Reveal index={1} step={70} style={{ gap: spacing.sm }}>
-          <AppText variant="eyebrow" tone="secondary">Guest Link</AppText>
-          <Pressable
+        <Animated.View
+          style={{
+            transform: [{ translateY: card2Translate }],
+            opacity: card2Opacity,
+          }}
+        >
+          <Reveal index={1} step={70} style={{ gap: spacing.sm }}>
+            <AppText variant="eyebrow" tone="secondary">Guest Link</AppText>
+            <Pressable
             style={{
               paddingHorizontal: spacing.lg,
               paddingVertical: spacing.md,
@@ -134,12 +218,19 @@ export default function SuccessScreen() {
             <AppText variant="labelSmall" tone="secondary">
               {copied ? '✓' : 'copy'}
             </AppText>
-          </Pressable>
-        </Reveal>
+            </Pressable>
+          </Reveal>
+        </Animated.View>
 
         {/* Action Buttons */}
-        <Reveal index={2} step={70} style={{ gap: spacing.sm }}>
-          <Button
+        <Animated.View
+          style={{
+            transform: [{ translateY: buttonsTranslate }],
+            opacity: buttonsOpacity,
+          }}
+        >
+          <Reveal index={2} step={70} style={{ gap: spacing.sm }}>
+            <Button
             label="Share Event"
             onPress={() => {
               void Share.share({ message: shareMessage }).catch(() => {});
@@ -150,7 +241,9 @@ export default function SuccessScreen() {
             variant="secondary"
             onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
           />
-        </Reveal>
+            </Button>
+          </Reveal>
+        </Animated.View>
       </View>
     </ScrollView>
   );

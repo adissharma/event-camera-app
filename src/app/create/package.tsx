@@ -19,6 +19,7 @@ import { CreationStepScreen } from '@/features/celebrations/creation/step-screen
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { fetchCatalogue, formatPrice, planKeys } from '@/services/plans';
 import { publishDraft, PublicationError } from '@/services/publication';
+import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
 import { celebrationKeys } from '@/services/celebrations';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, layout, radii, spacing } from '@/design';
@@ -42,10 +43,10 @@ export default function PackageStep() {
     setIsPublishing(true);
     setPublishError(null);
     try {
-      await publishDraft(draft);
-      await reset();
+      const result = await publishDraft(draft);
+      setPublicationResult(result);
       await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
-      router.replace('/home');
+      router.replace('/create/success');
     } catch (error) {
       const stage = error instanceof PublicationError ? error.stage : null;
       setPublishError(
