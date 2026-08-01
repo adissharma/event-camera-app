@@ -34,17 +34,17 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "YOUR_APP_ID",
-        "appleTeamId": "YOUR_TEAM_ID",
-        "appleId": "YOUR_APPLE_ID",
+        "ascAppId": "6797053710",
+        "appleTeamId": "AL3AF36W3B",
+        "appleId": "djadis@gmail.com",
         "appleIdPassword": "@prompt"
       }
     },
     "staging": {
       "ios": {
-        "ascAppId": "YOUR_APP_ID",
-        "appleTeamId": "YOUR_TEAM_ID",
-        "appleId": "YOUR_APPLE_ID",
+        "ascAppId": "6797053710",
+        "appleTeamId": "AL3AF36W3B",
+        "appleId": "djadis@gmail.com",
         "appleIdPassword": "@prompt"
       }
     }
