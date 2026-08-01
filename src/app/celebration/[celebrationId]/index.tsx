@@ -611,7 +611,7 @@ function EventDetailView({
         ? true
         : (!isBackendConfigured
             ? true
-            : (session ? session.user.id === celebration.created_by : false)
+            : (profile?.id ? profile.id === celebration.created_by : (session ? session.user.id === celebration.created_by : true))
           )
       );
 
