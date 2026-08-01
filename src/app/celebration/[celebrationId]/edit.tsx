@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, StyleSheet, Pressable, ScrollView, Platform } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Pressable, ScrollView, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
@@ -9,7 +9,9 @@ import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   celebrationDetailKeys,
   fetchCelebrationDetail,
+  archiveCelebration,
 } from '@/services/celebration-detail';
+import { celebrationKeys } from '@/services/celebrations';
 import { colours, layout, spacing, radii } from '@/design';
 import { copy } from '@/i18n';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
@@ -32,7 +34,9 @@ function ChevronRightIcon({ size = 16, color = '#6B7280' }) {
 export default function EditEventScreen() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { update } = useCreationDraft();
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (shouldBlockHostRouteOnWeb(Platform.OS)) {
@@ -95,6 +99,34 @@ export default function EditEventScreen() {
     } else if (field === 'challenges') {
       router.push(`/celebration/${celebrationId}/challenges` as never);
     }
+  };
+
+  const handleDelete = () => {
+    Alert.alert(
+      'Delete Event?',
+      'This will permanently delete this event and all associated photos. This cannot be undone.',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeleting(true);
+            try {
+              await archiveCelebration(String(celebrationId));
+              await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
+              router.replace('/home');
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete event. Please try again.');
+              setIsDeleting(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const formattedEndDate = celebration.ends_at
@@ -203,6 +235,24 @@ export default function EditEventScreen() {
         <AppText variant="caption" tone="secondary" style={styles.footerNote}>
           Changes made within setup screens will apply instantly to this celebration.
         </AppText>
+
+        <View style={styles.dangerSection}>
+          <AppText variant="eyebrow" tone="secondary" style={styles.sectionHeader}>
+            Danger Zone
+          </AppText>
+          <Pressable
+            style={[styles.deleteButton, isDeleting && { opacity: 0.5 }]}
+            onPress={handleDelete}
+            disabled={isDeleting}
+          >
+            <AppText style={styles.deleteButtonText}>
+              {isDeleting ? 'Deleting...' : 'Delete Event'}
+            </AppText>
+          </Pressable>
+          <AppText variant="caption" tone="secondary" style={styles.deleteNote}>
+            Permanently delete this event and all photos. This cannot be undone.
+          </AppText>
+        </View>
       </ScrollView>
     </Screen>
   );
@@ -280,6 +330,27 @@ const styles = StyleSheet.create({
   },
   footerNote: {
     marginTop: spacing.xl,
+    textAlign: 'center',
+    paddingHorizontal: spacing.base,
+  },
+  dangerSection: {
+    marginTop: spacing.xxl,
+    gap: spacing.sm,
+  },
+  deleteButton: {
+    backgroundColor: '#DC2626',
+    borderRadius: radii.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
+  deleteNote: {
     textAlign: 'center',
     paddingHorizontal: spacing.base,
   },
