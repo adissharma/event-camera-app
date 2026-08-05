@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
+import { decodeRevealMode } from '@/features/celebrations/draft/types';
 import {
   celebrationDetailKeys,
   fetchCelebrationDetail,
@@ -63,6 +64,17 @@ export default function EditEventScreen() {
   const { celebration, primarySession } = data;
 
   const handleEditField = (field: 'name' | 'closing' | 'cover' | 'photo-limit' | 'reveal' | 'treatment' | 'challenges') => {
+    // The database has one reveal setting for the whole session — nothing
+    // distinguishes a host's view from a guest's (see reveal/state.ts). Both
+    // tiers of the reveal step's UI are seeded from that single value, so
+    // reopening settings shows "Same time as me" rather than a stale split
+    // left over from a previous draft.
+    const { choice: revealChoice, customRevealAt } = decodeRevealMode(
+      primarySession.reveal_mode,
+      primarySession.reveal_at,
+      celebration.ends_at,
+    );
+
     // Seed draft with ALL current settings of this celebration
     update({
       title: celebration.title,
@@ -72,12 +84,14 @@ export default function EditEventScreen() {
       coverStoragePath: celebration.cover_storage_path,
       coverLocalUri: celebration.cover_storage_path, // fallback
       shotLimitPerGuest: primarySession.shot_limit_per_guest,
+      captureMode: primarySession.capture_mode || 'camera_and_library',
+      cameraRollUploadsEnabled: (primarySession.capture_mode ?? 'camera_and_library') !== 'camera_only',
       galleryVisibility: primarySession.gallery_visibility,
       guestDownloadsEnabled: primarySession.guest_downloads_enabled,
-      guestRevealChoice: primarySession.reveal_mode === 'instant' 
-        ? 'during' 
-        : (primarySession.reveal_mode === 'delayed' ? 'at_close' : 'custom'),
-      guestCustomRevealAt: primarySession.reveal_at,
+      hostRevealChoice: revealChoice,
+      hostCustomRevealAt: customRevealAt,
+      guestRevealChoice: revealChoice,
+      guestCustomRevealAt: customRevealAt,
       photoTreatment: primarySession.photo_treatment || 'original',
       editCelebrationId: celebration.id, // Mark that we are editing this event!
       editSessionId: primarySession.id,
@@ -213,7 +227,7 @@ export default function EditEventScreen() {
             <Pressable onPress={() => handleEditField('treatment')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
                 <AppText style={styles.rowLabel}>Photo Filter</AppText>
-                <AppText style={styles.rowValue} style={{ textTransform: 'capitalize' }}>
+                <AppText style={[styles.rowValue, { textTransform: 'capitalize' }]}>
                   {primarySession.photo_treatment || 'original'}
                 </AppText>
               </View>

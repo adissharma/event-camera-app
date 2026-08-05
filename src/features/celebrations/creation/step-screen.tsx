@@ -13,7 +13,8 @@ import { copy } from '@/i18n';
 import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
 import { validateStep } from '../draft/validation';
-import { updateEventSettings, resolveReveal, celebrationDetailKeys } from '@/services/celebration-detail';
+import { buildEditPatch } from './edit-patch';
+import { updateEventSettings, celebrationDetailKeys } from '@/services/celebration-detail';
 import { celebrationKeys } from '@/services/celebrations';
 import Svg, { Path } from 'react-native-svg';
 export interface CreationStepScreenProps {
@@ -89,26 +90,11 @@ export function CreationStepScreen({
 
   async function defaultSave() {
     if (!draft.editCelebrationId || !draft.editSessionId) return;
-    const patch: any = {};
-    if (step === 'name') {
-      patch.title = draft.title;
-    } else if (step === 'closing') {
-      patch.endsAt = draft.endsAt;
-    } else if (step === 'photo-limit') {
-      patch.shotLimitPerGuest = draft.shotLimitPerGuest;
-    } else if (step === 'reveal') {
-      const modeAndReveal = resolveReveal(
-        draft.guestRevealChoice,
-        draft.endsAt,
-        draft.guestCustomRevealAt
-      );
-      patch.revealMode = modeAndReveal.mode;
-      patch.revealAt = modeAndReveal.revealAt;
-    } else if (step === 'treatment') {
-      patch.photoTreatment = draft.photoTreatment;
-    }
-    
-    await updateEventSettings(draft.editCelebrationId, draft.editSessionId, patch);
+    await updateEventSettings(
+      draft.editCelebrationId,
+      draft.editSessionId,
+      buildEditPatch(step, draft),
+    );
   }
 
   const handlePress = async () => {

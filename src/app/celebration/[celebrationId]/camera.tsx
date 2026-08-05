@@ -11,8 +11,10 @@ import {
   Alert,
   Share,
   NativeModules,
+  Linking,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
 let CameraView: any = null;
 let useCameraPermissions: any = () => [null, () => {}];
 let hasNativeCamera = false;
@@ -46,6 +48,10 @@ import {
 import { colours, radii, spacing, layout } from '@/design';
 import { fetchMyProfile, firstNameFrom, profileKeys } from '@/services/profile';
 import { isBackendConfigured } from '@/lib/supabase/client';
+import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
+import { uploadGuestPhoto } from '@/services/guest-media-upload';
+import { uploadHostPhoto } from '@/services/host-media-upload';
+import type { MediaSource } from '@/types/database';
 
 interface PhotoItem {
   uri: string;
@@ -153,6 +159,20 @@ function FlipIcon({ size = 22, color = '#FFFFFF' }) {
   );
 }
 
+function CameraRollPlusIcon({ size = 22, color = '#FFFFFF' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 5v14M5 12h14"
+        stroke={color}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 // ─── Camera / Viewfinder Screen ────────────────────────────────────────────────
 
 export default function CameraScreen() {
@@ -180,6 +200,31 @@ export default function CameraScreen() {
   const celebration = detail?.celebration;
   const primarySession = detail?.primarySession;
   const limit = primarySession?.shot_limit_per_guest ?? null;
+
+  // ── Upload pipeline ──
+  //
+  // `capture_mode` is the source of truth for whether the camera-roll action
+  // shows at all — no separate toggle, no client-side flag. It applies to both
+  // hosts and guests, so the setting controls what actions are available to both.
+  const isGuest = detail?.viewerRole === 'guest';
+  const captureMode = primarySession?.capture_mode ?? 'camera_and_library';
+  const showCameraRollAction = captureMode !== 'camera_only';
+  const [guestAuth, setGuestAuth] = useState<{ slug: string; guestToken: string } | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  useEffect(() => {
+    if (!isGuest || !celebrationId) return;
+    let cancelled = false;
+    (async () => {
+      const found = await loadStoredGuestSessionByCelebrationId(String(celebrationId));
+      if (!cancelled && found) {
+        setGuestAuth({ slug: found.slug, guestToken: found.session.guestToken });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, celebrationId]);
 
   // ── States ──
   const [permission, requestPermission] = useCameraPermissions();
@@ -293,11 +338,116 @@ export default function CameraScreen() {
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   }
 
+  /**
+   * Flying-thumbnail animation and upload, shared by a camera capture and a
+   * camera-roll pick so the two feel like the same action landing in the
+   * same place, and so the upload path is written exactly once.
+   *
+   * Host and guest both go through a real pipeline now (`uploadHostPhoto` /
+   * `uploadGuestPhoto`) — there is no product reason for a host's own
+   * contribution to their own event to land somewhere different from a
+   * guest's. A failed or cancelled upload never reaches `finalize`, so
+   * nothing server-side needs rolling back — only the local, session-only
+   * thumbnail does, in the `catch` below.
+   *
+   * The one remaining branch is `isBackendConfigured`: with no real backend
+   * at all (the typed development fallback), both roles fall back to local
+   * mock storage, same as every other screen in that mode.
+   */
+  async function commitPhoto(
+    uri: string,
+    source: MediaSource,
+    mimeType?: string,
+    width?: number,
+    height?: number,
+  ) {
+    setFlyingThumbnailUri(uri);
+    flyingAnim.setValue({ x: 0, y: 0 });
+    flyingScale.setValue(1);
+    flyingOpacity.setValue(1);
+
+    await new Promise<void>((resolve) => {
+      Animated.parallel([
+        Animated.timing(flyingAnim, {
+          toValue: { x: deltaX, y: deltaY },
+          duration: 380,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flyingScale, {
+          toValue: 0.15,
+          duration: 380,
+          useNativeDriver: true,
+        }),
+        Animated.timing(flyingOpacity, {
+          toValue: 0.1,
+          duration: 380,
+          useNativeDriver: true,
+        }),
+      ]).start(() => resolve());
+    });
+
+    setFlyingThumbnailUri(null);
+
+    const userName = firstNameFrom(profile) || 'You';
+    const newPhoto: PhotoItem = { uri, takenBy: userName };
+    const next = [newPhoto, ...photos];
+    setPhotos(next);
+
+    if (!isBackendConfigured) {
+      await AsyncStorage.setItem(`__mock_photos_${celebrationId}`, JSON.stringify(next));
+    } else {
+      setIsUploading(true);
+      try {
+        if (isGuest && guestAuth) {
+          await uploadGuestPhoto({
+            eventCode: guestAuth.slug,
+            guestToken: guestAuth.guestToken,
+            localUri: uri,
+            source,
+            mimeType,
+            width,
+            height,
+          });
+        } else if (!isGuest && celebrationId) {
+          await uploadHostPhoto({
+            celebrationId: String(celebrationId),
+            localUri: uri,
+            source,
+            mimeType,
+            width,
+            height,
+          });
+        } else {
+          // Guest identity hasn't loaded yet (loadStoredGuestSessionByCelebrationId
+          // is async — see the effect above). Rare in practice since the
+          // camera-roll/shutter buttons are only reachable once the screen
+          // has fully mounted, but fail loud rather than silently drop the photo.
+          throw new Error('No identity available to upload this photo yet.');
+        }
+        await queryClient.invalidateQueries({
+          queryKey: celebrationDetailKeys.detail(String(celebrationId)),
+        });
+      } catch (e) {
+        console.error(`Failed to upload ${source} photo:`, e);
+        Alert.alert('Upload failed', 'Your photo could not be uploaded. Please try again.');
+        // The server never received it — only the local, session-only
+        // thumbnail needs undoing.
+        setPhotos(photos);
+      } finally {
+        setIsUploading(false);
+      }
+    }
+
+    // Invalidate query to trigger global Live Activity sync manager instantly
+    void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+  }
+
   async function handleCapture() {
-    if (limit !== null && photos.length >= limit) {
+    if (outOfShots) {
       Alert.alert('Limit Reached', "You've reached the photo limit for this event.");
       return;
     }
+    if (isUploading) return;
 
     if (cameraRef.current) {
       try {
@@ -307,7 +457,8 @@ export default function CameraScreen() {
         });
 
         if (photo && photo.uri) {
-          // Play native shutter flash animation
+          // Native shutter flash — fire-and-forget, independent of the
+          // flying-thumbnail animation that follows.
           shutterFlashOpacity.setValue(0);
           Animated.sequence([
             Animated.timing(shutterFlashOpacity, {
@@ -322,44 +473,7 @@ export default function CameraScreen() {
             }),
           ]).start();
 
-          // Prepare Flying animation values
-          setFlyingThumbnailUri(photo.uri);
-          flyingAnim.setValue({ x: 0, y: 0 });
-          flyingScale.setValue(1);
-          flyingOpacity.setValue(1);
-
-          // Trigger smooth flight transition into Photos button
-          Animated.parallel([
-            Animated.timing(flyingAnim, {
-              toValue: { x: deltaX, y: deltaY },
-              duration: 380,
-              useNativeDriver: true,
-            }),
-            Animated.timing(flyingScale, {
-              toValue: 0.15,
-              duration: 380,
-              useNativeDriver: true,
-            }),
-            Animated.timing(flyingOpacity, {
-              toValue: 0.1,
-              duration: 380,
-              useNativeDriver: true,
-            }),
-          ]).start(async () => {
-            setFlyingThumbnailUri(null);
-
-            // Update photos list
-            const userName = firstNameFrom(profile) || 'You';
-            const newPhoto: PhotoItem = { uri: photo.uri, takenBy: userName };
-            const next = [newPhoto, ...photos];
-            setPhotos(next);
-            await AsyncStorage.setItem(
-              `__mock_photos_${celebrationId}`,
-              JSON.stringify(next),
-            );
-            // Invalidate query to trigger global Live Activity sync manager instantly
-            void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
-          });
+          await commitPhoto(photo.uri, 'camera', undefined, photo.width, photo.height);
         }
       } catch (e) {
         console.error('Failed to capture photo:', e);
@@ -368,18 +482,60 @@ export default function CameraScreen() {
     }
   }
 
+  async function handlePickFromLibrary() {
+    if (outOfShots) {
+      Alert.alert('Limit Reached', "You've reached the photo limit for this event.");
+      return;
+    }
+    if (isUploading) return;
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        'Photo Access Required',
+        'Allow access to your photo library to add a photo from your camera roll.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Settings', onPress: () => Linking.openSettings() },
+        ],
+      );
+      return;
+    }
+
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.85,
+        selectionLimit: 1,
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      const asset = result.assets[0];
+      await commitPhoto(asset.uri, 'library', asset.mimeType, asset.width, asset.height);
+    } catch (e) {
+      console.error('Failed to pick photo from library:', e);
+      Alert.alert('Error', 'Failed to add photo. Please try again.');
+    }
+  }
+
   async function handleShareLink() {
-    if (!celebration) return;
+    // `event_code` (short, meant to be spoken or typed) is what the guest
+    // join screen and `get_event_preview_by_code` look up by. `public_slug`
+    // is a different, deliberately unguessable column meant for opaque URLs
+    // — sharing it here as "the code" meant no code a host gave out could
+    // actually join the event.
+    if (!celebration || !celebration.event_code) return;
     try {
       await Share.share({
-        message: `Join "${celebration.title}" on Candidly → ${BRAND_CONFIG.guestDomain}/e/${celebration.public_slug}`,
+        message: `Join "${celebration.title}" on Candidly → ${BRAND_CONFIG.guestDomain}/e/${celebration.event_code}`,
       });
     } catch {}
   }
 
   async function handleCopyCode() {
-    if (!celebration) return;
-    await Clipboard.setStringAsync(celebration.public_slug);
+    if (!celebration || !celebration.event_code) return;
+    await Clipboard.setStringAsync(celebration.event_code);
     Alert.alert('Copied', 'Event code copied to clipboard.');
   }
 
@@ -396,7 +552,15 @@ export default function CameraScreen() {
     return `${minutes}m left`;
   }
 
-  const remainingPhotos = (limit !== null && isPhotosLoaded) ? limit - photos.length : null;
+  // `shot_limit_per_guest` caps guests, by name and by design — server-
+  // computed from uploads that actually reached `ready`, so a failed or
+  // abandoned upload never costs an allowance. It does not apply to a host
+  // contributing to their own event, so `remainingPhotos` stays null for a
+  // host: no counter renders, and nothing is ever "out of shots" for them.
+  const shotsUsed = detail?.guestShotsUsed ?? 0;
+  const remainingPhotos =
+    isGuest && limit !== null && Boolean(detail) ? limit - shotsUsed : null;
+  const outOfShots = remainingPhotos !== null && remainingPhotos <= 0;
   const latestPhotoUri = photos.length > 0 ? photos[0].uri : null;
 
 
@@ -552,8 +716,31 @@ export default function CameraScreen() {
           </View>
         )}
 
+        {/* Camera-roll action — mirrors the shots-left tag on the opposite
+            corner. Visible only when capture_mode allows a library source;
+            no separate toggle, this reads the same setting the shots-left
+            count and the shutter's own capture_mode gate already use. */}
+        {showCameraRollAction && (
+          <Pressable
+            onPress={handlePickFromLibrary}
+            disabled={outOfShots || isUploading}
+            style={[S.cameraRollTag, (outOfShots || isUploading) && { opacity: 0.4 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Add photo from camera roll"
+          >
+            <CameraRollPlusIcon size={20} />
+          </Pressable>
+        )}
+
         {/* Zoom Selector Controls */}
-        <View style={S.zoomContainer}>
+        {/* `zoomContainer` spans the full viewfinder width (`left: 0, right:
+            0`) to centre its pill child, but that leaves its own invisible
+            hit-testable bounds covering the corners too — silently
+            swallowing taps on the camera-roll button underneath, at the same
+            zIndex but earlier in this file's paint order. `box-none` makes
+            only the pill itself (and its buttons) touchable, not the empty
+            width around it. */}
+        <View style={S.zoomContainer} pointerEvents="box-none">
           <View style={S.zoomPill}>
             {[
               { label: '0.5', value: 0 },
@@ -601,9 +788,14 @@ export default function CameraScreen() {
           </Pressable>
 
           {/* Shutter Button */}
-          <Pressable 
-            onPress={handleCapture} 
-            style={({ pressed }) => [S.shutterBtn, pressed && { opacity: 0.8 }]}
+          <Pressable
+            onPress={handleCapture}
+            disabled={outOfShots || isUploading}
+            style={({ pressed }) => [
+              S.shutterBtn,
+              pressed && { opacity: 0.8 },
+              (outOfShots || isUploading) && { opacity: 0.4 },
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Take photo"
           >
@@ -688,7 +880,7 @@ export default function CameraScreen() {
                   <QrCodeIcon size={100} color={colours.brandPrimary} />
                 </View>
                 <AppText style={[S.qrCode, { color: colours.brandPrimary }]}>
-                  {celebration.public_slug}
+                  {celebration.event_code ?? '——————'}
                 </AppText>
               </View>
 
@@ -832,6 +1024,20 @@ const S = StyleSheet.create({
     lineHeight: COUNTER_LEADING,
     color: '#FFFFFF',
     textAlign: 'center',
+  },
+
+  // Camera-Roll Pill — same family as photosLeftTag, opposite corner.
+  cameraRollTag: {
+    position: 'absolute',
+    bottom: PILL_INSET,
+    right: PILL_INSET,
+    backgroundColor: 'rgba(11, 11, 12, 0.65)',
+    height: PILL_HEIGHT,
+    width: PILL_HEIGHT,
+    borderRadius: PILL_RADIUS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 20,
   },
 
   // Zoom Selector Pill

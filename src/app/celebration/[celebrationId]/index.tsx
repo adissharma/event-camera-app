@@ -5,7 +5,7 @@
  * Inspired by Leica, Kinfolk Magazine, Apple Photos, and luxury wedding albums.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -23,7 +23,7 @@ import {
   Platform,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -33,11 +33,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
-import { isBackendConfigured } from '@/lib/supabase/client';
+import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { BRAND_CONFIG } from '@/config/brand';
 import { shouldShowHostControls } from '@/lib/platform-guards';
-import { loadStoredGuestSession } from '@/services/guest-session';
+import { loadStoredGuestSession, clearStoredGuestSession } from '@/services/guest-session';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { QrCodeIcon, CloseIcon, LockIcon } from '@/components/ui/icons';
@@ -49,6 +49,11 @@ import {
 } from '@/services/celebration-detail';
 import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
+import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
+import { TreatedPhoto } from '@/components/media/treated-photo';
+import { canViewerSeePhotos, msUntilReveal, formatRevealCountdownWords } from '@/features/celebrations/reveal/state';
+import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal';
+import { serverNow } from '@/services/server-time';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
@@ -170,6 +175,20 @@ type Challenge = {
 interface PhotoItem {
   uri: string;
   takenBy: string;
+  /**
+   * The media item's id. Seeds the disposable treatment's per-photo
+   * randomisation — deliberately not the URI, which is a signed URL that
+   * gets re-issued on expiry and would reshuffle the look each time.
+   */
+  id?: string;
+  /**
+   * `uri` stays the real image URL even while locked — this flag alone
+   * drives the blur + lock icon (see `visiblePhotos`), so what's blurred is
+   * genuinely the photo itself, not a substituted placeholder.
+   */
+  locked?: boolean;
+  /** What the disposable treatment's date stamp reads. Absent for mock photos. */
+  capturedAt?: string | null;
 }
 
 const DEFAULT_CHALLENGES: Challenge[] = [
@@ -575,9 +594,10 @@ function EventDetailView({
   archiving: boolean;
 }) {
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { celebration, primarySession, metrics } = detail;
+  const { celebration, primarySession, metrics, viewerRole, mediaPhotos } = detail;
 
   const { session } = useAuth();
 
@@ -605,13 +625,22 @@ function EventDetailView({
     });
   }, [celebration, isHost]);
 
-  const roleIsHost = devRole === 'guest'
+  // `viewerRole === 'guest'` is authoritative and wins over everything below:
+  // it means this detail came from the guest RPC path (see
+  // `fetchCelebrationDetail`), which never returns `celebration.created_by` —
+  // so the `session.user.id === celebration.created_by` comparison further
+  // down would otherwise default an anonymous guest to host on a `null`
+  // mismatch it cannot reliably make either way.
+  const roleIsHost = viewerRole === 'guest'
     ? false
-    : (devRole === 'host'
-        ? true
-        : (!isBackendConfigured
+    : (devRole === 'guest'
+        ? false
+        : (devRole === 'host'
             ? true
-            : (profile?.id ? profile.id === celebration.created_by : (session ? session.user.id === celebration.created_by : true))
+            : (!isBackendConfigured
+                ? true
+                : (profile?.id ? profile.id === celebration.created_by : (session ? session.user.id === celebration.created_by : true))
+              )
           )
       );
 
@@ -619,6 +648,28 @@ function EventDetailView({
   const isHost = shouldShowHostControls(roleIsHost ? 'host' : 'guest');
 
   const showGuestbook = isHost || detail.hasAudioGuestbook !== false;
+
+  // Guests can't swipe back out of the event (see the `gestureEnabled` below)
+  // — a guest who joins by mistake, or wants to switch events, needs an
+  // explicit way out. Confirmed because it's easy to graze this control while
+  // reaching for something else in a one-handed grip. Clearing the stored
+  // session only forgets it locally: the guest's server-side row and their
+  // photos are untouched, and re-entering the same code recognises this
+  // device again — see `join_event_by_code`'s device-fingerprint reuse.
+  function handleLeaveEvent() {
+    Alert.alert('Leave this event?', 'You can rejoin any time with the same event code.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Leave',
+        style: 'destructive',
+        onPress: () => {
+          void clearStoredGuestSession(celebration.public_slug ?? celebration.id).then(() => {
+            router.replace('/j');
+          });
+        },
+      },
+    ]);
+  }
 
   // ── Dimensions Hook (Fully Reactive to Hot Reloads and Screen Orientations) ──
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
@@ -794,8 +845,13 @@ function EventDetailView({
     themes?.find((t) => t.id === celebration.default_theme_id)?.accent_color_hex
     ?? colours.brandPrimary;
 
-  // ── Load gallery ──
+  // ── Load gallery (offline mock fallback) ──
+  // Only when there's no real backend at all — matches every other screen's
+  // convention for that mode. With a real backend, host and guest both load
+  // real media below; there's no product reason for a host's own event to
+  // show something different from what a guest sees.
   useEffect(() => {
+    if (isBackendConfigured) return;
     (async () => {
       const key = `__mock_photos_${celebration.id}`;
       const stored = await AsyncStorage.getItem(key);
@@ -827,6 +883,57 @@ function EventDetailView({
       await AsyncStorage.setItem(key, JSON.stringify(initial));
     })();
   }, [celebration.id]);
+
+  // ── Load gallery (real media, host and guest alike) ──
+  //
+  // `mediaPhotos` carries raw private-bucket paths, not URLs. For a guest,
+  // get_guest_gallery has already decided which ones they're allowed to see
+  // (their own, always; others only once revealed — see that RPC's
+  // comments); for a host, RLS already scoped the read to their own event.
+  // Either way, signing here is just "turn an authorised path into a
+  // fetchable URL," not a second visibility check.
+  useEffect(() => {
+    if (!isBackendConfigured) return;
+    if (!mediaPhotos || mediaPhotos.length === 0) {
+      setPhotos([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const client = requireSupabase();
+      const { data, error } = await client.storage
+        .from('event-media')
+        .createSignedUrls(
+          mediaPhotos.map((p) => p.storagePath),
+          3600,
+        );
+
+      if (cancelled) return;
+
+      if (error || !data) {
+        console.error('[gallery] failed to sign photo URLs', error);
+        setPhotos([]);
+        return;
+      }
+
+      const urlByPath = new Map(data.map((d) => [d.path, d.signedUrl]));
+      const resolved: PhotoItem[] = mediaPhotos
+        .map((p): PhotoItem | null => {
+          const signedUrl = urlByPath.get(p.storagePath);
+          return signedUrl
+            ? { uri: signedUrl, takenBy: p.displayName, capturedAt: p.capturedAt, id: p.id }
+            : null;
+        })
+        .filter((p): p is PhotoItem => p !== null);
+
+      setPhotos(resolved);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaPhotos]);
 
   // ── Load challenges & Pre-seed c3 (Best Group Photo) submissions ──
   useEffect(() => {
@@ -927,9 +1034,6 @@ function EventDetailView({
   }
 
   function getPhotoSource(photo: string) {
-    if (photo === 'locked_photo') {
-      return GALLERY_PRESETS[0].source;
-    }
     const preset = GALLERY_PRESETS.find((p) => p.id === photo);
     return preset ? preset.source : { uri: photo };
   }
@@ -951,13 +1055,79 @@ function EventDetailView({
     );
   }
 
-  const isGalleryLocked = primarySession?.reveal_mode === 'scheduled' &&
-                          primarySession?.reveal_at &&
-                          new Date(primarySession.reveal_at).getTime() > Date.now();
+  // Shared with the reveal modal and the photo viewer. Deriving it here inline
+  // is how the modal ended up able to announce photos the gallery still hid.
+  const isGalleryLocked = !canViewerSeePhotos({
+    now: serverNow(),
+    revealAt: primarySession?.reveal_at,
+    revealMode: primarySession?.reveal_mode,
+  });
 
+  // Copy for the lock overlay — "3 days" / "5 hours" / "20 minutes" until
+  // reveal. Null when there's nothing to count down to (e.g. manual reveal
+  // with no time set yet), in which case the overlay falls back to the lock
+  // icon alone.
+  const revealCountdownWords = (() => {
+    const remainingMs = msUntilReveal({
+      now: serverNow(),
+      revealAt: primarySession?.reveal_at,
+      revealMode: primarySession?.reveal_mode,
+    });
+    return remainingMs === null ? null : formatRevealCountdownWords(remainingMs);
+  })();
+
+  // For a guest, get_guest_gallery already applies the real rule
+  // server-side: while locked, the only rows it ever returns are that
+  // guest's own (see the RPC's WHERE clause — everyone else's are excluded
+  // outright, not filtered here). For a host, RLS already scoped the read to
+  // their own event, and seeing your own event's photos early is exactly
+  // what being the host means. Either way, blurring the real image rather
+  // than substituting a placeholder is correct and safe for both roles now
+  // that both load real data — see the loader effect above.
   const visiblePhotos = isGalleryLocked
-    ? photos.map((p) => ({ ...p, uri: 'locked_photo' }))
+    ? photos.map((p) => ({ ...p, locked: true }))
     : photos;
+
+  // ── End-of-event reveal ───────────────────────────────────────────
+
+  // Scoped per viewer so a host and a guest on one device each get their own
+  // reveal. Null until resolved — the modal stays down rather than writing an
+  // acknowledgement against the wrong identity.
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  useEffect(() => {
+    if (profile?.id) {
+      setViewerId(profile.id);
+      return;
+    }
+    if (session?.user.id) {
+      setViewerId(session.user.id);
+      return;
+    }
+    void loadStoredGuestSession(celebration.public_slug ?? celebration.id)
+      .then((guest) => setViewerId(guest?.guestSessionId ?? 'anon'))
+      .catch(() => setViewerId('anon'));
+  }, [profile?.id, session?.user.id, celebration.public_slug, celebration.id]);
+
+  const reveal = useRevealModal({
+    celebrationId: celebration.id,
+    viewerId,
+    endsAt: primarySession?.ends_at ?? celebration.ends_at,
+    revealAt: primarySession?.reveal_at,
+    revealMode: primarySession?.reveal_mode,
+    ready: Boolean(primarySession),
+    refresh: () =>
+      queryClient.refetchQueries({
+        queryKey: celebrationDetailKeys.detail(celebration.id),
+      }),
+  });
+
+  // The real photographs, blurred by the modal rather than substituted. A
+  // placeholder grid would undercut the whole point of the moment.
+  const revealThumbnails = useMemo(
+    () => photos.slice(0, 8).map((photo) => getPhotoSource(photo.uri)),
+    [photos],
+  );
+
 
   // ── Native iOS Shared-Element Hero Viewer State & Animations ──
   const [heroVisible, setHeroVisible] = useState(false);
@@ -965,9 +1135,44 @@ function EventDetailView({
   const [heroStartBounds, setHeroStartBounds] = useState({ x: 16, y: 300, width: CELL_W, height: CELL_H });
   const [heroMenuVisible, setHeroMenuVisible] = useState(false);
 
+  // Two independent reasons to disable the native swipe-back gesture here,
+  // covering two different moments:
+  //
+  // 1. Guests, always. Below this screen in the stack sits the join/entry
+  //    screen the guest replaced on their way in (see `j/[slug].tsx`'s
+  //    `router.replace`). An accidental edge swipe would pop back onto it and
+  //    read as having left the event with no warning — guests get an
+  //    explicit "leave" control instead (`handleLeaveEvent`, in the header),
+  //    which is the only way out.
+  // 2. Everyone, while the hero photo viewer is open. It pages between photos
+  //    with its own horizontal drag (`heroPanResponder` below), and
+  //    `PanResponder` is pure JS — it cannot stop `react-native-screens`'
+  //    native swipe-back recognizer from *also* seeing the same drag, since
+  //    the two aren't part of the same gesture system. Left enabled, every
+  //    attempt to page a photo also pops the screen.
+  useEffect(() => {
+    navigation.setOptions({ gestureEnabled: isHost && !heroVisible });
+  }, [isHost, heroVisible, navigation]);
+
   const heroAnimProgress = useRef(new Animated.Value(0)).current;
   const heroPanY = useRef(new Animated.Value(0)).current;
   const heroPanX = useRef(new Animated.Value(0)).current;
+
+  // There's only one image element for the hero viewer — it swaps to the new
+  // photo when `heroIndex` changes, rather than sliding between two stacked
+  // images. So resetting `heroPanX` back to 0 has to land in the same paint
+  // as that swap, or the OLD photo flashes back into view at rest (fully
+  // on-screen) for one frame before the new photo appears. Resetting it
+  // inside the swipe animation's `.start()` callback was too early: that
+  // callback calls `heroPanX.setValue(0)` synchronously, but `setHeroIndex`
+  // alongside it is an async state update — React hasn't re-rendered with
+  // the new photo yet, so the visible frame in between is the OLD photo
+  // sitting at translateX: 0. `useLayoutEffect` runs synchronously right
+  // after React commits the new `heroIndex` but before the screen paints, so
+  // this reset lands in the same frame as the photo swap instead of before it.
+  useLayoutEffect(() => {
+    heroPanX.setValue(0);
+  }, [heroIndex, heroPanX]);
 
   function getThumbBounds(idx: number) {
     const col = idx % 2;
@@ -982,6 +1187,9 @@ function EventDetailView({
       Alert.alert('Gallery is locked', 'Photos will be revealed automatically once the countdown ends!');
       return;
     }
+    // Seeing the photographs IS the news. Someone who got here another way —
+    // a deep link, a notification — should not be told about it afterwards.
+    reveal.markRevealedSeen();
     setHeroIndex(index);
     if (e?.currentTarget?.measure) {
       e.currentTarget.measure((_x: number, _y: number, w: number, h: number, pageX: number, pageY: number) => {
@@ -1019,6 +1227,20 @@ function EventDetailView({
     });
   }
 
+  // Keep responder stable via useRef to avoid jank on every swipe, but use
+  // separate refs to keep handlers current. A responder built with
+  // `useRef(...).current` captures stale state at init (heroIndex=0,
+  // photos=[]); building only once means handlers can't navigate. But
+  // rebuilding via `useMemo` on every state change causes the animation to
+  // jank. Solution: refs for state, stable responder object.
+  const heroIndexRef = useRef(heroIndex);
+  const heroPhotosLengthRef = useRef(photos.length);
+
+  useEffect(() => {
+    heroIndexRef.current = heroIndex;
+    heroPhotosLengthRef.current = photos.length;
+  }, [heroIndex, photos.length]);
+
   const heroPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -1046,30 +1268,32 @@ function EventDetailView({
 
         // Horizontal gallery carousel swipe
         if (gestureState.dx < -50 || (gestureState.dx < -20 && gestureState.vx < -0.3)) {
-          if (heroIndex < photos.length - 1) {
+          if (heroIndexRef.current < heroPhotosLengthRef.current - 1) {
             void Haptics.selectionAsync().catch(() => {});
             Animated.timing(heroPanX, {
               toValue: -400,
               duration: 150,
               useNativeDriver: false,
             }).start(() => {
-              heroPanX.setValue(0);
-              const nextIdx = heroIndex + 1;
+              // heroPanX resets in the useLayoutEffect above, synchronized
+              // with the photo swap — not here, or the old photo flashes back.
+              const nextIdx = heroIndexRef.current + 1;
               setHeroIndex(nextIdx);
               setHeroStartBounds(getThumbBounds(nextIdx));
             });
             return;
           }
         } else if (gestureState.dx > 50 || (gestureState.dx > 20 && gestureState.vx > 0.3)) {
-          if (heroIndex > 0) {
+          if (heroIndexRef.current > 0) {
             void Haptics.selectionAsync().catch(() => {});
             Animated.timing(heroPanX, {
               toValue: 400,
               duration: 150,
               useNativeDriver: false,
             }).start(() => {
-              heroPanX.setValue(0);
-              const prevIdx = heroIndex - 1;
+              // heroPanX resets in the useLayoutEffect above, synchronized
+              // with the photo swap — not here, or the old photo flashes back.
+              const prevIdx = heroIndexRef.current - 1;
               setHeroIndex(prevIdx);
               setHeroStartBounds(getThumbBounds(prevIdx));
             });
@@ -1167,15 +1391,22 @@ function EventDetailView({
   }
 
   async function handleShareLink() {
+    // `event_code` (short, guessable-by-design for a spoken/typed code) is
+    // what the guest join screen and `get_event_preview_by_code` look up by.
+    // `public_slug` is a different, deliberately unguessable column meant for
+    // opaque URLs — sharing it here as "the code" meant no code a host ever
+    // gave out could actually join the event.
+    if (!celebration.event_code) return;
     try {
       await Share.share({
-        message: `Join "${celebration.title}" on Candidly → ${BRAND_CONFIG.guestDomain}/e/${celebration.public_slug}`,
+        message: `Join "${celebration.title}" on Candidly → ${BRAND_CONFIG.guestDomain}/e/${celebration.event_code}`,
       });
     } catch {}
   }
 
   async function handleCopyCode() {
-    await Clipboard.setStringAsync(celebration.public_slug);
+    if (!celebration.event_code) return;
+    await Clipboard.setStringAsync(celebration.event_code);
     Alert.alert('Copied', 'Event code copied to clipboard.');
   }
 
@@ -1235,7 +1466,9 @@ function EventDetailView({
 
           {/* Floating nav icons */}
           <View style={[S.navBar, { paddingTop: insets.top + 6 }]}>
-            {/* Back button: only show for hosts */}
+            {/* Hosts get a normal back button. Guests get an explicit "leave"
+                control instead, since their swipe-back gesture is disabled
+                below — this is the only way out of the event without it. */}
             {isHost ? (
               <Pressable
                 style={S.navBtn}
@@ -1246,7 +1479,14 @@ function EventDetailView({
                 <BackChevron />
               </Pressable>
             ) : (
-              <View style={S.navBtn} />
+              <Pressable
+                style={S.navBtn}
+                onPress={handleLeaveEvent}
+                accessibilityRole="button"
+                accessibilityLabel="Leave event"
+              >
+                <CloseIcon size={20} color="#FFFFFF" />
+              </Pressable>
             )}
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable
@@ -1424,7 +1664,7 @@ function EventDetailView({
                 .filter((_, i) => i % 2 === 0)
                 .map((photo, i) => {
                   const originalIndex = i * 2;
-                  const locked = photo.uri === 'locked_photo';
+                  const locked = Boolean(photo.locked);
                   return (
                     <Pressable
                       key={`L${i}`}
@@ -1435,17 +1675,26 @@ function EventDetailView({
                         pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
                       ]}
                     >
-                      <Image
+                      <TreatedPhoto
                         source={getPhotoSource(photo.uri)}
                         style={S.galleryCellImg}
                         resizeMode="cover"
-                        blurRadius={locked ? 20 : 0}
+                        blurRadius={locked ? 45 : 0}
+                        treatment={primarySession?.photo_treatment}
+                        dateStampEnabled={primarySession?.date_stamp_enabled}
+                        capturedAt={photo.capturedAt}
+                        seedKey={photo.id}
                       />
                       {locked && (
                         <View style={S.lockOverlay}>
                           <View style={S.lockCircle}>
-                            <LockIcon size={18} color="#000000" />
+                            <LockIcon size={18} color="#FFFFFF" />
                           </View>
+                          {revealCountdownWords && (
+                            <AppText style={S.lockCountdownText}>
+                              Revealed in {revealCountdownWords}
+                            </AppText>
+                          )}
                         </View>
                       )}
                       {!locked && (
@@ -1463,7 +1712,7 @@ function EventDetailView({
                 .filter((_, i) => i % 2 === 1)
                 .map((photo, i) => {
                   const originalIndex = i * 2 + 1;
-                  const locked = photo.uri === 'locked_photo';
+                  const locked = Boolean(photo.locked);
                   return (
                     <Pressable
                       key={`R${i}`}
@@ -1474,17 +1723,26 @@ function EventDetailView({
                         pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
                       ]}
                     >
-                      <Image
+                      <TreatedPhoto
                         source={getPhotoSource(photo.uri)}
                         style={S.galleryCellImg}
                         resizeMode="cover"
-                        blurRadius={locked ? 20 : 0}
+                        blurRadius={locked ? 45 : 0}
+                        treatment={primarySession?.photo_treatment}
+                        dateStampEnabled={primarySession?.date_stamp_enabled}
+                        capturedAt={photo.capturedAt}
+                        seedKey={photo.id}
                       />
                       {locked && (
                         <View style={S.lockOverlay}>
                           <View style={S.lockCircle}>
-                            <LockIcon size={18} color="#000000" />
+                            <LockIcon size={18} color="#FFFFFF" />
                           </View>
+                          {revealCountdownWords && (
+                            <AppText style={S.lockCountdownText}>
+                              Revealed in {revealCountdownWords}
+                            </AppText>
+                          )}
                         </View>
                       )}
                       {!locked && (
@@ -1565,7 +1823,7 @@ function EventDetailView({
                 <QrCodeIcon size={100} color={accentColor} />
               </View>
               <AppText style={[S.qrCode, { color: accentColor }]}>
-                {celebration.public_slug}
+                {celebration.event_code ?? '——————'}
               </AppText>
             </View>
 
@@ -1851,10 +2109,14 @@ function EventDetailView({
                 zIndex: 20,
               }}
             >
-              <Image
+              <TreatedPhoto
                 source={getPhotoSource(activePhoto.uri)}
                 style={{ width: '100%', height: '100%' }}
                 resizeMode="cover"
+                treatment={primarySession?.photo_treatment}
+                dateStampEnabled={primarySession?.date_stamp_enabled}
+                capturedAt={activePhoto.capturedAt}
+                seedKey={activePhoto.id}
               />
             </Animated.View>
 
@@ -1952,6 +2214,21 @@ function EventDetailView({
           </View>
         );
       })()}
+
+      {/* ── End-of-event reveal ───────────────────────────────── */}
+      <EventRevealModal
+        visible={reveal.visible}
+        state={reveal.state}
+        eventName={celebration.title}
+        photoCount={photos.length}
+        countdownLabel={reveal.countdownLabel}
+        thumbnails={revealThumbnails}
+        confirming={reveal.confirming}
+        onDismiss={reveal.dismiss}
+        onViewPhotos={() => {
+          reveal.dismiss();
+        }}
+      />
 
     </View>
   );
@@ -2209,14 +2486,20 @@ const S = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
+  },
+  lockCountdownText: {
+    marginTop: 10,
+    paddingHorizontal: 10,
+    fontFamily: 'InstrumentSans_500Medium',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.75)',
+    textAlign: 'center',
+    letterSpacing: 0.2,
   },
   photoNameText: {
     fontFamily: 'InstrumentSans_600SemiBold',

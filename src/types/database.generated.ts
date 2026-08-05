@@ -287,6 +287,11 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           ends_at: string | null
+          // Hand-added: `20260801140000_event_codes.sql` added this column
+          // after this file was last regenerated (`npx supabase gen types
+          // typescript --linked`). Regenerating will make this comment
+          // redundant but not wrong — remove it once that's run.
+          event_code: string | null
           id: string
           inspiration_pack: Database["public"]["Enums"]["inspiration_pack"]
           location_address: string | null
@@ -309,6 +314,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           ends_at?: string | null
+          event_code?: string | null
           id?: string
           inspiration_pack?: Database["public"]["Enums"]["inspiration_pack"]
           location_address?: string | null
@@ -331,6 +337,7 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           ends_at?: string | null
+          event_code?: string | null
           id?: string
           inspiration_pack?: Database["public"]["Enums"]["inspiration_pack"]
           location_address?: string | null

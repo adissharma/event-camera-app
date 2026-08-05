@@ -85,7 +85,7 @@ export const enGB = {
       'A limit makes people think before they shoot. It tends to produce better photos, not fewer.',
     photoLimitUnlimited: 'Unlimited',
     photoLimitCount: '{count} photos',
-    cameraRollToggle: 'Let guests add from their camera roll',
+    cameraRollToggle: 'Allow adding from camera roll',
     cameraRollToggleDescription: 'As well as taking photos in the app.',
     cameraRollAnytime: 'Any time',
     cameraRollAnytimeDescription: 'Guests can add camera-roll photos whenever they like.',
@@ -125,7 +125,6 @@ export const enGB = {
     treatmentOriginal: 'Original',
     treatmentDisposable: 'Disposable',
     treatmentBlackAndWhite: 'Black and white',
-    treatmentWarmFilm: 'Warm film',
     dateStamp: 'Add a date stamp',
 
     // Step 10

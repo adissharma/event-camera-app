@@ -26,6 +26,8 @@ export interface PublishedEvent {
   supportingLine: string | null;
   endsAt: string | null;
   timezone: string;
+  /** The host's chosen cover, so the success screen opens on their photograph. */
+  coverStoragePath: string | null;
 }
 
 export class PublicationError extends Error {
@@ -179,10 +181,25 @@ export async function publishDraft(
       supportingLine: draft.supportingLine.trim() || null,
       endsAt: draft.endsAt,
       timezone: draft.timezone,
+      coverStoragePath: draft.coverLocalUri ?? null,
     };
   } catch (e) {
-    console.warn('Failed to publish celebration to Supabase, fallback to local storage:', e);
-    
+    // Only the typed development fallback (no real backend at all) should
+    // ever produce a local-only mock event. A configured backend that fails
+    // mid-publish must surface the real error — `review.tsx` already has
+    // stage-aware handling for exactly this. Swallowing it here instead
+    // silently created a mock event with a non-UUID id, which the success
+    // screen then reported as published; every real screen that reads it back
+    // from Supabase failed with "invalid input syntax for type uuid", since
+    // the celebration this id refers to was never actually created there.
+    if (isBackendConfigured) {
+      throw e instanceof PublicationError ? e : new PublicationError(
+        e instanceof Error ? e.message : 'Failed to publish celebration', 'draft',
+      );
+    }
+
+    console.warn('Supabase not configured; falling back to local mock storage:', e);
+
     const mockId = 'celebration-' + Math.random().toString(36).substring(2, 11);
     const mockSlug = 'slug-' + Math.random().toString(36).substring(2, 11);
     const mockEventCode = 'ABC' + Math.random().toString(36).substring(2, 5).toUpperCase();
@@ -205,6 +222,7 @@ export async function publishDraft(
         ends_at: draft.endsAt,
         reveal_at: null,
         reveal_mode: 'instant',
+        capture_mode: draft.captureMode,
       }
     };
 
@@ -229,6 +247,7 @@ export async function publishDraft(
       supportingLine: draft.supportingLine.trim() || null,
       endsAt: draft.endsAt,
       timezone: draft.timezone,
+      coverStoragePath: draft.coverLocalUri ?? null,
     };
   }
 }
