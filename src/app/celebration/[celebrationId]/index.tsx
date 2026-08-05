@@ -792,6 +792,29 @@ function EventDetailView({
   useEffect(() => { activeSlideRef.current = activeSlideIndex; }, [activeSlideIndex]);
   useEffect(() => { submissionCountRef.current = storySubmissions.length; }, [storySubmissions]);
 
+  /**
+   * Guards the swipe-down dismiss below against a stalled JS-driven
+   * animation — see where it is scheduled, in `onPanResponderRelease`, for
+   * why that can happen. Only ever reads/writes stable things (a ref and a
+   * `useState` setter), so it is safe for the `panResponder` below to close
+   * over this one instance for the life of the screen.
+   */
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dismissStory = () => {
+    if (dismissTimerRef.current !== null) {
+      clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = null;
+    }
+    // `dragY` is deliberately NOT reset here. The modal fades out over
+    // roughly 300ms after `selectedChallenge` goes null, so zeroing it now
+    // would snap the story back to centre and fade out from there — the
+    // flash at the end of the swipe. It is reset when the story next opens.
+    setSelectedChallenge(null);
+  };
+  useEffect(() => () => {
+    if (dismissTimerRef.current !== null) clearTimeout(dismissTimerRef.current);
+  }, []);
+
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -836,17 +859,24 @@ function EventDetailView({
         // to the native side, after which the drag's JS writes no longer
         // landed cleanly and the following swipe stuttered.
         if (gestureState.dy > 80 || gestureState.vy > 0.3) {
+          // The actual dismissal is a `setTimeout`, NOT the animation's own
+          // completion callback. A JS-driven `Animated.timing` only advances
+          // on `requestAnimationFrame`, and rAF can stop being serviced —
+          // the tab loses foreground priority mid-gesture, the device is in
+          // a low-power mode, or the main thread is busy decoding the very
+          // photo just swiped past. When that happens the callback simply
+          // never runs, and with nothing else able to close the story it
+          // stays stuck open with no way out except the header's close
+          // button. A plain timer keeps running regardless: it is a
+          // completely separate scheduling mechanism from rAF, so the story
+          // reliably closes even on a frame that never got painted. Whichever
+          // of the two fires first wins — `dismissStory` cancels the other.
           Animated.timing(dragY, {
             toValue: height,
             duration: 200,
             useNativeDriver: false,
-          }).start(() => {
-            // `dragY` is deliberately NOT reset here. The modal fades out over
-            // roughly 300ms after `visible` flips, so zeroing it now snapped
-            // the story back to centre and faded it out from there — the flash
-            // at the end of the swipe. It is reset when the story next opens.
-            setSelectedChallenge(null);
-          });
+          }).start(dismissStory);
+          dismissTimerRef.current = setTimeout(dismissStory, 220);
         } else {
           Animated.spring(dragY, {
             toValue: 0,
@@ -1381,6 +1411,12 @@ function EventDetailView({
     // Cleared on the way in rather than on the way out, so the dismissed story
     // can stay off-screen for the whole of the modal's fade-out.
     dragY.setValue(0);
+    // Belt and braces against a pending dismiss timer from a swipe on the
+    // previous story somehow still being outstanding — see `dismissStory`.
+    if (dismissTimerRef.current !== null) {
+      clearTimeout(dismissTimerRef.current);
+      dismissTimerRef.current = null;
+    }
     setSelectedChallenge(challenge);
     setActiveSlideIndex(0);
   }
