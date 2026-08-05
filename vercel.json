@@ -1,4 +1,16 @@
 {
   "buildCommand": "expo export --platform web",
-  "outputDirectory": "dist"
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/j/:slug", "destination": "/j/%5Bslug%5D.html" },
+    { "source": "/e/:eventCode", "destination": "/e/%5BeventCode%5D.html" },
+    { "source": "/e/:eventCode/gallery", "destination": "/e/%5BeventCode%5D/gallery.html" },
+    { "source": "/celebration/:celebrationId", "destination": "/celebration/%5BcelebrationId%5D.html" },
+    { "source": "/celebration/:celebrationId/edit", "destination": "/celebration/%5BcelebrationId%5D/edit.html" },
+    { "source": "/celebration/:celebrationId/camera", "destination": "/celebration/%5BcelebrationId%5D/camera.html" },
+    { "source": "/celebration/:celebrationId/preview", "destination": "/celebration/%5BcelebrationId%5D/preview.html" },
+    { "source": "/celebration/:celebrationId/challenges", "destination": "/celebration/%5BcelebrationId%5D/challenges.html" },
+    { "source": "/celebration/:celebrationId/photos/:photoId", "destination": "/celebration/%5BcelebrationId%5D/photos/%5BphotoId%5D.html" },
+    { "source": "/celebration/:celebrationId/challenges/:challengeId", "destination": "/celebration/%5BcelebrationId%5D/challenges/%5BchallengeId%5D.html" }
+  ]
 }
