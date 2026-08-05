@@ -20,9 +20,6 @@
         "EXPO_PUBLIC_SUPABASE_URL": "https://hzmyhrzshtzmyfrmvevw.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "YOUR_PROD_SUPABASE_ANON_KEY"
       }
-    },
-    "_comment_no_clip_profile": {
-      "note": "There is deliberately no 'clip' build profile. The App Clip is a TARGET inside the main app's Xcode project, so every normal build already produces and embeds it. Do NOT set APP_VARIANT=clip at the profile level. app.config.js reads it to swap the expo-router root to ./src/app-clip and the bundle id to .Clip — correct for the Clip's own bundling step, catastrophic for the whole build, which would ship the main app with guest-only routes under the Clip's identifier. APP_VARIANT is set only inside the Clip target's 'Bundle React Native code and images' build phase, by plugins/with-clip-js-bundle.js."
     }
   },
   "submit": {
