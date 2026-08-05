@@ -278,6 +278,88 @@ const CHALLENGE_BRIEFS: Record<string, { desc: string; instr: string }> = {
   confetti: {
     desc: "Capture the explosive confetti or grand exit of the couple.",
     instr: "Pre-focus on the aisle, wait for the couple to walk through the shower of petals, and snap a high-energy shot!"
+  },
+  // Birthday & Party
+  birthday: {
+    desc: "Capture the birthday person and their celebration moment.",
+    instr: "Get the birthday candles being blown out or the cake reveal for maximum joy!"
+  },
+  babyShower: {
+    desc: "Document the mom-to-be opening gifts with loved ones.",
+    instr: "Frame genuine reactions and the decorations celebrating the coming arrival."
+  },
+  bridalShower: {
+    desc: "Capture the bride's bridal shower with friends and games.",
+    instr: "Get candid laughter moments and personalized decorations telling her story."
+  },
+  engagement: {
+    desc: "Celebrate the newly engaged couple and their new ring.",
+    instr: "Focus on their hands together or their joyful reaction with family."
+  },
+  graduation: {
+    desc: "Document the graduate in their cap and gown moment.",
+    instr: "Capture both the formal shot and candid moments with loved ones celebrating."
+  },
+  housewarming: {
+    desc: "Frame the home and guests celebrating the new space.",
+    instr: "Highlight special features of the home or a group toast to new beginnings."
+  },
+  bachelorette: {
+    desc: "Capture the bride-to-be surrounded by her squad having fun.",
+    instr: "Get the group energy, silly moments, and the bride at the center."
+  },
+  anniversary: {
+    desc: "Celebrate the couple's milestone and their journey together.",
+    instr: "Capture them together in a heartfelt moment or with loved ones."
+  },
+  reunion: {
+    desc: "Document old friends reuniting and reliving memories together.",
+    instr: "Get nostalgic embraces, group shots, and genuine laughter between friends."
+  },
+  cocktail: {
+    desc: "Capture the elegance of the cocktail hour and mingling guests.",
+    instr: "Frame elegant drinks, the ambient lighting, and guests in conversation."
+  },
+  // Corporate & Formal
+  conference: {
+    desc: "Document speakers, panels, and networking moments.",
+    instr: "Capture keynote speakers, Q&A sessions, and attendees engaging."
+  },
+  teamBuilding: {
+    desc: "Capture the team in action during bonding activities.",
+    instr: "Get action shots, laughter, and moments of genuine connection."
+  },
+  gala: {
+    desc: "Document the elegant evening with dressed-up guests.",
+    instr: "Frame the venue, elegant attire, and social moments."
+  },
+  awards: {
+    desc: "Capture honorees on stage and celebration moments.",
+    instr: "Get acceptance speeches, trophy moments, and champagne toasts."
+  },
+  productLaunch: {
+    desc: "Document the product reveal and team celebration.",
+    instr: "Capture the unveiling, audience reactions, and team pride."
+  },
+  networking: {
+    desc: "Capture meaningful business conversations and connections.",
+    instr: "Frame one-on-one conversations, business card exchanges, and introductions."
+  },
+  retreat: {
+    desc: "Document outdoor activities and team bonding.",
+    instr: "Capture adventure moments, scenic backdrops, and genuine team connection."
+  },
+  training: {
+    desc: "Frame the learning and engagement during training sessions.",
+    instr: "Get instructor engagement, hands-on activities, and group participation."
+  },
+  holiday: {
+    desc: "Capture the festive spirit and team celebrations.",
+    instr: "Get holiday decorations, group gatherings, and seasonal cheer."
+  },
+  sports: {
+    desc: "Document action and team celebration moments.",
+    instr: "Capture intense game moments, victory celebrations, and team spirit!"
   }
 };
 
@@ -527,6 +609,156 @@ function ChallengeIconSVG({ type, size = 28 }: { type: string; size?: number }) 
         <Path d="M8 20l-.5-4 3.5 2" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
         <Path d="M4 13l3-2.5-.5 4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
         <Circle cx={12} cy={12} r={2} stroke={c} strokeWidth={w} fill="none" />
+      </>
+    ),
+    birthday: (
+      <>
+        <Path d="M12 3c0 0-1.5 1.5-1.5 3.5S11.2 9 12 9s1.5-.8 1.5-2.5S12 3 12 3z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Circle cx={12} cy={14} r={6} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 10v4M8 14h8" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    babyShower: (
+      <>
+        <Path d="M12 3c-3 2-4 5-4 8 0 4 2 6 4 8s4-4 4-8c0-3-1-6-4-8z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M12 7v4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Circle cx={12} cy={11} r={1} fill={c} />
+      </>
+    ),
+    bridalShower: (
+      <>
+        <Circle cx={12} cy={5} r={2.5} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 7.5v3L8 14l8 2 2-4v-3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M9 18h6" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    engagement: (
+      <>
+        <Circle cx={10} cy={12} r={3} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={14} cy={12} r={3} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={8} cy={12} r={0.8} fill={c} />
+        <Circle cx={16} cy={12} r={0.8} fill={c} />
+      </>
+    ),
+    graduation: (
+      <>
+        <Rect x={8} y={8} width={8} height={6} rx={0.5} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 14v3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M8 8L6 5l2-1 10 0 2 1-2 3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    housewarming: (
+      <>
+        <Path d="M4 14h16" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M6 14v4c0 1 0 2 1 2h10c1 0 1-1 1-2v-4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M12 4l-8 10h16z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M10 10h4v4h-4z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    bachelorette: (
+      <>
+        <Circle cx={12} cy={6} r={2} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M8 10c-1 1-1.5 2-1.5 4 0 2 1 3 1.5 4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M12 9v9" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M16 10c1 1 1.5 2 1.5 4 0 2-1 3-1.5 4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    anniversary: (
+      <>
+        <Path d="M6 12a6 6 0 1 0 12 0 6 6 0 0 0-12 0" stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 9v6l-3-3 6 0-3 3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    reunion: (
+      <>
+        <Circle cx={8} cy={7} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={12} cy={6} r={1.8} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={16} cy={7} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M7 9c-1 1.5-1.5 3-1.5 5 0 3 1 4 5 4s5-1 5-4c0-2-.5-3.5-1.5-5" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    cocktail: (
+      <>
+        <Path d="M9 4h6l-2 8H11l-2-8z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M12 12v4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M10 16h4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Circle cx={9.5} cy={5} r={0.6} fill={c} />
+      </>
+    ),
+    conference: (
+      <>
+        <Rect x={5} y={7} width={14} height={10} rx={1} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M5 10h14" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M12 12l-3-1 3 2 3-1" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M8 14v2M12 14v2M16 14v2" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    teamBuilding: (
+      <>
+        <Circle cx={6} cy={8} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={12} cy={7} r={1.8} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={18} cy={8} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M6 10c-1 1.5-1.5 2.5-1.5 4 0 2 .5 3 1.5 3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M12 9c-2 1-2.5 3-2.5 5 0 2.5 1 4 2.5 4s2.5-1.5 2.5-4c0-2-.5-4-2.5-5" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M18 10c1 1.5 1.5 2.5 1.5 4 0 2-.5 3-1.5 3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    gala: (
+      <>
+        <Path d="M8 6l2-2 2 2 2-2 2 2" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Rect x={7} y={8} width={10} height={10} rx={1} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 11l-2 4 2-2 2 2-2-4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    awards: (
+      <>
+        <Path d="M12 3l2 4h4.5l-3.5 2.5 1 4.5L12 13l-3.5 2.5 1-4.5-3.5-2.5H10l2-4z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M12 15v3" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M10 18h4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    productLaunch: (
+      <>
+        <Rect x={6} y={9} width={12} height={8} rx={1} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 5v4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M10 6l2-2 2 2" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M9 12h6M9 15h6" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    networking: (
+      <>
+        <Circle cx={8} cy={8} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={12} cy={6} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Circle cx={16} cy={8} r={1.5} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M8 10l2 2M12 8l0 4M16 10l-2 2" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M8 12h8" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+      </>
+    ),
+    retreat: (
+      <>
+        <Path d="M12 4l-6 4v8h12v-8l-6-4z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M9 12h6" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M10 12v4h4v-4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    training: (
+      <>
+        <Rect x={6} y={8} width={12} height={9} rx={1} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M6 11h12" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M8 13l2 2 3-4M14 13l2 2 3-4" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    holiday: (
+      <>
+        <Path d="M12 3l2 4h4l-3 2 1 4-4-3-4 3 1-4-3-2h4l2-4z" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+        <Path d="M9 11c-1 0-2 1-2 2s1 2 2 2M15 11c1 0 2 1 2 2s-1 2-2 2" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} strokeLinejoin={lj} />
+      </>
+    ),
+    sports: (
+      <>
+        <Circle cx={12} cy={12} r={5} stroke={c} strokeWidth={w} fill="none" />
+        <Path d="M12 8v8M8 12h8" stroke={c} strokeWidth={w} fill="none" strokeLinecap={lc} />
+        <Path d="M9 9l6 6M15 9l-6 6" stroke={c} strokeWidth={0.8} fill="none" strokeLinecap={lc} />
       </>
     ),
   };
