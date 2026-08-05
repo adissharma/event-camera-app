@@ -123,4 +123,38 @@ export function workspaceIdFromPath(path: string): string | null {
   return first && SAFE_SEGMENT.test(first) ? first : null;
 }
 
+/**
+ * Best-effort MIME type from a local file URI's extension.
+ *
+ * Used when the source (a bare camera capture, unlike a picker asset) never
+ * reports one itself. Defaults to JPEG, matching the quality/format the
+ * camera capture path already requests.
+ */
+export function inferMimeTypeFromUri(uri: string): string {
+  // A `data:` URI (what expo-camera's web capture produces) carries its MIME
+  // type in the header, not the path — reading it via a file extension below
+  // would instead scan the base64 payload for a literal ".", find none, and
+  // read the *entire* multi-megabyte string as one "extension", silently
+  // falling through to the wrong default every time.
+  if (uri.startsWith('data:')) {
+    const match = /^data:([^;,]+)[;,]/.exec(uri);
+    if (match) return match[1];
+  }
+
+  const withoutQuery = uri.split('?')[0] ?? uri;
+  const ext = withoutQuery.split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'png':
+      return 'image/png';
+    case 'heic':
+      return 'image/heic';
+    case 'heif':
+      return 'image/heif';
+    case 'webp':
+      return 'image/webp';
+    default:
+      return 'image/jpeg';
+  }
+}
+
 export const BUCKETS = STORAGE_BUCKETS;

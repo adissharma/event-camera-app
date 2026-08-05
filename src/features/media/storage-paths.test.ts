@@ -4,6 +4,7 @@ import {
   buildOriginalMediaPath,
   buildQrAssetPath,
   buildVariantPath,
+  inferMimeTypeFromUri,
   normaliseExtension,
   workspaceIdFromPath,
 } from './storage-paths';
@@ -118,6 +119,26 @@ describe('storage paths', () => {
     it('returns null for a malformed path rather than a wrong id', () => {
       expect(workspaceIdFromPath('not-a-uuid/x/y')).toBeNull();
       expect(workspaceIdFromPath('')).toBeNull();
+    });
+  });
+
+  describe('inferMimeTypeFromUri', () => {
+    it('reads the MIME type straight out of a data: URI header', () => {
+      // What expo-camera's web capture produces. A base64 payload has no
+      // "." in it, so an extension-based guess would previously read the
+      // *entire* multi-megabyte string as one bogus extension and fall
+      // through to the wrong default.
+      expect(inferMimeTypeFromUri('data:image/png;base64,iVBORw0KGgoAAAANS')).toBe('image/png');
+      expect(inferMimeTypeFromUri('data:image/jpeg;base64,/9j/4AAQSkZJRg')).toBe('image/jpeg');
+    });
+
+    it('still infers from a real file extension', () => {
+      expect(inferMimeTypeFromUri('file:///var/mobile/photo.HEIC')).toBe('image/heic');
+      expect(inferMimeTypeFromUri('https://example.com/a.webp?x=1')).toBe('image/webp');
+    });
+
+    it('falls back to jpeg for an extensionless native default', () => {
+      expect(inferMimeTypeFromUri('file:///var/mobile/photo')).toBe('image/jpeg');
     });
   });
 });

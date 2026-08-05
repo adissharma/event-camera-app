@@ -12,6 +12,7 @@ import {
   Share,
   NativeModules,
   Linking,
+  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
@@ -98,6 +99,19 @@ const PILL_INSET = 20;
 /** Counter type, sized to sit inside PILL_HEIGHT without clipping. */
 const COUNTER_SIZE = 22;
 const COUNTER_LEADING = 28;
+
+/**
+ * The widest zoom level's underlying `CameraView.zoom` value. Deliberately
+ * not exactly `0`: `expo-camera`'s web layer converts a normalized zoom via
+ * `if (!value) return;` (see its `WebCameraUtils.convertNormalizedSetting`),
+ * which treats an explicit `0` identically to "not provided" and silently
+ * drops the constraint — so on web, switching to this level after any other
+ * one appeared to do nothing, and the camera stayed at whichever zoom was
+ * last actually applied. A value indistinguishable from zero in practice,
+ * but truthy, sidesteps the library bug on every platform without changing
+ * the visible zoom level on any of them.
+ */
+const MIN_ZOOM = 0.0001;
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
@@ -227,12 +241,18 @@ export default function CameraScreen() {
   }, [isGuest, celebrationId]);
 
   // ── States ──
+  const isWeb = Platform.OS === 'web';
   const [permission, requestPermission] = useCameraPermissions();
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [isPhotosLoaded, setIsPhotosLoaded] = useState(false);
   const [facing, setFacing] = useState<'front' | 'back'>('back');
+  // Real per-shot flash strobe (off/on/auto), meaningful only on native — see
+  // `toggleFlash` for why web drives a completely different prop.
   const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
-  const [zoom, setZoom] = useState(0);
+  // Continuous "torch" light, the only flash-adjacent capability a browser's
+  // camera API exposes. Web-only state; native never reads it.
+  const [torchOn, setTorchOn] = useState(false);
+  const [zoom, setZoom] = useState(MIN_ZOOM);
   const [shareVisible, setShareVisible] = useState(false);
 
   // ── Animation Values ──
@@ -326,7 +346,23 @@ export default function CameraScreen() {
 
   // ── Handlers ──
 
+  /**
+   * `flash` (off/on/auto) is a per-shot strobe decision the hardware makes at
+   * the moment of capture — real on native, but not a thing a browser's
+   * camera API can do at all. The only flash-adjacent capability the web
+   * platform exposes is `torch`, a continuous light with no shutter-synced
+   * behaviour, which is why `enableTorch` — not `flash` — is the prop that
+   * `expo-camera`'s own web layer actually wires to hardware (confirmed by
+   * reading it: `flashMode` there only ever maps to `torch: false`,
+   * regardless of value, which is why this control did nothing on Chrome).
+   * "Auto" has no meaning for a light that's simply on or off, so web gets a
+   * 2-state toggle instead of native's 3-state cycle.
+   */
   function toggleFlash() {
+    if (isWeb) {
+      setTorchOn((prev) => !prev);
+      return;
+    }
     setFlash((prev) => {
       if (prev === 'off') return 'on';
       if (prev === 'on') return 'auto';
@@ -336,6 +372,25 @@ export default function CameraScreen() {
 
   function toggleFacing() {
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+  }
+
+  /**
+   * `expo-camera`'s web layer requests a fresh `getUserMedia` stream for the
+   * new facing mode whenever `facing` changes — a real camera switch, not a
+   * stub, and it should just work on any device with both a front and back
+   * camera. But nothing recovered if that request failed (a single-camera
+   * device, a mid-session permission hiccup): the view was left on a stream
+   * that no longer matched what the UI claimed, with no visible feedback.
+   * This puts the toggle back where it started and says so, rather than
+   * leaving a viewfinder frozen or blank with no explanation.
+   */
+  function handleCameraMountError() {
+    console.error('Camera failed to (re)start — reverting facing mode.');
+    setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
+    Alert.alert(
+      'Camera unavailable',
+      "Couldn't switch cameras. This device may only have one, or another app is using it.",
+    );
   }
 
   /**
@@ -454,6 +509,11 @@ export default function CameraScreen() {
         const photo = await cameraRef.current.takePictureAsync({
           quality: 0.85,
           skipProcessing: false,
+          // Web-only option (native always shoots jpg regardless). Without
+          // this, web silently defaults to png — a format canvas.toDataURL
+          // ignores `quality` for entirely, so `quality: 0.85` above was a
+          // no-op on every web capture even before the upload itself broke.
+          imageType: 'jpg',
         });
 
         if (photo && photo.uri) {
@@ -473,7 +533,11 @@ export default function CameraScreen() {
             }),
           ]).start();
 
-          await commitPhoto(photo.uri, 'camera', undefined, photo.width, photo.height);
+          // `photo.format` is authoritative — always present, and avoids
+          // guessing the MIME type from the URI, which is unreliable for a
+          // web capture's data: URI (no file extension to read).
+          const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg';
+          await commitPhoto(photo.uri, 'camera', mimeType, photo.width, photo.height);
         }
       } catch (e) {
         console.error('Failed to capture photo:', e);
@@ -697,8 +761,10 @@ export default function CameraScreen() {
           ref={cameraRef}
           style={StyleSheet.absoluteFill}
           facing={facing}
-          flash={flash}
+          flash={isWeb ? 'off' : flash}
+          enableTorch={isWeb ? torchOn : false}
           zoom={zoom}
+          onMountError={handleCameraMountError}
         />
 
         {/* Shutter Animation Overlay */}
@@ -743,7 +809,7 @@ export default function CameraScreen() {
         <View style={S.zoomContainer} pointerEvents="box-none">
           <View style={S.zoomPill}>
             {[
-              { label: '0.5', value: 0 },
+              { label: '0.5', value: MIN_ZOOM },
               { label: '1x', value: 0.15 },
               { label: '2.5', value: 0.45 },
             ].map((opt) => {
@@ -767,14 +833,16 @@ export default function CameraScreen() {
       {/* 3. Bottom Controls Panel */}
       <View style={[S.bottomPanel, { height: bottomPanelHeight + insets.bottom, paddingBottom: insets.bottom }]}>
         <View style={S.bottomControlsRow}>
-          {/* Flash Button */}
-          <Pressable 
-            onPress={toggleFlash} 
+          {/* Flash Button — web only has an on/off torch, not the native
+              off/on/auto strobe, so the icon reflects whichever state this
+              platform actually has. */}
+          <Pressable
+            onPress={toggleFlash}
             style={S.controlBtn}
             accessibilityRole="button"
             accessibilityLabel="Toggle flash"
           >
-            <FlashIcon mode={flash} />
+            <FlashIcon mode={isWeb ? (torchOn ? 'on' : 'off') : flash} />
           </Pressable>
 
           {/* Flip Camera Button */}

@@ -1,8 +1,8 @@
-import { File } from 'expo-file-system';
 import * as Crypto from 'expo-crypto';
 
 import { requireSupabase } from '@/lib/supabase/client';
 import { inferMimeTypeFromUri } from '@/features/media/storage-paths';
+import { readLocalImageBytes } from '@/features/media/read-local-image';
 import type { MediaSource } from '@/types/database';
 
 /**
@@ -48,8 +48,7 @@ export async function uploadGuestPhoto(
 ): Promise<UploadGuestPhotoResult> {
   const client = requireSupabase();
   const mimeType = params.mimeType ?? inferMimeTypeFromUri(params.localUri);
-  const file = new File(params.localUri);
-  const fileSizeBytes = file.size ?? null;
+  const { bytes, sizeBytes: fileSizeBytes } = await readLocalImageBytes(params.localUri);
 
   const { data: intentData, error: intentError } = await (client as any).rpc(
     'create_guest_media_upload_intent',
@@ -72,8 +71,6 @@ export async function uploadGuestPhoto(
     bucket: string;
     storage_path: string;
   };
-
-  const bytes = await file.arrayBuffer();
 
   const { error: uploadError } = await client.storage
     .from(intent.bucket)
