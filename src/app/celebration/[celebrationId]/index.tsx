@@ -18,10 +18,21 @@ import {
   Alert,
   Share,
   ScrollView,
-  PanResponder,
   Dimensions,
   Platform,
+  PanResponder,
 } from 'react-native';
+import ReanimatedAnimated, {
+  Extrapolate,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { PanGestureHandler } from 'react-native-gesture-handler';
+import type { PanGestureHandlerEventPayload } from 'react-native-gesture-handler';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -777,7 +788,9 @@ function EventDetailView({
   const scrollY = useRef(new Animated.Value(0)).current;
 
   // ── Drag to Dismiss story ──
-  const dragY = useRef(new Animated.Value(0)).current;
+  // Reanimated shared value runs on the UI thread, so gesture updates are
+  // smooth and don't go through the JS bridge — no jank on iOS.
+  const dragY = useSharedValue(0);
 
   /**
    * The PanResponder below is built once and kept for the life of the screen,
@@ -815,77 +828,62 @@ function EventDetailView({
     if (dismissTimerRef.current !== null) clearTimeout(dismissTimerRef.current);
   }, []);
 
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0) {
-          dragY.setValue(gestureState.dy);
-        }
-      },
-      // Without this, a gesture stolen by another responder leaves the story
-      // frozen part-way down the screen with no way to settle it.
-      onPanResponderTerminate: () => {
-        Animated.spring(dragY, { toValue: 0, useNativeDriver: false }).start();
-      },
-      onPanResponderRelease: (e, gestureState) => {
-        // Read live, for the same stale-closure reason as the refs above.
-        const { width, height } = Dimensions.get('window');
-        const isTap = Math.abs(gestureState.dx) < 15 && Math.abs(gestureState.dy) < 15;
+  // Gesture handler for pan events. Reanimated's shared values update directly
+  // on the UI thread without going through the JS bridge, eliminating jank.
+  const handlePanEvent = (event: any) => {
+    if (event.translationY !== undefined) {
+      // Gesture is active — track the drag
+      if (event.translationY > 0) {
+        dragY.value = event.translationY;
+      }
+    }
+  };
 
-        if (isTap) {
-          // Split the screen down the middle, as Instagram does: left goes
-          // back, right goes forward. `x0` is where the finger landed.
-          const totalSlides = 1 + submissionCountRef.current;
-          const current = activeSlideRef.current;
+  const handlePanStateChange = (event: any) => {
+    // State change handler for end of gesture
+    if (event.nativeEvent.state === 5) {
+      // END state
+      const { width, height } = Dimensions.get('window');
+      const isTap = Math.abs(event.nativeEvent.translationX) < 15 && Math.abs(event.nativeEvent.translationY) < 15;
 
-          if (gestureState.x0 < width / 2) {
-            if (current > 0) setActiveSlideIndex(current - 1);
-          } else if (current < totalSlides - 1) {
-            setActiveSlideIndex(current + 1);
-          } else {
-            // Past the final slide, the story is over.
-            setSelectedChallenge(null);
-          }
-          dragY.setValue(0);
-          return;
-        }
+      if (isTap) {
+        // Split the screen down the middle for slide navigation.
+        const totalSlides = 1 + submissionCountRef.current;
+        const current = activeSlideRef.current;
 
-        // Swipe down to dismiss, anywhere on the story.
-        //
-        // Every animation on `dragY` is JS-driven, matching the `setValue`
-        // above. Running these two on the native driver moved the node across
-        // to the native side, after which the drag's JS writes no longer
-        // landed cleanly and the following swipe stuttered.
-        if (gestureState.dy > 80 || gestureState.vy > 0.3) {
-          // The actual dismissal is a `setTimeout`, NOT the animation's own
-          // completion callback. A JS-driven `Animated.timing` only advances
-          // on `requestAnimationFrame`, and rAF can stop being serviced —
-          // the tab loses foreground priority mid-gesture, the device is in
-          // a low-power mode, or the main thread is busy decoding the very
-          // photo just swiped past. When that happens the callback simply
-          // never runs, and with nothing else able to close the story it
-          // stays stuck open with no way out except the header's close
-          // button. A plain timer keeps running regardless: it is a
-          // completely separate scheduling mechanism from rAF, so the story
-          // reliably closes even on a frame that never got painted. Whichever
-          // of the two fires first wins — `dismissStory` cancels the other.
-          Animated.timing(dragY, {
-            toValue: height,
-            duration: 200,
-            useNativeDriver: false,
-          }).start(dismissStory);
-          dismissTimerRef.current = setTimeout(dismissStory, 220);
+        if (event.nativeEvent.absoluteX < width / 2) {
+          if (current > 0) setActiveSlideIndex(current - 1);
+        } else if (current < totalSlides - 1) {
+          setActiveSlideIndex(current + 1);
         } else {
-          Animated.spring(dragY, {
-            toValue: 0,
-            useNativeDriver: false,
-          }).start();
+          // Past the final slide, the story is over.
+          setSelectedChallenge(null);
         }
-      },
-    })
-  ).current;
+        dragY.value = 0;
+        return;
+      }
+
+      // Swipe down to dismiss.
+      if (event.nativeEvent.translationY > 80 || event.nativeEvent.velocityY > 2) {
+        // Animate out with Reanimated's timing (UI thread, no jank).
+        dragY.value = withTiming(height, { duration: 200 }, () => {
+          runOnJS(dismissStory)();
+        });
+        dismissTimerRef.current = setTimeout(dismissStory, 220);
+      } else {
+        // Spring back into place, also on the UI thread.
+        dragY.value = withSpring(0, { damping: 10, mass: 1, stiffness: 100 });
+      }
+    } else if (event.nativeEvent.state === 3) {
+      // FAILED state
+      dragY.value = withSpring(0);
+    }
+  };
+
+  // Animated style for the story overlay — driven by Reanimated on the UI thread.
+  const storyOverlayAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: dragY.value }],
+  }));
   const imageParallax = scrollY.interpolate({
     inputRange: [0, HERO_H],
     outputRange: [0, PARALLAX_RANGE],
@@ -1410,7 +1408,7 @@ function EventDetailView({
     setStorySubmissions(loadedSubmissions);
     // Cleared on the way in rather than on the way out, so the dismissed story
     // can stay off-screen for the whole of the modal's fade-out.
-    dragY.setValue(0);
+    dragY.value = 0;
     // Belt and braces against a pending dismiss timer from a swipe on the
     // previous story somehow still being outstanding — see `dismissStory`.
     if (dismissTimerRef.current !== null) {
@@ -1930,9 +1928,10 @@ function EventDetailView({
             : getCoverSource();
             
           return (
-            <Animated.View 
-              style={[S.storyOverlay, { transform: [{ translateY: dragY }] }]}
-            >
+            <PanGestureHandler onGestureEvent={handlePanEvent} onHandlerStateChange={handlePanStateChange}>
+              <ReanimatedAnimated.View
+                style={[S.storyOverlay, storyOverlayAnimatedStyle]}
+              >
               {/* 1. Background Photo */}
               {activeSlideIndex === 0 ? (
                 <Image
@@ -1991,14 +1990,7 @@ function EventDetailView({
                 </Animated.View>
               ) : null}
 
-              {/* 4. Touch Nav Areas (Handles both tap navigation and drag gestures) */}
-              <Animated.View
-                style={[ABSOLUTE_FILL, { backgroundColor: 'transparent', zIndex: 5 }]}
-                collapsable={false}
-                {...panResponder.panHandlers}
-              />
-
-              {/* 5. Safe Area Header Content (Sits on top of Touch Nav Pressable) */}
+              {/* 4. Safe Area Header Content (Gesture handling via outer PanGestureHandler) */}
               <View style={[S.storyHeader, { paddingTop: insets.top + spacing.sm }]}>
                 {/* Progress Indicators */}
                 <View style={S.storyProgressBarRow}>
@@ -2073,7 +2065,8 @@ function EventDetailView({
                   </Pressable>
                 </View>
               )}
-            </Animated.View>
+              </ReanimatedAnimated.View>
+            </PanGestureHandler>
           );
         })()}
       </Modal>
