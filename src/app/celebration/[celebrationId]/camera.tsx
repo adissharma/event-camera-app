@@ -260,16 +260,30 @@ export default function CameraScreen() {
 
   // On web the torch and zoom are driven straight onto the live MediaStream
   // track rather than through `CameraView`'s props — see `web-camera-track`
-  // for why the library cannot do it. `capabilities` describes the camera
-  // that is open RIGHT NOW, so it changes when the camera is flipped.
-  const { containerRef: cameraContainerRef, capabilities: webCamera } = useWebCameraTrack({
+  // for why the library cannot do it.
+  const { containerRef: cameraContainerRef } = useWebCameraTrack({
     facing,
     torchOn,
     zoom,
   });
 
-  /** Web only shows a flash control when the open camera really has a torch. */
-  const showFlashControl = !isWeb || webCamera.torch;
+  /**
+   * Web only shows a flash control for the back camera.
+   *
+   * This is deliberately NOT gated on `webCamera.torch` (the browser's own
+   * capability report). `MediaStreamTrack.getCapabilities().torch` is
+   * unreliable on mobile Chrome — it can come back empty for a beat right
+   * after the stream starts, or simply never populate on some Android
+   * builds — so trusting it as a visibility gate hid the flash button on
+   * real rear cameras that do have one. `facing` is a much safer signal:
+   * front cameras essentially never have a torch, rear cameras on a phone
+   * being used for event photography essentially always do. The actual
+   * `applyConstraints` call in `web-camera-track` still checks real
+   * capabilities before touching the track, so tapping the button on
+   * hardware that truly has no torch just does nothing — same as if it were
+   * correctly hidden, without the risk of hiding it when it does work.
+   */
+  const showFlashControl = !isWeb || facing === 'back';
 
   /** Guards `handleCameraMountError` against reverting `facing` in a loop. */
   const isRecoveringFacing = useRef(false);
