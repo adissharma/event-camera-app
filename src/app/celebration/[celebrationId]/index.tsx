@@ -68,6 +68,27 @@ const ROW_GAP = 20;
 const CHIP_D = 68;  // outer circle diameter
 const CHIP_R = CHIP_D / 2;
 
+/**
+ * The display URI for a `require`d bundled image, on every platform.
+ *
+ * Metro hands back a different shape per platform: a numeric asset handle on
+ * native, and on web either a plain URL string or an object carrying one.
+ * `Image.resolveAssetSource` only understands the native handle and, crucially,
+ * **does not exist at all in react-native-web** — calling it there throws
+ * `Image.default.resolveAssetSource is not a function`, which is precisely what
+ * blanked this screen for any guest arriving in a fresh browser.
+ */
+function bundledAssetUri(asset: unknown): string {
+  if (typeof asset === 'string') return asset;
+  if (asset && typeof asset === 'object' && typeof (asset as { uri?: unknown }).uri === 'string') {
+    return (asset as { uri: string }).uri;
+  }
+  // Native: a numeric handle only `resolveAssetSource` can dereference. Optional
+  // call, so a platform without it degrades to an empty URI instead of throwing.
+  return (Image as { resolveAssetSource?: (a: unknown) => { uri?: string } })
+    .resolveAssetSource?.(asset)?.uri ?? '';
+}
+
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -956,7 +977,7 @@ function EventDetailView({
           require('../../../../assets/images/placeholders/iphone_group_3.png'),
           require('../../../../assets/images/placeholders/iphone_group_4.png'),
           require('../../../../assets/images/placeholders/iphone_group_5.png'),
-        ].map(req => Image.resolveAssetSource(req).uri);
+        ].map(bundledAssetUri);
 
         const names = ['Emma', 'Daniel', 'Chloe', 'Ryan', 'Zoe'];
         demoPhotos = demoUris.map((uri, idx) => ({
