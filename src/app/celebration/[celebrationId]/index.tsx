@@ -615,22 +615,19 @@ function EventDetailView({
     AsyncStorage.getItem('__dev_role').then(setDevRole);
   }, []);
 
-  // Load guest name if this device joined as a guest
-  useEffect(() => {
-    if (!celebration || isHost) return;
-    void loadStoredGuestSession(celebration.public_slug ?? celebration.id).then((session) => {
-      if (session?.displayName) {
-        setGuestName(session.displayName);
-      }
-    });
-  }, [celebration, isHost]);
-
   // `viewerRole === 'guest'` is authoritative and wins over everything below:
   // it means this detail came from the guest RPC path (see
   // `fetchCelebrationDetail`), which never returns `celebration.created_by` —
   // so the `session.user.id === celebration.created_by` comparison further
   // down would otherwise default an anonymous guest to host on a `null`
   // mismatch it cannot reliably make either way.
+  //
+  // Declared before the effect below, which reads `isHost` in its dependency
+  // array: that array is evaluated synchronously during render, so having it
+  // declared later in the same scope was a real `ReferenceError` (temporal
+  // dead zone), not just a lint complaint — it threw unconditionally, for
+  // every viewer, on every render, with no error boundary to catch it. That
+  // is the blank-screen bug a guest hit immediately after joining.
   const roleIsHost = viewerRole === 'guest'
     ? false
     : (devRole === 'guest'
@@ -646,6 +643,16 @@ function EventDetailView({
 
   // On web, never show host controls. On native, respect the user's role.
   const isHost = shouldShowHostControls(roleIsHost ? 'host' : 'guest');
+
+  // Load guest name if this device joined as a guest
+  useEffect(() => {
+    if (!celebration || isHost) return;
+    void loadStoredGuestSession(celebration.public_slug ?? celebration.id).then((session) => {
+      if (session?.displayName) {
+        setGuestName(session.displayName);
+      }
+    });
+  }, [celebration, isHost]);
 
   const showGuestbook = isHost || detail.hasAudioGuestbook !== false;
 
