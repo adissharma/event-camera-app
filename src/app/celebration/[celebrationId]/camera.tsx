@@ -52,6 +52,7 @@ import { isBackendConfigured } from '@/lib/supabase/client';
 import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
 import { uploadGuestPhoto } from '@/services/guest-media-upload';
 import { uploadHostPhoto } from '@/services/host-media-upload';
+import { useWebCameraTrack } from '@/features/media/web-camera-track';
 import type { MediaSource } from '@/types/database';
 
 interface PhotoItem {
@@ -101,15 +102,17 @@ const COUNTER_SIZE = 22;
 const COUNTER_LEADING = 28;
 
 /**
- * The widest zoom level's underlying `CameraView.zoom` value. Deliberately
- * not exactly `0`: `expo-camera`'s web layer converts a normalized zoom via
- * `if (!value) return;` (see its `WebCameraUtils.convertNormalizedSetting`),
- * which treats an explicit `0` identically to "not provided" and silently
- * drops the constraint — so on web, switching to this level after any other
- * one appeared to do nothing, and the camera stayed at whichever zoom was
- * last actually applied. A value indistinguishable from zero in practice,
- * but truthy, sidesteps the library bug on every platform without changing
- * the visible zoom level on any of them.
+ * The widest zoom level, on the normalised 0–1 scale `CameraView.zoom` uses.
+ *
+ * Deliberately not exactly `0`. `expo-camera`'s web layer converts a
+ * normalized zoom via `if (!value) return;` (see its
+ * `WebCameraUtils.convertNormalizedSetting`), which treats an explicit `0`
+ * identically to "not provided" and silently drops the constraint — so
+ * returning to this level appeared to do nothing and the camera stayed at
+ * whichever zoom was applied last. Web no longer routes zoom through that
+ * function at all (`useWebCameraTrack` applies it to the track directly),
+ * but the value is kept truthy so nothing depends on which path is taken.
+ * It is indistinguishable from zero at any real zoom range.
  */
 const MIN_ZOOM = 0.0001;
 
@@ -255,6 +258,22 @@ export default function CameraScreen() {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [shareVisible, setShareVisible] = useState(false);
 
+  // On web the torch and zoom are driven straight onto the live MediaStream
+  // track rather than through `CameraView`'s props — see `web-camera-track`
+  // for why the library cannot do it. `capabilities` describes the camera
+  // that is open RIGHT NOW, so it changes when the camera is flipped.
+  const { containerRef: cameraContainerRef, capabilities: webCamera } = useWebCameraTrack({
+    facing,
+    torchOn,
+    zoom,
+  });
+
+  /** Web only shows a flash control when the open camera really has a torch. */
+  const showFlashControl = !isWeb || webCamera.torch;
+
+  /** Guards `handleCameraMountError` against reverting `facing` in a loop. */
+  const isRecoveringFacing = useRef(false);
+
   // ── Animation Values ──
   const shutterFlashOpacity = useRef(new Animated.Value(0)).current;
   const flyingAnim = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
@@ -351,12 +370,12 @@ export default function CameraScreen() {
    * the moment of capture — real on native, but not a thing a browser's
    * camera API can do at all. The only flash-adjacent capability the web
    * platform exposes is `torch`, a continuous light with no shutter-synced
-   * behaviour, which is why `enableTorch` — not `flash` — is the prop that
-   * `expo-camera`'s own web layer actually wires to hardware (confirmed by
-   * reading it: `flashMode` there only ever maps to `torch: false`,
-   * regardless of value, which is why this control did nothing on Chrome).
-   * "Auto" has no meaning for a light that's simply on or off, so web gets a
-   * 2-state toggle instead of native's 3-state cycle.
+   * behaviour. "Auto" has no meaning for a light that is simply on or off, so
+   * web gets a 2-state toggle instead of native's 3-state cycle.
+   *
+   * `torchOn` is read by `useWebCameraTrack`, which applies it to the live
+   * MediaStream track; it is not passed to `CameraView`, whose own web
+   * implementation of this cannot be made to work — see that module.
    */
   function toggleFlash() {
     if (isWeb) {
@@ -371,21 +390,37 @@ export default function CameraScreen() {
   }
 
   function toggleFacing() {
+    // A deliberate flip starts a fresh recovery budget: the previous failure,
+    // if any, is no longer what the viewfinder is trying to do.
+    isRecoveringFacing.current = false;
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   }
 
   /**
-   * `expo-camera`'s web layer requests a fresh `getUserMedia` stream for the
-   * new facing mode whenever `facing` changes — a real camera switch, not a
-   * stub, and it should just work on any device with both a front and back
-   * camera. But nothing recovered if that request failed (a single-camera
-   * device, a mid-session permission hiccup): the view was left on a stream
-   * that no longer matched what the UI claimed, with no visible feedback.
-   * This puts the toggle back where it started and says so, rather than
-   * leaving a viewfinder frozen or blank with no explanation.
+   * Recovery when a camera fails to start — a single-camera device, another
+   * app holding the camera, a mid-session permission hiccup. Without this the
+   * view is left on a stream that no longer matches what the UI claims, with
+   * no visible feedback.
+   *
+   * The revert is deliberately allowed only ONCE per flip. Reverting sets
+   * `facing` back, and on web that remounts the camera (see the `key` on
+   * `CameraView`) — so if BOTH cameras fail, an unguarded revert would flip
+   * back and forth forever, stacking an alert on every pass. The second
+   * consecutive failure reports and stops instead.
    */
   function handleCameraMountError() {
+    if (isRecoveringFacing.current) {
+      isRecoveringFacing.current = false;
+      console.error('Camera failed to start on both facings — not reverting again.');
+      Alert.alert(
+        'Camera unavailable',
+        "Couldn't start the camera. Another app may be using it, or camera access may be blocked for this site.",
+      );
+      return;
+    }
+
     console.error('Camera failed to (re)start — reverting facing mode.');
+    isRecoveringFacing.current = true;
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
     Alert.alert(
       'Camera unavailable',
@@ -756,15 +791,35 @@ export default function CameraScreen() {
       </View>
 
       {/* 2. Full-Screen Camera View Container */}
-      <View style={[S.viewfinderContainer, { height: viewfinderHeight }]}>
+      <View ref={cameraContainerRef} style={[S.viewfinderContainer, { height: viewfinderHeight }]}>
         <CameraView
+          // Flipping on web has to tear the old stream down before the new one
+          // is requested. The library only ever gives Chrome a SOFT
+          // `facingMode: { ideal: … }` constraint (its `exact` branch is
+          // WebKit-only), and while a camera is still open the browser is free
+          // to ignore that and return the same device — which `compareStreams`
+          // then discards as "unchanged", so the flip did nothing at all.
+          // Remounting runs the library's unmount cleanup, which stops every
+          // open track, so the next `getUserMedia` starts from no live camera
+          // and honours the facing that was asked for.
+          key={isWeb ? facing : undefined}
           ref={cameraRef}
           style={StyleSheet.absoluteFill}
           facing={facing}
+          // Held CONSTANT on web on purpose: any change to these three makes
+          // the library's settings effect fire, and it applies each changed
+          // key on its own via `applyConstraints`, which replaces the track's
+          // whole constraint set — wiping whatever `useWebCameraTrack` last
+          // applied. Native still drives flash and zoom through these props.
           flash={isWeb ? 'off' : flash}
-          enableTorch={isWeb ? torchOn : false}
-          zoom={zoom}
+          enableTorch={false}
+          zoom={isWeb ? 0 : zoom}
           onMountError={handleCameraMountError}
+          // A camera that starts successfully ends any recovery in progress,
+          // so a later, unrelated failure gets its own revert attempt.
+          onCameraReady={() => {
+            isRecoveringFacing.current = false;
+          }}
         />
 
         {/* Shutter Animation Overlay */}
@@ -835,15 +890,25 @@ export default function CameraScreen() {
         <View style={S.bottomControlsRow}>
           {/* Flash Button — web only has an on/off torch, not the native
               off/on/auto strobe, so the icon reflects whichever state this
-              platform actually has. */}
-          <Pressable
-            onPress={toggleFlash}
-            style={S.controlBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Toggle flash"
-          >
-            <FlashIcon mode={isWeb ? (torchOn ? 'on' : 'off') : flash} />
-          </Pressable>
+              platform actually has.
+
+              A torch belongs to one physical camera rather than to the
+              device: most front cameras have none, and a browser cannot
+              light one that does not exist. Where there is nothing to switch
+              on, the control is left out instead of sitting there dead. The
+              placeholder keeps the shutter centred in the row. */}
+          {showFlashControl ? (
+            <Pressable
+              onPress={toggleFlash}
+              style={S.controlBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Toggle flash"
+            >
+              <FlashIcon mode={isWeb ? (torchOn ? 'on' : 'off') : flash} />
+            </Pressable>
+          ) : (
+            <View style={S.controlBtn} />
+          )}
 
           {/* Flip Camera Button */}
           <Pressable 
