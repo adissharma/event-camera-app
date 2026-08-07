@@ -1,13 +1,10 @@
 import { useMemo, useState } from 'react';
-import { Animated, Modal, PanResponder, Platform, Pressable, StyleSheet, View } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Animated, Modal, PanResponder, Platform, Pressable, View } from 'react-native';
 
-import { AppText } from '@/components/ui/text';
 import { CloseIcon, EyeIcon, PencilIcon } from '@/components/ui/icons';
-import { BrandLogo } from '@/components/brand/brand-logo';
-import { PremiumImage } from '@/components/media/premium-image';
-import { colours, radii, spacing } from '@/design';
-import { LOCALE_CONFIG } from '@/config/app-config';
+import { colours, spacing } from '@/design';
+import { GuestEventCover } from '@/features/celebrations/guest-event-cover';
+import { resolveCover } from '@/features/celebrations/cover-source';
 import type { CreationDraft } from '../draft/types';
 
 /**
@@ -77,7 +74,6 @@ export function GuestCoverPreview({
   isFullScreen = false,
 }: GuestCoverPreviewProps) {
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
-  const displayDate = draft.displayDate ?? draft.endsAt;
 
   // Swipe down to dismiss gesture handling for full-screen preview
   const translateY = useMemo(() => new Animated.Value(0), []);
@@ -116,54 +112,31 @@ export function GuestCoverPreview({
     [translateY]
   );
 
-  // A host-written label wins over the formatted date. Falling back rather than
-  // requiring one means the cover reads sensibly before it is ever touched.
-  const dateLine =
-    draft.coverDateLabel?.trim() ||
-    (displayDate
-      ? new Intl.DateTimeFormat(LOCALE_CONFIG.locale, {
-          day: 'numeric',
-          month: 'long',
-          year: 'numeric',
-          timeZone: draft.timezone,
-        }).format(new Date(displayDate))
-      : null);
-
-  const scale = isFullScreen ? 1.625 : (compact ? 0.72 : 1);
   const accent = theme?.accent ?? colours.brandPrimary;
-  const isCentred = theme?.align === 'centre';
-
-  // A full scrim darkens the whole image; the default weights the ramp to the
-  // bottom so the photograph stays visible.
-  const scrimLocations: [number, number, number] =
-    theme?.overlay === 'scrim_full' ? [0, 0.2, 0.7] : [0, 0.45, 0.85];
-
-  // Ink on a pale accent, off-white on a dark one — otherwise a dark theme
-  // accent renders dark-on-dark and the guest's only action disappears.
-  const accentIsLight = isLightColour(accent);
+  const coverSource = draft.coverLocalUri || draft.coverStoragePath
+    ? resolveCover(draft.coverLocalUri ?? draft.coverStoragePath)
+    : resolveCover(null);
+  const title = draft.title.trim() || 'Your event';
+  const countdownLabel = formatRemaining(draft.endsAt);
+  const shotsLeftLabel =
+    draft.shotLimitPerGuest === null
+      ? '∞'
+      : draft.shotLimitPerGuest === undefined
+        ? '—'
+        : String(draft.shotLimitPerGuest);
 
   return (
     <View style={{ flex: 1 }}>
-      {draft.coverLocalUri ? (
-        <PremiumImage
-          uri={draft.coverLocalUri}
-          accessibilityLabel="Your cover photograph"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          radius="none"
-        />
-      ) : (
-        <PremiumImage
-          assetKey="create_event_cover"
-          accessibilityLabel="Default cover photograph"
-          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
-          radius="none"
-        />
-      )}
-
-      <LinearGradient
-        colors={colours.imageScrim}
-        locations={scrimLocations}
-        style={StyleSheet.absoluteFill}
+      <GuestEventCover
+        coverSource={coverSource}
+        title={title}
+        countdownLabel={countdownLabel}
+        shotsLeftLabel={shotsLeftLabel}
+        accent={accent}
+        height="100%"
+        preview={!isFullScreen || compact}
+        showNameInput={false}
+        ctaLabel="Join the event"
       />
 
       {/* Single edit entry point for the whole cover. */}
@@ -183,15 +156,22 @@ export function GuestCoverPreview({
             accessibilityLabel="Preview cover"
             onPress={() => setIsPreviewVisible(true)}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: 'rgba(11, 11, 12, 0.12)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.14,
+              shadowRadius: 4,
+              elevation: 3,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <EyeIcon size={16} color="#fff" />
+            <EyeIcon size={18} color="#0B0B0C" />
           </Pressable>
 
           <Pressable
@@ -199,65 +179,25 @@ export function GuestCoverPreview({
             accessibilityLabel="Edit cover"
             onPress={onEditCover}
             style={{
-              width: 32,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: 'rgba(11, 11, 12, 0.12)',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.14,
+              shadowRadius: 4,
+              elevation: 3,
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <PencilIcon size={16} color="#fff" />
+            <PencilIcon size={18} color="#0B0B0C" />
           </Pressable>
         </View>
       ) : null}
-
-      <View style={{ flex: 1, justifyContent: 'space-between', padding: spacing.md * scale }}>
-        <BrandLogo height={18 * scale} />
-
-        <View style={{ gap: spacing.xs * scale, alignItems: isCentred ? 'center' : 'stretch' }}>
-          {dateLine ? (
-            <AppText
-              variant="eyebrow"
-              tone="secondary"
-              style={{ fontSize: 8 * scale, letterSpacing: 1.2 * scale }}
-            >
-              {dateLine}
-            </AppText>
-          ) : null}
-
-          <AppText
-            variant="titleMedium"
-            numberOfLines={3}
-            style={{ fontSize: 18 * scale, lineHeight: 22 * scale, flexShrink: 1 }}
-          >
-            {draft.title.trim() || 'Your event'}
-          </AppText>
-
-          {/* The guest's action. Present so the host can see that joining is one
-              tap and needs no account. */}
-          <View
-            style={{
-              marginTop: spacing.sm * scale,
-              paddingVertical: spacing.sm * scale,
-              borderRadius: radii.md * scale,
-              backgroundColor: accent,
-              alignItems: 'center',
-              alignSelf: 'stretch',
-            }}
-          >
-            <AppText
-              variant="caption"
-              style={{
-                fontSize: 10 * scale,
-                color: accentIsLight ? colours.textOnBrand : colours.textPrimary,
-              }}
-            >
-              Start taking photos
-            </AppText>
-          </View>
-        </View>
-      </View>
 
       <Modal
         visible={isPreviewVisible}
@@ -308,17 +248,18 @@ export function GuestCoverPreview({
   );
 }
 
-/**
- * Rough perceived lightness, for choosing a readable label on an accent.
- *
- * Uses the sRGB luma weights rather than a plain average: the eye is far more
- * sensitive to green than to blue, so an average calls a saturated blue
- * "light" and produces white-on-pale-blue.
- */
-function isLightColour(hex: string): boolean {
-  const value = hex.replace('#', '');
-  const r = parseInt(value.slice(0, 2), 16);
-  const g = parseInt(value.slice(2, 4), 16);
-  const b = parseInt(value.slice(4, 6), 16);
-  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.6;
+function formatRemaining(endsAt: string | null): string {
+  if (!endsAt) return '—';
+
+  const remaining = new Date(endsAt).getTime() - Date.now();
+  if (!Number.isFinite(remaining) || remaining <= 0) return 'Ended';
+
+  const totalMinutes = Math.floor(remaining / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+
+  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }

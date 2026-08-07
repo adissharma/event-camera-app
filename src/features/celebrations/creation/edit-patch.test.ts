@@ -77,7 +77,16 @@ describe('buildEditPatch', () => {
       const endsAt = new Date(Date.now() + 86_400_000).toISOString();
       expect(
         buildEditPatch('reveal', draftWith({ guestRevealChoice: 'at_close', endsAt })),
-      ).toEqual({ revealMode: 'scheduled', revealAt: endsAt });
+      ).toEqual({ revealMode: 'scheduled', revealAt: endsAt, galleryVisibility: 'all_guests' });
+    });
+
+    it('saves host-only reveal visibility when guests should never see photos', () => {
+      expect(
+        buildEditPatch(
+          'reveal',
+          draftWith({ guestRevealChoice: 'never', galleryVisibility: 'hosts_only' }),
+        ),
+      ).toEqual({ revealMode: 'manual', revealAt: null, galleryVisibility: 'hosts_only' });
     });
 
     it('saves the date stamp alongside the treatment', () => {

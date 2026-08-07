@@ -43,6 +43,11 @@ export interface UploadGuestPhotoResult {
   shotsUsed: number;
 }
 
+export interface DeleteGuestPhotoResult {
+  mediaItemId: string;
+  shotsUsed: number;
+}
+
 export async function uploadGuestPhoto(
   params: UploadGuestPhotoParams,
 ): Promise<UploadGuestPhotoResult> {
@@ -102,6 +107,32 @@ export async function uploadGuestPhoto(
   return {
     mediaItemId: result.media_item_id,
     storagePath: result.storage_path,
+    shotsUsed: result.shots_used,
+  };
+}
+
+export async function deleteGuestPhoto({
+  mediaItemId,
+  guestToken,
+}: {
+  mediaItemId: string;
+  guestToken: string;
+}): Promise<DeleteGuestPhotoResult> {
+  const client = requireSupabase();
+  const { data, error } = await (client as any).rpc('delete_guest_media_item', {
+    p_media_item_id: mediaItemId,
+    p_guest_token: guestToken,
+  });
+
+  if (error) throw error;
+
+  const result = data as {
+    media_item_id: string;
+    shots_used: number;
+  };
+
+  return {
+    mediaItemId: result.media_item_id,
     shotsUsed: result.shots_used,
   };
 }

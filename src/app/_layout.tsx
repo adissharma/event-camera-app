@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-import { Platform, StyleSheet, View } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -20,64 +19,23 @@ import {
 
 import { colours } from '@/design';
 import { queryClient } from '@/lib/query-client';
-import { AuthContextProvider, useAuth } from '@/features/auth/context';
+import { AuthContextProvider } from '@/features/auth/context';
 import { CreationDraftProvider } from '@/features/celebrations/draft/store';
 import { LiveActivitySyncManager } from '@/services/live-activity-sync';
-import { AppText } from '@/components/ui/text';
-import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { seedMockDataIfNeeded } from '@/lib/mock-data-seed';
 
 // Keep the splash up until fonts are ready, so no screen ever renders with a
 // fallback face and then reflows into the real one.
 void SplashScreen.preventAutoHideAsync();
 
-/** Routes reachable without a session. Everything else requires one. */
-const PUBLIC_ROUTES = new Set(['index', 'sign-in', 'verify', 'create']);
-
+/**
+ * Root layout for the FULL app (host + guest).
+ *
+ * The App Clip does not use this tree at all. It builds against
+ * `src/app-clip`, selected via the expo-router `root` option in
+ * `app.config.js`, so nothing under `src/app` is bundled into the Clip.
+ */
 function RootNavigator() {
-  // ── WEB ACCESS GUARD ──
-  // On web, only guest-facing routes are allowed. Block host-only routes.
-  const segments = useSegments();
-  const router = useRouter();
-
-  useEffect(() => {
-    if (!shouldBlockHostRouteOnWeb(Platform.OS)) return;
-
-    const current: string = segments[0] ?? 'index';
-    const hostOnlyRoutes = new Set([
-      'index', // Welcome/home selector
-      'home', // Host dashboard
-      'sign-in', // Host sign-in
-      'verify', // Email verification
-      'your-name', // Name entry
-      'create', // Event creation wizard
-    ]);
-
-    if (hostOnlyRoutes.has(current)) {
-      router.replace('/j/');
-    }
-  }, [segments, router]);
-
-  // ── AUTH BYPASSED FOR TESTING ──
-  // The auth redirect logic is temporarily disabled so that every screen is
-  // reachable without signing in. Remove this block and restore the original
-  // guard when auth is re-enabled.
-  //
-  // const { isSignedIn, isRestoring } = useAuth();
-  // const segments = useSegments();
-  // const router = useRouter();
-  //
-  // useEffect(() => {
-  //   if (isRestoring) return;
-  //   const current: string = segments[0] ?? 'index';
-  //   const isPublic = PUBLIC_ROUTES.has(current);
-  //   if (!isSignedIn && !isPublic) {
-  //     router.replace('/');
-  //   } else if (isSignedIn && isPublic && current !== 'index') {
-  //     router.replace('/home');
-  //   }
-  // }, [isSignedIn, isRestoring, segments, router]);
-
   return (
     <Stack
       screenOptions={{
@@ -87,11 +45,26 @@ function RootNavigator() {
       }}
     >
       <Stack.Screen
+        name="celebration/[celebrationId]/camera"
+        options={{
+          presentation: 'transparentModal',
+          animation: 'fade',
+          contentStyle: { backgroundColor: 'transparent' },
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
         name="celebration/[celebrationId]/photos/[photoId]"
         options={{
           presentation: 'transparentModal',
           animation: 'fade',
           contentStyle: { backgroundColor: 'transparent' },
+          // The screen pages between photos with its own horizontal
+          // PanResponder drag — see the same-named component. Native
+          // swipe-to-dismiss can't be told apart from that by iOS, so it
+          // fires on every drag right alongside it. Off entirely: this
+          // screen has no legitimate case for the native gesture.
+          gestureEnabled: false,
         }}
       />
     </Stack>
@@ -106,6 +79,7 @@ export default function RootLayout() {
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,
     InstrumentSans_700Bold,
+    OpenMojiBlack: require('../../assets/fonts/OpenMoji-black-glyf.ttf'),
   });
 
   useEffect(() => {

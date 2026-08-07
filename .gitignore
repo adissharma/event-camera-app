@@ -48,3 +48,5 @@ example
 # Generated bundle for manual SQL-editor application
 .tmp/
 supabase/.temp/
+.vercel
+.env*

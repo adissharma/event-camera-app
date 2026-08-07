@@ -29,6 +29,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 ) {
   const [isFocused, setIsFocused] = useState(false);
   const hasError = Boolean(error);
+  const autoCapitalize = rest.autoCapitalize ?? 'sentences';
 
   return (
     <View style={[{ gap: spacing.sm }, containerStyle]}>
@@ -44,6 +45,7 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
         accessibilityHint={error ?? hint}
         placeholderTextColor={colours.textSecondary}
         selectionColor={colours.brandPrimary}
+        autoCapitalize={autoCapitalize}
         onFocus={(event) => {
           setIsFocused(true);
           onFocus?.(event);

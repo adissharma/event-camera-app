@@ -32,6 +32,7 @@ describe('reveal resolution', () => {
     // A wrong reveal time is worse than asking the host to press a button.
     expect(resolveReveal('custom', CLOSE, null)).toEqual({ mode: 'manual', revealAt: null });
     expect(resolveReveal('at_close', null, null)).toEqual({ mode: 'manual', revealAt: null });
+    expect(resolveReveal('never', CLOSE, null)).toEqual({ mode: 'manual', revealAt: null });
   });
 });
 
@@ -158,6 +159,21 @@ describe('step validation', () => {
             hostCustomRevealAt: hostTime.toISOString(),
             guestRevealChoice: 'custom',
             guestCustomRevealAt: guestTime.toISOString(),
+          }),
+        ),
+      ).toBeNull();
+    });
+
+    it('accepts never as a host-only guest access choice', () => {
+      expect(
+        validateStep(
+          'reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: new Date(Date.now() + 86_400_000).toISOString(),
+            guestRevealChoice: 'never',
+            guestCustomRevealAt: null,
+            galleryVisibility: 'hosts_only',
           }),
         ),
       ).toBeNull();

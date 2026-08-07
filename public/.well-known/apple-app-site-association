@@ -3,14 +3,14 @@
     "apps": [],
     "details": [
       {
-        "appID": "AL3AF36W3B.com.example.eventcamera",
-        "paths": ["/e/*"]
+        "appID": "AL3AF36W3B.com.potoevents.eventcamera",
+        "paths": ["/e/*", "/j/*"]
       }
     ]
   },
   "appclips": {
     "apps": [
-      "AL3AF36W3B.com.example.eventcamera.Clip"
+      "AL3AF36W3B.com.potoevents.eventcamera.Clip"
     ]
   }
 }

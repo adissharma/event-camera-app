@@ -11,10 +11,33 @@
 
 import Constants from 'expo-constants';
 
+/**
+ * Statically-referenced public env vars.
+ *
+ * These MUST be written as literal `process.env.EXPO_PUBLIC_…` member
+ * expressions. Expo inlines public env vars at build time by textually
+ * replacing exactly that shape; a dynamic lookup such as `process.env[key]`
+ * cannot be substituted. Development has a real `process.env` object supplied
+ * by the dev server, so dynamic access appears to work there — but a production
+ * bundle has no such object, so every dynamic read returns `undefined`.
+ *
+ * That is not a theoretical concern: it silently disabled the backend in every
+ * production build, leaving the app on its in-memory fallback while looking
+ * completely normal.
+ *
+ * To add a public env var, add a literal line here. Do not reintroduce
+ * computed keys.
+ */
+const INLINED_ENV: Record<string, string | undefined> = {
+  EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
+  EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  EXPO_PUBLIC_IS_APP_CLIP: process.env.EXPO_PUBLIC_IS_APP_CLIP,
+};
+
 /** Reads a public Expo env var, falling back to `undefined` when unset. */
 function env(key: string): string | undefined {
   const value =
-    process.env[key] ??
+    INLINED_ENV[key] ??
     (Constants.expoConfig?.extra as Record<string, string> | undefined)?.[key];
   return value && value.length > 0 ? value : undefined;
 }
@@ -32,6 +55,9 @@ export const SUPABASE_CONFIG = {
  */
 export const HAS_SUPABASE_CREDENTIALS =
   Boolean(SUPABASE_CONFIG.url) && Boolean(SUPABASE_CONFIG.anonKey);
+
+/** True when building the iOS App Clip (guest-only experience). */
+export const IS_APP_CLIP = env('EXPO_PUBLIC_IS_APP_CLIP') === 'true';
 
 /** Temporary platform identifiers. All must change before launch. */
 export const PLATFORM_IDENTIFIERS = {

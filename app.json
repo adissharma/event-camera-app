@@ -10,18 +10,20 @@
     "ios": {
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.potoevents.eventcamera",
+      "appleTeamId": "AL3AF36W3B",
       "supportsTablet": false,
       "associatedDomains": [
-        "applinks:poto.events",
-        "applinks:staging.poto.events",
-        "applinks:poto.events",
-        "applinks:staging.poto.events"
+        "applinks:event-camera-app-navy.vercel.app"
       ],
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSSupportsLiveActivities": true
+      },
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     },
-    "android": {
+      "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -37,12 +39,7 @@
           "data": [
             {
               "scheme": "https",
-              "host": "poto.events",
-              "pathPrefix": "/j"
-            },
-            {
-              "scheme": "https",
-              "host": "staging.poto.events",
+              "host": "event-camera-app-navy.vercel.app",
               "pathPrefix": "/j"
             }
           ],
@@ -62,6 +59,9 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/with-clip-js-bundle",
+      "@bacons/apple-targets",
+      "./plugins/with-live-activity-module",
       "expo-router",
       [
         "expo-splash-screen",
@@ -91,6 +91,9 @@
       "eas": {
         "projectId": "dd58ddcc-e04f-4ae4-a667-05bc4cd64a85"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/dd58ddcc-e04f-4ae4-a667-05bc4cd64a85"
     }
   }
 }

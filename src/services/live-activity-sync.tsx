@@ -66,8 +66,13 @@ export function LiveActivitySyncManager() {
             console.error('Error loading taken photos count:', e);
           }
 
-          // If unlimited (null), show -1 to indicate unlimited in the live activity
-          const remaining = limit === null ? -1 : Math.max(0, limit - takenCount);
+          // If unlimited, show -1 — the widget draws that as "∞".
+          // `undefined` has to land here too, not just `null`: a session that
+          // never carried a limit was falling through to the arithmetic below
+          // and sending NaN across the bridge, which the widget then drew as a
+          // literal "NaN" where the shot count belongs.
+          const remaining =
+            limit === null || limit === undefined ? -1 : Math.max(0, limit - takenCount);
 
           if (!activeActivitiesRef.current.has(event.id)) {
             console.log(`[LiveActivitySync] Starting Live Activity for "${event.title}" with remaining count = ${remaining}`);

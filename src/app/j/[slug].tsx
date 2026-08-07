@@ -12,7 +12,6 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
@@ -20,6 +19,8 @@ import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
 import { CameraIcon, CameraSparkleIcon, ClockIcon, PersonIcon } from '@/components/ui/icons';
+import { CoverScrim } from '@/components/media/cover-scrim';
+import { resolveCover } from '@/features/celebrations/cover-source';
 import { colours, layout, radii, spacing } from '@/design';
 import {
   fetchGuestEventPreview,
@@ -28,16 +29,6 @@ import {
   loadStoredGuestSession,
 } from '@/services/guest-session';
 
-/** Cover art for the development fallback, keyed the same way as the dashboard. */
-const COVER_MAP: Record<string, ReturnType<typeof require>> = {
-  modern: require('../../../assets/images/placeholders/christian_wedding.png'),
-  classic: require('../../../assets/images/placeholders/christian_wedding.png'),
-  vibrant: require('../../../assets/images/placeholders/hindu_wedding.png'),
-  retro: require('../../../assets/images/placeholders/treatment_preview_1.png'),
-  editorial: require('../../../assets/images/placeholders/treatment_preview_2.png'),
-};
-const FALLBACK_COVER = require('../../../assets/images/placeholders/create_event_cover.png');
-
 const NAME_MAX_LENGTH = 50;
 
 /**
@@ -45,28 +36,6 @@ const NAME_MAX_LENGTH = 50;
  * the screen and the form sits under it rather than beside it.
  */
 const COVER_HEIGHT_RATIO = 0.66;
-
-/**
- * The scrim.
- *
- * Nothing at all across the top half of the photograph, then an accelerating
- * fall to the page background. Holding off that long is what keeps the cover
- * reading as a photograph rather than a darkened panel, and the last stop
- * matches `colours.background` exactly so the image has no visible bottom edge.
- */
-function scrimStop(alpha: number): string {
-  const hex = colours.background.replace('#', '');
-  return `rgba(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(hex.slice(2, 4), 16)}, ${parseInt(hex.slice(4, 6), 16)}, ${alpha})`;
-}
-const SCRIM_COLORS = [
-  scrimStop(0),
-  scrimStop(0),
-  scrimStop(0.35),
-  scrimStop(0.75),
-  scrimStop(0.95),
-  scrimStop(1),
-] as readonly [string, string, ...string[]];
-const SCRIM_LOCATIONS = [0, 0.42, 0.6, 0.75, 0.88, 1] as readonly [number, number, ...number[]];
 
 /**
  * The first screen a guest sees, from a QR code or an invitation link.
@@ -171,6 +140,7 @@ export default function GuestEntryScreen() {
   const coverHeight = Math.round(viewportHeight * COVER_HEIGHT_RATIO);
   const shotsLeft =
     preview.shotLimit === null ? null : Math.max(0, preview.shotLimit - preview.shotsUsed);
+  const accent = preview.themeAccent ?? colours.accentWarm;
 
   return (
     <View style={S.root}>
@@ -197,17 +167,12 @@ export default function GuestEntryScreen() {
               accessibilityLabel={`Cover photograph for ${preview.title}`}
             />
 
-            <LinearGradient
-              colors={SCRIM_COLORS}
-              locations={SCRIM_LOCATIONS}
-              style={S.scrim}
-              pointerEvents="none"
-            />
+            <CoverScrim />
 
             {/* Event identity sits in the dark end of the ramp, so it reads as
                 emerging from the photograph rather than floating on it. */}
             <View style={S.identity}>
-              <AppText variant="eyebrow" style={S.eyebrow}>
+              <AppText variant="eyebrow" style={[S.eyebrow, { color: accent }]}>
                 You&rsquo;re invited
               </AppText>
 
@@ -225,13 +190,13 @@ export default function GuestEntryScreen() {
 
               <View style={S.detailRow}>
                 <Detail
-                  icon={<ClockIcon size={18} color={colours.accentWarm} />}
+                  icon={<ClockIcon size={18} color={accent} />}
                   value={countdown}
                   label="Time left"
                 />
                 <View style={S.detailDivider} />
                 <Detail
-                  icon={<CameraIcon size={18} color={colours.accentWarm} />}
+                  icon={<CameraIcon size={18} color={accent} />}
                   value={shotsLeft === null ? '∞' : String(shotsLeft)}
                   label="Shots left"
                 />
@@ -258,8 +223,8 @@ export default function GuestEntryScreen() {
                 }}
                 placeholder="Enter your name"
                 placeholderTextColor={colours.textSecondary}
-                selectionColor={colours.brandPrimary}
-                style={S.fieldInput}
+                  selectionColor={accent}
+                  style={S.fieldInput}
                 maxLength={NAME_MAX_LENGTH}
                 autoCapitalize="words"
                 autoComplete="name"
@@ -291,6 +256,7 @@ export default function GuestEntryScreen() {
               accessibilityState={{ disabled: !isNameValid || isJoining }}
               style={({ pressed }) => [
                 S.cta,
+                { backgroundColor: accent },
                 (!isNameValid || isJoining) && S.ctaDisabled,
                 pressed && S.ctaPressed,
               ]}
@@ -391,14 +357,6 @@ function readAccessToken(param?: string): string | null {
   return null;
 }
 
-function resolveCover(path: string | null) {
-  if (!path) return FALLBACK_COVER;
-  if (COVER_MAP[path]) return COVER_MAP[path];
-  // A real storage path or a local file URI from the host's own picker.
-  if (path.startsWith('http') || path.startsWith('file:')) return { uri: path };
-  return FALLBACK_COVER;
-}
-
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: colours.background },
   centred: { alignItems: 'center', justifyContent: 'center' },
@@ -406,7 +364,6 @@ const S = StyleSheet.create({
   // ── Cover ──
   cover: { width: '100%', backgroundColor: colours.background },
   coverImage: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, width: '100%', height: '100%' },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
 
   identity: {
     position: 'absolute',

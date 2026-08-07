@@ -31,6 +31,8 @@ export interface TreatedPhotoProps {
   style?: StyleProp<ViewStyle>;
   resizeMode?: ImageResizeMode;
   blurRadius?: number;
+  /** Called once the rendered image is ready to be captured/exported. */
+  onReady?: () => void;
   /**
    * Small render surfaces (crops, chips) skip the finer disposable layers —
    * grain, leaks and debris are invisible at that size and not worth the
@@ -69,6 +71,7 @@ export function TreatedPhoto({
   resizeMode = 'cover',
   blurRadius,
   compact = false,
+  onReady,
 }: TreatedPhotoProps) {
   const resolved = normalisePhotoTreatment(treatment);
   const visual = TREATMENT_VISUALS[resolved];
@@ -88,6 +91,7 @@ export function TreatedPhoto({
         style={style}
         resizeMode={resizeMode}
         compact={compact}
+        onReady={onReady}
       />
     );
   }
@@ -98,6 +102,7 @@ export function TreatedPhoto({
       style={StyleSheet.absoluteFill}
       resizeMode={resizeMode}
       blurRadius={blurRadius}
+      onLoadEnd={onReady}
     />
   );
 

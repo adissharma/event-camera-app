@@ -43,7 +43,11 @@ export function buildEditPatch(step: CreationStep, draft: CreationDraft): EventS
         draft.endsAt,
         draft.guestCustomRevealAt,
       );
-      return { revealMode: mode, revealAt };
+      return {
+        revealMode: mode,
+        revealAt,
+        galleryVisibility: draft.galleryVisibility,
+      };
     }
 
     case 'treatment':

@@ -60,7 +60,7 @@ export const revealSchema = z
   .object({
     hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
     hostCustomRevealAt: z.string().nullable(),
-    guestRevealChoice: z.enum(['during', 'at_close', 'custom']),
+    guestRevealChoice: z.enum(['during', 'at_close', 'custom', 'never']),
     guestCustomRevealAt: z.string().nullable(),
   })
   .refine(
@@ -87,6 +87,10 @@ export const revealSchema = z
   )
   .refine(
     (val) => {
+      if (val.guestRevealChoice === 'never') {
+        return true;
+      }
+
       if (val.hostRevealChoice === 'at_close' && val.guestRevealChoice === 'during') {
         return false;
       }
@@ -96,6 +100,10 @@ export const revealSchema = z
   )
   .refine(
     (val) => {
+      if (val.guestRevealChoice === 'never') {
+        return true;
+      }
+
       if (val.hostRevealChoice === 'custom' && val.guestRevealChoice !== 'custom') {
         return false;
       }
@@ -105,6 +113,10 @@ export const revealSchema = z
   )
   .refine(
     (val) => {
+      if (val.guestRevealChoice === 'never') {
+        return true;
+      }
+
       if (
         val.hostRevealChoice === 'custom' &&
         val.guestRevealChoice === 'custom' &&

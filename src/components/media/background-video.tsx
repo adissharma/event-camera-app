@@ -9,7 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { colours, easing, useMotion } from '@/design';
-import { getMotionAsset, type MotionAssetKey } from '@/config/visual-assets';
+import { getMotionAsset, type MotionAssetKey } from '@/config/motion-assets';
 import { VisualPlaceholder } from './visual-placeholder';
 
 export interface BackgroundVideoProps {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Pressable, ScrollView, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
@@ -14,7 +14,6 @@ import {
 } from '@/services/celebration-detail';
 import { celebrationKeys } from '@/services/celebrations';
 import { colours, layout, spacing, radii } from '@/design';
-import { copy } from '@/i18n';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import Svg, { Path } from 'react-native-svg';
 
@@ -74,6 +73,8 @@ export default function EditEventScreen() {
       primarySession.reveal_at,
       celebration.ends_at,
     );
+    const guestRevealChoice =
+      primarySession.gallery_visibility === 'hosts_only' ? 'never' : revealChoice;
 
     // Seed draft with ALL current settings of this celebration
     update({
@@ -90,14 +91,17 @@ export default function EditEventScreen() {
       guestDownloadsEnabled: primarySession.guest_downloads_enabled,
       hostRevealChoice: revealChoice,
       hostCustomRevealAt: customRevealAt,
-      guestRevealChoice: revealChoice,
-      guestCustomRevealAt: customRevealAt,
+      guestRevealChoice,
+      guestCustomRevealAt: guestRevealChoice === 'never' ? null : customRevealAt,
       photoTreatment: primarySession.photo_treatment || 'original',
       editCelebrationId: celebration.id, // Mark that we are editing this event!
       editSessionId: primarySession.id,
     });
 
-    // Navigate to respective setup screen
+    // Navigate to the edit section without losing the Manage Event screen
+    // beneath it. Using push here preserves the stack so the swipe-back
+    // gesture animates back to Manage Event instead of falling through to the
+    // gallery.
     if (field === 'name') {
       router.push('/create/name');
     } else if (field === 'closing') {
@@ -133,7 +137,7 @@ export default function EditEventScreen() {
               await archiveCelebration(String(celebrationId));
               await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
               router.replace('/home');
-            } catch (error) {
+            } catch {
               Alert.alert('Error', 'Failed to delete event. Please try again.');
               setIsDeleting(false);
             }
@@ -174,8 +178,8 @@ export default function EditEventScreen() {
           <View style={styles.card}>
             <Pressable onPress={() => handleEditField('name')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>Event Name</AppText>
-                <AppText style={styles.rowValue} numberOfLines={1}>{celebration.title}</AppText>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Event Name</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue} numberOfLines={1}>{celebration.title}</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>
@@ -184,8 +188,8 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('closing')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>End Date</AppText>
-                <AppText style={styles.rowValue}>{formattedEndDate}</AppText>
+                <AppText variant="labelLarge" style={styles.rowLabel}>End Date</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>{formattedEndDate}</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>
@@ -194,8 +198,8 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('cover')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>Cover Photo</AppText>
-                <AppText style={styles.rowValue}>Edit Cover</AppText>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Cover Photo</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>Edit Cover</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>
@@ -204,8 +208,8 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('photo-limit')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>Guest Photo Limit</AppText>
-                <AppText style={styles.rowValue}>{limitText}</AppText>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Guest Photo Limit</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>{limitText}</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>
@@ -214,8 +218,8 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('reveal')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>Reveal Delay</AppText>
-                <AppText style={styles.rowValue}>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Reveal Delay</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>
                   {primarySession.reveal_mode === 'instant' ? 'Instant' : 'Delayed'}
                 </AppText>
               </View>
@@ -226,8 +230,8 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('treatment')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>Photo Filter</AppText>
-                <AppText style={[styles.rowValue, { textTransform: 'capitalize' }]}>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Photo Filter</AppText>
+                <AppText variant="bodySmall" style={[styles.rowValue, { textTransform: 'capitalize' }]}>
                   {primarySession.photo_treatment || 'original'}
                 </AppText>
               </View>
@@ -238,8 +242,8 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('challenges')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText style={styles.rowLabel}>Challenges</AppText>
-                <AppText style={styles.rowValue}>Manage Challenges</AppText>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Challenges</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>Manage Challenges</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>
@@ -296,7 +300,6 @@ const styles = StyleSheet.create({
     color: colours.textPrimary,
   },
   headerTitle: {
-    fontWeight: '600',
     color: colours.textPrimary,
   },
   container: {
@@ -311,11 +314,11 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.xs,
   },
   card: {
-    backgroundColor: colours.surfaceRaised,
+    backgroundColor: colours.surface,
     borderRadius: radii.xl,
     overflow: 'hidden',
     borderWidth: layout.hairline,
-    borderColor: colours.borderSubtle,
+    borderColor: colours.borderStrong,
   },
   row: {
     flexDirection: 'row',
@@ -329,12 +332,9 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   rowLabel: {
-    fontSize: 15,
-    fontWeight: '600',
     color: colours.textPrimary,
   },
   rowValue: {
-    fontSize: 13,
     color: colours.textSecondary,
   },
   separator: {
@@ -360,8 +360,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   deleteButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
     color: '#FFFFFF',
   },
   deleteNote: {

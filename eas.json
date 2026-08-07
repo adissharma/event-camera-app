@@ -18,7 +18,7 @@
       },
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://hzmyhrzshtzmyfrmvevw.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "YOUR_PROD_SUPABASE_ANON_KEY"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_DR6NlQSFhXpOwvW6l1gvQA_Tv_NiN27"
       }
     }
   },

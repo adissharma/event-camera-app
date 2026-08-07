@@ -56,13 +56,21 @@ export interface CelebrationDetail {
    * offline-mock array under that name) to avoid colliding with it.
    */
   mediaPhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; isMine?: boolean }[]
     | null;
 }
 
 export const celebrationDetailKeys = {
   detail: (id: string) => ['celebrations', 'detail', id] as const,
+  joinedGuests: (eventSessionId: string) => ['celebrations', 'joined-guests', eventSessionId] as const,
 };
+
+export interface JoinedGuest {
+  id: string;
+  displayName: string;
+  createdAt: string;
+  lastSeenAt: string;
+}
 
 /**
  * Full detail for the celebration dashboard — shared by host and guest.
@@ -149,6 +157,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 storagePath: m.original_storage_path,
                 capturedAt: m.captured_at,
                 displayName: (m.guest_sessions as any)?.display_name ?? 'Host',
+                isMine: false,
               }));
           })()
         : [];
@@ -253,6 +262,28 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
   throw new Error('This invitation is no longer available.');
 }
 
+export async function fetchJoinedGuests(eventSessionId: string): Promise<JoinedGuest[]> {
+  if (!isBackendConfigured) {
+    return [];
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from('guest_sessions')
+    .select('id, display_name, created_at, last_seen_at')
+    .eq('event_session_id', eventSessionId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? []).map((guest) => ({
+    id: guest.id,
+    displayName: guest.display_name?.trim() || 'Guest',
+    createdAt: guest.created_at,
+    lastSeenAt: guest.last_seen_at,
+  }));
+}
+
 /**
  * The guest-token path for `fetchCelebrationDetail`.
  *
@@ -346,6 +377,7 @@ async function tryFetchCelebrationDetailAsGuest(
           storagePath: p.storage_path,
           capturedAt: p.captured_at ?? null,
           displayName: p.display_name ?? 'Guest',
+          isMine: p.is_mine === true,
         }))
       : null,
   };

@@ -14,6 +14,8 @@ export interface ScreenProps {
   children: ReactNode;
   /** Pinned to the bottom above the safe area. Use for the primary action. */
   stickyAction?: ReactNode;
+  /** When false, the sticky action stays fixed while the keyboard overlays it. */
+  stickyActionFollowsKeyboard?: boolean;
   scrollable?: boolean;
   /** Removes the horizontal gutter so imagery can run edge to edge. */
   edgeToEdge?: boolean;
@@ -32,6 +34,7 @@ export interface ScreenProps {
 export function Screen({
   children,
   stickyAction,
+  stickyActionFollowsKeyboard = true,
   scrollable = true,
   edgeToEdge = false,
   contentStyle,
@@ -60,27 +63,42 @@ export function Screen({
     <View style={[{ flex: 1 }, padding, contentStyle]}>{children}</View>
   );
 
+  const stickyActionBlock = stickyAction ? (
+    <View
+      style={{
+        paddingHorizontal: layout.gutter,
+        paddingTop: spacing.base,
+        paddingBottom: insets.bottom + spacing.base,
+        backgroundColor: colours.background,
+        borderTopWidth: layout.hairline,
+        borderTopColor: colours.borderSubtle,
+      }}
+    >
+      {stickyAction}
+    </View>
+  ) : null;
+
+  if (!stickyActionFollowsKeyboard) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colours.background }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {body}
+        </KeyboardAvoidingView>
+        {stickyActionBlock}
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colours.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {body}
-
-      {stickyAction ? (
-        <View
-          style={{
-            paddingHorizontal: layout.gutter,
-            paddingTop: spacing.base,
-            paddingBottom: insets.bottom + spacing.base,
-            backgroundColor: colours.background,
-            borderTopWidth: layout.hairline,
-            borderTopColor: colours.borderSubtle,
-          }}
-        >
-          {stickyAction}
-        </View>
-      ) : null}
+      {stickyActionBlock}
     </KeyboardAvoidingView>
   );
 }

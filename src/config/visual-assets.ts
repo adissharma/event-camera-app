@@ -141,59 +141,6 @@ export function getVisualAsset(key: VisualAssetKey): VisualAsset {
 
 /* ------------------------------------------------------------------------- */
 
-export interface MotionAsset {
-  source: number;
-  /** Key in `VISUAL_ASSETS` shown if the video fails or is unavailable. */
-  fallbackAssetKey: VisualAssetKey;
-  accessibilityLabel: string;
-  intendedScreen: string;
-  /** Provenance and licence. Recorded for the same reason the fonts are. */
-  licence: {
-    source: string;
-    url: string;
-    author: string;
-    licence: string;
-    commercialUse: boolean;
-    attributionRequired: boolean;
-  };
-  /** Bundled file size, so the effect on app size stays visible. */
-  approxBytes: number;
-  isPlaceholder: boolean;
-}
-
-/**
- * Motion assets bundled with the app.
- *
- * Same rule as photography: replacing one means editing THIS mapping, never a
- * screen.
- *
- * Keep this list very short. Every entry ships inside the binary and is paid
- * for in download size by every user.
- */
-export const MOTION_ASSETS = {
-  welcome_ambient: {
-    source: require('../../assets/video/welcome-hero.mp4'),
-    fallbackAssetKey: 'welcome_hero',
-    accessibilityLabel: 'Sparklers held in the dark at a celebration',
-    intendedScreen: 'Welcome',
-    licence: {
-      source: 'Pexels',
-      url: 'https://www.pexels.com/video/a-person-holding-a-sparkler-in-the-dark-19492425/',
-      author: 'Beyza Koeken',
-      licence: 'Pexels License — free to use',
-      commercialUse: true,
-      attributionRequired: false,
-    },
-    approxBytes: 1_318_552,
-    // Stock footage standing in for real event footage. It is atmospheric and
-    // correctly licensed, but it is not this product's own material and should
-    // be replaced before launch — see docs/visual-assets.md.
-    isPlaceholder: true,
-  },
-} as const satisfies Record<string, MotionAsset>;
-
-export type MotionAssetKey = keyof typeof MOTION_ASSETS;
-
-export function getMotionAsset(key: MotionAssetKey): MotionAsset {
-  return MOTION_ASSETS[key];
-}
+// Motion assets live in `./motion-assets`. They are deliberately NOT re-exported
+// here: this module is imported by components the App Clip uses, and a video
+// `require()` reachable from it would pull the footage into the Clip bundle.

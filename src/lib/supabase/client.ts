@@ -105,6 +105,47 @@ const noopStorage = {
 };
 
 /**
+ * SecureStore is unavailable in some sandboxes — notably the iOS App Clip,
+ * which cannot reach the keychain without a `keychain-access-groups`
+ * entitlement and instead throws:
+ *
+ *   KeyChainException: A required entitlement isn't present.
+ *
+ * That throw does not stay contained. supabase-js touches session storage
+ * before issuing a request, so a keychain failure surfaces as *every* query
+ * failing — which presented as "This invitation is no longer available" on a
+ * perfectly healthy database.
+ *
+ * Falling back to AsyncStorage keeps the client usable. It is the right
+ * trade-off precisely where it triggers: the App Clip is guest-only and has no
+ * sign-in, so there is no session worth protecting. Anywhere a host can
+ * actually authenticate, SecureStore is present and is still used.
+ */
+const secureStoreWithFallback = {
+  async getItem(key: string): Promise<string | null> {
+    try {
+      return await secureStoreAdapter.getItem(key);
+    } catch {
+      return AsyncStorage.getItem(key);
+    }
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      await secureStoreAdapter.setItem(key, value);
+    } catch {
+      await AsyncStorage.setItem(key, value);
+    }
+  },
+  async removeItem(key: string): Promise<void> {
+    try {
+      await secureStoreAdapter.removeItem(key);
+    } catch {
+      await AsyncStorage.removeItem(key);
+    }
+  },
+};
+
+/**
  * Web has no SecureStore. AsyncStorage maps to localStorage, which is readable
  * by any script on the origin — acceptable for the local development preview,
  * NOT acceptable for a production web deployment. Shipping the guest web app
@@ -114,7 +155,7 @@ const storage = isServerRendering
   ? noopStorage
   : Platform.OS === 'web'
     ? AsyncStorage
-    : secureStoreAdapter;
+    : secureStoreWithFallback;
 
 /** Null when no credentials are configured. Guard with `isBackendConfigured`. */
 export const supabase: SupabaseClient<Database> | null = HAS_SUPABASE_CREDENTIALS

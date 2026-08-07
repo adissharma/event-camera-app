@@ -37,6 +37,9 @@ export type CreationStep = (typeof CREATION_STEPS)[number];
 /** Reveal choices as presented to the host, mapped to the database model. */
 export type RevealChoice = 'during' | 'at_close' | 'custom';
 
+/** Reveal choices as presented to guests. */
+export type GuestRevealChoice = RevealChoice | 'never';
+
 export interface CreationDraft {
   /** Bumped when the shape changes so a stale persisted draft is discarded. */
   version: number;
@@ -99,7 +102,7 @@ export interface CreationDraft {
 
   hostRevealChoice: RevealChoice;
   hostCustomRevealAt: string | null;
-  guestRevealChoice: RevealChoice;
+  guestRevealChoice: GuestRevealChoice;
   guestCustomRevealAt: string | null;
 
   // Step 9
@@ -184,7 +187,7 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
  * the kind of thing that silently drifts across a daylight-saving boundary.
  */
 export function resolveReveal(
-  choice: RevealChoice,
+  choice: RevealChoice | GuestRevealChoice,
   endsAt: string | null,
   customRevealAt: string | null,
 ): { mode: RevealMode; revealAt: string | null } {
@@ -204,5 +207,38 @@ export function resolveReveal(
           // button, so a custom choice with nothing picked yet falls back
           // to manual rather than inventing a time.
           { mode: 'manual', revealAt: null };
+    case 'never':
+      return { mode: 'manual', revealAt: null };
+  }
+}
+
+/**
+ * The inverse of `resolveReveal` — turns the database's reveal model back
+ * into the choice the reveal step's controls understand, for seeding the
+ * draft when a host reopens settings for an already-published event.
+ *
+ * `'scheduled'` collapses to `'at_close'` when its timestamp matches the
+ * session's closing time (the shape `resolveReveal` produces for that
+ * choice) so reopening the screen shows "After event ends" rather than a
+ * custom date that happens to equal it. Everything else that isn't a bare
+ * `'instant'` reads back as `'custom'`, `'manual'` included — a manual
+ * reveal has no timestamp of its own to show, so the picker opens against
+ * "now" until the host sets one, matching `resolveReveal`'s own fallback for
+ * a custom choice with nothing picked yet.
+ */
+export function decodeRevealMode(
+  mode: RevealMode,
+  revealAt: string | null,
+  endsAt: string | null,
+): { choice: RevealChoice; customRevealAt: string | null } {
+  switch (mode) {
+    case 'instant':
+      return { choice: 'during', customRevealAt: null };
+    case 'scheduled':
+      return revealAt && endsAt && revealAt === endsAt
+        ? { choice: 'at_close', customRevealAt: null }
+        : { choice: 'custom', customRevealAt: revealAt };
+    case 'manual':
+      return { choice: 'custom', customRevealAt: null };
   }
 }

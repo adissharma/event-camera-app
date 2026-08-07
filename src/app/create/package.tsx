@@ -1,91 +1,59 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Modal,
+  FlatList,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
   View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
-import { CloseIcon } from '@/components/ui/icons';
-import { Button } from '@/components/ui/button';
-import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
-import { fetchCatalogue, formatPrice, planKeys } from '@/services/plans';
+import { fetchCatalogue, formatPrice, planKeys, type PlanWithEntitlements } from '@/services/plans';
 import { publishDraft, PublicationError } from '@/services/publication';
 import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
 import { celebrationKeys } from '@/services/celebrations';
 import { LOCALE_CONFIG } from '@/config/app-config';
-import { colours, layout, radii, spacing } from '@/design';
+import { fontFamilies, layout, radii, spacing } from '@/design';
 
-/**
- * The Package selection screen.
- *
- * Highly visual selection of guest capacity using a card grid, an exciting
- * image-faded tile for photo games (with modal info trigger), and an upgrade card
- * for the combined Media Bundle, showing final summary pricing at the bottom.
- */
-export default function PackageStep() {
-  const router = useRouter();
-  const queryClient = useQueryClient();
-  const { draft, update, reset } = useCreationDraft();
-  const [gamesInfoVisible, setGamesInfoVisible] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
-  const [publishError, setPublishError] = useState<string | null>(null);
+const SCREEN_BG = '#090909';
+const CARD_BG = '#131314';
+const CARD_BORDER = 'rgba(255, 248, 239, 0.12)';
+const CARD_BORDER_SELECTED = '#F3EADF';
+const MUTED_TEXT = '#A79F96';
+const GOLD_TEXT = '#E8C98F';
+const PHONE_BG = '#171718';
+const MOST_POPULAR_KEY = 'guests_50';
+const PLAN_ORDER = [
+  'guests_5',
+  'guests_25',
+  'guests_50',
+  'guests_100',
+  'guests_150',
+  'guests_200',
+  'guests_unlimited',
+] as const;
 
-  async function handlePublish() {
-    setIsPublishing(true);
-    setPublishError(null);
-    try {
-      const result = await publishDraft(draft);
-      setPublicationResult(result);
-      await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
-      router.replace('/create/success');
-    } catch (error) {
-      const stage = error instanceof PublicationError ? error.stage : null;
-      setPublishError(
-        stage === 'purchase'
-          ? 'That payment did not go through. Nothing has been charged.'
-          : stage === 'publish'
-            ? 'Your event was saved but could not be published. Try again.'
-            : 'We could not create your event. Check your connection and try again.',
-      );
-    } finally {
-      setIsPublishing(false);
-    }
-  }
-
-  const { data, isLoading, isError } = useQuery({
-    queryKey: planKeys.catalogue(),
-    queryFn: fetchCatalogue,
-  });
-
-const MOCK_PLANS = [
+const FALLBACK_PLANS: PlanWithEntitlements[] = [
   {
     id: 'guests_5',
     key: 'guests_5',
     name: '5 Guests',
     description: 'Up to 5 guests can join.',
     tierRank: 1,
-    priceMinorUnits: 200,
+    priceMinorUnits: 0,
     currency: 'USD',
     entitlements: { participant_limit: 5 },
-  },
-  {
-    id: 'guests_10',
-    key: 'guests_10',
-    name: '10 Guests',
-    description: 'Up to 10 guests can join.',
-    tierRank: 2,
-    priceMinorUnits: 1500,
-    currency: 'USD',
-    entitlements: { participant_limit: 10 },
   },
   {
     id: 'guests_25',
@@ -149,444 +117,991 @@ const MOCK_PLANS = [
   },
 ];
 
-  // Sort and filter guest plans from the database catalogue, fall back to local mock plans if empty
+const PHONE_IMAGES = [
+  require('../../../assets/images/placeholders/christian_wedding.png'),
+  require('../../../assets/images/placeholders/hindu_wedding.png'),
+  require('../../../assets/images/placeholders/treatment_preview_1.png'),
+  require('../../../assets/images/placeholders/treatment_preview_2.png'),
+  require('../../../assets/images/placeholders/iphone_group_1.png'),
+  require('../../../assets/images/placeholders/iphone_group_2.png'),
+  require('../../../assets/images/placeholders/iphone_group_3.png'),
+  require('../../../assets/images/placeholders/iphone_group_4.png'),
+];
+
+const BENEFITS = [
+  {
+    id: 'capture',
+    headline: 'Everyone captures the night',
+    body: 'Guests join instantly and take candid photos throughout the event.',
+    eventName: 'James & Sofia',
+    subtitle: 'Wedding Party',
+    leftImage: require('../../../assets/images/placeholders/treatment_preview_1.png'),
+    rightImage: require('../../../assets/images/placeholders/iphone_group_5.png'),
+    phoneImages: PHONE_IMAGES,
+  },
+  {
+    id: 'no-app',
+    headline: 'No app needed',
+    body: 'Guests scan the QR code and start snapping straight away.',
+    eventName: 'Amara Turns 30',
+    subtitle: 'Birthday Party',
+    leftImage: require('../../../assets/images/placeholders/christian_wedding.png'),
+    rightImage: require('../../../assets/images/placeholders/treatment_preview_2.png'),
+    phoneImages: [...PHONE_IMAGES].reverse(),
+  },
+  {
+    id: 'reveal',
+    headline: 'Make the reveal part of the fun',
+    body: 'Choose when everyone gets to see the photos and build anticipation.',
+    eventName: 'Rooftop Afterparty',
+    subtitle: 'Launch Night',
+    leftImage: require('../../../assets/images/placeholders/hindu_wedding.png'),
+    rightImage: require('../../../assets/images/placeholders/iphone_group_3.png'),
+    phoneImages: [PHONE_IMAGES[4], PHONE_IMAGES[1], PHONE_IMAGES[6], PHONE_IMAGES[7], PHONE_IMAGES[0], PHONE_IMAGES[2]],
+  },
+  {
+    id: 'games',
+    headline: 'Photo Games, included',
+    body: 'Give guests playful photo challenges at no extra cost.',
+    eventName: 'Olivia & Marcus',
+    subtitle: 'Garden Wedding',
+    leftImage: require('../../../assets/images/placeholders/iphone_group_2.png'),
+    rightImage: require('../../../assets/images/placeholders/treatment_preview_1.png'),
+    phoneImages: [PHONE_IMAGES[2], PHONE_IMAGES[0], PHONE_IMAGES[5], PHONE_IMAGES[3], PHONE_IMAGES[1], PHONE_IMAGES[7]],
+  },
+] as const;
+
+function BackChevronIcon({ size = 20, color = '#F3EADF' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M15 18l-6-6 6-6"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function SparkleIcon({ size = 26, color = '#E8C98F' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2l1.55 6.45L20 10l-6.45 1.55L12 18l-1.55-6.45L4 10l6.45-1.55L12 2Z"
+        stroke={color}
+        strokeWidth={1.4}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+function CameraOutlineIcon({ size = 34, color = '#F3EADF' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.7l1.08-1.58A1.6 1.6 0 0 1 10.59 4h2.82a1.6 1.6 0 0 1 1.31.42L15.8 6h1.7A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-8Z"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={12.5} r={3.2} stroke={color} strokeWidth={1.6} />
+    </Svg>
+  );
+}
+
+type Benefit = (typeof BENEFITS)[number];
+
+function BenefitArtwork({
+  benefit,
+  width,
+}: {
+  benefit: Benefit;
+  width: number;
+}) {
+  const phoneWidth = Math.min(width * 0.58, 236);
+  const phoneHeight = phoneWidth * 1.98;
+  const rearCardWidth = phoneWidth * 0.72;
+  const rearCardHeight = rearCardWidth * 1.08;
+
+  return (
+    <View style={[styles.heroArtworkWrap, { height: phoneHeight + 62 }]}>
+      <View
+        style={[
+          styles.rearPhotoCard,
+          {
+            width: rearCardWidth,
+            height: rearCardHeight,
+            left: width * 0.08,
+            top: phoneHeight * 0.36,
+            transform: [{ rotate: '-10deg' }],
+          },
+        ]}
+      >
+        <Image source={benefit.leftImage} style={styles.rearPhotoImage} resizeMode="cover" />
+      </View>
+
+      <View
+        style={[
+          styles.rearPhotoCard,
+          {
+            width: rearCardWidth,
+            height: rearCardHeight,
+            right: width * 0.06,
+            top: phoneHeight * 0.36,
+            transform: [{ rotate: '9deg' }],
+          },
+        ]}
+      >
+        <Image source={benefit.rightImage} style={styles.rearPhotoImage} resizeMode="cover" />
+      </View>
+
+      <View style={[styles.sparkleLeft, { left: width * 0.16, top: phoneHeight * 0.16 }]}>
+        <SparkleIcon size={18} />
+        <SparkleIcon size={30} />
+      </View>
+
+      <View style={[styles.sparkleRight, { right: width * 0.1, bottom: 12 }]}>
+        <CameraOutlineIcon />
+      </View>
+
+      <View style={[styles.phoneShell, { width: phoneWidth, height: phoneHeight }]}>
+        <View style={styles.phoneBezel} />
+        <View style={styles.phoneHeader}>
+          <View style={styles.phoneHeaderTop}>
+            <View style={styles.phoneBackPill}>
+              <BackChevronIcon size={14} color="#F5F2ED" />
+            </View>
+            <View style={styles.phoneStatusWrap}>
+              <View style={styles.phoneDynamicIsland} />
+              <AppText variant="caption" style={styles.phoneStatusText}>
+                23:13
+              </AppText>
+            </View>
+          </View>
+          <View style={styles.phoneTitleRow}>
+            <View style={{ flex: 1 }}>
+              <AppText variant="heading" style={styles.phoneEventName} numberOfLines={1}>
+                {benefit.eventName}
+              </AppText>
+              <AppText variant="bodySmall" style={styles.phoneEventSubtitle} numberOfLines={1}>
+                {benefit.subtitle}
+              </AppText>
+            </View>
+            <View style={styles.liveBadge}>
+              <AppText variant="caption" style={styles.liveBadgeText}>
+                LIVE
+              </AppText>
+            </View>
+          </View>
+        </View>
+
+        <View style={styles.phoneGalleryGrid}>
+          {benefit.phoneImages.slice(0, 6).map((imageSource, index) => {
+            const isWide = index === 4;
+            return (
+              <View
+                key={`${benefit.id}-${index}`}
+                style={[
+                  styles.phoneGalleryCell,
+                  isWide && styles.phoneGalleryCellWide,
+                ]}
+              >
+                <Image source={imageSource} style={styles.phoneGalleryImage} resizeMode="cover" />
+              </View>
+            );
+          })}
+        </View>
+        <View style={styles.phoneBottomFade} pointerEvents="none" />
+      </View>
+    </View>
+  );
+}
+
+function PaginationDots({
+  count,
+  activeIndex,
+}: {
+  count: number;
+  activeIndex: number;
+}) {
+  return (
+    <View style={styles.dotsRow}>
+      {Array.from({ length: count }).map((_, index) => (
+        <View
+          key={index}
+          style={[
+            styles.dot,
+            index === activeIndex ? styles.dotActive : null,
+          ]}
+        />
+      ))}
+    </View>
+  );
+}
+
+function getParticipantLimit(plan: PlanWithEntitlements): number | null {
+  const value = plan.entitlements.participant_limit;
+  if (value === null) return null;
+  if (typeof value === 'number') {
+    return value >= 99999 ? null : value;
+  }
+  return null;
+}
+
+function getCapacityDisplay(plan: PlanWithEntitlements): {
+  topLabel: string;
+  bottomLabel: string;
+} {
+  if (plan.key === 'guests_5') {
+    return { topLabel: 'Free', bottomLabel: 'Up to 5 guests' };
+  }
+
+  const limit = getParticipantLimit(plan);
+  if (limit === null) {
+    return { topLabel: 'Unlimited', bottomLabel: 'guests' };
+  }
+
+  return { topLabel: String(limit), bottomLabel: 'guests' };
+}
+
+function getPillCopy(
+  plan: PlanWithEntitlements,
+  plans: PlanWithEntitlements[],
+  locale: string,
+): string {
+  if (plan.key === 'guests_5') return 'Try it out';
+  if (plan.key === 'guests_25') return 'Starting package';
+  if (plan.key === 'guests_unlimited') return 'All your guests';
+
+  const planIndex = plans.findIndex((candidate) => candidate.key === plan.key);
+  const previous = planIndex > 0 ? plans[planIndex - 1] : null;
+  const currentLimit = getParticipantLimit(plan);
+  const previousLimit = previous ? getParticipantLimit(previous) : null;
+
+  if (
+    previous &&
+    currentLimit !== null &&
+    previousLimit !== null &&
+    previousLimit > 0 &&
+    previous.priceMinorUnits > 0
+  ) {
+    const requiredPreviousPlans = Math.ceil(currentLimit / previousLimit);
+    const equivalentCost = previous.priceMinorUnits * requiredPreviousPlans;
+    const saving = equivalentCost - plan.priceMinorUnits;
+    if (saving > 0) {
+      return `Save ${formatPrice(saving, plan.currency, locale)}`;
+    }
+  }
+
+  if (plan.key === MOST_POPULAR_KEY) return 'Best value';
+  if (plan.key === 'guests_100') return 'Big celebration';
+  if (plan.key === 'guests_150') return 'Large guest list';
+  if (plan.key === 'guests_200') return 'Maximum capacity';
+  return 'Great choice';
+}
+
+function ctaPriceLabel(plan: PlanWithEntitlements | null): string {
+  if (!plan) return '';
+  if (plan.key === 'guests_5' && plan.priceMinorUnits === 0) return 'Free';
+  if (plan.priceMinorUnits === 0) return 'Free';
+  return formatPrice(plan.priceMinorUnits, plan.currency, LOCALE_CONFIG.locale);
+}
+
+export default function PackageStep() {
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const { draft, update } = useCreationDraft();
+
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const benefitListRef = useRef<FlatList<Benefit>>(null);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: planKeys.catalogue(),
+    queryFn: fetchCatalogue,
+  });
+
   const plans = useMemo(() => {
-    if (!data?.plans || data.plans.length === 0) return MOCK_PLANS;
-    const filtered = data.plans
-      .filter((p) => p.key.startsWith('guests_'))
-      .sort((a, b) => a.tierRank - b.tierRank);
-    return filtered.length > 0 ? filtered : MOCK_PLANS;
+    const source = data?.plans && data.plans.length > 0 ? data.plans : FALLBACK_PLANS;
+    const byKey = new Map(source.map((plan) => [plan.key, plan]));
+    return PLAN_ORDER.map((key) => byKey.get(key)).filter((plan): plan is PlanWithEntitlements => Boolean(plan));
   }, [data]);
 
-  // Handle plan key fallback
-  const selectedPlanKey = draft.planKey ?? plans[3]?.key ?? plans[0]?.key ?? null;
+  const defaultPlanKey = plans.find((plan) => plan.key === MOST_POPULAR_KEY)?.key ?? plans[0]?.key ?? null;
+  const selectedPlanKey = draft.planKey && plans.some((plan) => plan.key === draft.planKey)
+    ? draft.planKey
+    : defaultPlanKey;
 
-  // Sync plan key back to draft store if none set
-  useMemo(() => {
-    if (!draft.planKey && selectedPlanKey) {
+  useEffect(() => {
+    if (draft.addOnKeys.length > 0) {
+      update({ addOnKeys: [] });
+    }
+  }, [draft.addOnKeys.length, update]);
+
+  useEffect(() => {
+    if (selectedPlanKey && draft.planKey !== selectedPlanKey) {
       update({ planKey: selectedPlanKey });
     }
   }, [draft.planKey, selectedPlanKey, update]);
 
-  const selectedPlan = useMemo(() => {
-    return plans.find((p) => p.key === selectedPlanKey);
-  }, [plans, selectedPlanKey]);
+  const selectedPlan = useMemo(
+    () => plans.find((plan) => plan.key === selectedPlanKey) ?? null,
+    [plans, selectedPlanKey],
+  );
+
+  const carouselWidth = screenWidth - layout.gutter * 2;
+  const cardWidth = Math.max(86, Math.min(98, Math.round(screenWidth * 0.23)));
+  const cardHeight = Math.max(158, Math.min(212, Math.round(screenHeight * 0.205)));
+
+  const clearAutoAdvanceTimer = useCallback(() => {
+    if (autoAdvanceTimerRef.current !== null) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }, []);
+
+  const scrollToSlide = useCallback(
+    (index: number, animated = true) => {
+      benefitListRef.current?.scrollToOffset({
+        offset: index * carouselWidth,
+        animated,
+      });
+      setActiveSlide(index);
+    },
+    [carouselWidth],
+  );
+
+  const restartAutoAdvance = useCallback(() => {
+    clearAutoAdvanceTimer();
+    autoAdvanceTimerRef.current = setTimeout(() => {
+      const nextIndex = (activeSlide + 1) % BENEFITS.length;
+      scrollToSlide(nextIndex);
+    }, 2000);
+  }, [activeSlide, clearAutoAdvanceTimer, scrollToSlide]);
+
+  useEffect(() => {
+    restartAutoAdvance();
+    return clearAutoAdvanceTimer;
+  }, [activeSlide, restartAutoAdvance, clearAutoAdvanceTimer]);
+
+  const handleBenefitScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const nextIndex = Math.round(event.nativeEvent.contentOffset.x / carouselWidth);
+      setActiveSlide(Math.max(0, Math.min(BENEFITS.length - 1, nextIndex)));
+    },
+    [carouselWidth],
+  );
+
+  async function handlePublish() {
+    if (!selectedPlan) return;
+    setIsPublishing(true);
+    setPublishError(null);
+    try {
+      const result = await publishDraft({ ...draft, planKey: selectedPlan.key, addOnKeys: [] });
+      setPublicationResult(result);
+      await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
+      router.replace('/create/success');
+    } catch (error) {
+      const stage = error instanceof PublicationError ? error.stage : null;
+      setPublishError(
+        stage === 'purchase'
+          ? 'That payment did not go through. Nothing has been charged.'
+          : stage === 'publish'
+            ? 'Your event was saved but could not be published. Try again.'
+            : 'We could not create your event. Check your connection and try again.',
+      );
+    } finally {
+      setIsPublishing(false);
+    }
+  }
 
   if (isLoading) {
     return (
-      <CreationStepScreen step="package" heading="Choose your package">
-        <View style={{ paddingVertical: spacing.giant, alignItems: 'center' }}>
-          <ActivityIndicator color={colours.textSecondary} />
+      <View style={styles.screen}>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={MUTED_TEXT} />
         </View>
-      </CreationStepScreen>
+      </View>
     );
   }
 
-  if (isError || !plans || plans.length === 0) {
+  if (isError || !plans.length) {
     return (
-      <CreationStepScreen step="package" heading="Choose your package">
-        <AppText variant="body" tone="error">
-          Something went wrong loading packages.
-        </AppText>
-      </CreationStepScreen>
+      <View style={styles.screen}>
+        <View style={styles.loadingWrap}>
+          <AppText variant="body" tone="error" align="center">
+            Something went wrong loading packages.
+          </AppText>
+        </View>
+      </View>
     );
   }
 
-  const isMediaBundleEnabled = draft.addOnKeys.includes('media_bundle');
-
-  const toggleMediaBundle = () => {
-    void Haptics.selectionAsync().catch(() => {});
-    const nextKeys = isMediaBundleEnabled ? [] : ['media_bundle'];
-    update({ addOnKeys: nextKeys });
-  };
-
-  const getGuestCountLabel = (key: string) => {
-    if (key === 'guests_unlimited') return 'Unlimited';
-    return key.replace('guests_', '') + ' guests';
-  };
-
-  const planPrice = selectedPlan?.priceMinorUnits ?? 0;
-  const addOnPrice = isMediaBundleEnabled ? 1500 : 0;
-  const totalPrice = planPrice + addOnPrice;
-  const currency = selectedPlan?.currency ?? 'USD';
+  const activeBenefit = BENEFITS[activeSlide] ?? BENEFITS[0];
 
   return (
-    <CreationStepScreen
-      step="package"
-      heading="Choose your package"
-      scrollable={true}
-      action={
-        <View style={{ gap: spacing.sm }}>
-          {publishError ? (
-            <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">
-              {publishError}
-            </AppText>
-          ) : null}
-          <Button
-            label="Create Event 🥳"
-            loading={isPublishing}
-            haptic
-            onPress={() => void handlePublish()}
-          />
-        </View>
-      }
-    >
-      <View style={{ gap: spacing.lg, paddingBottom: spacing.giant }}>
-
-        {/* Section 1: Guest Capacity Chips */}
-        <View style={{ gap: spacing.sm }}>
-          <AppText variant="label" tone="secondary">
-            Select guest capacity
-          </AppText>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.xs }}
+    <View style={styles.screen}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingTop: insets.top + 14,
+          paddingBottom: insets.bottom + 160,
+        }}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <View style={styles.headerRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            onPress={() => router.back()}
+            style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
           >
-            {[
-              { key: 'guests_5', label: '5' },
-              { key: 'guests_10', label: '10' },
-              { key: 'guests_50', label: '50' },
-              { key: 'guests_100', label: '100' },
-              { key: 'guests_200', label: '200' },
-              { key: 'guests_unlimited', label: '∞' },
-            ].map((opt) => {
-              const active = opt.key === selectedPlanKey;
-              const isUnlimited = opt.key === 'guests_unlimited';
+            <BackChevronIcon />
+          </Pressable>
+          <View style={styles.headerTitleWrap}>
+            <AppText variant="displayLarge" align="center" style={styles.headerTitle}>
+              Create your event
+            </AppText>
+          </View>
+          <View style={styles.headerSpacer} />
+        </View>
+
+        <View style={styles.heroSection}>
+          <FlatList
+            ref={benefitListRef}
+            data={BENEFITS}
+            horizontal
+            pagingEnabled
+            keyExtractor={(item) => item.id}
+            showsHorizontalScrollIndicator={false}
+            onScrollBeginDrag={clearAutoAdvanceTimer}
+            onMomentumScrollEnd={handleBenefitScrollEnd}
+            renderItem={({ item }) => (
+              <View style={{ width: carouselWidth }}>
+                <BenefitArtwork benefit={item} width={carouselWidth} />
+              </View>
+            )}
+          />
+
+          <View style={styles.heroCopyBlock}>
+            <AppText variant="displayLarge" align="center" style={styles.heroHeadline}>
+              {activeBenefit.headline}
+            </AppText>
+            <AppText variant="bodyLarge" align="center" style={styles.heroBody}>
+              {activeBenefit.body}
+            </AppText>
+          </View>
+
+          <PaginationDots count={BENEFITS.length} activeIndex={activeSlide} />
+        </View>
+
+        <View style={styles.packagesSection}>
+          <AppText variant="heading" style={styles.capacityHeading}>
+            Choose your guest capacity
+          </AppText>
+
+          <FlatList
+            data={plans}
+            horizontal
+            keyExtractor={(item) => item.key}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.packageRail}
+            decelerationRate="fast"
+            snapToAlignment="start"
+            renderItem={({ item }) => {
+              const active = item.key === selectedPlanKey;
+              const { topLabel, bottomLabel } = getCapacityDisplay(item);
+              const isMostPopular = item.key === MOST_POPULAR_KEY;
+              const valueCopy = getPillCopy(item, plans, LOCALE_CONFIG.locale);
+
               return (
                 <Pressable
-                  key={opt.key}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
                   onPress={() => {
                     void Haptics.selectionAsync().catch(() => {});
-                    update({ planKey: opt.key });
+                    update({ planKey: item.key });
                   }}
-                  style={[
-                    styles.toggleChip,
-                    active && styles.toggleChipActive,
-                    isUnlimited && !active && styles.toggleChipGold,
+                  style={({ pressed }) => [
+                    styles.packageCardWrap,
+                    { width: cardWidth, height: cardHeight + (isMostPopular ? 16 : 0) },
+                    pressed && styles.pressed,
                   ]}
                 >
-                  <AppText
-                    variant="label"
-                    style={{
-                      fontSize: 15,
-                      fontWeight: '600',
-                      color: active
-                        ? colours.textOnBrand
-                        : isUnlimited
-                          ? '#DAA520'
-                          : colours.textPrimary,
-                    }}
+                  {isMostPopular ? (
+                    <View style={styles.mostPopularBadge}>
+                      <AppText variant="caption" style={styles.mostPopularLabel}>
+                        MOST POPULAR
+                      </AppText>
+                    </View>
+                  ) : null}
+
+                  <View
+                    style={[
+                      styles.packageCard,
+                      { width: cardWidth, height: cardHeight },
+                      active && styles.packageCardActive,
+                      isMostPopular ? styles.packageCardWithBadge : null,
+                    ]}
                   >
-                    {opt.label}
-                  </AppText>
+                    <View style={styles.packageCardTop}>
+                      <AppText
+                        variant="numericLarge"
+                        align="center"
+                        style={[
+                          styles.packageCapacity,
+                          item.key === 'guests_unlimited' ? styles.packageCapacityUnlimited : null,
+                        ]}
+                        numberOfLines={2}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.75}
+                      >
+                        {topLabel}
+                      </AppText>
+                      <AppText
+                        variant="bodyLarge"
+                        align="center"
+                        style={item.key === 'guests_5' ? styles.packageSubLabelFree : styles.packageSubLabel}
+                        numberOfLines={2}
+                      >
+                        {bottomLabel}
+                      </AppText>
+                    </View>
+
+                    <View style={styles.packageDivider} />
+
+                    <View style={styles.packageCardBottom}>
+                      <View style={styles.valuePill}>
+                        <AppText variant="labelLarge" align="center" style={styles.valuePillText}>
+                          {valueCopy}
+                        </AppText>
+                      </View>
+                    </View>
+                  </View>
                 </Pressable>
               );
-            })}
-          </ScrollView>
+            }}
+          />
         </View>
+      </ScrollView>
 
-        {/* Section 2: Feature Quadrant */}
-        <View style={{ gap: spacing.sm }}>
-          <AppText variant="label" tone="secondary">
-            What’s included
-          </AppText>
-          <View style={styles.featureGrid}>
-            {/* Photo Games — Exclusive */}
-            <Pressable
-              style={styles.featureTile}
-              onPress={() => setGamesInfoVisible(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Learn more about photo games"
-            >
-              <View style={styles.featureTileHeader}>
-                <AppText style={{ fontSize: 20 }}>🏆</AppText>
-                <View style={styles.exclusiveBadge}>
-                  <AppText variant="caption" style={{ color: '#DAA520', fontWeight: '800', fontSize: 9, letterSpacing: 0.5 }}>
-                    EXCLUSIVE
-                  </AppText>
-                </View>
-              </View>
-              <AppText variant="label" style={{ color: colours.textPrimary, fontWeight: '700', fontSize: 13 }}>
-                Photo Games
-              </AppText>
-              <AppText variant="caption" tone="secondary" style={{ fontSize: 11, lineHeight: 14 }}>
-                Fun challenges for guests
-              </AppText>
-            </Pressable>
-
-            {/* Shared Gallery */}
-            <View style={styles.featureTile}>
-              <AppText style={{ fontSize: 20 }}>🖼️</AppText>
-              <AppText variant="label" style={{ color: colours.textPrimary, fontWeight: '700', fontSize: 13, marginTop: spacing.xs }}>
-                Shared Gallery
-              </AppText>
-              <AppText variant="caption" tone="secondary" style={{ fontSize: 11, lineHeight: 14 }}>
-                Everyone’s photos, one place
-              </AppText>
-            </View>
-
-            {/* Custom Themes */}
-            <View style={styles.featureTile}>
-              <AppText style={{ fontSize: 20 }}>🎨</AppText>
-              <AppText variant="label" style={{ color: colours.textPrimary, fontWeight: '700', fontSize: 13, marginTop: spacing.xs }}>
-                Custom Themes
-              </AppText>
-              <AppText variant="caption" tone="secondary" style={{ fontSize: 11, lineHeight: 14 }}>
-                Match your event’s style
-              </AppText>
-            </View>
-
-            {/* QR Invite */}
-            <View style={styles.featureTile}>
-              <AppText style={{ fontSize: 20 }}>📲</AppText>
-              <AppText variant="label" style={{ color: colours.textPrimary, fontWeight: '700', fontSize: 13, marginTop: spacing.xs }}>
-                QR Invite
-              </AppText>
-              <AppText variant="caption" tone="secondary" style={{ fontSize: 11, lineHeight: 14 }}>
-                Guests join instantly
-              </AppText>
-            </View>
-          </View>
-        </View>
-
-        {/* Section 3: Premium Media Bundle (Add-on) */}
-        <View style={{ gap: spacing.xs }}>
-          <AppText variant="label" tone="secondary">
-            Recommended Upgrade
-          </AppText>
-          <Pressable
-            accessibilityState={{ checked: isMediaBundleEnabled }}
-            onPress={toggleMediaBundle}
-            style={[
-              styles.upgradeCard,
-              isMediaBundleEnabled && styles.upgradeCardActive
-            ]}
-          >
-            <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' }}>
-              <View style={{ flex: 1, gap: spacing.xxs }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-                  <AppText style={{ fontSize: 20 }}>🎙️</AppText>
-                  <AppText variant="labelLarge" style={{ color: colours.textPrimary, fontWeight: '700' }}>
-                    Guestbook & Video Pack
-                  </AppText>
-                </View>
-                <AppText variant="bodySmall" tone="secondary" style={{ lineHeight: 18, marginTop: spacing.xxs }}>
-                  Let guests leave spoken audio messages and upload up to 10 one-minute videos. The ultimate audio-visual record of your day.
-                </AppText>
-              </View>
-              
-              <View style={{ alignItems: 'flex-end', gap: spacing.xs, minWidth: 60 }}>
-                <AppText variant="labelLarge" tone="brand" style={{ fontSize: 16, fontWeight: '700' }}>
-                  {formatPrice(1500, currency, LOCALE_CONFIG.locale)}
-                </AppText>
-                <View
-                  style={[
-                    styles.checkboxCircle,
-                    isMediaBundleEnabled && styles.checkboxCircleActive
-                  ]}
-                >
-                  {isMediaBundleEnabled ? (
-                    <AppText variant="caption" tone="onBrand">✓</AppText>
-                  ) : null}
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        </View>
-
-        {/* Section 4: Dynamic Pricing Checkout Summary Footer */}
-        <View style={styles.footerPanel}>
-          <View style={styles.footerRow}>
-            <AppText variant="bodySmall" tone="secondary">
-              {selectedPlan ? getGuestCountLabel(selectedPlan.key) : ''}
-            </AppText>
-            <AppText variant="bodySmall" style={{ color: colours.textPrimary, fontWeight: '600' }}>
-              {selectedPlan ? formatPrice(selectedPlan.priceMinorUnits, selectedPlan.currency, LOCALE_CONFIG.locale) : ''}
-            </AppText>
-          </View>
-          
-          {isMediaBundleEnabled && (
-            <View style={styles.footerRow}>
-              <AppText variant="bodySmall" tone="secondary">
-                Guestbook & Video Pack
-              </AppText>
-              <AppText variant="bodySmall" style={{ color: colours.textPrimary, fontWeight: '600' }}>
-                {formatPrice(1500, currency, LOCALE_CONFIG.locale)}
-              </AppText>
-            </View>
-          )}
-          
-          <View style={styles.footerDivider} />
-          
-          <View style={styles.footerTotalRow}>
-            <AppText variant="labelLarge" style={{ fontSize: 18, color: colours.textPrimary }}>
-              Total price
-            </AppText>
-            <AppText variant="serifHeading" style={{ fontSize: 24, color: colours.brandPrimary }}>
-              {formatPrice(totalPrice, currency, LOCALE_CONFIG.locale)}
-            </AppText>
-          </View>
-        </View>
-
-      </View>
-
-      {/* Info Modal for Event Games */}
-      <Modal
-        visible={gamesInfoVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setGamesInfoVisible(false)}
+      <View
+        style={[
+          styles.ctaDock,
+          {
+            paddingBottom: insets.bottom + 12,
+          },
+        ]}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <AppText variant="labelLarge" style={{ fontSize: 18, fontWeight: '700' }}>
-                Interactive Photo Games 🏆
-              </AppText>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Close info modal"
-                onPress={() => setGamesInfoVisible(false)}
-                style={styles.modalCloseButton}
-              >
-                <CloseIcon size={16} color={colours.textPrimary} />
-              </Pressable>
-            </View>
-            <AppText variant="body" tone="secondary" style={{ lineHeight: 22 }}>
-              We are the only app that lets you run custom games for your guests. Challenge them to capture the magic of your day: with a grandparent, a candid toast, a secret dancer, or the best dressed guest. Choose from our pre-made templates or write your own custom challenges. Fully integrated and 100% free!
+        {publishError ? (
+          <AppText variant="caption" tone="error" align="center" style={styles.publishError}>
+            {publishError}
+          </AppText>
+        ) : null}
+
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={selectedPlan ? `Create my event for ${ctaPriceLabel(selectedPlan)}` : 'Create my event'}
+          disabled={!selectedPlan || isPublishing}
+          onPress={() => void handlePublish()}
+          style={({ pressed }) => [
+            styles.ctaButton,
+            (!selectedPlan || isPublishing) && styles.ctaButtonDisabled,
+            pressed && styles.ctaPressed,
+          ]}
+        >
+          {isPublishing ? (
+            <ActivityIndicator color="#111111" />
+          ) : (
+            <AppText variant="button" align="center" style={styles.ctaLabel}>
+              {selectedPlan ? `Create my event  ·  ${ctaPriceLabel(selectedPlan)}` : 'Create my event'}
             </AppText>
-            <Button
-              label="Got it"
-              variant="secondary"
-              onPress={() => setGamesInfoVisible(false)}
-              style={{ marginTop: spacing.xs }}
-            />
-          </View>
-        </View>
-      </Modal>
-    </CreationStepScreen>
+          )}
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  toggleChip: {
-    paddingHorizontal: spacing.base,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: colours.borderSubtle,
-    backgroundColor: colours.surface,
+  screen: {
+    flex: 1,
+    backgroundColor: SCREEN_BG,
+  },
+  loadingWrap: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 44,
+    paddingHorizontal: layout.gutter,
+    backgroundColor: SCREEN_BG,
   },
-  toggleChipActive: {
-    borderColor: colours.brandPrimary,
-    backgroundColor: colours.brandPrimary,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: layout.gutter,
   },
-  toggleChipGold: {
-    borderColor: '#DAA520',
+  backButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1A1A1C',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
   },
-  featureGrid: {
+  pressed: {
+    opacity: 0.9,
+    transform: [{ scale: 0.985 }],
+  },
+  headerTitleWrap: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  headerTitle: {
+    color: '#F3EADF',
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.25,
+  },
+  headerSpacer: {
+    width: 48,
+  },
+  heroSection: {
+    marginTop: spacing.lg,
+    gap: spacing.md,
+  },
+  heroArtworkWrap: {
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rearPhotoCard: {
+    position: 'absolute',
+    borderRadius: 22,
+    overflow: 'hidden',
+    backgroundColor: CARD_BG,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.14)',
+  },
+  rearPhotoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  sparkleLeft: {
+    position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xxs,
+    opacity: 0.92,
+  },
+  sparkleRight: {
+    position: 'absolute',
+    opacity: 0.92,
+  },
+  phoneShell: {
+    position: 'relative',
+    borderRadius: 42,
+    overflow: 'hidden',
+    backgroundColor: PHONE_BG,
+    borderWidth: 6,
+    borderColor: '#2D2B2C',
+    shadowColor: '#000000',
+    shadowOpacity: 0.38,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 12,
+  },
+  phoneBezel: {
+    position: 'absolute',
+    top: 10,
+    left: '50%',
+    marginLeft: -34,
+    width: 68,
+    height: 18,
+    borderRadius: 10,
+    backgroundColor: '#0A0A0B',
+    zIndex: 3,
+  },
+  phoneHeader: {
+    paddingTop: 16,
+    paddingHorizontal: 14,
+    gap: spacing.xxs,
+  },
+  phoneHeaderTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 18,
+  },
+  phoneBackPill: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+  },
+  phoneStatusWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  phoneDynamicIsland: {
+    width: 44,
+    height: 12,
+    borderRadius: 8,
+    backgroundColor: '#0A0A0B',
+  },
+  phoneStatusText: {
+    color: '#ECE5DC',
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 11,
+  },
+  phoneTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  phoneEventName: {
+    color: '#F4EFE9',
+    fontFamily: fontFamilies.textSemiBold,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  phoneEventSubtitle: {
+    color: 'rgba(244,239,233,0.78)',
+    fontSize: 10,
+    lineHeight: 14,
+  },
+  liveBadge: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.16)',
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  liveBadgeText: {
+    color: '#F3EADF',
+    fontFamily: fontFamilies.textSemiBold,
+    fontSize: 9,
+    letterSpacing: 0.8,
+  },
+  phoneGalleryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    gap: 6,
+  },
+  phoneGalleryCell: {
+    width: '48.5%',
+    height: 78,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#242426',
+  },
+  phoneGalleryCellWide: {
+    width: '100%',
+    height: 92,
+  },
+  phoneGalleryImage: {
+    width: '100%',
+    height: '100%',
+  },
+  phoneBottomFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '28%',
+    backgroundColor: 'rgba(9,9,9,0.58)',
+  },
+  heroCopyBlock: {
+    paddingHorizontal: layout.gutter + 8,
     gap: spacing.sm,
   },
-  featureTile: {
-    width: '47%',
-    flexGrow: 1,
-    backgroundColor: colours.surface,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colours.borderSubtle,
-    padding: spacing.md,
-    gap: 2,
+  heroHeadline: {
+    color: '#F3EADF',
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.28,
   },
-  featureTileHeader: {
+  heroBody: {
+    color: MUTED_TEXT,
+    maxWidth: 320,
+    alignSelf: 'center',
+    fontSize: 17,
+    lineHeight: 28,
+  },
+  dotsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: spacing.xs,
+    gap: 10,
+    marginTop: spacing.xs,
   },
-  exclusiveBadge: {
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  dotActive: {
+    backgroundColor: '#F3EADF',
+  },
+  packagesSection: {
+    marginTop: spacing.xl + spacing.xs,
+    gap: spacing.md,
+  },
+  capacityHeading: {
+    color: MUTED_TEXT,
+    paddingHorizontal: layout.gutter,
+    fontFamily: fontFamilies.textRegular,
+    fontSize: 18,
+    lineHeight: 24,
+  },
+  packageRail: {
+    paddingLeft: layout.gutter,
+    paddingRight: layout.gutter * 2.5,
+    gap: 10,
+  },
+  packageCardWrap: {
+    position: 'relative',
+  },
+  packageCard: {
+    marginTop: 14,
+    borderRadius: 22,
+    backgroundColor: CARD_BG,
     borderWidth: 1,
-    borderColor: '#DAA520',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 1,
-    borderRadius: radii.sm,
+    borderColor: CARD_BORDER,
+    paddingHorizontal: 10,
+    paddingTop: 18,
+    paddingBottom: 16,
+    justifyContent: 'space-between',
   },
-  upgradeCard: {
-    backgroundColor: colours.surface,
-    padding: spacing.base,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colours.borderSubtle,
+  packageCardWithBadge: {
+    marginTop: 10,
   },
-  upgradeCardActive: {
-    borderColor: colours.brandPrimary,
-    backgroundColor: colours.brandSoft,
+  packageCardActive: {
+    borderWidth: 2,
+    borderColor: CARD_BORDER_SELECTED,
   },
-  checkboxCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+  mostPopularBadge: {
+    position: 'absolute',
+    top: 0,
+    left: 10,
+    right: 10,
+    alignItems: 'center',
+    zIndex: 2,
+  },
+  mostPopularLabel: {
+    backgroundColor: '#F3EADF',
+    color: '#111111',
+    borderRadius: radii.pill,
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontFamily: fontFamilies.textSemiBold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+  },
+  packageCardTop: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: layout.hairline,
-    borderColor: colours.borderStrong,
-  },
-  checkboxCircleActive: {
-    borderWidth: 0,
-    backgroundColor: colours.brandPrimary,
-  },
-  footerPanel: {
-    backgroundColor: colours.surface,
-    padding: spacing.base,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: colours.borderSubtle,
     gap: spacing.xs,
-    marginTop: spacing.sm,
+    minHeight: 92,
   },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  packageCapacity: {
+    color: '#F3EADF',
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -0.2,
+  },
+  packageCapacityUnlimited: {
+    fontSize: 27,
+    lineHeight: 31,
+  },
+  packageSubLabel: {
+    color: MUTED_TEXT,
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  packageSubLabelFree: {
+    color: MUTED_TEXT,
+    fontSize: 13,
+    lineHeight: 19,
+    maxWidth: 72,
+  },
+  packageDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginHorizontal: 10,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  packageCardBottom: {
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    minHeight: 54,
   },
-  footerDivider: {
-    height: layout.hairline,
-    backgroundColor: colours.borderSubtle,
-    marginVertical: spacing.xxs,
-  },
-  footerTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  valuePill: {
+    minHeight: 42,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(232,201,143,0.28)',
+    backgroundColor: 'rgba(255,255,255,0.02)',
     alignItems: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
+  },
+  valuePillText: {
+    color: GOLD_TEXT,
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  ctaDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: SCREEN_BG,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+  },
+  publishError: {
+    marginBottom: spacing.sm,
+  },
+  ctaButton: {
+    height: 64,
+    borderRadius: 22,
+    backgroundColor: '#EFE9E0',
     alignItems: 'center',
-    padding: spacing.base,
+    justifyContent: 'center',
   },
-  modalContainer: {
-    backgroundColor: colours.surface,
-    borderRadius: radii.xxl,
-    padding: spacing.lg,
-    width: '100%',
-    maxWidth: 400,
-    gap: spacing.base,
-    borderWidth: layout.hairline,
-    borderColor: colours.borderSubtle,
+  ctaButtonDisabled: {
+    opacity: 0.45,
   },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  ctaPressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.992 }],
   },
-  modalCloseButton: {
-    padding: spacing.xxs,
+  ctaLabel: {
+    color: '#111111',
+    fontFamily: fontFamilies.textSemiBold,
+    fontSize: 21,
+    lineHeight: 26,
+    letterSpacing: -0.12,
   },
 });

@@ -55,6 +55,24 @@ export function buildGuestUrl(eventCode: string, token: string): string {
   return `${BRAND_CONFIG.guestDomain}/j/${eventCode}#t=${token}`;
 }
 
+async function resolveThemeId(themeKey: string | null | undefined): Promise<string | undefined> {
+  if (!themeKey) return undefined;
+
+  const client = requireSupabase();
+  const lookup = async (column: 'slug' | 'id') => {
+    const { data, error } = await client
+      .from('themes')
+      .select('id')
+      .eq(column, themeKey)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data?.id ?? null;
+  };
+
+  return (await lookup('slug')) ?? (await lookup('id')) ?? undefined;
+}
+
 /**
  * Publishes a draft.
  *
@@ -79,6 +97,7 @@ export async function publishDraft(
     }
     const client = requireSupabase();
     const reveal = resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
+    const themeId = await resolveThemeId(draft.themeSlug);
 
     let celebrationId = existingCelebrationId;
     let eventSessionId: string | undefined;
@@ -103,7 +122,7 @@ export async function publishDraft(
         p_reveal_at: reveal.revealAt ?? undefined,
         p_gallery_visibility: draft.galleryVisibility,
         p_photo_treatment: draft.photoTreatment,
-        p_theme_id: draft.themeSlug ?? undefined,
+        p_theme_id: themeId,
       });
 
       if (error) throw new PublicationError(error.message, 'draft');

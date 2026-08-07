@@ -4,6 +4,7 @@ import {
   contrast,
   exposure,
   saturation,
+  threshold,
   warmth,
   type ColorMatrix4x5,
 } from './disposable-recipe';
@@ -76,6 +77,13 @@ describe('colour primitives', () => {
     expect(r).toBeGreaterThan(0.5);
     expect(b).toBeLessThan(0.5);
   });
+
+  it('pushes sub-threshold values below zero and stretches highlights up', () => {
+    const [dark] = apply(threshold(0.6), [0.4, 0.4, 0.4]);
+    const [bright] = apply(threshold(0.6), [0.9, 0.9, 0.9]);
+    expect(dark).toBeLessThan(0);
+    expect(bright).toBeGreaterThan(0.7);
+  });
 });
 
 describe('buildDisposableRecipe', () => {
@@ -94,31 +102,60 @@ describe('buildDisposableRecipe', () => {
     for (let i = 0; i < 300; i += 1) {
       const recipe = buildDisposableRecipe(`seed-${i}`);
 
-      expect(recipe.grainIntensity).toBeGreaterThanOrEqual(0.05);
-      expect(recipe.grainIntensity).toBeLessThan(0.09);
+      expect(recipe.shadowCool).toBeGreaterThanOrEqual(0.035);
+      expect(recipe.shadowCool).toBeLessThan(0.08);
+      expect(recipe.highlightWarmth).toBeGreaterThanOrEqual(0.03);
+      expect(recipe.highlightWarmth).toBeLessThan(0.075);
+      expect(recipe.fade).toBeGreaterThanOrEqual(0.018);
+      expect(recipe.fade).toBeLessThan(0.05);
 
-      expect(recipe.blurRadius).toBeGreaterThanOrEqual(0.3);
-      expect(recipe.blurRadius).toBeLessThan(0.6);
+      expect(recipe.saturation).toBeGreaterThanOrEqual(0.98);
+      expect(recipe.saturation).toBeLessThan(1.08);
+      expect(recipe.contrast).toBeGreaterThanOrEqual(1.03);
+      expect(recipe.contrast).toBeLessThan(1.11);
 
-      expect(recipe.vignette.opacity).toBeGreaterThanOrEqual(0.22);
+      expect(recipe.grainIntensity).toBeGreaterThanOrEqual(0.075);
+      expect(recipe.grainIntensity).toBeLessThan(0.14);
+      expect(recipe.grainScale).toBeGreaterThanOrEqual(0.85);
+      expect(recipe.grainScale).toBeLessThan(1.35);
+
+      expect(recipe.blurRadius).toBeGreaterThanOrEqual(0.45);
+      expect(recipe.blurRadius).toBeLessThan(0.95);
+
+      expect(recipe.halation.opacity).toBeGreaterThanOrEqual(0.08);
+      expect(recipe.halation.opacity).toBeLessThan(0.18);
+      expect(recipe.halation.blurRadius).toBeGreaterThanOrEqual(1.2);
+      expect(recipe.halation.blurRadius).toBeLessThan(2.4);
+
+      expect(recipe.vignette.opacity).toBeGreaterThanOrEqual(0.2);
       expect(recipe.vignette.opacity).toBeLessThan(0.4);
-      expect(recipe.vignette.innerStop).toBeGreaterThanOrEqual(0.45);
-      expect(recipe.vignette.innerStop).toBeLessThan(0.62);
+      expect(recipe.vignette.innerStop).toBeGreaterThanOrEqual(0.52);
+      expect(recipe.vignette.innerStop).toBeLessThan(0.7);
+
+      if (recipe.edgeBurn) {
+        expect(['left', 'right']).toContain(recipe.edgeBurn.side);
+        expect(recipe.edgeBurn.opacity).toBeGreaterThanOrEqual(0.05);
+        expect(recipe.edgeBurn.opacity).toBeLessThan(0.12);
+        expect(recipe.edgeBurn.width).toBeGreaterThanOrEqual(0.2);
+        expect(recipe.edgeBurn.width).toBeLessThan(0.34);
+      }
 
       if (recipe.lightLeak) {
-        expect(recipe.lightLeak.strength).toBeGreaterThanOrEqual(0.08);
-        expect(recipe.lightLeak.strength).toBeLessThan(0.17);
+        expect(recipe.lightLeak.strength).toBeGreaterThanOrEqual(0.05);
+        expect(recipe.lightLeak.strength).toBeLessThan(0.12);
         expect([0, 1, 2, 3]).toContain(recipe.lightLeak.corner);
       }
 
       if (recipe.dust) {
         expect([0, 1]).toContain(recipe.dust.variant);
-        expect(recipe.dust.opacity).toBeLessThan(0.12);
+        expect(recipe.dust.opacity).toBeGreaterThanOrEqual(0.03);
+        expect(recipe.dust.opacity).toBeLessThan(0.08);
       }
 
       if (recipe.scratches) {
         expect([0, 1]).toContain(recipe.scratches.variant);
-        expect(recipe.scratches.opacity).toBeLessThan(0.1);
+        expect(recipe.scratches.opacity).toBeGreaterThanOrEqual(0.025);
+        expect(recipe.scratches.opacity).toBeLessThan(0.055);
       }
 
       expect(recipe.colorMatrix).toHaveLength(20);

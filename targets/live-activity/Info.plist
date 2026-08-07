@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+	<!--
+	  The extension renders the Live Activity in its own process, so it cannot
+	  reach the fonts expo-font registers at runtime inside the app. The brand
+	  faces are bundled here and registered statically instead — that is what
+	  lets the widget set the event name in Instrument Serif rather than
+	  silently falling back to the system serif.
+	-->
+	<key>UIAppFonts</key>
+	<array>
+		<string>InstrumentSerif-Regular.ttf</string>
+		<string>InstrumentSans-Regular.ttf</string>
+		<string>InstrumentSans-Medium.ttf</string>
+	</array>
+</dict>
+</plist>

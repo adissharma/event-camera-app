@@ -67,14 +67,6 @@ export default function PhotoLimitStep() {
           }
         />
 
-        <View
-          style={{
-            height: layout.hairline,
-            backgroundColor: colours.borderSubtle,
-            marginVertical: spacing.xs,
-          }}
-        />
-
         <ToggleRow
           label="Let guests view photos taken by others"
           value={draft.galleryVisibility === 'all_guests'}
@@ -82,14 +74,6 @@ export default function PhotoLimitStep() {
             update({ galleryVisibility: allowed ? 'all_guests' : 'own_only' })
           }
         />
-
-        {Boolean(draft.editCelebrationId) && draft.shotLimitPerGuest !== null ? (
-          <View style={{ backgroundColor: '#1C1C1E', padding: spacing.base, borderRadius: radii.md, marginTop: spacing.sm }}>
-            <AppText variant="caption" tone="warning">
-              Note: Downgrading from Unlimited is allowed, but no refund will be issued for the package.
-            </AppText>
-          </View>
-        ) : null}
       </View>
     </CreationStepScreen>
   );

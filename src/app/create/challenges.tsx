@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View, Pressable, ScrollView, Alert } from 'react-native';
+import { StyleSheet, View, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -170,7 +170,7 @@ export default function ChallengesStep() {
               <View style={styles.plusCircle}>
                 <PlusIcon size={16} color="#0B0B0C" />
               </View>
-              <AppText style={styles.addText}>Add new challenge...</AppText>
+              <AppText variant="labelLarge" style={styles.addText}>Add new challenge...</AppText>
             </View>
           </Pressable>
 
@@ -179,13 +179,13 @@ export default function ChallengesStep() {
               <View style={styles.separator} />
               <View style={styles.row}>
                 <View style={styles.rowLabelContainer}>
-                  <AppText style={styles.rowLabel}>{c.label}</AppText>
+                  <AppText variant="labelLarge" style={styles.rowLabel}>{c.label}</AppText>
                   {c.photo ? (
-                    <AppText style={[styles.rowValue, { color: colours.brandPrimary }]}>
+                    <AppText variant="bodySmall" style={[styles.rowValue, { color: colours.brandPrimary }]}>
                       Completed
                     </AppText>
                   ) : (
-                    <AppText style={styles.rowValue}>Not captured yet</AppText>
+                    <AppText variant="bodySmall" style={styles.rowValue}>Not captured yet</AppText>
                   )}
                 </View>
                 <Pressable onPress={() => handleDelete(c.id)} style={styles.deleteButton}>
@@ -202,11 +202,11 @@ export default function ChallengesStep() {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colours.surfaceRaised,
+    backgroundColor: colours.surface,
     borderRadius: radii.xl,
     overflow: 'hidden',
     borderWidth: layout.hairline,
-    borderColor: colours.borderSubtle,
+    borderColor: colours.borderStrong,
     marginTop: spacing.md,
   },
   row: {
@@ -221,24 +221,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowLabel: {
-    fontSize: 15,
-    fontWeight: '600',
     color: colours.textPrimary,
   },
   rowValue: {
-    fontSize: 12,
     color: colours.textSecondary,
   },
   addText: {
-    fontSize: 15,
-    fontWeight: '600',
     color: colours.textPrimary,
   },
   plusCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#EFE9E0',
+    backgroundColor: colours.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },

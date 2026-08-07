@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useLayoutEffect, useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,6 +10,8 @@ import {
   PanResponder,
   Modal,
   Share,
+  useWindowDimensions,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -117,6 +119,7 @@ export default function PhotoViewerScreen() {
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { session } = useAuth();
+  const { width: screenWidth } = useWindowDimensions();
 
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(Number(photoId) || 0);
@@ -139,14 +142,24 @@ export default function PhotoViewerScreen() {
   const celebration = detail?.celebration;
   const primarySession = detail?.primarySession;
 
-  // Check strict reveal/lock constraints
-  const isLocked = primarySession?.reveal_mode === 'scheduled' &&
-                   primarySession?.reveal_at &&
-                   new Date(primarySession.reveal_at).getTime() > Date.now();
-
-  const isHost = devRole === 'guest'
+  // `detail.viewerRole === 'guest'` is authoritative: that value means this
+  // detail came from the guest-token RPC path (see `fetchCelebrationDetail`),
+  // which never returns `celebration.created_by` — so the `!session ? true`
+  // branch below would otherwise default every anonymous guest to host.
+  const isHost = detail?.viewerRole === 'guest'
     ? false
-    : (devRole === 'host' ? true : (!session ? true : session.user.id === celebration?.created_by));
+    : (devRole === 'guest'
+        ? false
+        : (devRole === 'host' ? true : (!session ? true : session.user.id === celebration?.created_by)));
+
+  // Guests still respect reveal timing, but hosts can always open their own
+  // photo viewer. Host-only galleries are enforced elsewhere and should not
+  // trap the host behind the same lock that applies to guests.
+  const isLocked =
+    !isHost &&
+    primarySession?.reveal_mode === 'scheduled' &&
+    primarySession?.reveal_at &&
+    new Date(primarySession.reveal_at).getTime() > Date.now();
 
   // Load photos list
   useEffect(() => {
@@ -177,9 +190,27 @@ export default function PhotoViewerScreen() {
 
   const activePhoto = photos[currentIndex] ?? null;
 
-  // ── Swipe Down & Carousel Gesture Animation Setup ──
+  // ── Carousel Gesture Animation Setup ──
   const panY = useRef(new Animated.Value(0)).current;
   const panX = useRef(new Animated.Value(0)).current;
+  const carouselOffsetX = useRef(new Animated.Value(0)).current;
+
+  // Carousel width is the full screen width minus padding (16px each side)
+  const carouselWidth = screenWidth - 32;
+
+  // Keep responder stable via useRef to avoid jank on every swipe, but use
+  // separate refs to keep handlers current. A responder built with
+  // `useRef(...).current` captures stale state at init (currentIndex=0,
+  // photos=[]); building only once means handlers can't navigate. But
+  // rebuilding via `useMemo` on every state change causes the animation to
+  // jank. Solution: refs for state, stable responder object.
+  const currentIndexRef = useRef(currentIndex);
+  const photosLengthRef = useRef(photos.length);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+    photosLengthRef.current = photos.length;
+  }, [currentIndex, photos.length]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -187,18 +218,16 @@ export default function PhotoViewerScreen() {
       onMoveShouldSetPanResponder: (_, gestureState) =>
         Math.abs(gestureState.dy) > 6 || Math.abs(gestureState.dx) > 6,
       onPanResponderMove: (_, gestureState) => {
-        // Vertical drag down for dismissal
-        if (gestureState.dy > 0 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
-          panY.setValue(gestureState.dy);
-        }
-        // Horizontal drag for gallery swipe
-        else if (Math.abs(gestureState.dx) > Math.abs(gestureState.dy)) {
-          panX.setValue(gestureState.dx);
-        }
+        // Track both axes simultaneously; gestures are determined at release time
+        panY.setValue(gestureState.dy);
+        panX.setValue(gestureState.dx);
       },
       onPanResponderRelease: (_, gestureState) => {
-        // Vertical dismissal threshold
-        if (gestureState.dy > 120 || (gestureState.dy > 60 && gestureState.vy > 0.5)) {
+        const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
+        const isVerticalSwipe = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
+
+        // Vertical dismissal takes priority (swipe down to close)
+        if (isVerticalSwipe && (gestureState.dy > 100 || (gestureState.dy > 50 && gestureState.vy > 0.4))) {
           Animated.timing(panY, {
             toValue: 600,
             duration: 200,
@@ -207,44 +236,75 @@ export default function PhotoViewerScreen() {
           return;
         }
 
-        // Spring back vertical drag if threshold not met
+        // Horizontal carousel swipe (dragging left/right between photos)
+        if (isHorizontalSwipe) {
+          const thresholdPercent = 0.3; // Swipe past 30% of carousel width to commit
+          const thresholdPx = carouselWidth * thresholdPercent;
+
+          // Swipe left (negative dx) -> try to go to next photo
+          if (gestureState.dx < -thresholdPx || (gestureState.dx < -10 && gestureState.vx < -0.5)) {
+            if (currentIndexRef.current < photosLengthRef.current - 1) {
+              void Haptics.selectionAsync().catch(() => {});
+              // Animate to full page swipe distance and commit index
+              Animated.timing(panX, {
+                toValue: -carouselWidth,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => {
+                panX.setValue(0);
+                setCurrentIndex((prev) => prev + 1);
+              });
+              Animated.spring(panY, {
+                toValue: 0,
+                useNativeDriver: true,
+                bounciness: 6,
+              }).start();
+              return;
+            }
+          }
+
+          // Swipe right (positive dx) -> try to go to previous photo
+          if (gestureState.dx > thresholdPx || (gestureState.dx > 10 && gestureState.vx > 0.5)) {
+            if (currentIndexRef.current > 0) {
+              void Haptics.selectionAsync().catch(() => {});
+              // Animate to full page swipe distance and commit index
+              Animated.timing(panX, {
+                toValue: carouselWidth,
+                duration: 200,
+                useNativeDriver: true,
+              }).start(() => {
+                panX.setValue(0);
+                setCurrentIndex((prev) => prev - 1);
+              });
+              Animated.spring(panY, {
+                toValue: 0,
+                useNativeDriver: true,
+                bounciness: 6,
+              }).start();
+              return;
+            }
+          }
+
+          // Swipe didn't pass threshold—spring back to current photo
+          Animated.spring(panX, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 6,
+          }).start();
+          Animated.spring(panY, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 6,
+          }).start();
+          return;
+        }
+
+        // Neither vertical nor horizontal swipe—spring back everything
         Animated.spring(panY, {
           toValue: 0,
           useNativeDriver: true,
           bounciness: 6,
         }).start();
-
-        // Horizontal swipe navigation with smooth slide animation
-        if (gestureState.dx < -50 || (gestureState.dx < -20 && gestureState.vx < -0.3)) {
-          // Swipe left -> Next photo
-          if (currentIndex < photos.length - 1) {
-            void Haptics.selectionAsync().catch(() => {});
-            Animated.timing(panX, {
-              toValue: -400,
-              duration: 160,
-              useNativeDriver: true,
-            }).start(() => {
-              panX.setValue(0);
-              setCurrentIndex((prev) => prev + 1);
-            });
-            return;
-          }
-        } else if (gestureState.dx > 50 || (gestureState.dx > 20 && gestureState.vx > 0.3)) {
-          // Swipe right -> Previous photo
-          if (currentIndex > 0) {
-            void Haptics.selectionAsync().catch(() => {});
-            Animated.timing(panX, {
-              toValue: 400,
-              duration: 160,
-              useNativeDriver: true,
-            }).start(() => {
-              panX.setValue(0);
-              setCurrentIndex((prev) => prev - 1);
-            });
-            return;
-          }
-        }
-
         Animated.spring(panX, {
           toValue: 0,
           useNativeDriver: true,
@@ -253,6 +313,22 @@ export default function PhotoViewerScreen() {
       },
     })
   ).current;
+
+  // Update refs whenever state changes so gesture handlers see current values
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+    photosLengthRef.current = photos.length;
+  }, [currentIndex, photos.length]);
+
+  // When currentIndex changes, animate the carousel to show the new photo
+  useLayoutEffect(() => {
+    Animated.spring(carouselOffsetX, {
+      toValue: -currentIndex * carouselWidth,
+      useNativeDriver: true,
+      bounciness: 0,
+      speed: 8,
+    }).start();
+  }, [currentIndex, carouselWidth, carouselOffsetX]);
 
   // ── Actions ──
 
@@ -429,23 +505,60 @@ export default function PhotoViewerScreen() {
         </Pressable>
       </View>
 
-      {/* ── 80% HEIGHT PHOTO CONTAINER WITH DRAG GESTURES ── */}
+      {/* ── INTERACTIVE CAROUSEL WITH DRAG GESTURES ── */}
       <View style={S.centerArea}>
+        {/* Carousel container: holds three photos side-by-side */}
         <Animated.View
           {...panResponder.panHandlers}
-          style={[
-            S.photoContainer,
-            {
-              transform: [{ translateY: panY }, { translateX: panX }, { scale }],
-              opacity,
-            },
-          ]}
+          style={{
+            flexDirection: 'row',
+            width: carouselWidth * 3,
+            height: '100%',
+            transform: [
+              // Combine the carousel offset (based on currentIndex) with the drag (panX)
+              { translateX: Animated.add(carouselOffsetX, panX) },
+              { translateY: panY },
+              { scale },
+            ],
+            opacity,
+          }}
         >
-          <Image
-            source={getPhotoSource(activePhoto.uri)}
-            style={S.photoImage}
-            resizeMode="cover"
-          />
+          {/* Previous photo (if exists) */}
+          {currentIndex > 0 && (
+            <View style={{ width: carouselWidth, height: '100%' }}>
+              <Image
+                source={getPhotoSource(photos[currentIndex - 1]?.uri || '')}
+                style={[S.photoImage, { width: carouselWidth - 32 }]}
+                resizeMode="cover"
+              />
+            </View>
+          )}
+          {/* Padding for previous when at first photo */}
+          {currentIndex === 0 && <View style={{ width: carouselWidth, height: '100%' }} />}
+
+          {/* Current photo (center, always visible) */}
+          {activePhoto && (
+            <View style={[S.photoContainer, { width: carouselWidth }]}>
+              <Image
+                source={getPhotoSource(activePhoto.uri)}
+                style={S.photoImage}
+                resizeMode="cover"
+              />
+            </View>
+          )}
+
+          {/* Next photo (if exists) */}
+          {currentIndex < photos.length - 1 && (
+            <View style={{ width: carouselWidth, height: '100%' }}>
+              <Image
+                source={getPhotoSource(photos[currentIndex + 1]?.uri || '')}
+                style={[S.photoImage, { width: carouselWidth - 32 }]}
+                resizeMode="cover"
+              />
+            </View>
+          )}
+          {/* Padding for next when at last photo */}
+          {currentIndex === photos.length - 1 && <View style={{ width: carouselWidth, height: '100%' }} />}
         </Animated.View>
       </View>
 

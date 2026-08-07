@@ -5,10 +5,11 @@
  * Inspired by Leica, Kinfolk Magazine, Apple Photos, and luxury wedding albums.
  */
 
-import { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Animated,
   ActivityIndicator,
+  FlatList,
   View,
   Image,
   useWindowDimensions,
@@ -21,6 +22,7 @@ import {
   Dimensions,
   Platform,
   PanResponder,
+  type ImageSourcePropType,
 } from 'react-native';
 import ReanimatedAnimated, {
   Extrapolate,
@@ -34,11 +36,13 @@ import ReanimatedAnimated, {
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import type { PanGestureHandlerEventPayload } from 'react-native-gesture-handler';
 import * as Clipboard from 'expo-clipboard';
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { Asset as ExpoAsset } from 'expo-asset';
+import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -48,16 +52,24 @@ import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { BRAND_CONFIG } from '@/config/brand';
 import { shouldShowHostControls } from '@/lib/platform-guards';
-import { loadStoredGuestSession, clearStoredGuestSession } from '@/services/guest-session';
+import {
+  loadStoredGuestSession,
+  loadStoredGuestSessionByCelebrationId,
+  clearStoredGuestSession,
+} from '@/services/guest-session';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
-import { QrCodeIcon, CloseIcon, LockIcon } from '@/components/ui/icons';
+import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/forms/segmented-control';
+import { CloseIcon, CopyIcon, LockIcon, ShareIcon } from '@/components/ui/icons';
+import { QrCard } from '@/features/sharing/qr-card';
 import {
   archiveCelebration,
   celebrationDetailKeys,
   fetchCelebrationDetail,
   type CelebrationDetail,
 } from '@/services/celebration-detail';
+import { deleteGuestPhoto } from '@/services/guest-media-upload';
 import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
@@ -68,6 +80,10 @@ import { serverNow } from '@/services/server-time';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
+import {
+  CHALLENGE_BRIEFS as SHARED_CHALLENGE_BRIEFS,
+  ChallengeIconSVG as SharedChallengeIconSVG,
+} from '@/features/celebrations/challenge-icons';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -162,6 +178,20 @@ function DownloadTrayIcon({ size = 22, color = '#FFFFFF' }) {
   );
 }
 
+function CheckIcon({ size = 18, color = '#FFFFFF' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M20 6L9 17l-5-5"
+        stroke={color}
+        strokeWidth={2.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /**
  * Written out rather than reaching for `StyleSheet.absoluteFillObject`, which
  * this version of React Native (0.86) no longer exports. It evaluated to
@@ -179,13 +209,13 @@ const ABSOLUTE_FILL = {
 // ─── Placeholder image maps ───────────────────────────────────────────────────
 
 const COVER_MAP: Record<string, ReturnType<typeof require>> = {
-  modern:      require('../../../../assets/images/placeholders/christian_wedding.png'),
-  classic:     require('../../../../assets/images/placeholders/christian_wedding.png'),
-  retro:       require('../../../../assets/images/placeholders/treatment_preview_1.png'),
-  film:        require('../../../../assets/images/placeholders/treatment_preview_1.png'),
-  editorial:   require('../../../../assets/images/placeholders/treatment_preview_2.png'),
-  documentary: require('../../../../assets/images/placeholders/gallery_blurred_half.png'),
-  vibrant:     require('../../../../assets/images/placeholders/hindu_wedding.png'),
+  modern:      require('../../../../assets/images/placeholders/create_event_cover.png'),
+  classic:     require('../../../../assets/images/placeholders/create_event_cover.png'),
+  retro:       require('../../../../assets/images/placeholders/create_event_cover.png'),
+  film:        require('../../../../assets/images/placeholders/create_event_cover.png'),
+  editorial:   require('../../../../assets/images/placeholders/create_event_cover.png'),
+  documentary: require('../../../../assets/images/placeholders/create_event_cover.png'),
+  vibrant:     require('../../../../assets/images/placeholders/create_event_cover.png'),
 };
 
 const GALLERY_PRESETS = [
@@ -207,6 +237,9 @@ type Challenge = {
 interface PhotoItem {
   uri: string;
   takenBy: string;
+  takenById?: string | null;
+  postedAt?: string | null;
+  submissionId?: string | null;
   /**
    * The media item's id. Seeds the disposable treatment's per-photo
    * randomisation — deliberately not the URI, which is a signed URL that
@@ -221,7 +254,29 @@ interface PhotoItem {
   locked?: boolean;
   /** What the disposable treatment's date stamp reads. Absent for mock photos. */
   capturedAt?: string | null;
+  /** True when this visible real media item belongs to the current guest token. */
+  isMine?: boolean;
 }
+
+type SavePhotoItem = {
+  key: string;
+  uri: string;
+  source: ImageSourcePropType;
+  takenBy: string;
+  isChallenge: boolean;
+  challengeLabel?: string;
+  seedKey: string;
+  capturedAt?: string | null;
+};
+
+type FilteredCaptureState = {
+  item: SavePhotoItem;
+  source: ImageSourcePropType;
+  width: number;
+  height: number;
+  onReady: () => void;
+  onError: (error: unknown) => void;
+} | null;
 
 const DEFAULT_CHALLENGES: Challenge[] = [
   { id: 'c1', label: 'First Dance',      icon: 'firstDance' },
@@ -971,7 +1026,7 @@ function EventDetailView({
     scrimStop(0.98),
     scrimStop(1),
     scrimStop(1),
-  ];
+  ] as const;
 
   const SCRIM_LOCATIONS = [
     0,
@@ -981,7 +1036,7 @@ function EventDetailView({
     0.82 * SCRIM_SOLID_AT,
     SCRIM_SOLID_AT,
     1,
-  ];
+  ] as const;
 
   const CELL_W = (screenWidth - GALLERY_PADDING * 2 - GRID_GAP) / 2;
   const CELL_H = CELL_W * (16 / 9);
@@ -990,8 +1045,55 @@ function EventDetailView({
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [challenges, setChallenges] = useState<Challenge[]>(DEFAULT_CHALLENGES);
   const [shareVisible, setShareVisible] = useState(false);
+  const [saveVisible, setSaveVisible] = useState(false);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveSaving, setSaveSaving] = useState(false);
+  const [saveMode, setSaveMode] = useState<'original' | 'filtered'>('original');
+  const [saveItems, setSaveItems] = useState<SavePhotoItem[]>([]);
+  const [selectedSaveKeys, setSelectedSaveKeys] = useState<string[]>([]);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
+  const [challengeMenuVisible, setChallengeMenuVisible] = useState(false);
+  const filteredCaptureRef = useRef<View | null>(null);
+  const [filteredCaptureState, setFilteredCaptureState] = useState<FilteredCaptureState>(null);
   const storyMountAnim = useRef(new Animated.Value(0)).current;
+  const selectedChallengeRef = useRef<Challenge | null>(null);
+  const pendingChallengeRefreshRef = useRef<string | null>(null);
+  const challengeStoryCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const challengeViewerSessionRef = useRef(0);
+  const [guestAuth, setGuestAuth] = useState<{
+    slug: string;
+    guestToken: string;
+    guestSessionId: string;
+  } | null>(null);
+
+  useEffect(() => {
+    if (viewerRole !== 'guest') {
+      setGuestAuth(null);
+      return;
+    }
+
+    let cancelled = false;
+    void loadStoredGuestSessionByCelebrationId(celebration.id)
+      .then((found) => {
+        if (cancelled) return;
+        setGuestAuth(
+          found
+            ? {
+                slug: found.slug,
+                guestToken: found.session.guestToken,
+                guestSessionId: found.session.guestSessionId,
+              }
+            : null,
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setGuestAuth(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [viewerRole, celebration.id]);
 
   useEffect(() => {
     if (selectedChallenge) {
@@ -1003,6 +1105,9 @@ function EventDetailView({
         useNativeDriver: true,
       }).start();
     }
+  }, [selectedChallenge]);
+  useEffect(() => {
+    selectedChallengeRef.current = selectedChallenge;
   }, [selectedChallenge]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [storySubmissions, setStorySubmissions] = useState<PhotoItem[]>([]);
@@ -1046,19 +1151,104 @@ function EventDetailView({
    */
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissStory = () => {
+    challengeViewerSessionRef.current += 1;
     if (dismissTimerRef.current !== null) {
       clearTimeout(dismissTimerRef.current);
       dismissTimerRef.current = null;
+    }
+    if (challengeStoryCloseTimerRef.current !== null) {
+      clearTimeout(challengeStoryCloseTimerRef.current);
+      challengeStoryCloseTimerRef.current = null;
     }
     // `dragY` is deliberately NOT reset here. The modal fades out over
     // roughly 300ms after `selectedChallenge` goes null, so zeroing it now
     // would snap the story back to centre and fade out from there — the
     // flash at the end of the swipe. It is reset when the story next opens.
+    setChallengeMenuVisible(false);
+    selectedChallengeRef.current = null;
     setSelectedChallenge(null);
   };
   useEffect(() => () => {
     if (dismissTimerRef.current !== null) clearTimeout(dismissTimerRef.current);
+    if (challengeStoryCloseTimerRef.current !== null) clearTimeout(challengeStoryCloseTimerRef.current);
   }, []);
+
+  const loadChallengeSubmissions = useCallback(async (challenge: Challenge) => {
+    const key = `__mock_challenge_submissions_${celebration.id}_${challenge.id}`;
+    const stored = await AsyncStorage.getItem(key);
+
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        return parsed
+          .map((item: any, index: number) => {
+          if (typeof item === 'string') {
+            return { uri: item, takenBy: 'Guest', postedAt: null, _sortIndex: index };
+          }
+          return { ...(item as PhotoItem), _sortIndex: index };
+          })
+          .sort((a: any, b: any) => {
+            const aWeight = a.postedAt ? new Date(a.postedAt).getTime() : a._sortIndex ?? 0;
+            const bWeight = b.postedAt ? new Date(b.postedAt).getTime() : b._sortIndex ?? 0;
+            return bWeight - aWeight;
+          })
+          .map((item: any) => {
+            const { _sortIndex: _ignored, ...rest } = item;
+            return rest as PhotoItem;
+          });
+      } catch {
+        return [];
+      }
+    }
+
+    return [];
+  }, [celebration.id]);
+
+  const updateChallengeStory = useCallback((challenge: Challenge, submissions: PhotoItem[], forceLatest = false) => {
+    if (selectedChallengeRef.current?.id !== challenge.id) return;
+    setStorySubmissions(submissions);
+    if (forceLatest && submissions.length > 0) {
+        setActiveSlideIndex(1);
+        if (pendingChallengeRefreshRef.current === challenge.id) {
+          pendingChallengeRefreshRef.current = null;
+          Alert.alert(
+            'Added to challenge',
+            `Your photo has been added to ${challenge.label}.`,
+          );
+        }
+      }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      const pendingChallengeId = pendingChallengeRefreshRef.current;
+      if (!pendingChallengeId) {
+        return;
+      }
+
+      const challenge =
+        challenges.find((item) => item.id === pendingChallengeId) ??
+        selectedChallengeRef.current;
+      if (!challenge) {
+        pendingChallengeRefreshRef.current = null;
+        return;
+      }
+
+      let cancelled = false;
+      void (async () => {
+        const submissions = await loadChallengeSubmissions(challenge);
+        if (cancelled) return;
+        if (selectedChallengeRef.current?.id === challenge.id) {
+          updateChallengeStory(challenge, submissions, true);
+        }
+        pendingChallengeRefreshRef.current = null;
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }, [challenges, loadChallengeSubmissions, updateChallengeStory]),
+  );
 
   // Gesture handler for pan events. Reanimated's shared values update directly
   // on the UI thread without going through the JS bridge, eliminating jank.
@@ -1075,33 +1265,17 @@ function EventDetailView({
     // State change handler for end of gesture
     if (event.nativeEvent.state === 5) {
       // END state
-      const { width, height } = Dimensions.get('window');
-      const isTap = Math.abs(event.nativeEvent.translationX) < 15 && Math.abs(event.nativeEvent.translationY) < 15;
-
-      if (isTap) {
-        // Split the screen down the middle for slide navigation.
-        const totalSlides = 1 + submissionCountRef.current;
-        const current = activeSlideRef.current;
-
-        if (event.nativeEvent.absoluteX < width / 2) {
-          if (current > 0) setActiveSlideIndex(current - 1);
-        } else if (current < totalSlides - 1) {
-          setActiveSlideIndex(current + 1);
-        } else {
-          // Past the final slide, the story is over.
-          setSelectedChallenge(null);
-        }
-        dragY.value = 0;
-        return;
-      }
+      const { height } = Dimensions.get('window');
+      const viewerSession = challengeViewerSessionRef.current;
 
       // Swipe down to dismiss.
-      if (event.nativeEvent.translationY > 80 || event.nativeEvent.velocityY > 2) {
+      if (event.nativeEvent.translationY > 60 || event.nativeEvent.velocityY > 1.2) {
         // Animate out with Reanimated's timing (UI thread, no jank).
-        dragY.value = withTiming(height, { duration: 200 }, () => {
-          runOnJS(dismissStory)();
-        });
-        dismissTimerRef.current = setTimeout(dismissStory, 220);
+        dragY.value = withTiming(height, { duration: 200 });
+        dismissTimerRef.current = setTimeout(() => {
+          if (challengeViewerSessionRef.current !== viewerSession) return;
+          dismissStory();
+        }, 220);
       } else {
         // Spring back into place, also on the UI thread.
         dragY.value = withSpring(0, { damping: 10, mass: 1, stiffness: 100 });
@@ -1130,7 +1304,7 @@ function EventDetailView({
   // ── Theme ──
   const { data: themes } = useQuery({ queryKey: themeKeys.all, queryFn: listThemes });
   const accentColor =
-    themes?.find((t) => t.id === celebration.default_theme_id)?.accent_color_hex
+    (themes?.find((t) => t.id === celebration.default_theme_id) as { accent_color_hex?: string } | undefined)?.accent_color_hex
     ?? colours.brandPrimary;
 
   // ── Load gallery (offline mock fallback) ──
@@ -1210,7 +1384,13 @@ function EventDetailView({
         .map((p): PhotoItem | null => {
           const signedUrl = urlByPath.get(p.storagePath);
           return signedUrl
-            ? { uri: signedUrl, takenBy: p.displayName, capturedAt: p.capturedAt, id: p.id }
+            ? {
+                uri: signedUrl,
+                takenBy: p.displayName,
+                capturedAt: p.capturedAt,
+                id: p.id,
+                isMine: p.isMine === true,
+              }
             : null;
         })
         .filter((p): p is PhotoItem => p !== null);
@@ -1224,59 +1404,63 @@ function EventDetailView({
   }, [mediaPhotos]);
 
   // ── Load challenges & Pre-seed c3 (Best Group Photo) submissions ──
-  useEffect(() => {
-    (async () => {
-      const submissionsKey = `__mock_challenge_submissions_${celebration.id}_c3`;
-      const submissionsStored = await AsyncStorage.getItem(submissionsKey);
-      
-      let demoPhotos: PhotoItem[] = [];
-      if (!submissionsStored) {
-        const demoUris = [
-          require('../../../../assets/images/placeholders/iphone_group_1.png'),
-          require('../../../../assets/images/placeholders/iphone_group_2.png'),
-          require('../../../../assets/images/placeholders/iphone_group_3.png'),
-          require('../../../../assets/images/placeholders/iphone_group_4.png'),
-          require('../../../../assets/images/placeholders/iphone_group_5.png'),
-        ].map(bundledAssetUri);
+  const loadChallenges = useCallback(async () => {
+    const submissionsKey = `__mock_challenge_submissions_${celebration.id}_c3`;
+    const submissionsStored = await AsyncStorage.getItem(submissionsKey);
 
-        const names = ['Emma', 'Daniel', 'Chloe', 'Ryan', 'Zoe'];
-        demoPhotos = demoUris.map((uri, idx) => ({
-          uri,
-          takenBy: names[idx % names.length],
-        }));
+    let demoPhotos: PhotoItem[] = [];
+    if (!submissionsStored) {
+      const demoUris = [
+        require('../../../../assets/images/placeholders/iphone_group_1.png'),
+        require('../../../../assets/images/placeholders/iphone_group_2.png'),
+        require('../../../../assets/images/placeholders/iphone_group_3.png'),
+        require('../../../../assets/images/placeholders/iphone_group_4.png'),
+        require('../../../../assets/images/placeholders/iphone_group_5.png'),
+      ].map(bundledAssetUri);
 
-        await AsyncStorage.setItem(submissionsKey, JSON.stringify(demoPhotos));
-      } else {
-        try {
-          const parsed = JSON.parse(submissionsStored);
-          demoPhotos = parsed.map((item: any) => {
-            if (typeof item === 'string') {
-              return { uri: item, takenBy: 'Guest' };
-            }
-            return item as PhotoItem;
-          });
-        } catch {}
-      }
+      const names = ['Emma', 'Daniel', 'Chloe', 'Ryan', 'Zoe'];
+      demoPhotos = demoUris.map((uri, idx) => ({
+        uri,
+        takenBy: names[idx % names.length],
+      }));
 
-      const key = `__mock_challenges_${celebration.id}`;
-      const stored = await AsyncStorage.getItem(key);
-      if (stored) {
-        try {
-          let parsed = JSON.parse(stored) as Challenge[];
-          if (demoPhotos.length > 0) {
-            parsed = parsed.map(c => c.id === 'c3' && !c.photo ? { ...c, photo: demoPhotos[demoPhotos.length - 1].uri } : c);
+      await AsyncStorage.setItem(submissionsKey, JSON.stringify(demoPhotos));
+    } else {
+      try {
+        const parsed = JSON.parse(submissionsStored);
+        demoPhotos = parsed.map((item: any) => {
+          if (typeof item === 'string') {
+            return { uri: item, takenBy: 'Guest' };
           }
-          setChallenges(parsed);
-        } catch {}
-      } else {
-        let def = [...DEFAULT_CHALLENGES];
+          return item as PhotoItem;
+        });
+      } catch {}
+    }
+
+    const key = `__mock_challenges_${celebration.id}`;
+    const stored = await AsyncStorage.getItem(key);
+    if (stored) {
+      try {
+        let parsed = JSON.parse(stored) as Challenge[];
         if (demoPhotos.length > 0) {
-          def = def.map(c => c.id === 'c3' ? { ...c, photo: demoPhotos[demoPhotos.length - 1].uri } : c);
+          parsed = parsed.map((c) => (c.id === 'c3' && !c.photo ? { ...c, photo: demoPhotos[demoPhotos.length - 1].uri } : c));
         }
-        setChallenges(def);
+        setChallenges(parsed);
+      } catch {}
+    } else {
+      let def = [...DEFAULT_CHALLENGES];
+      if (demoPhotos.length > 0) {
+        def = def.map((c) => (c.id === 'c3' ? { ...c, photo: demoPhotos[demoPhotos.length - 1].uri } : c));
       }
-    })();
+      setChallenges(def);
+    }
   }, [celebration.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadChallenges();
+    }, [loadChallenges]),
+  );
 
   // ── Sync server metrics ──
   useEffect(() => {
@@ -1326,6 +1510,28 @@ function EventDetailView({
     return preset ? preset.source : { uri: photo };
   }
 
+  function resolvePhotoSourceForSaving(photoUri: string) {
+    return getPhotoSource(photoUri);
+  }
+
+  function mergeSaveItem(
+    itemsByUri: Map<string, SavePhotoItem>,
+    item: SavePhotoItem,
+  ) {
+    const existing = itemsByUri.get(item.key);
+    if (!existing) {
+      itemsByUri.set(item.key, item);
+      return;
+    }
+
+      itemsByUri.set(item.key, {
+        ...existing,
+        isChallenge: existing.isChallenge || item.isChallenge,
+        challengeLabel: existing.challengeLabel ?? item.challengeLabel,
+        takenBy: existing.takenBy || item.takenBy,
+    });
+  }
+
   function buildCountdownLabel() {
     if (countdown.isOngoing) return null;
     if (countdown.isCompleted) return 'EVENT ENDED';
@@ -1345,24 +1551,31 @@ function EventDetailView({
 
   // Shared with the reveal modal and the photo viewer. Deriving it here inline
   // is how the modal ended up able to announce photos the gallery still hid.
-  const isGalleryLocked = !canViewerSeePhotos({
-    now: serverNow(),
-    revealAt: primarySession?.reveal_at,
-    revealMode: primarySession?.reveal_mode,
-  });
+  const isHostOnlyGallery = primarySession?.gallery_visibility === 'hosts_only';
+  const viewerCanSeePhotos =
+    viewerRole === 'host' ||
+    (!isHostOnlyGallery &&
+      canViewerSeePhotos({
+        now: serverNow(),
+        revealAt: primarySession?.reveal_at,
+        revealMode: primarySession?.reveal_mode,
+      }));
+  const isGalleryLocked = !viewerCanSeePhotos;
 
   // Copy for the lock overlay — "3 days" / "5 hours" / "20 minutes" until
   // reveal. Null when there's nothing to count down to (e.g. manual reveal
   // with no time set yet), in which case the overlay falls back to the lock
   // icon alone.
-  const revealCountdownWords = (() => {
-    const remainingMs = msUntilReveal({
-      now: serverNow(),
-      revealAt: primarySession?.reveal_at,
-      revealMode: primarySession?.reveal_mode,
-    });
-    return remainingMs === null ? null : formatRevealCountdownWords(remainingMs);
-  })();
+  const revealCountdownWords = viewerCanSeePhotos
+    ? null
+    : (() => {
+        const remainingMs = msUntilReveal({
+          now: serverNow(),
+          revealAt: primarySession?.reveal_at,
+          revealMode: primarySession?.reveal_mode,
+        });
+        return remainingMs === null ? null : formatRevealCountdownWords(remainingMs);
+      })();
 
   // For a guest, get_guest_gallery already applies the real rule
   // server-side: while locked, the only rows it ever returns are that
@@ -1391,10 +1604,14 @@ function EventDetailView({
       setViewerId(session.user.id);
       return;
     }
-    void loadStoredGuestSession(celebration.public_slug ?? celebration.id)
-      .then((guest) => setViewerId(guest?.guestSessionId ?? 'anon'))
+    if (guestAuth?.guestSessionId) {
+      setViewerId(guestAuth.guestSessionId);
+      return;
+    }
+    void loadStoredGuestSessionByCelebrationId(celebration.id)
+      .then((guest) => setViewerId(guest?.session.guestSessionId ?? 'anon'))
       .catch(() => setViewerId('anon'));
-  }, [profile?.id, session?.user.id, celebration.public_slug, celebration.id]);
+  }, [profile?.id, session?.user.id, guestAuth?.guestSessionId, celebration.id]);
 
   const reveal = useRevealModal({
     celebrationId: celebration.id,
@@ -1402,12 +1619,26 @@ function EventDetailView({
     endsAt: primarySession?.ends_at ?? celebration.ends_at,
     revealAt: primarySession?.reveal_at,
     revealMode: primarySession?.reveal_mode,
+    viewerCanSeePhotos,
     ready: Boolean(primarySession),
     refresh: () =>
       queryClient.refetchQueries({
         queryKey: celebrationDetailKeys.detail(celebration.id),
       }),
   });
+
+  const activeChallengeSubmission = activeSlideIndex > 0 ? storySubmissions[activeSlideIndex - 1] : null;
+  const isLegacyOwnChallengeSubmission =
+    viewerRole === 'guest' &&
+    Boolean(activeChallengeSubmission) &&
+    !activeChallengeSubmission?.takenById &&
+    (activeChallengeSubmission?.takenBy === guestName || activeChallengeSubmission?.takenBy === 'You');
+  const canDeleteActiveChallengeSubmission =
+    Boolean(activeChallengeSubmission) &&
+    ((Boolean(activeChallengeSubmission?.takenById) &&
+      Boolean(viewerId) &&
+      activeChallengeSubmission?.takenById === viewerId) ||
+      isLegacyOwnChallengeSubmission);
 
   // The real photographs, blurred by the modal rather than substituted. A
   // placeholder grid would undercut the whole point of the moment.
@@ -1501,6 +1732,50 @@ function EventDetailView({
       bounciness: 4,
       speed: 12,
     }).start();
+  }
+
+  function deleteGuestGalleryPhoto(photo: PhotoItem, index: number) {
+    if (!photo.id || !guestAuth) return;
+
+    setHeroMenuVisible(false);
+    Alert.alert(
+      'Delete this photo?',
+      'This will remove it from the event gallery.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Photo',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteGuestPhoto({
+                mediaItemId: photo.id as string,
+                guestToken: guestAuth.guestToken,
+              });
+
+              setPhotos((current) => {
+                const next = current.filter((item) => item.id !== photo.id);
+                if (next.length === 0) {
+                  closeHeroViewer();
+                } else if (index >= next.length) {
+                  setHeroIndex(next.length - 1);
+                }
+                return next;
+              });
+
+              await queryClient.invalidateQueries({
+                queryKey: celebrationDetailKeys.detail(celebration.id),
+              });
+              void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            } catch (error) {
+              console.error('[gallery] failed to delete guest photo', error);
+              Alert.alert('Error', 'Could not delete this photo. Please try again.');
+            }
+          },
+        },
+      ],
+    );
   }
 
   function closeHeroViewer() {
@@ -1598,6 +1873,24 @@ function EventDetailView({
     })
   ).current;
 
+  function navigateStorySlide(direction: 'prev' | 'next') {
+    const current = activeSlideRef.current;
+    const totalSlides = 1 + submissionCountRef.current;
+
+    if (direction === 'prev') {
+      if (current > 0) {
+        setActiveSlideIndex(current - 1);
+      }
+      return;
+    }
+
+    if (current < totalSlides - 1) {
+      setActiveSlideIndex(current + 1);
+    } else {
+      dismissStory();
+    }
+  }
+
   async function handlePickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -1620,24 +1913,23 @@ function EventDetailView({
   }
 
   async function handleChallengePhotoPress(challenge: Challenge) {
-    const key = `__mock_challenge_submissions_${celebration.id}_${challenge.id}`;
-    const stored = await AsyncStorage.getItem(key);
-    let loadedSubmissions: PhotoItem[] = [];
-    if (stored) {
-      try {
-        const parsed = JSON.parse(stored);
-        loadedSubmissions = parsed.map((item: any) => {
-          if (typeof item === 'string') {
-            return { uri: item, takenBy: 'Guest' };
-          }
-          return item as PhotoItem;
-        });
-      } catch {}
-    } else if (challenge.photo) {
-      loadedSubmissions = [{ uri: challenge.photo, takenBy: 'Guest' }];
-      await AsyncStorage.setItem(key, JSON.stringify(loadedSubmissions));
+    const viewerSession = ++challengeViewerSessionRef.current;
+    pendingChallengeRefreshRef.current = null;
+    setChallengeMenuVisible(false);
+    if (challengeStoryCloseTimerRef.current !== null) {
+      clearTimeout(challengeStoryCloseTimerRef.current);
+      challengeStoryCloseTimerRef.current = null;
     }
-    setStorySubmissions(loadedSubmissions);
+    selectedChallengeRef.current = challenge;
+    setSelectedChallenge(challenge);
+    setActiveSlideIndex(0);
+    setStorySubmissions([]);
+
+    void loadChallengeSubmissions(challenge).then((loadedSubmissions) => {
+      if (challengeViewerSessionRef.current !== viewerSession) return;
+      updateChallengeStory(challenge, loadedSubmissions);
+    });
+
     // Cleared on the way in rather than on the way out, so the dismissed story
     // can stay off-screen for the whole of the modal's fade-out.
     dragY.value = 0;
@@ -1647,36 +1939,62 @@ function EventDetailView({
       clearTimeout(dismissTimerRef.current);
       dismissTimerRef.current = null;
     }
-    setSelectedChallenge(challenge);
-    setActiveSlideIndex(0);
   }
 
   async function handleAddSubmission(challenge: Challenge) {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo access to upload a submission.');
+    pendingChallengeRefreshRef.current = challenge.id;
+    setChallengeMenuVisible(false);
+    if (challengeStoryCloseTimerRef.current !== null) {
+      clearTimeout(challengeStoryCloseTimerRef.current);
+      challengeStoryCloseTimerRef.current = null;
+    }
+    requestAnimationFrame(() => {
+      router.push({
+        pathname: `/celebration/${celebration.id}/camera`,
+        params: {
+          captureTarget: 'challenge',
+          challengeId: challenge.id,
+        },
+      } as never);
+      if (challengeStoryCloseTimerRef.current !== null) {
+        clearTimeout(challengeStoryCloseTimerRef.current);
+      }
+      challengeStoryCloseTimerRef.current = setTimeout(() => {
+        dismissStory();
+      }, 180);
+    });
+  }
+
+  async function deleteActiveChallengeSubmission() {
+    const challenge = selectedChallengeRef.current;
+    const activeSubmission = activeSlideIndex > 0 ? storySubmissions[activeSlideIndex - 1] : null;
+
+    if (!challenge || !activeSubmission || !canDeleteActiveChallengeSubmission) {
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'], quality: 0.85,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      const userName = firstNameFrom(profile) || 'You';
+
+    try {
       const key = `__mock_challenge_submissions_${celebration.id}_${challenge.id}`;
-      const newSubmission: PhotoItem = { uri, takenBy: userName };
-      const nextSubmissions = [...storySubmissions, newSubmission];
-      
-      await AsyncStorage.setItem(key, JSON.stringify(nextSubmissions));
-      setStorySubmissions(nextSubmissions);
-      
-      const updatedChallenges = challenges.map((c) => 
-        c.id === challenge.id ? { ...c, photo: uri } : c
-      );
-      setChallenges(updatedChallenges);
-      await saveChallenges(updatedChallenges);
-      
-      setActiveSlideIndex(nextSubmissions.length);
+      const stored = await AsyncStorage.getItem(key);
+      if (!stored) return;
+
+      const parsed = JSON.parse(stored) as Array<PhotoItem | string>;
+      const next = parsed.filter((entry) => {
+        if (typeof entry === 'string') {
+          return entry !== activeSubmission.uri;
+        }
+        return activeSubmission.submissionId
+          ? entry.submissionId !== activeSubmission.submissionId
+          : entry.uri !== activeSubmission.uri;
+      });
+
+      await AsyncStorage.setItem(key, JSON.stringify(next));
+      const refreshed = await loadChallengeSubmissions(challenge);
+      setStorySubmissions(refreshed);
+      setActiveSlideIndex(refreshed.length > 0 ? 1 : 0);
+      setChallengeMenuVisible(false);
+    } catch {
+      Alert.alert('Error', 'Could not delete this challenge photo.');
     }
   }
 
@@ -1704,9 +2022,257 @@ function EventDetailView({
     Alert.alert('Copied', 'Event code copied to clipboard.');
   }
 
+  async function openSavePhotos() {
+    try {
+      setSaveLoading(true);
+      setSaveVisible(true);
+      setSaveMode('original');
+      setSaveItems([]);
+      setSelectedSaveKeys([]);
+
+      const itemsByUri = new Map<string, SavePhotoItem>();
+      const challengeById = new Map(challenges.map((challenge) => [challenge.id, challenge]));
+
+      photos.forEach((photo) => {
+        const source = resolvePhotoSourceForSaving(photo.uri);
+        mergeSaveItem(itemsByUri, {
+          key: photo.id ?? photo.uri,
+          uri: photo.uri,
+          source,
+          takenBy: photo.takenBy || 'Guest',
+          isChallenge: false,
+          seedKey: photo.id ?? photo.uri,
+          capturedAt: photo.capturedAt ?? null,
+        });
+      });
+
+      const allKeys = await AsyncStorage.getAllKeys();
+      const submissionKeys = allKeys.filter((key) =>
+        key.startsWith(`__mock_challenge_submissions_${celebration.id}_`),
+      );
+
+      for (const key of submissionKeys) {
+        const challengeId = key.slice(`__mock_challenge_submissions_${celebration.id}_`.length);
+        const challenge = challengeById.get(challengeId);
+        const stored = await AsyncStorage.getItem(key);
+        if (!stored) continue;
+
+        try {
+          const parsed = JSON.parse(stored) as unknown[];
+          parsed.forEach((entry, submissionIndex) => {
+            const uri = typeof entry === 'string'
+              ? entry
+              : typeof entry === 'object' && entry && 'uri' in entry && typeof (entry as { uri?: unknown }).uri === 'string'
+                ? (entry as { uri: string }).uri
+                : null;
+
+            if (!uri) return;
+
+            mergeSaveItem(itemsByUri, {
+              key: `${challengeId}:${submissionIndex}:${uri}`,
+              uri,
+              source: resolvePhotoSourceForSaving(uri),
+              takenBy: typeof entry === 'object' && entry && 'takenBy' in entry && typeof (entry as { takenBy?: unknown }).takenBy === 'string'
+                ? (entry as { takenBy: string }).takenBy
+                : 'Guest',
+              isChallenge: true,
+              challengeLabel: challenge?.label ?? 'Challenge photo',
+              seedKey: `${challengeId}:${submissionIndex}:${uri}`,
+            });
+
+            // Keep older data that only stored the current hero shot on the
+            // challenge record itself from disappearing from the save picker.
+            if (submissionIndex === 0 && challenge?.photo && !itemsByUri.has(`${challengeId}:hero:${challenge.photo}`)) {
+              mergeSaveItem(itemsByUri, {
+                key: `${challengeId}:hero:${challenge.photo}`,
+                uri: challenge.photo,
+                source: resolvePhotoSourceForSaving(challenge.photo),
+                takenBy: 'Guest',
+                isChallenge: true,
+                challengeLabel: challenge.label,
+                seedKey: `${challengeId}:hero:${challenge.photo}`,
+              });
+            }
+          });
+        } catch {}
+
+        if (challenge?.photo && !itemsByUri.has(`${challengeId}:hero:${challenge.photo}`)) {
+          mergeSaveItem(itemsByUri, {
+            key: `${challengeId}:hero:${challenge.photo}`,
+            uri: challenge.photo,
+            source: resolvePhotoSourceForSaving(challenge.photo),
+            takenBy: 'Guest',
+            isChallenge: true,
+            challengeLabel: challenge.label,
+            seedKey: `${challengeId}:hero:${challenge.photo}`,
+          });
+        }
+      }
+
+      const nextItems = Array.from(itemsByUri.values());
+      if (nextItems.length === 0) {
+        Alert.alert('No photos', 'There are no photos available to save yet.');
+        setSaveVisible(false);
+        return;
+      }
+
+      setSaveItems(nextItems);
+      setSelectedSaveKeys(nextItems.map((item) => item.key));
+    } catch {
+      Alert.alert('Error', 'Failed to prepare the photos for saving.');
+      setSaveVisible(false);
+    } finally {
+      setSaveLoading(false);
+    }
+  }
+
+  function setAllSaveSelections(nextSelected: boolean) {
+    setSelectedSaveKeys(nextSelected ? saveItems.map((item) => item.key) : []);
+  }
+
+  function togglePhotoSelection(key: string) {
+    setSelectedSaveKeys((current) =>
+      current.includes(key)
+        ? current.filter((itemKey) => itemKey !== key)
+        : [...current, key],
+    );
+  }
+
+  function selectChallengePhotos(shouldSelect: boolean) {
+    const challengeKeys = saveItems.filter((item) => item.isChallenge).map((item) => item.key);
+    setSelectedSaveKeys((current) => {
+      const currentSet = new Set(current);
+      if (shouldSelect) {
+        challengeKeys.forEach((key) => currentSet.add(key));
+        return Array.from(currentSet);
+      }
+      return current.filter((key) => !challengeKeys.includes(key));
+    });
+  }
+
+  async function ensureLocalSaveUri(item: SavePhotoItem) {
+    if (typeof item.source === 'number') {
+      const bundled = ExpoAsset.fromModule(item.source);
+      await bundled.downloadAsync();
+      return bundled.localUri ?? bundled.uri ?? item.uri;
+    }
+
+    const sourceUri = item.source && typeof item.source === 'object' && 'uri' in item.source && typeof item.source.uri === 'string'
+      ? item.source.uri
+      : item.uri;
+
+    if (sourceUri.startsWith('file://') || sourceUri.startsWith('content://')) {
+      return sourceUri;
+    }
+
+    const extension =
+      sourceUri.split('.').pop()?.split('?')[0]?.toLowerCase() ?? 'jpg';
+    const safeExt = extension.length <= 5 ? extension : 'jpg';
+    const destinationFile = new FileSystem.File(
+      FileSystem.Paths.cache,
+      `candidly-save-${celebration.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`,
+    );
+    const downloaded = await FileSystem.File.downloadFileAsync(sourceUri, destinationFile);
+    return downloaded.uri;
+  }
+
+  async function renderFilteredSave(item: SavePhotoItem) {
+    const localUri = await ensureLocalSaveUri(item);
+    const source = { uri: localUri };
+    const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      Image.getSize(
+        localUri,
+        (width, height) => resolve({ width, height }),
+        reject,
+      );
+    }).catch(() => ({ width: 1600, height: 1600 }));
+    const maxSide = 1800;
+    const scale = Math.min(1, maxSide / Math.max(size.width, size.height));
+    const width = Math.max(1, Math.round(size.width * scale));
+    const height = Math.max(1, Math.round(size.height * scale));
+
+    let readyResolve: (() => void) | null = null;
+    let readyReject: ((error: unknown) => void) | null = null;
+    const readyPromise = new Promise<void>((resolve, reject) => {
+      readyResolve = resolve;
+      readyReject = reject;
+    });
+    const readyTimeout = new Promise<void>((_, reject) => {
+      setTimeout(() => reject(new Error('Timed out waiting for filtered photo to render.')), 8000);
+    });
+
+    setFilteredCaptureState({
+      item,
+      source,
+      width,
+      height,
+      onReady: () => readyResolve?.(),
+      onError: (error) => readyReject?.(error),
+    });
+
+    await Promise.race([readyPromise, readyTimeout]);
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+
+    try {
+      const { captureRef } = await import('react-native-view-shot');
+      return await captureRef(filteredCaptureRef, {
+        format: 'jpg',
+        quality: 0.98,
+        result: 'tmpfile',
+      });
+    } finally {
+      setFilteredCaptureState(null);
+    }
+  }
+
+  async function saveSelectedPhotos() {
+    if (selectedSaveKeys.length === 0) {
+      Alert.alert('Nothing selected', 'Choose at least one photo to save.');
+      return;
+    }
+
+    try {
+      setSaveSaving(true);
+      const MediaLibrary = await import('expo-media-library');
+      const { status } = await MediaLibrary.requestPermissionsAsync(true);
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Allow photo access so we can save the selected photos.');
+        return;
+      }
+
+      const selectedItems = saveItems.filter((item) => selectedSaveKeys.includes(item.key));
+      let savedCount = 0;
+
+      for (const item of selectedItems) {
+        const localUri =
+          saveMode === 'filtered'
+            ? await renderFilteredSave(item)
+            : await ensureLocalSaveUri(item);
+
+        await MediaLibrary.Asset.create(localUri);
+        savedCount += 1;
+      }
+
+      setSaveVisible(false);
+      Alert.alert(
+        'Saved',
+        `Saved ${savedCount} photo${savedCount === 1 ? '' : 's'} to your library.`,
+      );
+    } catch {
+      Alert.alert('Error', 'Failed to save the selected photos.');
+    } finally {
+      setSaveSaving(false);
+    }
+  }
+
   // ── Derived ──
   const isLive = !countdown.isCompleted && !countdown.isOngoing;
   const countdownLabel = buildCountdownLabel();
+  const eventHasEnded = countdown.isCompleted;
 
   return (
     <View style={S.root}>
@@ -1840,12 +2406,20 @@ function EventDetailView({
 
               <AppText style={S.statusDot}>•</AppText>
 
-              <View style={S.statusItem}>
-                <PeopleSmall />
-                <AppText style={S.statusText}>
-                  {guestsJoined} JOINED
-                </AppText>
-              </View>
+              <Pressable
+                onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
+                accessibilityRole="button"
+                accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
+                hitSlop={8}
+                style={({ pressed }) => [S.statusItemPressable, pressed && S.statusItemPressed]}
+              >
+                <View style={S.statusItem}>
+                  <PeopleSmall />
+                  <AppText style={S.statusText}>
+                    {guestsJoined} JOINED
+                  </AppText>
+                </View>
+              </Pressable>
 
               {countdownLabel && (
                 <>
@@ -1886,6 +2460,7 @@ function EventDetailView({
               onPress={handleAddChallenge}
               accessibilityRole="button"
               accessibilityLabel="Add new challenge"
+              hitSlop={10}
             >
               <View style={S.chipAddOuter}>
                 <AppText style={S.chipAddPlus}>+</AppText>
@@ -1926,6 +2501,8 @@ function EventDetailView({
               onPress={() => handleChallengePhotoPress(challenge)}
               accessibilityRole="button"
               accessibilityLabel={`Challenge: ${challenge.label}`}
+              hitSlop={18}
+              pressRetentionOffset={18}
             >
               <View style={S.chipOuter}>
                 {challenge.photo ? (
@@ -1938,7 +2515,7 @@ function EventDetailView({
                 ) : (
                   /* Placeholder: line art SVG on dark ring background */
                   <View style={S.chipIconBg}>
-                    <ChallengeIconSVG type={challenge.icon} size={28} />
+                    <SharedChallengeIconSVG type={challenge.icon} size={28} />
                   </View>
                 )}
               </View>
@@ -2060,255 +2637,12 @@ function EventDetailView({
       </Animated.ScrollView>
 
       {/* ══════════════════════════════════════════════════════
-          FLOATING CAMERA PILL FAB
-          ══════════════════════════════════════════════════════ */}
-      {(!heroVisible) && (
-        <View style={[S.fabWrap, { bottom: insets.bottom + 28 }]}>
-          <Pressable
-            style={({ pressed }) => [pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
-            onPress={() => router.push(`/celebration/${celebration.id}/camera` as never)}
-            accessibilityRole="button"
-            accessibilityLabel="Add a photo"
-          >
-            {/* Outermost white border wrapper */}
-            <View style={S.fabOutermostWhiteBorder}>
-              {/* Inner black border wrapper */}
-              <View style={S.fabOuterBlackBorder}>
-                <View style={S.fabContentCircle}>
-                  <CameraFABIcon size={26} color="#000000" />
-                </View>
-              </View>
-            </View>
-          </Pressable>
-        </View>
-      )}
-
-      {/* ══════════════════════════════════════════════════════
-          SHARE MODAL
-          ══════════════════════════════════════════════════════ */}
-      <Modal
-        visible={shareVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShareVisible(false)}
-      >
-        <View style={S.modalOverlay}>
-          <View style={[S.modalSheet, { paddingBottom: insets.bottom + spacing.xl }]}>
-            <View style={S.sheetHandle} />
-
-            <AppText variant="titleLarge" style={{ textAlign: 'center', marginTop: spacing.xs }}>
-              Invite Guests
-            </AppText>
-            <AppText variant="bodySmall" tone="secondary" align="center">
-              Share the link or code so your guests can start contributing.
-            </AppText>
-
-            {/* QR placeholder card */}
-            <View style={S.qrCard}>
-              <AppText
-                variant="eyebrow"
-                tone="secondary"
-                align="center"
-                style={{ letterSpacing: 1 }}
-              >
-                {celebration.title}
-              </AppText>
-              <View style={S.qrIconWrap}>
-                <QrCodeIcon size={100} color={accentColor} />
-              </View>
-              <AppText style={[S.qrCode, { color: accentColor }]}>
-                {celebration.event_code ?? '——————'}
-              </AppText>
-            </View>
-
-            <Pressable
-              style={[S.sheetBtnPrimary, { backgroundColor: accentColor }]}
-              onPress={handleShareLink}
-            >
-              <AppText style={{ color: colours.textOnBrand, fontWeight: '700', fontSize: 15 }}>
-                Share Link
-              </AppText>
-            </Pressable>
-            <Pressable style={S.sheetBtnSecondary} onPress={handleCopyCode}>
-              <AppText style={{ color: colours.textPrimary, fontWeight: '600', fontSize: 15 }}>
-                Copy Code
-              </AppText>
-            </Pressable>
-            <Pressable
-              style={{ paddingVertical: spacing.sm, alignItems: 'center' }}
-              onPress={() => setShareVisible(false)}
-            >
-              <AppText variant="bodySmall" tone="secondary">Dismiss</AppText>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ══════════════════════════════════════════════════════
-          INSTAGRAM STORY CHALLENGE VIEWER MODAL
-          ══════════════════════════════════════════════════════ */}
-      <Modal
-        visible={selectedChallenge !== null}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setSelectedChallenge(null)}
-      >
-        {selectedChallenge && (() => {
-          const totalSlides = 1 + storySubmissions.length;
-          const coverPhoto = storySubmissions.length > 0 
-            ? { uri: storySubmissions[storySubmissions.length - 1].uri } 
-            : getCoverSource();
-            
-          return (
-            <PanGestureHandler onGestureEvent={handlePanEvent} onHandlerStateChange={handlePanStateChange}>
-              <ReanimatedAnimated.View
-                style={[S.storyOverlay, storyOverlayAnimatedStyle]}
-              >
-              {/* 1. Background Photo */}
-              {activeSlideIndex === 0 ? (
-                <Image
-                  source={coverPhoto}
-                  style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
-                  resizeMode="cover"
-                  blurRadius={35}
-                />
-              ) : (
-                <Image
-                  source={{ uri: storySubmissions[activeSlideIndex - 1].uri }}
-                  style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
-                  resizeMode="cover"
-                />
-              )}
-
-              {/* 2. Scrim Overlay */}
-              <View style={[ABSOLUTE_FILL, { backgroundColor: activeSlideIndex === 0 ? 'rgba(0, 0, 0, 0.40)' : 'rgba(11, 11, 12, 0.25)' }]} />
-
-              {/* 3. Slide Content (Background layer relative to touch overlay) */}
-              {activeSlideIndex === 0 ? (
-                /* Slide 1: Challenge Brief (Centered Hero) */
-                <Animated.View 
-                  pointerEvents="none" 
-                  style={[
-                    S.storyHeroContainer,
-                    {
-                      opacity: storyMountAnim,
-                      transform: [{
-                        translateY: storyMountAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [20, 0],
-                        })
-                      }]
-                    }
-                  ]}
-                >
-                  <View style={S.storyHeroIconRing}>
-                    <ChallengeIconSVG type={selectedChallenge.icon} size={32} />
-                  </View>
-                  <AppText style={S.storyHeroTitle}>
-                    {selectedChallenge.label}
-                  </AppText>
-                  
-                  <View style={S.storyHeroDividerRow}>
-                    <View style={S.storyHeroDividerLine} />
-                    <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                      <Path d="M7 0C7 3.866 3.866 7 0 7C3.866 7 7 10.134 7 14C7 10.134 10.134 7 14 7C10.134 7 7 3.866 7 0Z" fill="rgba(255, 255, 255, 0.6)" />
-                    </Svg>
-                    <View style={S.storyHeroDividerLine} />
-                  </View>
-                  
-                  <AppText style={S.storyHeroDesc}>
-                    {CHALLENGE_BRIEFS[selectedChallenge.icon]?.instr || 'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'}
-                  </AppText>
-                </Animated.View>
-              ) : null}
-
-              {/* 4. Safe Area Header Content (Gesture handling via outer PanGestureHandler) */}
-              <View style={[S.storyHeader, { paddingTop: insets.top + spacing.sm }]}>
-                {/* Progress Indicators */}
-                <View style={S.storyProgressBarRow}>
-                  {Array.from({ length: totalSlides }).map((_, i) => (
-                    <View key={i} style={S.storyProgressBarOuter}>
-                      <View 
-                        style={[
-                          S.storyProgressBarInner, 
-                          { width: i < activeSlideIndex ? '100%' : (i === activeSlideIndex ? '100%' : '0%') }
-                        ]} 
-                      />
-                    </View>
-                  ))}
-                </View>
-
-                {/* Header Row */}
-                <View style={S.storyHeaderRowNew}>
-                  <View style={{ flex: 1, paddingLeft: 4 }}>
-                    {activeSlideIndex > 0 && (
-                      <View style={{ gap: 2 }}>
-                        <AppText style={{ fontFamily: 'InstrumentSans_600SemiBold', fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                          {storySubmissions[activeSlideIndex - 1].takenBy || 'Guest'}
-                        </AppText>
-                        <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 12, color: 'rgba(255, 255, 255, 0.8)', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                          Today at 7:42 PM
-                        </AppText>
-                      </View>
-                    )}
-                  </View>
-                  <Pressable 
-                    onPress={() => setSelectedChallenge(null)}
-                    style={S.storyCloseBtnNew}
-                    accessibilityRole="button"
-                    accessibilityLabel="Close story"
-                  >
-                    <CloseIcon size={24} color="#FFFFFF" />
-                  </Pressable>
-                </View>
-              </View>
-
-              {/* 6. Bottom Action Bar (Sits on top of Touch Nav Pressable) */}
-              {activeSlideIndex === 0 ? (
-                <Animated.View 
-                  style={[
-                    S.storyHeroCTAWrap, 
-                    { 
-                      bottom: insets.bottom + 24,
-                      opacity: storyMountAnim,
-                      transform: [{
-                        translateY: storyMountAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [40, 0],
-                        })
-                      }]
-                    }
-                  ]}
-                >
-                  <Pressable
-                    onPress={() => handleAddSubmission(selectedChallenge)}
-                    style={({ pressed }) => [S.storyHeroCTA, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
-                  >
-                    <AppText style={S.storyHeroCTAText}>📸 Add Yours</AppText>
-                  </Pressable>
-                </Animated.View>
-              ) : (
-                <View style={[S.storyBottomBar, { paddingBottom: Math.max(insets.bottom, spacing.base) }]}>
-                  <Pressable
-                    onPress={() => handleAddSubmission(selectedChallenge)}
-                    style={({ pressed }) => [S.storyAddYoursBtn, pressed && { opacity: 0.8 }]}
-                  >
-                    <AppText style={S.storyAddYoursBtnText}>📸 Add Yours</AppText>
-                  </Pressable>
-                </View>
-              )}
-              </ReanimatedAnimated.View>
-            </PanGestureHandler>
-          );
-        })()}
-      </Modal>
-
-      {/* ══════════════════════════════════════════════════════
           SHARED-ELEMENT HERO PHOTO VIEWER OVERLAY
           ══════════════════════════════════════════════════════ */}
       {heroVisible && (() => {
         const activePhoto = photos[heroIndex] ?? null;
         if (!activePhoto) return null;
+        const canDeleteGuestPhoto = viewerRole === 'guest' && activePhoto.isMine === true && Boolean(activePhoto.id) && Boolean(guestAuth);
 
         const targetX = 16;
         const targetY = Math.max(insets.top + 48, 56);
@@ -2352,7 +2686,6 @@ function EventDetailView({
 
         return (
           <View style={ABSOLUTE_FILL}>
-            {/* 1. Backdrop */}
             <Animated.View
               style={[
                 ABSOLUTE_FILL,
@@ -2360,7 +2693,6 @@ function EventDetailView({
               ]}
             />
 
-            {/* 2. Top Header Buttons */}
             <Animated.View
               style={[
                 {
@@ -2383,7 +2715,6 @@ function EventDetailView({
               </Pressable>
             </Animated.View>
 
-            {/* 3. Hero Shared Element Photo Container */}
             <Animated.View
               {...heroPanResponder.panHandlers}
               style={{
@@ -2409,7 +2740,6 @@ function EventDetailView({
               />
             </Animated.View>
 
-            {/* 4. Bottom Metadata Row */}
             <Animated.View
               style={[
                 {
@@ -2447,7 +2777,6 @@ function EventDetailView({
               </View>
             </Animated.View>
 
-            {/* 5. Three-Dot Overflow Menu Modal */}
             <Modal
               visible={heroMenuVisible}
               transparent
@@ -2494,6 +2823,14 @@ function EventDetailView({
                       <AppText style={S.menuDeleteText}>Delete Photo</AppText>
                     </Pressable>
                   )}
+                  {canDeleteGuestPhoto && (
+                    <Pressable
+                      style={[S.menuOption, S.menuOptionBorder]}
+                      onPress={() => deleteGuestGalleryPhoto(activePhoto, heroIndex)}
+                    >
+                      <AppText style={S.menuDeleteText}>Delete Photo</AppText>
+                    </Pressable>
+                  )}
                   <Pressable style={[S.menuOption, S.menuCancelOption]} onPress={() => setHeroMenuVisible(false)}>
                     <AppText style={S.menuCancelText}>Cancel</AppText>
                   </Pressable>
@@ -2504,7 +2841,458 @@ function EventDetailView({
         );
       })()}
 
-      {/* ── End-of-event reveal ───────────────────────────────── */}
+      {/* ══════════════════════════════════════════════════════
+          FLOATING CAMERA PILL FAB
+          ══════════════════════════════════════════════════════ */}
+      {(!heroVisible) && (
+        <View style={[S.fabWrap, { bottom: insets.bottom + 28 }]}>
+          <Pressable
+            style={({ pressed }) => [pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
+            onPress={eventHasEnded ? openSavePhotos : () => router.push(`/celebration/${celebration.id}/camera` as never)}
+            accessibilityRole="button"
+            accessibilityLabel={eventHasEnded ? 'Save photos' : 'Add a photo'}
+          >
+            {/* Outermost white border wrapper */}
+            <View style={S.fabOutermostWhiteBorder}>
+              {/* Inner black border wrapper */}
+              <View style={S.fabOuterBlackBorder}>
+                <View style={S.fabContentCircle}>
+                  {eventHasEnded ? (
+                    <View style={S.fabLabelRow}>
+                      <DownloadTrayIcon size={20} color="#000000" />
+                      <AppText style={S.fabLabelText}>Save</AppText>
+                    </View>
+                  ) : (
+                    <CameraFABIcon size={26} color="#000000" />
+                  )}
+                </View>
+              </View>
+            </View>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          SHARE MODAL
+          ══════════════════════════════════════════════════════ */}
+      <Modal
+        visible={shareVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShareVisible(false)}
+      >
+        <Pressable style={S.modalOverlay} onPress={() => setShareVisible(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[S.modalSheet, { paddingBottom: insets.bottom + spacing.xl }]}
+          >
+            <View style={S.sheetHandle} />
+
+            <View style={S.inviteHeader}>
+              <AppText variant="titleLarge" style={S.inviteTitle}>
+              Invite Guests
+              </AppText>
+              <AppText variant="bodySmall" tone="secondary" style={S.inviteSubtitle}>
+                Scan the QR code or share the invitation to join.
+              </AppText>
+            </View>
+
+            {celebration.event_code ? (
+              <QrCard
+                value={`${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`}
+                eventName={celebration.title}
+                footer={
+                  <View style={S.inviteCodeRow}>
+                    <View style={S.inviteCodeTitleWrap}>
+                      <AppText variant="eyebrow" style={S.inviteCodeLabel}>
+                        EVENT CODE
+                      </AppText>
+                    </View>
+                    <View style={S.inviteCodeDividerRow}>
+                      <View style={S.inviteCodeDivider} />
+                    </View>
+                    <View style={S.inviteCodeActionRow}>
+                      <AppText variant="bodyLarge" style={S.inviteCodeValue} numberOfLines={1} ellipsizeMode="middle">
+                        {celebration.event_code}
+                      </AppText>
+                      <Pressable
+                        onPress={() => void handleCopyCode()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Copy event code"
+                        hitSlop={8}
+                        style={({ pressed }) => [S.inviteCopyButton, pressed && { opacity: 0.88 }]}
+                      >
+                        <CopyIcon size={16} color="#FFFFFF" />
+                        <AppText variant="labelSmall" style={S.inviteCopyLabel}>
+                          Copy
+                        </AppText>
+                      </Pressable>
+                    </View>
+                  </View>
+                }
+              />
+            ) : null}
+
+            <Button
+              label="Share Invitation"
+              variant="primary"
+              size="medium"
+              leading={<ShareIcon size={18} color={colours.textOnBrand} />}
+              onPress={handleShareLink}
+            />
+            <Pressable
+              style={{ paddingVertical: spacing.sm, alignItems: 'center' }}
+              onPress={() => setShareVisible(false)}
+            >
+              <AppText variant="bodySmall" tone="secondary">Close</AppText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ══════════════════════════════════════════════════════
+          INSTAGRAM STORY CHALLENGE VIEWER
+          ══════════════════════════════════════════════════════ */}
+      {selectedChallenge ? (() => {
+          const totalSlides = 1 + storySubmissions.length;
+          const coverPhoto = storySubmissions.length > 0
+            ? { uri: storySubmissions[storySubmissions.length - 1].uri }
+            : getCoverSource();
+
+      return (
+            <PanGestureHandler
+              onGestureEvent={handlePanEvent}
+              onHandlerStateChange={handlePanStateChange}
+              activeOffsetY={[-12, 12]}
+              failOffsetX={[-24, 24]}
+            >
+              <ReanimatedAnimated.View style={[S.storyOverlay, storyOverlayAnimatedStyle]}>
+                {activeSlideIndex === 0 ? (
+                  <Image
+                    source={coverPhoto}
+                    style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
+                    resizeMode="cover"
+                    blurRadius={35}
+                  />
+                ) : (
+                  <Image
+                    source={{ uri: storySubmissions[activeSlideIndex - 1].uri }}
+                    style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
+                    resizeMode="cover"
+                  />
+                )}
+
+                <View
+                  style={[
+                    ABSOLUTE_FILL,
+                    { backgroundColor: activeSlideIndex === 0 ? 'rgba(0, 0, 0, 0.40)' : 'rgba(11, 11, 12, 0.25)' },
+                  ]}
+                />
+
+                <View style={ABSOLUTE_FILL} pointerEvents="box-none">
+                  <View style={{ flex: 1, flexDirection: 'row' }} pointerEvents="box-none">
+                    <Pressable
+                      style={S.storyTapZone}
+                      accessibilityRole="button"
+                      accessibilityLabel="Previous story photo"
+                      onPress={() => navigateStorySlide('prev')}
+                    />
+                    <Pressable
+                      style={S.storyTapZone}
+                      accessibilityRole="button"
+                      accessibilityLabel="Next story photo"
+                      onPress={() => navigateStorySlide('next')}
+                    />
+                  </View>
+                </View>
+
+                {activeSlideIndex === 0 ? (
+                  <Animated.View
+                    pointerEvents="none"
+                    style={[
+                      S.storyHeroContainer,
+                      {
+                        opacity: storyMountAnim,
+                        transform: [{
+                          translateY: storyMountAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [20, 0],
+                          }),
+                        }],
+                      },
+                    ]}
+                  >
+                    <View style={S.storyHeroIconRing}>
+                      <SharedChallengeIconSVG type={selectedChallenge.icon} size={32} />
+                    </View>
+                    <AppText style={S.storyHeroTitle}>{selectedChallenge.label}</AppText>
+
+                    <View style={S.storyHeroDividerRow}>
+                      <View style={S.storyHeroDividerLine} />
+                      <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
+                        <Path
+                          d="M7 0C7 3.866 3.866 7 0 7C3.866 7 7 10.134 7 14C7 10.134 10.134 7 14 7C10.134 7 7 3.866 7 0Z"
+                          fill="rgba(255, 255, 255, 0.6)"
+                        />
+                      </Svg>
+                      <View style={S.storyHeroDividerLine} />
+                    </View>
+
+                    <AppText style={S.storyHeroDesc}>
+                      {CHALLENGE_BRIEFS[selectedChallenge.icon]?.instr || 'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'}
+                    </AppText>
+                  </Animated.View>
+                ) : null}
+
+                <View style={[S.storyHeader, { paddingTop: insets.top + spacing.sm }]}>
+                  <View style={S.storyProgressBarRow}>
+                    {Array.from({ length: totalSlides }).map((_, i) => (
+                      <View key={i} style={S.storyProgressBarOuter}>
+                        <View
+                          style={[
+                            S.storyProgressBarInner,
+                            { width: i < activeSlideIndex ? '100%' : (i === activeSlideIndex ? '100%' : '0%') },
+                          ]}
+                        />
+                      </View>
+                    ))}
+                  </View>
+
+                  <View style={S.storyHeaderRowNew}>
+                    <View style={{ flex: 1, paddingLeft: 4 }}>
+                      {activeSlideIndex > 0 && (
+                        <View style={{ gap: 2 }}>
+                          <AppText style={{ fontFamily: 'InstrumentSans_600SemiBold', fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
+                            {storySubmissions[activeSlideIndex - 1].takenBy || 'Guest'}
+                          </AppText>
+                          <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 12, color: 'rgba(255, 255, 255, 0.8)', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
+                            Today at 7:42 PM
+                          </AppText>
+                        </View>
+                      )}
+                    </View>
+                    <Pressable
+                      onPress={dismissStory}
+                      style={S.storyCloseBtnNew}
+                      accessibilityRole="button"
+                      accessibilityLabel="Close story"
+                    >
+                      <CloseIcon size={24} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </View>
+
+                {activeSlideIndex === 0 ? (
+                  <Animated.View
+                    style={[
+                      S.storyHeroCTAWrap,
+                      {
+                        bottom: insets.bottom + 24,
+                        opacity: storyMountAnim,
+                        transform: [{
+                          translateY: storyMountAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [40, 0],
+                          }),
+                        }],
+                      },
+                    ]}
+                  >
+                    <Pressable
+                      onPress={() => handleAddSubmission(selectedChallenge)}
+                      style={({ pressed }) => [S.storyHeroCTA, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                    >
+                      <AppText style={S.storyHeroCTAText}>📸 Add Yours</AppText>
+                    </Pressable>
+                  </Animated.View>
+                ) : (
+                  <View style={[S.storyBottomBar, { paddingBottom: Math.max(insets.bottom, spacing.base) }]}>
+                    <Pressable
+                      onPress={() => handleAddSubmission(selectedChallenge)}
+                      style={({ pressed }) => [S.storyAddYoursBtn, pressed && { opacity: 0.8 }]}
+                    >
+                      <AppText style={S.storyAddYoursBtnText}>📸 Add Yours</AppText>
+                    </Pressable>
+                  </View>
+                )}
+              </ReanimatedAnimated.View>
+            </PanGestureHandler>
+          );
+        })() : null}
+
+      {/* ══════════════════════════════════════════════════════
+          SAVE PHOTOS MODAL
+          ══════════════════════════════════════════════════════ */}
+      <Modal
+        visible={saveVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => {
+          if (!saveSaving) setSaveVisible(false);
+        }}
+      >
+        <View style={S.saveOverlay}>
+          <Pressable
+            style={S.saveBackdrop}
+            onPress={() => {
+              if (!saveSaving) setSaveVisible(false);
+            }}
+          />
+
+          <View style={[S.saveSheet, { paddingBottom: insets.bottom + spacing.xl }]}>
+            <View style={S.sheetHandle} />
+
+            <View style={S.saveHeaderRow}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <AppText variant="titleLarge">Save photos</AppText>
+                <AppText variant="bodySmall" tone="secondary">
+                  Pick original or filtered, then choose the photos to save.
+                </AppText>
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (!saveSaving) setSaveVisible(false);
+                }}
+                style={S.saveCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close save sheet"
+              >
+                <CloseIcon size={18} color={colours.textSecondary} />
+              </Pressable>
+            </View>
+
+            {saveLoading ? (
+              <View style={S.saveLoadingWrap}>
+                <ActivityIndicator />
+              </View>
+            ) : (
+              <>
+                <View style={{ gap: spacing.sm }}>
+                  <AppText variant="bodyLarge">Save with original or filter?</AppText>
+                  <SegmentedControl
+                    accessibilityLabel="Save with original or filter?"
+                    value={saveMode}
+                    onChange={(value) => setSaveMode(value)}
+                    options={[
+                      { value: 'original', label: 'Original' },
+                      { value: 'filtered', label: 'Filter' },
+                    ]}
+                  />
+                </View>
+
+                <View style={S.saveSelectionRow}>
+                  <Pressable
+                    style={S.saveCheckboxAction}
+                    onPress={() => setAllSaveSelections(selectedSaveKeys.length !== saveItems.length)}
+                  >
+                    <View style={[S.saveCheckboxBox, selectedSaveKeys.length === saveItems.length && S.saveCheckboxBoxSelected]}>
+                      {selectedSaveKeys.length === saveItems.length ? <CheckIcon size={12} color="#000000" /> : null}
+                    </View>
+                    <AppText style={S.saveCheckboxLabel}>Select All</AppText>
+                  </Pressable>
+                  <Pressable
+                    style={S.saveCheckboxAction}
+                    onPress={() => selectChallengePhotos(!saveItems.some((item) => item.isChallenge && selectedSaveKeys.includes(item.key)))}
+                  >
+                    <View
+                      style={[
+                        S.saveCheckboxBox,
+                        saveItems.some((item) => item.isChallenge && selectedSaveKeys.includes(item.key)) && S.saveCheckboxBoxSelected,
+                      ]}
+                    >
+                      {saveItems.some((item) => item.isChallenge && selectedSaveKeys.includes(item.key)) ? (
+                        <CheckIcon size={12} color="#000000" />
+                      ) : null}
+                    </View>
+                    <AppText style={S.saveCheckboxLabel}>Select Challenges</AppText>
+                  </Pressable>
+                </View>
+
+                <FlatList
+                  data={saveItems}
+                  keyExtractor={(item) => item.key}
+                  numColumns={3}
+                  columnWrapperStyle={S.saveGridRow}
+                  contentContainerStyle={S.saveGrid}
+                  renderItem={({ item }) => {
+                    const isSelected = selectedSaveKeys.includes(item.key);
+                    return (
+                      <Pressable
+                        onPress={() => togglePhotoSelection(item.key)}
+                        style={({ pressed }) => [
+                          S.saveGridItem,
+                          isSelected && S.saveGridItemSelected,
+                          pressed && { opacity: 0.92 },
+                        ]}
+                      >
+                        <TreatedPhoto
+                          source={item.source}
+                          style={S.saveGridImage}
+                          resizeMode="cover"
+                          treatment={saveMode === 'filtered' ? primarySession?.photo_treatment : 'original'}
+                          dateStampEnabled={primarySession?.date_stamp_enabled}
+                          capturedAt={item.capturedAt}
+                          seedKey={item.seedKey}
+                          compact
+                        />
+                        <View style={[S.saveCheckBadge, isSelected && S.saveCheckBadgeSelected]}>
+                          {isSelected ? <CheckIcon size={14} color="#000000" /> : null}
+                        </View>
+                        {item.isChallenge ? (
+                          <View style={S.saveChallengeBadge}>
+                            <AppText style={S.saveChallengeBadgeText} numberOfLines={1}>
+                              {item.challengeLabel ?? 'Challenge'}
+                            </AppText>
+                          </View>
+                        ) : null}
+                      </Pressable>
+                    );
+                  }}
+                />
+
+                <Pressable
+                  style={[
+                    S.sheetBtnPrimary,
+                    { backgroundColor: colours.brandPrimary, opacity: saveSaving ? 0.65 : 1 },
+                  ]}
+                  disabled={saveSaving}
+                  onPress={() => void saveSelectedPhotos()}
+                >
+                  <AppText style={{ color: colours.textOnBrand, fontWeight: '700', fontSize: 15 }}>
+                    {saveSaving ? 'Saving…' : 'Save Photos'}
+                  </AppText>
+                </Pressable>
+              </>
+            )}
+          </View>
+
+          {filteredCaptureState ? (
+            <View
+              ref={filteredCaptureRef}
+              collapsable={false}
+              style={[
+                S.hiddenCaptureHost,
+                {
+                  width: filteredCaptureState.width,
+                  height: filteredCaptureState.height,
+                },
+              ]}
+            >
+              <TreatedPhoto
+                source={filteredCaptureState.source}
+                style={[S.hiddenCaptureFrame, { width: filteredCaptureState.width, height: filteredCaptureState.height }]}
+                resizeMode="cover"
+                treatment={primarySession?.photo_treatment}
+                dateStampEnabled={primarySession?.date_stamp_enabled}
+                capturedAt={filteredCaptureState.item.capturedAt}
+                seedKey={filteredCaptureState.item.seedKey}
+                onReady={filteredCaptureState.onReady}
+              />
+            </View>
+          ) : null}
+        </View>
+      </Modal>
+
       <EventRevealModal
         visible={reveal.visible}
         state={reveal.state}
@@ -2518,10 +3306,10 @@ function EventDetailView({
           reveal.dismiss();
         }}
       />
-
     </View>
   );
 }
+
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
@@ -2628,6 +3416,14 @@ const S = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
+  },
+  statusItemPressable: {
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  statusItemPressed: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   statusText: {
     fontFamily: 'InstrumentSans_600SemiBold',
@@ -2842,6 +3638,16 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  fabLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  fabLabelText: {
+    color: '#000000',
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 16,
+  },
 
   // ── Share modal ──
   modalOverlay: {
@@ -2850,12 +3656,13 @@ const S = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: colours.surfaceRaised,
+    backgroundColor: '#09090A',
     borderTopLeftRadius: radii.xxl,
     borderTopRightRadius: radii.xxl,
-    paddingHorizontal: layout.gutter,
-    paddingTop: spacing.base,
-    gap: spacing.md,
+    paddingHorizontal: 24,
+    paddingTop: spacing.lg,
+    gap: spacing.lg,
+    maxHeight: '92%',
   },
   sheetHandle: {
     width: 36,
@@ -2863,26 +3670,85 @@ const S = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colours.borderStrong,
     alignSelf: 'center',
+    marginBottom: spacing.sm,
+  },
+  inviteHeader: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  inviteTitle: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 30,
+    lineHeight: 34,
+    marginBottom: 2,
+  },
+  inviteSubtitle: {
+    color: 'rgba(255,255,255,0.62)',
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 22,
+    marginBottom: spacing.sm,
+  },
+  inviteCodeRow: {
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  inviteCodeTitleWrap: {
+    alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  qrCard: {
-    backgroundColor: colours.surface,
-    borderRadius: radii.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colours.borderSubtle,
-    padding: spacing.xl,
+  inviteCodeDividerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  qrIconWrap: {
-    backgroundColor: colours.textPrimary,
-    borderRadius: radii.lg,
-    padding: spacing.md,
+  inviteCodeDivider: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
-  qrCode: {
-    fontFamily: 'InstrumentSans_700Bold',
-    fontSize: 24,
+  inviteCodeActionRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 0,
+  },
+  inviteCodeLabel: {
+    color: 'rgba(255,255,255,0.56)',
+    textAlign: 'center',
     letterSpacing: 3,
+  },
+  inviteCodeValue: {
+    flexShrink: 1,
+    color: '#F1E7DA',
+    textAlign: 'left',
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: 5,
+  },
+  inviteCopyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: radii.pill,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.78)',
+  },
+  inviteCopyLabel: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   sheetBtnPrimary: {
     height: 52,
@@ -2897,6 +3763,163 @@ const S = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colours.borderStrong,
+  },
+
+  // ── Save modal ──
+  saveOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(5,5,6,0.88)',
+  },
+  saveBackdrop: {
+    ...ABSOLUTE_FILL,
+  },
+  saveSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    top: 80,
+    backgroundColor: colours.surfaceRaised,
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.base,
+    gap: spacing.md,
+    overflow: 'hidden',
+  },
+  saveHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  saveCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colours.surface,
+  },
+  saveLoadingWrap: {
+    minHeight: 180,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveSelectionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  saveCheckboxAction: {
+    flex: 1,
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colours.surface,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
+    paddingHorizontal: spacing.sm,
+  },
+  saveCheckboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colours.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  saveCheckboxBoxSelected: {
+    backgroundColor: colours.brandPrimary,
+    borderColor: colours.brandPrimary,
+  },
+  saveCheckboxLabel: {
+    fontFamily: 'InstrumentSans_500Medium',
+    fontSize: 13,
+    color: colours.textPrimary,
+    textAlign: 'center',
+  },
+  saveMetaRow: {
+    alignItems: 'flex-end',
+    marginTop: -spacing.xs,
+  },
+  saveGrid: {
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
+  },
+  saveGridRow: {
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  saveGridItem: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: colours.surface,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  saveGridItemSelected: {
+    borderColor: colours.brandPrimary,
+  },
+  saveGridImage: {
+    width: '100%',
+    height: '100%',
+  },
+  saveCheckBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(11, 11, 12, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveCheckBadgeSelected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#FFFFFF',
+  },
+  saveChallengeBadge: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(11, 11, 12, 0.65)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  saveChallengeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontFamily: 'InstrumentSans_600SemiBold',
+  },
+  saveEmptyWrap: {
+    paddingVertical: spacing.xl,
+    alignItems: 'center',
+  },
+  saveFooter: {
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  hiddenCaptureHost: {
+    position: 'absolute',
+    left: -10_000,
+    top: -10_000,
+    width: 1,
+    height: 1,
+    overflow: 'hidden',
+  },
+  hiddenCaptureFrame: {
+    width: 1,
+    height: 1,
   },
 
   // ── Fallback ──
@@ -2914,9 +3937,14 @@ const S = StyleSheet.create({
 
   // ── Story Viewer styles ──
   storyOverlay: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#000000',
-    position: 'relative',
+    zIndex: 250,
+    elevation: 250,
   },
   storyHeader: {
     position: 'absolute',
@@ -2948,6 +3976,14 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
+  },
+  storyHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  storyHeaderMenuBtn: {
+    padding: spacing.xs,
   },
   storyCloseBtnNew: {
     padding: spacing.xs,
@@ -3001,6 +4037,9 @@ const S = StyleSheet.create({
     right: 24,
     alignItems: 'center',
     zIndex: 10,
+  },
+  storyTapZone: {
+    flex: 1,
   },
   storyHeroCTA: {
     width: '100%',

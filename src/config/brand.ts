@@ -19,7 +19,7 @@ export const BRAND_CONFIG = {
   supportEmail: 'support@example.com',
   websiteUrl: 'https://example.com',
   /** Must match the Universal Link / App Link domain in `app.json`. */
-  guestDomain: 'http://localhost:8081',
+  guestDomain: 'https://event-camera-app-navy.vercel.app',
 } as const;
 
 export type BrandConfig = typeof BRAND_CONFIG;

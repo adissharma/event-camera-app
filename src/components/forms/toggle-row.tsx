@@ -62,8 +62,8 @@ export function ToggleRow({
         value={value}
         onValueChange={onValueChange}
         disabled={disabled}
-        trackColor={{ false: colours.surfaceRaised, true: colours.brandPrimary }}
-        thumbColor={value ? colours.textOnBrand : colours.textSecondary}
+        trackColor={{ false: colours.surfaceRaised, true: colours.background }}
+        thumbColor={colours.textPrimary}
         ios_backgroundColor={colours.surfaceRaised}
       />
     </View>

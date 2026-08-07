@@ -38,8 +38,10 @@ import * as Clipboard from 'expo-clipboard';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
+import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { QrCodeIcon, CloseIcon } from '@/components/ui/icons';
+import { CopyIcon, QrCodeIcon, ShareIcon } from '@/components/ui/icons';
+import { QrCard } from '@/features/sharing/qr-card';
 import { BRAND_CONFIG } from '@/config/brand';
 import {
   fetchCelebrationDetail,
@@ -58,6 +60,9 @@ import type { MediaSource } from '@/types/database';
 interface PhotoItem {
   uri: string;
   takenBy: string;
+  takenById?: string | null;
+  postedAt?: string | null;
+  submissionId?: string | null;
 }
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
@@ -193,7 +198,11 @@ function CameraRollPlusIcon({ size = 22, color = '#FFFFFF' }) {
 // ─── Camera / Viewfinder Screen ────────────────────────────────────────────────
 
 export default function CameraScreen() {
-  const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
+  const { celebrationId, captureTarget, challengeId } = useLocalSearchParams<{
+    celebrationId: string;
+    captureTarget?: string;
+    challengeId?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const cameraRef = useRef<any>(null);
@@ -217,6 +226,7 @@ export default function CameraScreen() {
   const celebration = detail?.celebration;
   const primarySession = detail?.primarySession;
   const limit = primarySession?.shot_limit_per_guest ?? null;
+  const isChallengeCapture = captureTarget === 'challenge' && Boolean(challengeId);
 
   // ── Upload pipeline ──
   //
@@ -225,8 +235,12 @@ export default function CameraScreen() {
   // hosts and guests, so the setting controls what actions are available to both.
   const isGuest = detail?.viewerRole === 'guest';
   const captureMode = primarySession?.capture_mode ?? 'camera_and_library';
-  const showCameraRollAction = captureMode !== 'camera_only';
-  const [guestAuth, setGuestAuth] = useState<{ slug: string; guestToken: string } | null>(null);
+  const showCameraRollAction = captureMode !== 'camera_only' && !isChallengeCapture;
+  const [guestAuth, setGuestAuth] = useState<{
+    slug: string;
+    guestToken: string;
+    guestSessionId: string;
+  } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
@@ -235,7 +249,11 @@ export default function CameraScreen() {
     (async () => {
       const found = await loadStoredGuestSessionByCelebrationId(String(celebrationId));
       if (!cancelled && found) {
-        setGuestAuth({ slug: found.slug, guestToken: found.session.guestToken });
+        setGuestAuth({
+          slug: found.slug,
+          guestToken: found.session.guestToken,
+          guestSessionId: found.session.guestSessionId,
+        });
       }
     })();
     return () => {
@@ -546,6 +564,65 @@ export default function CameraScreen() {
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
   }
 
+  async function commitChallengePhoto(uri: string) {
+    if (!celebrationId || !challengeId) {
+      throw new Error('Missing challenge capture context.');
+    }
+
+    setIsUploading(true);
+    try {
+      const userName = firstNameFrom(profile) || 'You';
+      const userId = profile?.id ?? session?.user.id ?? guestAuth?.guestSessionId ?? null;
+      const submissionsKey = `__mock_challenge_submissions_${celebrationId}_${challengeId}`;
+      const storedSubmissions = await AsyncStorage.getItem(submissionsKey);
+      let submissions: PhotoItem[] = [];
+      if (storedSubmissions) {
+        try {
+          submissions = JSON.parse(storedSubmissions).map((item: any) => {
+            if (typeof item === 'string') {
+              return { uri: item, takenBy: 'Guest' };
+            }
+            return item as PhotoItem;
+          });
+        } catch {
+          submissions = [];
+        }
+      }
+
+      const nextSubmissions = [
+        {
+          uri,
+          takenBy: userName,
+          takenById: userId,
+          postedAt: new Date().toISOString(),
+          submissionId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        },
+        ...submissions,
+      ];
+      await AsyncStorage.setItem(submissionsKey, JSON.stringify(nextSubmissions));
+
+      await queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebrationId)),
+      });
+      void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+      Alert.alert(
+        'Added to challenge',
+        'Your photo has been added to the challenge story.',
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              router.back();
+            },
+          },
+        ],
+        { cancelable: false },
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
   async function handleCapture() {
     if (outOfShots) {
       Alert.alert('Limit Reached', "You've reached the photo limit for this event.");
@@ -586,7 +663,11 @@ export default function CameraScreen() {
           // guessing the MIME type from the URI, which is unreliable for a
           // web capture's data: URI (no file extension to read).
           const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg';
-          await commitPhoto(photo.uri, 'camera', mimeType, photo.width, photo.height);
+          if (isChallengeCapture) {
+            await commitChallengePhoto(photo.uri);
+          } else {
+            await commitPhoto(photo.uri, 'camera', mimeType, photo.width, photo.height);
+          }
         }
       } catch (e) {
         console.error('Failed to capture photo:', e);
@@ -1001,58 +1082,80 @@ export default function CameraScreen() {
 
       {/* 5. Invite Modal */}
       {celebration && (
-        <Modal
-          visible={shareVisible}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setShareVisible(false)}
-        >
-          <View style={S.modalOverlay}>
-            <View style={[S.modalSheet, { paddingBottom: insets.bottom + spacing.xl }]}>
-              <View style={S.sheetHandle} />
+      <Modal
+        visible={shareVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShareVisible(false)}
+      >
+        <Pressable style={S.modalOverlay} onPress={() => setShareVisible(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[S.modalSheet, { paddingBottom: insets.bottom + spacing.xl }]}
+          >
+            <View style={S.sheetHandle} />
 
-              <AppText variant="titleLarge" style={{ textAlign: 'center', marginTop: spacing.xs, color: '#FFFFFF' }}>
+            <View style={S.inviteHeader}>
+              <AppText variant="titleLarge" style={S.inviteTitle}>
                 Invite Guests
               </AppText>
-              <AppText variant="bodySmall" tone="secondary" align="center">
-                Share the link or code so your guests can start contributing.
+              <AppText variant="bodySmall" tone="secondary" style={S.inviteSubtitle}>
+                Scan the QR code or share the invitation to join.
               </AppText>
-
-              {/* QR card */}
-              <View style={S.qrCard}>
-                <AppText variant="eyebrow" tone="secondary" align="center" style={{ letterSpacing: 1 }}>
-                  {celebration.title}
-                </AppText>
-                <View style={S.qrIconWrap}>
-                  <QrCodeIcon size={100} color={colours.brandPrimary} />
-                </View>
-                <AppText style={[S.qrCode, { color: colours.brandPrimary }]}>
-                  {celebration.event_code ?? '——————'}
-                </AppText>
-              </View>
-
-              <Pressable
-                style={[S.sheetBtnPrimary, { backgroundColor: colours.brandPrimary }]}
-                onPress={handleShareLink}
-              >
-                <AppText style={{ color: colours.textOnBrand, fontWeight: '700', fontSize: 15 }}>
-                  Share Link
-                </AppText>
-              </Pressable>
-              <Pressable style={S.sheetBtnSecondary} onPress={handleCopyCode}>
-                <AppText style={{ color: '#FFFFFF', fontWeight: '600', fontSize: 15 }}>
-                  Copy Code
-                </AppText>
-              </Pressable>
-              <Pressable
-                style={{ paddingVertical: spacing.sm, alignItems: 'center' }}
-                onPress={() => setShareVisible(false)}
-              >
-                <AppText variant="bodySmall" tone="secondary">Dismiss</AppText>
-              </Pressable>
             </View>
-          </View>
-        </Modal>
+
+            {celebration.event_code ? (
+            <QrCard
+                value={`${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`}
+                eventName={celebration.title}
+                footer={
+                  <View style={S.inviteCodeRow}>
+                    <View style={S.inviteCodeTitleWrap}>
+                      <AppText variant="eyebrow" style={S.inviteCodeLabel}>
+                        EVENT CODE
+                      </AppText>
+                    </View>
+                    <View style={S.inviteCodeDividerRow}>
+                      <View style={S.inviteCodeDivider} />
+                    </View>
+                    <View style={S.inviteCodeActionRow}>
+                      <AppText variant="bodyLarge" style={S.inviteCodeValue} numberOfLines={1} ellipsizeMode="middle">
+                        {celebration.event_code}
+                      </AppText>
+                      <Pressable
+                        onPress={() => void handleCopyCode()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Copy event code"
+                        hitSlop={8}
+                        style={({ pressed }) => [S.inviteCopyButton, pressed && { opacity: 0.88 }]}
+                      >
+                        <CopyIcon size={16} color="#FFFFFF" />
+                        <AppText variant="labelSmall" style={S.inviteCopyLabel}>
+                          Copy
+                        </AppText>
+                      </Pressable>
+                    </View>
+                  </View>
+                  }
+              />
+            ) : null}
+
+            <Button
+              label="Share Invitation"
+              variant="primary"
+              size="medium"
+              leading={<ShareIcon size={18} color={colours.textOnBrand} />}
+              onPress={handleShareLink}
+            />
+            <Pressable
+              style={{ paddingVertical: spacing.sm, alignItems: 'center' }}
+              onPress={() => setShareVisible(false)}
+            >
+              <AppText variant="bodySmall" tone="secondary">Close</AppText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
       )}
     </View>
   );
@@ -1322,12 +1425,13 @@ const S = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: '#1C1B19',
+    backgroundColor: '#09090A',
     borderTopLeftRadius: radii.xxl,
     borderTopRightRadius: radii.xxl,
-    paddingHorizontal: layout.gutter,
-    paddingTop: spacing.base,
-    gap: spacing.md,
+    paddingHorizontal: 24,
+    paddingTop: spacing.lg,
+    gap: spacing.lg,
+    maxHeight: '92%',
   },
   sheetHandle: {
     width: 36,
@@ -1335,26 +1439,85 @@ const S = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: colours.borderStrong,
     alignSelf: 'center',
+    marginBottom: spacing.sm,
+  },
+  inviteHeader: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.xs,
+    paddingTop: spacing.xs,
+  },
+  inviteTitle: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 30,
+    lineHeight: 34,
+    marginBottom: 2,
+  },
+  inviteSubtitle: {
+    color: 'rgba(255,255,255,0.62)',
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 22,
+    marginBottom: spacing.sm,
+  },
+  inviteCodeRow: {
+    alignSelf: 'stretch',
+    alignItems: 'stretch',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  inviteCodeTitleWrap: {
+    alignItems: 'center',
     marginBottom: spacing.xs,
   },
-  qrCard: {
-    backgroundColor: '#0B0B0C',
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-    padding: spacing.xl,
+  inviteCodeDividerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
   },
-  qrIconWrap: {
-    backgroundColor: '#EFE9E0',
-    borderRadius: radii.lg,
-    padding: spacing.md,
+  inviteCodeDivider: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.10)',
   },
-  qrCode: {
-    fontFamily: 'InstrumentSans_700Bold',
-    fontSize: 24,
+  inviteCodeActionRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 0,
+  },
+  inviteCodeLabel: {
+    color: 'rgba(255,255,255,0.56)',
+    textAlign: 'center',
     letterSpacing: 3,
+  },
+  inviteCodeValue: {
+    flexShrink: 1,
+    color: '#F1E7DA',
+    textAlign: 'left',
+    fontSize: 28,
+    lineHeight: 34,
+    letterSpacing: 5,
+  },
+  inviteCopyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: radii.pill,
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.78)',
+  },
+  inviteCopyLabel: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   sheetBtnPrimary: {
     height: 52,

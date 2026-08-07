@@ -2,10 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 import {
   loadStoredGuestSession,
+  loadStoredGuestSessionByCelebrationId,
   clearStoredGuestSession,
   guestSessionStorage,
   getDeviceFingerprint,
   updateGuestDisplayName,
+  fetchGuestEventPreview,
   fetchGuestGallery,
   type GuestSession,
 } from './guest-session';
@@ -68,6 +70,39 @@ describe('Guest Session persistence and security', () => {
     });
   });
 
+  describe('Reverse lookup by celebrationId', () => {
+    // `/celebration/[celebrationId]/*` routes only have the celebrationId, not
+    // the event code the guest originally joined with — this is what lets
+    // `fetchCelebrationDetail` find a guest's token from just that route param.
+    it('resolves a guest session from its celebrationId alone', async () => {
+      await guestSessionStorage.set('hen-do-2026', mockSession);
+
+      const found = await loadStoredGuestSessionByCelebrationId(mockSession.celebrationId);
+
+      expect(found).not.toBeNull();
+      expect(found?.slug).toBe('hen-do-2026');
+      expect(found?.session).toEqual(mockSession);
+    });
+
+    it('returns null for a celebrationId this device never joined', async () => {
+      await guestSessionStorage.set('hen-do-2026', mockSession);
+
+      const found = await loadStoredGuestSessionByCelebrationId('some_other_celebration');
+
+      expect(found).toBeNull();
+    });
+
+    it('stays correct across a rejoin under a different display name', async () => {
+      await guestSessionStorage.set('hen-do-2026', mockSession);
+      const renamed: GuestSession = { ...mockSession, displayName: 'Dave Edited' };
+      await guestSessionStorage.set('hen-do-2026', renamed);
+
+      const found = await loadStoredGuestSessionByCelebrationId(mockSession.celebrationId);
+
+      expect(found?.session.displayName).toBe('Dave Edited');
+    });
+  });
+
   describe('Membership and name editing idempotency', () => {
     it('renames display names locally and updates state', async () => {
       // Arrange
@@ -84,6 +119,29 @@ describe('Guest Session persistence and security', () => {
   });
 
   describe('Gallery access, locks, and visibility scenarios (Dev fallback)', () => {
+    it('does not fall back to the first seeded demo event for an unknown code', async () => {
+      await AsyncStorage.setItem(
+        '__mock_celebrations',
+        JSON.stringify([
+          {
+            id: 'demo-1',
+            title: 'Demo Event',
+            publicSlug: 'demo-slug',
+            endsAt: new Date(Date.now() + 100000).toISOString(),
+            primarySession: {
+              ends_at: new Date(Date.now() + 100000).toISOString(),
+              shot_limit_per_guest: 10,
+            },
+            coverStoragePath: null,
+          },
+        ])
+      );
+
+      await expect(fetchGuestEventPreview('not-a-real-code')).rejects.toThrow(
+        'No event found for code "not-a-real-code".'
+      );
+    });
+
     it('fails if no session matches or guestToken is invalid', async () => {
       // Act
       await expect(loadStoredGuestSession('non-existent')).resolves.toBeNull();

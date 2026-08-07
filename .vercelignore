@@ -1,0 +1,9 @@
+# Native projects and dependencies are irrelevant to the web build and
+# together contain 70k+ files — well past Vercel's per-deploy file cap.
+# Vercel installs its own node_modules server-side from package-lock.json.
+node_modules/
+ios/
+android/
+.expo/
+dist/
+.git/

@@ -9,6 +9,7 @@ export interface OptionCardProps {
   description?: string;
   selected: boolean;
   onPress: () => void;
+  layoutMode?: 'horizontal' | 'vertical';
   /** Shown instead of the tick when the option is not available on this plan. */
   locked?: boolean;
   lockedReason?: string;
@@ -30,11 +31,14 @@ export function OptionCard({
   description,
   selected,
   onPress,
+  layoutMode = 'horizontal',
   locked = false,
   lockedReason,
   trailing,
   style,
 }: OptionCardProps) {
+  const isVertical = layoutMode === 'vertical';
+
   return (
     <Pressable
       accessibilityRole="radio"
@@ -51,8 +55,8 @@ export function OptionCard({
       }}
       style={[
         {
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: isVertical ? 'column' : 'row',
+          alignItems: isVertical ? 'stretch' : 'center',
           gap: spacing.base,
           minHeight: layout.minTouchTarget + 8,
           padding: spacing.base,
@@ -65,7 +69,7 @@ export function OptionCard({
         style,
       ]}
     >
-      <View style={{ flex: 1, gap: spacing.xxs }}>
+      <View style={{ flex: isVertical ? undefined : 1, gap: spacing.xxs }}>
         <AppText variant="labelLarge">{label}</AppText>
         {description ? (
           <AppText variant="bodySmall" tone="secondary">
@@ -94,6 +98,7 @@ export function OptionCard({
           borderRadius: 12,
           alignItems: 'center',
           justifyContent: 'center',
+          alignSelf: isVertical ? 'flex-end' : 'auto',
           borderWidth: selected ? 0 : layout.hairline,
           borderColor: colours.borderStrong,
           backgroundColor: selected ? colours.brandPrimary : 'transparent',

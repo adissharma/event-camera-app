@@ -111,6 +111,27 @@ export function CloseIcon({ size = 16, color = colours.textPrimary }: IconProps)
   );
 }
 
+export function CopyIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M9 5h10v10H9V5z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M5 9h10v10H5V9z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function LockIcon({ size = 16, color = colours.textPrimary }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -323,6 +344,99 @@ export function PeopleIcon({ size = 16, color = colours.textPrimary }: IconProps
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * Link.
+ *
+ * Two interlocking arcs rather than a chain of rectangles — at 20px the
+ * rectangular form fills in and reads as a smudge.
+ */
+export function LinkIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export function ShareIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M12 3v12"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M8 7l4-4 4 4"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/**
+ * Party popper.
+ *
+ * The one moment in the product that earns a celebratory mark. Drawn as an
+ * outline in the warm accent so it sits with the rest of the iconography — a
+ * 🎉 emoji would arrive full-colour, ignore the palette, and change size
+ * between platforms on the single screen where composition matters most.
+ */
+export function CelebrationIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {/* Cone */}
+      <Path
+        d="M3 21l4.5-12.5L15.5 16.5 3 21z"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Streamers leaving the mouth */}
+      <Path
+        d="M13 3.5c1.2.7 1.5 2 .8 3.2M17.5 6c1.4 0 2.4 1 2.4 2.4M15.8 11.4c1.1-1.1 2.7-1.1 3.8 0"
+        stroke={color}
+        strokeWidth={1.6}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* Scattered confetti */}
+      <Path
+        d="M20.5 3.5h.01M11.5 8.5h.01M21 14h.01"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinecap="round"
       />
     </Svg>
   );

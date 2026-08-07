@@ -1,16 +1,15 @@
+import type { ReactNode } from 'react';
 import { View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
-import { AppText } from '@/components/ui/text';
-import { BrandLogo } from '@/components/brand/brand-logo';
-import { colours, layout, radii, spacing } from '@/design';
+import { radii, spacing } from '@/design';
 
 export interface QrCardProps {
   /** The full guest link. Contains the access token. */
   value: string;
   eventName: string;
-  supportingLine?: string;
   size?: number;
+  footer?: ReactNode;
 }
 
 /**
@@ -24,28 +23,27 @@ export interface QrCardProps {
  * Error correction is set to M rather than L so the code still scans when the
  * card is printed small, creased, or read across a dim room.
  */
-export function QrCard({ value, eventName, supportingLine, size = 200 }: QrCardProps) {
+export function QrCard({ value, eventName, size = 216, footer }: QrCardProps) {
   return (
     <View
       accessible
       accessibilityLabel={`QR code for ${eventName}`}
       style={{
         alignItems: 'center',
-        gap: spacing.base,
-        padding: spacing.xl,
-        borderRadius: radii.xl,
-        backgroundColor: colours.brandPrimary,
-        borderWidth: layout.hairline,
-        borderColor: colours.borderStrong,
+        gap: spacing.sm,
+        width: '100%',
       }}
     >
-      <BrandLogo height={22} />
-
       <View
         style={{
           padding: spacing.md,
-          borderRadius: radii.md,
+          borderRadius: radii.xl,
           backgroundColor: '#FFFFFF',
+          shadowColor: '#000000',
+          shadowOpacity: 0.18,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 6,
         }}
       >
         <QRCode
@@ -59,23 +57,7 @@ export function QrCard({ value, eventName, supportingLine, size = 200 }: QrCardP
         />
       </View>
 
-      <View style={{ alignItems: 'center', gap: spacing.xxs }}>
-        <AppText
-          variant="titleMedium"
-          align="center"
-          numberOfLines={2}
-          style={{ color: colours.textOnBrand }}
-        >
-          {eventName}
-        </AppText>
-        <AppText
-          variant="caption"
-          align="center"
-          style={{ color: colours.textOnBrand, opacity: 0.7 }}
-        >
-          {supportingLine ?? 'Scan to add your photos'}
-        </AppText>
-      </View>
+      {footer ? <View style={{ width: '100%' }}>{footer}</View> : null}
     </View>
   );
 }

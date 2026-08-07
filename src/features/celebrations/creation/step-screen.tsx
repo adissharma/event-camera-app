@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { View, Alert, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
@@ -74,6 +74,7 @@ export function CreationStepScreen({
   onSave,
 }: CreationStepScreenProps) {
   const router = useRouter();
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
 
@@ -110,7 +111,7 @@ export function CreationStepScreen({
           queryKey: celebrationDetailKeys.detail(draft.editCelebrationId!),
         });
         await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
-        router.replace(`/celebration/${draft.editCelebrationId}/edit`);
+        navigation.goBack();
       } catch (e: any) {
         Alert.alert('Error', e.message || 'Failed to save changes.');
       } finally {
@@ -148,7 +149,9 @@ export function CreationStepScreen({
       <View style={[{ gap: spacing.xl }, scrollable ? null : { flex: 1 }]}>
         <View style={styles.topNav}>
           <Pressable 
-            onPress={() => router.back()} 
+            onPress={() => {
+              navigation.goBack();
+            }}
             style={styles.backBtn}
             accessibilityRole="button"
             accessibilityLabel="Go back"

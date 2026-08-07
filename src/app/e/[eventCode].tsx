@@ -12,15 +12,14 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
-import { CameraIcon, CameraSparkleIcon, ClockIcon, PersonIcon } from '@/components/ui/icons';
 import { colours, layout, radii, spacing } from '@/design';
+import { GuestEventCover } from '@/features/celebrations/guest-event-cover';
 import {
   fetchGuestEventPreview,
   guestSessionKeys,
@@ -32,14 +31,15 @@ import {
 import { useAuth } from '@/features/auth/context';
 import { fetchMyProfile, profileKeys } from '@/services/profile';
 import { isBackendConfigured } from '@/lib/supabase/client';
+import { IS_APP_CLIP } from '@/config/app-config';
 
 /** Cover art for the development fallback, keyed the same way as the dashboard. */
 const COVER_MAP: Record<string, ReturnType<typeof require>> = {
-  modern: require('../../../assets/images/placeholders/christian_wedding.png'),
-  classic: require('../../../assets/images/placeholders/christian_wedding.png'),
-  vibrant: require('../../../assets/images/placeholders/hindu_wedding.png'),
-  retro: require('../../../assets/images/placeholders/treatment_preview_1.png'),
-  editorial: require('../../../assets/images/placeholders/treatment_preview_2.png'),
+  modern: require('../../../assets/images/placeholders/create_event_cover.png'),
+  classic: require('../../../assets/images/placeholders/create_event_cover.png'),
+  vibrant: require('../../../assets/images/placeholders/create_event_cover.png'),
+  retro: require('../../../assets/images/placeholders/create_event_cover.png'),
+  editorial: require('../../../assets/images/placeholders/create_event_cover.png'),
 };
 const FALLBACK_COVER = require('../../../assets/images/placeholders/create_event_cover.png');
 
@@ -151,8 +151,18 @@ export default function GuestEntryScreen() {
   const isNameValid = showReturningWelcome || trimmedName.length > 0;
 
   const handleEnterGallery = useCallback(() => {
-    router.replace(`/e/${eventCode}/gallery` as never);
-  }, [eventCode, router]);
+    // The App Clip target bundles only `src/app-clip/*` routes, so it stays
+    // on its own self-contained gallery here. The full app (native + web)
+    // reuses the real Event Gallery so guests get the same experience hosts
+    // do, gated by role.
+    if (IS_APP_CLIP) {
+      router.replace(`/e/${eventCode}/gallery` as never);
+      return;
+    }
+    if (storedSession) {
+      router.replace(`/celebration/${storedSession.celebrationId}` as never);
+    }
+  }, [eventCode, storedSession, router]);
 
   const handleJoin = useCallback(async () => {
     if (isJoining) return; // Guards against a double tap submitting twice.
@@ -178,7 +188,11 @@ export default function GuestEntryScreen() {
         displayName: trimmedName,
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.replace(`/e/${eventCode}/gallery` as never);
+      if (IS_APP_CLIP) {
+        router.replace(`/e/${eventCode}/gallery` as never);
+      } else {
+        router.replace(`/celebration/${joinedSession.celebrationId}` as never);
+      }
     } catch (e) {
       // The typed name survives the failure — retyping it is the last thing a
       // guest should have to do after a network blip.
@@ -208,6 +222,7 @@ export default function GuestEntryScreen() {
   const coverHeight = Math.round(viewportHeight * COVER_HEIGHT_RATIO);
   const shotsLeft =
     preview.shotLimit === null ? null : Math.max(0, preview.shotLimit - preview.shotsUsed);
+  const accent = preview.themeAccent ?? colours.accentWarm;
 
   return (
     <View style={S.root}>
@@ -225,153 +240,38 @@ export default function GuestEntryScreen() {
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          {/* ── Cover ─────────────────────────────────────────────── */}
-          <View style={[S.cover, { height: coverHeight }]}>
-            <Image
-              source={resolveCover(preview.coverStoragePath)}
-              style={S.coverImage}
-              resizeMode="cover"
-              accessibilityLabel={`Cover photograph for ${preview.title}`}
-            />
-
-            <LinearGradient
-              colors={SCRIM_COLORS}
-              locations={SCRIM_LOCATIONS}
-              style={S.scrim}
-              pointerEvents="none"
-            />
-
-            {/* Event identity sits in the dark end of the ramp, so it reads as
-                emerging from the photograph rather than floating on it. */}
-            <View style={S.identity}>
-              <AppText variant="eyebrow" style={S.eyebrow}>
-                You&rsquo;re invited
-              </AppText>
-
-              <AppText
-                variant="displayLarge"
-                align="center"
-                numberOfLines={2}
-                // Shrinks a long event name rather than cutting it off.
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                style={S.title}
-              >
-                {preview.title}
-              </AppText>
-
-              <View style={S.detailRow}>
-                <Detail
-                  icon={<ClockIcon size={18} color={colours.accentWarm} />}
-                  value={countdown}
-                  label="Time left"
-                />
-                <View style={S.detailDivider} />
-                <Detail
-                  icon={<CameraIcon size={18} color={colours.accentWarm} />}
-                  value={shotsLeft === null ? '∞' : String(shotsLeft)}
-                  label="Shots left"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* ── Form ──────────────────────────────────────────────── */}
-          <View style={S.form}>
-            {showReturningWelcome ? (
-              <View style={S.welcomeContainer}>
-                <AppText variant="bodyLarge" style={S.welcomeText}>
-                  Welcome back, <AppText style={S.boldText}>{name}</AppText>.
-                </AppText>
-                <Pressable onPress={async () => {
-                  await clearStoredGuestSession(String(slug));
-                  setStoredSession(null);
-                  setName('');
-                  setIsEditingName(true);
-                }} accessibilityRole="button">
-                  <AppText style={S.changeNameLink}>Not you?</AppText>
-                </Pressable>
-              </View>
-            ) : showSignedInWelcome ? (
-              <View style={S.welcomeContainer}>
-                <AppText variant="bodyLarge" style={S.welcomeText}>
-                  Welcome, <AppText style={S.boldText}>{profile?.display_name}</AppText>.
-                </AppText>
-                <Pressable onPress={() => {
-                  setName('');
-                  setIsEditingName(true);
-                }} accessibilityRole="button">
-                  <AppText style={S.changeNameLink}>Not you?</AppText>
-                </Pressable>
-              </View>
-            ) : (
-              <View
-                style={[
-                  S.field,
-                  showValidation && !isNameValid && S.fieldInvalid,
-                ]}
-              >
-                <PersonIcon size={20} color={colours.textSecondary} />
-                <TextInput
-                  ref={inputRef}
-                  value={name}
-                  onChangeText={(next) => {
-                    setName(next);
-                    if (next.trim()) setShowValidation(false);
-                    if (error) setError(null);
-                  }}
-                  placeholder="Enter your name"
-                  placeholderTextColor={colours.textSecondary}
-                  selectionColor={colours.brandPrimary}
-                  style={S.fieldInput}
-                  maxLength={NAME_MAX_LENGTH}
-                  autoCapitalize="words"
-                  autoComplete="name"
-                  textContentType="name"
-                  returnKeyType="go"
-                  onSubmitEditing={() => void handleJoin()}
-                  accessibilityLabel="Your name"
-                  editable={!isJoining}
-                />
-              </View>
-            )}
-
-            {showValidation && !isNameValid && !showReturningWelcome ? (
-              <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">
-                Enter your name to join.
-              </AppText>
-            ) : null}
-
-            {error ? (
-              <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">
-                {error}
-              </AppText>
-            ) : null}
-
-            <Pressable
-              onPress={() => void handleJoin()}
-              disabled={!isNameValid || isJoining}
-              accessibilityRole="button"
-              accessibilityLabel={showReturningWelcome ? "Enter the gallery" : "Join the event"}
-              accessibilityState={{ disabled: !isNameValid || isJoining }}
-              style={({ pressed }) => [
-                S.cta,
-                (!isNameValid || isJoining) && S.ctaDisabled,
-                pressed && S.ctaPressed,
-              ]}
-            >
-              {isJoining ? (
-                <ActivityIndicator color={colours.textOnBrand} />
-              ) : (
-                <>
-                  <CameraSparkleIcon size={22} color={colours.textOnBrand} />
-                  <AppText variant="labelLarge" style={S.ctaLabel}>
-                    {showReturningWelcome ? "Enter the gallery" : "Join the event"}
-                  </AppText>
-                </>
-              )}
-            </Pressable>
-          </View>
+          <GuestEventCover
+            coverSource={resolveCover(preview.coverStoragePath)}
+            coverHeight={coverHeight}
+            title={preview.title}
+            countdownLabel={countdown}
+            shotsLeftLabel={shotsLeft === null ? '∞' : String(shotsLeft)}
+            accent={accent}
+            welcomeName={showReturningWelcome ? name : showSignedInWelcome ? profile?.display_name ?? null : null}
+            welcomePrefix={showReturningWelcome ? 'Welcome back' : 'Welcome'}
+            onChangeNamePress={async () => {
+              if (showReturningWelcome) {
+                await clearStoredGuestSession(String(slug));
+                setStoredSession(null);
+              }
+              setName('');
+              setIsEditingName(true);
+            }}
+            nameInputRef={inputRef}
+            nameValue={name}
+            onNameChange={(next) => {
+              setName(next);
+              if (next.trim()) setShowValidation(false);
+              if (error) setError(null);
+            }}
+            showNameInput={!showReturningWelcome && !showSignedInWelcome}
+            showValidation={showValidation && !isNameValid && !showReturningWelcome}
+            error={error}
+            isNameValid={isNameValid}
+            isJoining={isJoining}
+            ctaLabel={showReturningWelcome ? 'Enter the gallery' : 'Join the event'}
+            onCtaPress={() => void handleJoin()}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

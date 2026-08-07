@@ -25,6 +25,7 @@ export interface UseRevealModalOptions {
   endsAt: string | null | undefined;
   revealAt: string | null | undefined;
   revealMode: RevealMode | null | undefined;
+  viewerCanSeePhotos?: boolean;
   /** False while the event is still loading — nothing is decided until it lands. */
   ready: boolean;
   /**
@@ -72,7 +73,16 @@ const MILESTONE: Record<Exclude<RevealModalState, 'hidden'>, RevealMilestone> = 
  * zero early, refetches, is told no, and keeps waiting.
  */
 export function useRevealModal(options: UseRevealModalOptions): RevealModalController {
-  const { celebrationId, viewerId, endsAt, revealAt, revealMode, ready, refresh } = options;
+  const {
+    celebrationId,
+    viewerId,
+    endsAt,
+    revealAt,
+    revealMode,
+    viewerCanSeePhotos,
+    ready,
+    refresh,
+  } = options;
 
   const [ack, setAck] = useState<RevealAcknowledgement | null>(null);
   const [confirming, setConfirming] = useState(false);
@@ -88,7 +98,9 @@ export function useRevealModal(options: UseRevealModalOptions): RevealModalContr
   // tear down and rebuild the one-second interval each time — and since the
   // interval itself sets state, that is a self-sustaining loop.
   const refreshRef = useRef(refresh);
-  refreshRef.current = refresh;
+  useEffect(() => {
+    refreshRef.current = refresh;
+  }, [refresh]);
 
   // ── Acknowledgement ───────────────────────────────────────────────
   useEffect(() => {
@@ -132,7 +144,7 @@ export function useRevealModal(options: UseRevealModalOptions): RevealModalContr
   const ended = isEventEnded({ now, endsAt });
   const remaining = msUntilReveal({ now, revealAt, revealMode });
 
-  const state = resolveRevealModalState({ now, endsAt, revealAt, revealMode });
+  const state = resolveRevealModalState({ now, endsAt, revealAt, revealMode, viewerCanSeePhotos });
 
   // ── The countdown, and the confirmation at zero ───────────────────
 

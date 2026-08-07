@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
+import { listThemes } from '@/services/themes';
 
 /**
  * A guest's identity for one event, on one device.
@@ -32,6 +33,7 @@ export interface GuestEventPreview {
   shotLimit: number | null;
   shotsUsed: number;
   coverStoragePath: string | null;
+  themeAccent: string | null;
   /** Set when this device has already joined — the form is then skipped. */
   existingDisplayName: string | null;
 }
@@ -65,13 +67,20 @@ export const guestSessionStorage = {
 
   async set(eventCode: string, session: GuestSession): Promise<void> {
     const cleanCode = eventCode.trim().toLowerCase();
+    // Also indexed by celebrationId, so screens reached only with a
+    // celebrationId route param (`/celebration/[celebrationId]/*`) can find
+    // which event code this device joined under — see
+    // `loadStoredGuestSessionByCelebrationId`.
+    const indexKey = `guest_session_celebration_${session.celebrationId}`;
     try {
       if (Platform.OS === 'web') {
         if (typeof window !== 'undefined' && window.localStorage) {
           window.localStorage.setItem(`guest_session_${cleanCode}`, JSON.stringify(session));
+          window.localStorage.setItem(indexKey, cleanCode);
         }
       } else {
         await AsyncStorage.setItem(`guest_session_${cleanCode}`, JSON.stringify(session));
+        await AsyncStorage.setItem(indexKey, cleanCode);
       }
     } catch {}
   },
@@ -87,8 +96,53 @@ export const guestSessionStorage = {
         await AsyncStorage.removeItem(`guest_session_${cleanCode}`);
       }
     } catch {}
-  }
+  },
+
+  /** The event code a guest session was stored under, given its celebrationId. */
+  async getEventCodeForCelebration(celebrationId: string): Promise<string | null> {
+    const indexKey = `guest_session_celebration_${celebrationId}`;
+    try {
+      if (Platform.OS === 'web') {
+        return typeof window !== 'undefined' && window.localStorage
+          ? window.localStorage.getItem(indexKey)
+          : null;
+      }
+      return await AsyncStorage.getItem(indexKey);
+    } catch {
+      return null;
+    }
+  },
 };
+
+async function readMockGalleryVisibility(celebrationId: string): Promise<string | null> {
+  try {
+    const raw =
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage
+        ? window.localStorage.getItem('__mock_celebrations')
+        : await AsyncStorage.getItem('__mock_celebrations');
+
+    if (!raw) return null;
+
+    const list = JSON.parse(raw) as { id?: string; primarySession?: { gallery_visibility?: string } }[];
+    const match = list.find((item) => item.id === celebrationId);
+    return match?.primarySession?.gallery_visibility ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveThemeAccent(themeKey: string | null | undefined): Promise<string | null> {
+  if (!themeKey) return null;
+
+  try {
+    const themes = await listThemes();
+    const match = themes.find((theme) => theme.id === themeKey || theme.slug === themeKey);
+    const accent = (match?.design_tokens as { accent?: unknown } | null | undefined)?.accent;
+    return typeof accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * A stable per-device identifier.
@@ -123,6 +177,25 @@ export async function getDeviceFingerprint(): Promise<string> {
 /** The remembered session for this event on this device, if there is one. */
 export async function loadStoredGuestSession(slug: string): Promise<GuestSession | null> {
   return guestSessionStorage.get(slug);
+}
+
+/**
+ * The remembered session for this device, found via celebrationId rather than
+ * event code.
+ *
+ * `/celebration/[celebrationId]/*` routes only have the celebrationId — not
+ * the slug the guest originally joined with — so they cannot call
+ * `loadStoredGuestSession` directly. This resolves the slug first via the
+ * reverse index `guestSessionStorage` maintains, then loads the session.
+ */
+export async function loadStoredGuestSessionByCelebrationId(
+  celebrationId: string
+): Promise<{ slug: string; session: GuestSession } | null> {
+  const slug = await guestSessionStorage.getEventCodeForCelebration(celebrationId);
+  if (!slug) return null;
+  const session = await guestSessionStorage.get(slug);
+  if (!session) return null;
+  return { slug, session };
 }
 
 async function storeGuestSession(slug: string, session: GuestSession): Promise<void> {
@@ -174,7 +247,16 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       p_event_code: slug,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[guest-preview] RPC get_event_preview_by_code failed', {
+        slug,
+        message: error.message,
+        code: (error as { code?: string }).code,
+        details: (error as { details?: string }).details,
+        hint: (error as { hint?: string }).hint,
+      });
+      throw error;
+    }
 
     const preview = data as unknown as {
       celebration_id: string;
@@ -182,7 +264,16 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       ends_at: string | null;
       shot_limit_per_guest: number | null;
       cover_storage_path: string | null;
-    };
+      theme_accent?: string | null;
+      default_theme_id?: string | null;
+    } | null;
+
+    // A code that matches nothing returns null, not an error. Say so plainly
+    // rather than reading through it and throwing a TypeError that the catch
+    // below would then disguise as a backend outage.
+    if (!preview) {
+      throw new Error(`No event found for code "${slug}".`);
+    }
 
     return {
       celebrationId: preview.celebration_id,
@@ -191,16 +282,30 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       shotLimit: preview.shot_limit_per_guest,
       shotsUsed: stored?.shotsUsed ?? 0,
       coverStoragePath: preview.cover_storage_path,
+      themeAccent:
+        preview.theme_accent ??
+        (await resolveThemeAccent(preview.default_theme_id ?? null)) ??
+        null,
       existingDisplayName: stored?.displayName ?? null,
     };
   } catch (err) {
-    // Same development fallback every other service in this app uses, so the
-    // whole guest journey stays exercisable without a backend.
+    // The offline fallback exists so the guest journey stays exercisable with
+    // no backend. It must NOT run when a backend IS configured: doing so turns
+    // every real failure — bad credentials, network, RLS, a missing row — into
+    // the same "no longer available" message, which is undiagnosable and hid a
+    // completely empty database for weeks.
+    if (isBackendConfigured) {
+      console.error('[guest-preview] backend configured but lookup failed', err);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+
     const raw = await AsyncStorage.getItem('__mock_celebrations');
     const list = raw ? (JSON.parse(raw) as any[]) : [];
-    const found = list.find((item) => item.publicSlug === slug) ?? list[0];
+    const found = list.find((item) => item.publicSlug === slug);
 
-    if (!found) throw new Error('This invitation is no longer available.');
+    if (!found) {
+      throw new Error(`No event found for code "${slug}".`);
+    }
 
     return {
       celebrationId: found.id,
@@ -209,6 +314,7 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       shotLimit: found.primarySession?.shot_limit_per_guest ?? 20,
       shotsUsed: stored?.shotsUsed ?? 0,
       coverStoragePath: found.coverStoragePath ?? null,
+      themeAccent: (await resolveThemeAccent(found.defaultThemeId ?? null)) ?? null,
       existingDisplayName: stored?.displayName ?? null,
     };
   }
@@ -309,6 +415,7 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
   if (!isBackendConfigured) {
     // Development fallback
     const preview = await fetchGuestEventPreview(cleanSlug);
+    const galleryVisibility = (await readMockGalleryVisibility(preview.celebrationId)) ?? 'all_guests';
     
     // Load mock photos to verify returning guest visual states
     const mockPhotosKey = `__mock_photos_${preview.celebrationId}`;
@@ -343,10 +450,10 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
         name: 'Primary Session',
         reveal_mode: 'instant',
         reveal_at: null,
-        gallery_visibility: 'all_guests',
+        gallery_visibility: galleryVisibility,
         shot_limit_per_guest: preview.shotLimit,
         guest_downloads_enabled: true,
-        is_locked: false,
+        is_locked: galleryVisibility === 'hosts_only',
       },
       guest: {
         id: `guest_${guestToken}`,
@@ -354,7 +461,7 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
         shots_used: mockPhotos.length,
         shot_limit: preview.shotLimit,
       },
-      photos: mockPhotos.map((p: any) => ({
+      photos: (galleryVisibility === 'hosts_only' ? [] : mockPhotos).map((p: any) => ({
         id: p.id || `photo_${Math.random()}`,
         storage_path: p.uri || p.storage_path,
         captured_at: p.captured_at || new Date().toISOString(),
@@ -369,12 +476,27 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
       p_guest_token: guestToken,
     });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[guest-gallery] RPC get_guest_gallery failed', {
+        slug: cleanSlug,
+        message: error.message,
+        code: (error as { code?: string }).code,
+      });
+      throw error;
+    }
     return data;
   } catch (err) {
-    // If the RPC fails (e.g., schema mismatch), fall back to the development mock
-    // This allows the guest flow to keep working while the backend is fixed
+    // Same discipline as fetchGuestEventPreview: a configured backend that
+    // fails must surface the real error, not silently degrade to mock data —
+    // that swallowing is what hid a missing table grant behind a generic
+    // "invitation no longer available" for weeks.
+    if (isBackendConfigured) {
+      console.error('[guest-gallery] backend configured but lookup failed', err);
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+
     const preview = await fetchGuestEventPreview(cleanSlug);
+    const galleryVisibility = (await readMockGalleryVisibility(preview.celebrationId)) ?? 'all_guests';
 
     const mockPhotosKey = `__mock_photos_${preview.celebrationId}`;
     let mockPhotos: any[] = [];
@@ -408,10 +530,10 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
         name: 'Primary Session',
         reveal_mode: 'instant',
         reveal_at: null,
-        gallery_visibility: 'all_guests',
+        gallery_visibility: galleryVisibility,
         shot_limit_per_guest: preview.shotLimit,
         guest_downloads_enabled: true,
-        is_locked: false,
+        is_locked: galleryVisibility === 'hosts_only',
       },
       guest: {
         id: `guest_${guestToken}`,
@@ -419,7 +541,7 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
         shots_used: mockPhotos.length,
         shot_limit: preview.shotLimit,
       },
-      photos: mockPhotos.map((p: any) => ({
+      photos: (galleryVisibility === 'hosts_only' ? [] : mockPhotos).map((p: any) => ({
         id: p.id || `photo_${Math.random()}`,
         storage_path: p.uri || p.storage_path,
         captured_at: p.captured_at || new Date().toISOString(),

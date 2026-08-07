@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { DeviceFrame } from '@/components/media/device-frame';
-import { GuestCoverPreview } from '@/features/celebrations/creation/guest-cover-preview';
+import { GuestCoverPreview, parseCoverTheme } from '@/features/celebrations/creation/guest-cover-preview';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { resolveReveal, type CreationStep } from '@/features/celebrations/draft/types';
@@ -15,6 +15,7 @@ import { LOCALE_CONFIG } from '@/config/app-config';
 import { publishDraft, PublicationError } from '@/services/publication';
 import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
 import { celebrationKeys } from '@/services/celebrations';
+import { listThemes, themeKeys } from '@/services/themes';
 import { colours, layout, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
 
@@ -31,6 +32,11 @@ export default function ReviewStep() {
   const { draft, reset } = useCreationDraft();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const { data: themes = [] } = useQuery({
+    queryKey: themeKeys.list(),
+    queryFn: listThemes,
+  });
+  const selectedTheme = themes.find((theme) => theme.slug === draft.themeSlug);
 
   async function handlePublish() {
     setIsPublishing(true);
@@ -106,12 +112,12 @@ export default function ReviewStep() {
     { step: 'package', label: 'Package', value: draft.planKey ?? 'Not chosen' },
   ];
 
-  const blocking = validateStep('review', draft);
+  const blocking = validateStep('package', draft);
   const ready = canPublish(draft);
 
   return (
     <CreationStepScreen
-      step="review"
+      step="package"
       heading={copy.create.reviewHeading}
       supporting={copy.create.reviewSupporting}
       action={
@@ -139,7 +145,10 @@ export default function ReviewStep() {
     >
       <View style={{ gap: spacing.xl }}>
         <DeviceFrame>
-          <GuestCoverPreview draft={draft} />
+          <GuestCoverPreview
+            draft={draft}
+            theme={selectedTheme ? parseCoverTheme(selectedTheme.design_tokens) : undefined}
+          />
         </DeviceFrame>
 
         <View style={{ gap: spacing.xs }}>

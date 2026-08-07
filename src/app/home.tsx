@@ -28,6 +28,7 @@ import { colours, layout, radii, spacing, fontFamilies } from '@/design';
 import { copy } from '@/i18n';
 import { LOCALE_CONFIG, STORAGE_BUCKETS } from '@/config/app-config';
 import { requireSupabase } from '@/lib/supabase/client';
+import type { ThemeRow } from '@/types/database';
 
 const { width } = Dimensions.get('window');
 
@@ -124,6 +125,45 @@ function ChevronRightIcon({ size = 16, color = colours.textSecondary }) {
   );
 }
 
+function ProfileSettingsRow({
+  title,
+  value,
+  tone = 'default',
+  onPress,
+}: {
+  title: string;
+  value: string;
+  tone?: 'default' | 'danger';
+  onPress: () => void;
+}) {
+  const isDanger = tone === 'danger';
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.profileActionRow, pressed && styles.profileActionRowPressed]}
+    >
+      <View style={styles.profileActionText}>
+        <AppText
+          variant="labelLarge"
+          style={[styles.profileActionLabel, isDanger && styles.profileActionLabelDanger]}
+        >
+          {title}
+        </AppText>
+        <AppText
+          variant="bodySmall"
+          style={[styles.profileActionValue, isDanger && styles.profileActionValueDanger]}
+          numberOfLines={1}
+        >
+          {value}
+        </AppText>
+      </View>
+      <ChevronRightIcon color={isDanger ? colours.error : colours.textSecondary} />
+    </Pressable>
+  );
+}
+
 // Helper to resolve status label (UPCOMING, completed hides label)
 function getStatusLabel(celebration: CelebrationSummary) {
   const endsAt = celebration.primarySession?.ends_at ?? celebration.endsAt;
@@ -162,7 +202,9 @@ function EventCardTile({ celebration, index, themes, onPress }) {
   }
 
   // Resolve theme design tokens
-  const theme = (themes ?? []).find(t => t.slug === celebration.defaultThemeId);
+  const theme = (themes ?? []).find(
+    (t: ThemeRow) => t.id === celebration.defaultThemeId || t.slug === celebration.defaultThemeId,
+  );
   const accentColor = theme?.design_tokens?.accent || colours.textPrimary;
 
   const statusLabel = getStatusLabel(celebration);
@@ -282,25 +324,19 @@ export default function HomeScreen() {
     enabled: isBackendConfigured,
   });
 
-  // Calculate showFilters dynamically: only show if both upcoming and completed exist
+  // Calculate filtered events
   const isCompletedHelper = (c: CelebrationSummary) => {
     const endsAt = c.primarySession?.ends_at ?? c.endsAt;
     return endsAt && new Date(endsAt).getTime() < Date.now();
   };
   const list = celebrations ?? [];
-  const hasUpcoming = list.some(c => !isCompletedHelper(c));
-  const hasCompleted = list.some(c => isCompletedHelper(c));
-  const showFilters = hasUpcoming && hasCompleted;
-  const effectiveFilter = showFilters ? filter : 'all';
-
-  // Calculate filtered events
   const getFilteredCelebrations = () => {
     const now = new Date();
-    
+
     let result = list;
-    if (effectiveFilter === 'upcoming') {
+    if (filter === 'upcoming') {
       result = list.filter(c => !c.endsAt || new Date(c.endsAt) >= now);
-    } else if (effectiveFilter === 'past') {
+    } else if (filter === 'past') {
       result = list.filter(c => c.endsAt && new Date(c.endsAt) < now);
     }
 
@@ -374,6 +410,8 @@ export default function HomeScreen() {
   const userInitials = profile?.display_name
     ? profile.display_name.trim().slice(0, 1).toUpperCase()
     : null;
+  const profileName = profile?.display_name?.trim() || firstName || 'Host';
+  const profileEmail = session?.user?.email ?? 'Host account';
 
   return (
     <View style={styles.container}>
@@ -433,28 +471,26 @@ export default function HomeScreen() {
         </View>
 
         {/* 3. Filters Row - Pills are larger and much more prominent */}
-        {showFilters ? (
-          <View style={styles.filtersContainer}>
-            {(['all', 'upcoming', 'past'] as const).map((type) => {
-              const selected = effectiveFilter === type;
-              const label = type === 'all' ? 'All' : type === 'upcoming' ? 'Upcoming' : 'Completed';
-              return (
-                <Pressable
-                  key={type}
-                  onPress={() => setFilter(type)}
-                  style={[styles.filterPill, selected && styles.filterPillSelected]}
+        <View style={styles.filtersContainer}>
+          {(['all', 'upcoming', 'past'] as const).map((type) => {
+            const selected = filter === type;
+            const label = type === 'all' ? 'All' : type === 'upcoming' ? 'Upcoming' : 'Completed';
+            return (
+              <Pressable
+                key={type}
+                onPress={() => setFilter(type)}
+                style={[styles.filterPill, selected && styles.filterPillSelected]}
+              >
+                <AppText
+                  variant="caption"
+                  style={[styles.filterPillText, selected && styles.filterPillTextSelected]}
                 >
-                  <AppText 
-                    variant="caption" 
-                    style={[styles.filterPillText, selected && styles.filterPillTextSelected]}
-                  >
-                    {label}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+                  {label}
+                </AppText>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {/* 4. Event Tiles List */}
         {isLoading ? (
@@ -462,7 +498,7 @@ export default function HomeScreen() {
             <ActivityIndicator color={colours.brandPrimary} />
           </View>
         ) : filteredEvents.length > 0 ? (
-          <View style={[styles.eventsGrid, !showFilters && { marginTop: spacing.md }]}>
+          <View style={styles.eventsGrid}>
             {/* Left column */}
             <View style={styles.gridColumn}>
               {filteredEvents
@@ -609,68 +645,82 @@ export default function HomeScreen() {
             onPress={() => setProfileModalVisible(false)} 
           />
           
-          <View style={styles.drawerSheet}>
+          <View style={[styles.drawerSheet, styles.profileDrawerSheet]}>
             <View style={styles.drawerHandle} />
 
-            <View style={styles.drawerHeader}>
-              <AppText variant="heading">Profile Settings</AppText>
-              <AppText variant="bodySmall" tone="secondary">
-                {session?.user?.email ?? 'Host Account'}
+            <View style={styles.profileDrawerHeader}>
+              <View style={styles.profileAvatarLarge}>
+                {userInitials ? (
+                  <AppText style={styles.profileAvatarInitial}>{userInitials}</AppText>
+                ) : (
+                  <UserIcon size={22} color={colours.textPrimary} />
+                )}
+              </View>
+              <View style={styles.profileHeaderText}>
+                <AppText variant="bodyLarge" style={styles.profileHeaderTitle}>Profile Settings</AppText>
+                <AppText variant="bodySmall" style={styles.profileHeaderSubtitle} numberOfLines={1}>
+                  {profileName} · {profileEmail}
+                </AppText>
+              </View>
+            </View>
+
+            <View style={styles.profileSection}>
+              <AppText variant="eyebrow" tone="secondary" style={styles.profileSectionHeader}>
+                Account settings
               </AppText>
+
+              <View style={styles.profileSettingsCard}>
+                <ProfileSettingsRow
+                  title="Change your name"
+                  value={profileName}
+                  onPress={() => {
+                    setProfileModalVisible(false);
+                    router.push('/your-name');
+                  }}
+                />
+
+                <View style={styles.profileSeparator} />
+
+                <ProfileSettingsRow
+                  title="Contact support"
+                  value="Get help with your account"
+                  onPress={() => {
+                    Alert.alert('Contact Support', 'Need help? Get in touch with our team at support@eventcamera.app');
+                  }}
+                />
+
+                <View style={styles.profileSeparator} />
+
+                <ProfileSettingsRow
+                  title="Log out"
+                  value={profileEmail}
+                  onPress={async () => {
+                    await signOut();
+                    setProfileModalVisible(false);
+                    router.replace('/');
+                  }}
+                />
+              </View>
             </View>
 
-            <View style={styles.drawerActions}>
-              <Pressable 
-                style={styles.actionRow}
-                onPress={() => {
-                  setProfileModalVisible(false);
-                  router.push('/your-name');
-                }}
-              >
-                <AppText variant="label">Change your name</AppText>
-                <ChevronRightIcon />
-              </Pressable>
+            <View style={styles.profileSection}>
+              <AppText variant="eyebrow" tone="secondary" style={styles.profileSectionHeader}>
+                Danger Zone
+              </AppText>
 
-              <View style={styles.drawerDivider} />
-
-              <Pressable 
-                style={styles.actionRow}
-                onPress={() => {
-                  Alert.alert('Contact Support', 'Need help? Get in touch with our team at support@eventcamera.app');
-                }}
-              >
-                <AppText variant="label">Contact support</AppText>
-                <ChevronRightIcon />
-              </Pressable>
-
-              <View style={styles.drawerDivider} />
-
-              <Pressable 
-                style={styles.actionRow}
-                onPress={async () => {
-                  await signOut();
-                  setProfileModalVisible(false);
-                  router.replace('/');
-                }}
-              >
-                <AppText variant="label">Log out</AppText>
-                <ChevronRightIcon />
-              </Pressable>
-
-              <View style={styles.drawerDivider} />
-
-              <Pressable 
-                style={styles.actionRow}
-                onPress={handleDeleteAccount}
-              >
-                <AppText variant="label" tone="error">Delete account</AppText>
-                <ChevronRightIcon color={colours.error} />
-              </Pressable>
+              <View style={styles.profileSettingsCard}>
+                <ProfileSettingsRow
+                  title="Delete account"
+                  value="Permanently remove your account"
+                  tone="danger"
+                  onPress={handleDeleteAccount}
+                />
+              </View>
             </View>
 
-            <Pressable 
+            <Pressable
               onPress={() => setProfileModalVisible(false)}
-              style={styles.closeDrawerButton}
+              style={styles.profileCloseButton}
             >
               <AppText variant="button" tone="onBrand">Close</AppText>
             </Pressable>
@@ -854,6 +904,10 @@ const styles = StyleSheet.create({
     borderTopWidth: layout.hairline,
     borderColor: colours.borderSubtle,
   },
+  profileDrawerSheet: {
+    gap: spacing.base,
+    paddingBottom: spacing.xxl,
+  },
   scannerSheet: {
     backgroundColor: colours.surfaceRaised,
     borderTopLeftRadius: radii.xl,
@@ -876,6 +930,92 @@ const styles = StyleSheet.create({
   drawerHeader: {
     gap: 4,
     marginBottom: spacing.xs,
+  },
+  profileDrawerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
+  },
+  profileAvatarLarge: {
+    width: 48,
+    height: 48,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colours.surface,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
+  },
+  profileAvatarInitial: {
+    color: colours.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  profileHeaderText: {
+    flex: 1,
+    gap: 3,
+  },
+  profileHeaderTitle: {
+    color: colours.textPrimary,
+  },
+  profileHeaderSubtitle: {
+    color: colours.textSecondary,
+  },
+  profileSection: {
+    gap: spacing.xs,
+  },
+  profileSectionHeader: {
+    paddingLeft: spacing.xs,
+  },
+  profileSettingsCard: {
+    backgroundColor: colours.surface,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
+  },
+  profileActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.base,
+    gap: spacing.md,
+  },
+  profileActionRowPressed: {
+    backgroundColor: colours.surfaceMuted,
+  },
+  profileActionText: {
+    flex: 1,
+    gap: 4,
+  },
+  profileActionLabel: {
+    color: colours.textPrimary,
+  },
+  profileActionLabelDanger: {
+    color: colours.error,
+  },
+  profileActionValue: {
+    color: colours.textSecondary,
+  },
+  profileActionValueDanger: {
+    color: colours.error,
+    opacity: 0.78,
+  },
+  profileSeparator: {
+    height: layout.hairline,
+    backgroundColor: colours.borderSubtle,
+    marginHorizontal: spacing.base,
+  },
+  profileCloseButton: {
+    backgroundColor: colours.brandPrimary,
+    borderRadius: radii.pill,
+    paddingVertical: spacing.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.xs,
   },
   viewfinderContainer: {
     alignItems: 'center',

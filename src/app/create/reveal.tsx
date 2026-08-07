@@ -1,12 +1,10 @@
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
-  Switch,
   View,
 } from 'react-native';
 
@@ -15,9 +13,6 @@ import {
   ChevronDownIcon,
   ClockIcon,
   LockIcon,
-  PeopleIcon,
-  PersonIcon,
-  UnlockIcon,
 } from '@/components/ui/icons';
 import { ExpandingSection } from '@/components/feedback/expanding-section';
 import { SegmentedControl } from '@/components/forms/segmented-control';
@@ -25,6 +20,7 @@ import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
+import { resolveReveal } from '@/features/celebrations/draft/types';
 
 /**
  * The Reveal step screen.
@@ -33,15 +29,26 @@ export default function RevealStep() {
   const { draft, update } = useCreationDraft();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [now] = useState(() => Date.now());
 
-  // Mappings
-  const guestsCanViewOthers = draft.galleryVisibility === 'all_guests';
   const hostDelayEnabled = draft.hostRevealChoice !== 'during';
+  const hostReveal = resolveReveal(draft.hostRevealChoice, draft.endsAt, draft.hostCustomRevealAt);
+  const guestReveal =
+    draft.guestRevealChoice === 'never'
+      ? { mode: 'manual' as const, revealAt: null }
+      : resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
   const guestDelayEnabled =
-    draft.guestRevealChoice === 'custom' || draft.guestRevealChoice !== draft.hostRevealChoice;
+    draft.guestRevealChoice !== 'never' &&
+    (hostReveal.mode !== guestReveal.mode || hostReveal.revealAt !== guestReveal.revealAt);
+  const guestRevealSelection =
+    draft.guestRevealChoice === 'never'
+      ? 'never'
+      : draft.guestRevealChoice === 'custom' && guestDelayEnabled
+        ? 'review'
+        : 'same';
 
   // Base time helper: Guest delay is always added to this base time
-  const getBaseTime = () => {
+  const getBaseTime = useCallback(() => {
     if (draft.hostRevealChoice === 'custom' && draft.hostCustomRevealAt) {
       return new Date(draft.hostCustomRevealAt);
     }
@@ -49,7 +56,7 @@ export default function RevealStep() {
       return new Date(draft.endsAt);
     }
     return new Date();
-  };
+  }, [draft.endsAt, draft.hostCustomRevealAt, draft.hostRevealChoice]);
 
   // Determine current active duration (1, 12, or 24 hours)
   const getActiveDuration = () => {
@@ -76,11 +83,7 @@ export default function RevealStep() {
         });
       }
     }
-  }, [draft.hostRevealChoice, draft.hostCustomRevealAt, draft.endsAt]);
-
-  const handleOthersPhotosToggle = (allowed: boolean) => {
-    update({ galleryVisibility: allowed ? 'all_guests' : 'own_only' });
-  };
+  }, [activeDuration, draft.guestCustomRevealAt, getBaseTime, guestDelayEnabled, update]);
 
   const handleHostChoiceChange = (choice: 'during' | 'at_close' | 'custom') => {
     let nextHostCustomTime = draft.hostCustomRevealAt;
@@ -89,17 +92,11 @@ export default function RevealStep() {
       nextHostCustomTime = new Date(base + 3600000).toISOString();
     }
 
-    const syncGuest = !guestDelayEnabled;
-    const nextGuestChoice = syncGuest ? choice : 'custom';
+    const syncGuest = draft.guestRevealChoice !== 'never' && !guestDelayEnabled;
+    const nextGuestChoice = syncGuest ? choice : draft.guestRevealChoice;
     const nextGuestCustomTime = syncGuest
       ? (choice === 'custom' ? nextHostCustomTime : null)
-      : new Date(
-          (choice === 'custom' && nextHostCustomTime
-            ? new Date(nextHostCustomTime)
-            : new Date(draft.endsAt || Date.now())
-          ).getTime() +
-            activeDuration * 3600000
-        ).toISOString();
+      : draft.guestCustomRevealAt;
 
     update({
       hostRevealChoice: choice,
@@ -141,7 +138,7 @@ export default function RevealStep() {
 
   const updateHostCustomTime = (date: Date) => {
     const isoString = date.toISOString();
-    const syncGuest = !guestDelayEnabled;
+    const syncGuest = draft.guestRevealChoice !== 'never' && !guestDelayEnabled;
 
     let nextGuestTime = draft.guestCustomRevealAt;
     if (syncGuest) {
@@ -156,19 +153,29 @@ export default function RevealStep() {
     });
   };
 
-  const handleGuestDelayToggle = (enabled: boolean) => {
-    if (!enabled) {
+  const handleGuestChoiceChange = (choice: 'same' | 'review' | 'never') => {
+    if (choice === 'never') {
+      update({
+        guestRevealChoice: 'never',
+        guestCustomRevealAt: null,
+        galleryVisibility: 'hosts_only',
+      });
+      return;
+    }
+
+    if (choice === 'same') {
       update({
         guestRevealChoice: draft.hostRevealChoice,
-        guestCustomRevealAt: draft.hostCustomRevealAt,
+        guestCustomRevealAt: draft.hostRevealChoice === 'custom' ? draft.hostCustomRevealAt : null,
       });
-    } else {
-      const nextTime = new Date(getBaseTime().getTime() + 12 * 3600000).toISOString();
-      update({
-        guestRevealChoice: 'custom',
-        guestCustomRevealAt: nextTime,
-      });
+      return;
     }
+
+    const nextTime = new Date(getBaseTime().getTime() + 12 * 3600000).toISOString();
+    update({
+      guestRevealChoice: 'custom',
+      guestCustomRevealAt: nextTime,
+    });
   };
 
   const handleDurationChange = (hours: number) => {
@@ -211,7 +218,7 @@ export default function RevealStep() {
     }
 
     const revealDate = new Date(revealDateStr);
-    const diffMs = revealDate.getTime() - Date.now();
+    const diffMs = revealDate.getTime() - now;
 
     if (diffMs <= 0) {
       return 'Photos will be revealed shortly';
@@ -259,16 +266,13 @@ export default function RevealStep() {
                   blurRadius={hostDelayEnabled ? 20 : 0}
                 />
 
-                {/* Lock or Unlock overlay */}
-                <View style={styles.lockOverlay}>
-                  <View style={hostDelayEnabled ? styles.lockCircle : styles.unlockCircle}>
-                    {hostDelayEnabled ? (
-                      <LockIcon size={18} color="#000000" />
-                    ) : (
-                      <UnlockIcon size={18} color="#000000" />
-                    )}
+                {hostDelayEnabled ? (
+                  <View style={styles.lockOverlay}>
+                    <View style={styles.lockCircle}>
+                      <LockIcon size={18} color="#FFFFFF" />
+                    </View>
                   </View>
-                </View>
+                ) : null}
               </View>
             ))}
           </View>
@@ -276,116 +280,81 @@ export default function RevealStep() {
           <AppText style={styles.statusText}>{getUnlockTimeText()}</AppText>
         </View>
 
-        {/* Card 1: Reveal Timing */}
-        <View style={styles.card}>
-          {/* Header Row */}
-          <View style={styles.sectionHeaderRow}>
-            <ClockIcon size={16} color={colours.accentWarm} />
-            <AppText variant="caption" style={styles.sectionLabel}>
-              Reveal Timing
-            </AppText>
-          </View>
+        <View style={{ gap: spacing.base }}>
+          <AppText variant="bodyLarge">
+            When do you want to see new photos?
+          </AppText>
 
-          <View style={styles.divider} />
+          <SegmentedControl
+            accessibilityLabel="When do you want to see new photos?"
+            value={draft.hostRevealChoice}
+            onChange={(choice) => handleHostChoiceChange(choice)}
+            options={[
+              { value: 'during', label: 'Immediately' },
+              { value: 'at_close', label: 'After event ends' },
+              { value: 'custom', label: 'Custom' },
+            ]}
+          />
 
-          {/* 1. Your Reveal */}
-          <View style={{ gap: spacing.base }}>
-            <View style={styles.subHeaderRow}>
-              <PersonIcon size={16} color={colours.textSecondary} />
-              <AppText variant="labelLarge" style={styles.subSectionTitle}>
-                Your Reveal
-              </AppText>
-            </View>
-            <AppText variant="bodySmall" tone="secondary" style={{ marginTop: -spacing.xxs }}>
-              When do you want to see new photos?
-            </AppText>
-
-            {/* No `gap` on this wrapper: a flex gap is applied either side of a
-                zero-height child, so a collapsed disclosure would still leave a
-                blank band under the control. The spacing lives inside the
-                disclosure instead. */}
-            <View>
-              <SegmentedControl
-                accessibilityLabel="When do you want to see new photos?"
-                value={draft.hostRevealChoice}
-                onChange={(choice) => handleHostChoiceChange(choice)}
-                options={[
-                  { value: 'during', label: 'Immediately' },
-                  { value: 'at_close', label: 'After event ends' },
-                  { value: 'custom', label: 'Custom' },
-                ]}
-              />
-
-              {/* Only meaningful for a custom time — collapsed away entirely for
-                  the other two choices rather than sitting there inert. */}
-              <ExpandingSection expanded={draft.hostRevealChoice === 'custom'}>
-              <View style={styles.customSelectorsContainer}>
-                <Pressable
-                  onPress={() => setShowDatePicker(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Reveal date, ${formatDate(draft.hostCustomRevealAt)}`}
-                  style={styles.selectorBtn}
-                >
-                  <View style={styles.selectorLeft}>
-                    <CalendarIcon size={16} color={colours.textSecondary} />
-                    <AppText style={styles.selectorText}>
-                      {formatDate(draft.hostCustomRevealAt)}
-                    </AppText>
-                  </View>
-                  <ChevronDownIcon size={16} color={colours.textSecondary} />
-                </Pressable>
-
-                <Pressable
-                  onPress={() => setShowTimePicker(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Reveal time, ${formatTime(draft.hostCustomRevealAt)}`}
-                  style={styles.selectorBtn}
-                >
-                  <View style={styles.selectorLeft}>
-                    <ClockIcon size={16} color={colours.textSecondary} />
-                    <AppText style={styles.selectorText}>
-                      {formatTime(draft.hostCustomRevealAt)}
-                    </AppText>
-                  </View>
-                  <ChevronDownIcon size={16} color={colours.textSecondary} />
-                </Pressable>
+          {/* Only meaningful for a custom time — collapsed away entirely for
+              the other two choices rather than sitting there inert. */}
+          <ExpandingSection expanded={draft.hostRevealChoice === 'custom'}>
+            <View style={styles.customSelectorsContainer}>
+              <Pressable
+                onPress={() => setShowDatePicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Reveal date, ${formatDate(draft.hostCustomRevealAt)}`}
+                style={styles.selectorBtn}
+              >
+                <View style={styles.selectorLeft}>
+                  <CalendarIcon size={16} color={colours.textSecondary} />
+                  <AppText variant="bodySmall" style={styles.selectorText}>
+                    {formatDate(draft.hostCustomRevealAt)}
+                  </AppText>
                 </View>
-              </ExpandingSection>
-            </View>
-          </View>
+                <ChevronDownIcon size={16} color={colours.textSecondary} />
+              </Pressable>
 
-          <View style={styles.divider} />
-
-          {/* 2. Guest Reveal */}
-          <View style={{ gap: spacing.base }}>
-            <View style={styles.subHeaderRow}>
-              <PeopleIcon size={16} color={colours.textSecondary} />
-              <AppText variant="labelLarge" style={styles.subSectionTitle}>
-                Guest Reveal
-              </AppText>
+              <Pressable
+                onPress={() => setShowTimePicker(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`Reveal time, ${formatTime(draft.hostCustomRevealAt)}`}
+                style={styles.selectorBtn}
+              >
+                <View style={styles.selectorLeft}>
+                  <ClockIcon size={16} color={colours.textSecondary} />
+                  <AppText variant="bodySmall" style={styles.selectorText}>
+                    {formatTime(draft.hostCustomRevealAt)}
+                  </AppText>
+                </View>
+                <ChevronDownIcon size={16} color={colours.textSecondary} />
+              </Pressable>
             </View>
-            <AppText variant="bodySmall" tone="secondary" style={{ marginTop: -spacing.xxs }}>
+          </ExpandingSection>
+
+          <View style={{ gap: spacing.sm, marginTop: spacing.sm }}>
+            <AppText variant="bodyLarge">
               When should guests see the photos?
             </AppText>
 
-            <View>
-              <SegmentedControl
-                accessibilityLabel="When should guests see the photos?"
-                value={guestDelayEnabled ? 'review' : 'same'}
-                onChange={(choice) => handleGuestDelayToggle(choice === 'review')}
-                options={[
-                  { value: 'same', label: 'Same time as me' },
-                  { value: 'review', label: 'After I review them' },
-                ]}
-              />
+            <SegmentedControl
+              accessibilityLabel="When should guests see the photos?"
+              value={guestRevealSelection}
+              onChange={(choice) => handleGuestChoiceChange(choice as 'same' | 'review' | 'never')}
+              options={[
+                { value: 'never', label: 'Never' },
+                { value: 'same', label: 'Same time as me' },
+                { value: 'review', label: 'After I review them' },
+              ]}
+            />
 
-              {/* The delay only exists when guests are held back, so it discloses
-                  on the same curve as the custom date fields above. */}
-              <ExpandingSection expanded={guestDelayEnabled}>
-                <View style={styles.reviewDelayContainer}>
+            {/* The delay only exists when guests are held back, so it discloses
+                on the same curve as the custom date fields above. */}
+            <ExpandingSection expanded={guestDelayEnabled}>
+              <View style={styles.reviewDelayContainer}>
                 <View style={styles.reviewDelayHeader}>
                   <ClockIcon size={14} color={colours.textSecondary} />
-                  <AppText variant="caption" tone="secondary">
+                  <AppText variant="bodySmall" tone="secondary">
                     Guests will see them this long after you do.
                   </AppText>
                 </View>
@@ -399,40 +368,9 @@ export default function RevealStep() {
                     { value: 12, label: '12 hours' },
                     { value: 24, label: '24 hours' },
                   ]}
-                  />
-                </View>
-              </ExpandingSection>
-            </View>
-          </View>
-        </View>
-
-        {/* Card 2: Guest Access */}
-        <View style={styles.card}>
-          <View style={styles.sectionHeaderRow}>
-            <PeopleIcon size={16} color={colours.accentWarm} />
-            <AppText variant="caption" style={styles.sectionLabel}>
-              Guest Access
-            </AppText>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={{ gap: spacing.base }}>
-            <View style={styles.toggleRow}>
-              <AppText variant="labelLarge" style={{ flex: 1 }}>
-                Let guests view photos taken by others
-              </AppText>
-              <Switch
-                value={guestsCanViewOthers}
-                onValueChange={handleOthersPhotosToggle}
-                trackColor={{ false: colours.surfaceRaised, true: colours.brandPrimary }}
-                thumbColor={guestsCanViewOthers ? colours.textOnBrand : colours.textSecondary}
-                ios_backgroundColor={colours.surfaceRaised}
-              />
-            </View>
-            <AppText variant="bodySmall" tone="secondary" style={{ marginTop: -spacing.xxs }}>
-              Guests can still upload photos even if this is turned off.
-            </AppText>
+                />
+              </View>
+            </ExpandingSection>
           </View>
         </View>
       </View>
@@ -501,43 +439,6 @@ function PickerModal({
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colours.surface,
-    borderRadius: radii.xl,
-    borderWidth: layout.hairline,
-    borderColor: colours.borderSubtle,
-    padding: spacing.base,
-    gap: spacing.base,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  sectionLabel: {
-    textTransform: 'uppercase',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 1.2,
-    color: colours.accentWarm,
-  },
-  subHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  subSectionTitle: {
-    textTransform: 'uppercase',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    color: colours.textPrimary,
-  },
-  divider: {
-    height: layout.hairline,
-    backgroundColor: colours.borderSubtle,
-    marginVertical: -spacing.xs,
-  },
   customSelectorsContainer: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -550,9 +451,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: colours.surfaceMuted,
-    borderWidth: 1,
-    borderColor: colours.borderSubtle,
+    backgroundColor: colours.surface,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
     borderRadius: radii.lg,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.base,
@@ -565,7 +466,6 @@ const styles = StyleSheet.create({
   },
   selectorText: {
     color: colours.textPrimary,
-    fontWeight: '500',
   },
   reviewDelayContainer: {
     gap: spacing.sm,
@@ -642,31 +542,13 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#FFFFFF', // solid white background for high pop
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  unlockCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#55EFC4', // solid vibrant mint green
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
   },
   statusText: {
-    fontSize: 14,
-    fontWeight: '700',
     color: colours.textPrimary,
     letterSpacing: 0.5,
     marginTop: spacing.xxs,
