@@ -155,7 +155,7 @@ export default function GuestEntryScreen() {
     // on its own self-contained gallery here. The full app (native + web)
     // reuses the real Event Gallery so guests get the same experience hosts
     // do, gated by role.
-    if (IS_APP_CLIP) {
+    if (IS_APP_CLIP || Platform.OS === 'web') {
       router.replace(`/e/${eventCode}/gallery` as never);
       return;
     }
@@ -188,7 +188,7 @@ export default function GuestEntryScreen() {
         displayName: trimmedName,
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      if (IS_APP_CLIP) {
+      if (IS_APP_CLIP || Platform.OS === 'web') {
         router.replace(`/e/${eventCode}/gallery` as never);
       } else {
         router.replace(`/celebration/${joinedSession.celebrationId}` as never);
