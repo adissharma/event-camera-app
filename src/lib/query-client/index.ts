@@ -16,7 +16,9 @@ export const queryClient = new QueryClient({
       retry: (failureCount, error) => {
         // Never retry a permissions or not-found failure — it will never succeed.
         const status = (error as { status?: number } | null)?.status;
+        const code = (error as { code?: string } | null)?.code;
         if (status === 401 || status === 403 || status === 404) return false;
+        if (code === '42501') return false; // Postgres insufficient_privilege (unauthorized/forbidden)
         return failureCount < 3;
       },
       retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 30_000),

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
-import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
+import { loadStoredGuestSessionByCelebrationId, clearStoredGuestSession } from '@/services/guest-session';
 import type {
   CaptureMode,
   CelebrationRow,
@@ -357,6 +357,11 @@ async function tryFetchCelebrationDetailAsGuest(
       message: error.message,
       code: error.code,
     });
+    // Clear stale guest session if permissions fail (code 42501) or the celebration is not found/unavailable
+    if (error.code === '42501' || error.message?.includes('event not found') || error.message?.includes('invalid guest session')) {
+      console.warn('[celebration-detail] Stale guest session detected. Clearing from local storage.');
+      await clearStoredGuestSession(found.slug);
+    }
     return null;
   }
 
