@@ -1098,17 +1098,35 @@ export default function CameraScreen() {
           {/* Photos Button */}
           <Pressable 
             onPress={() => {
-              if (latestPhotoId) {
-                router.replace({
-                  pathname: '/celebration/[celebrationId]',
-                  params: {
-                    celebrationId: String(celebrationId),
-                    openPhotoId: latestPhotoId,
-                  },
-                } as never);
+              // This screen is a `transparentModal` sitting on top of the
+              // gallery, which is still mounted underneath it.
+              //
+              // `replace` was the wrong verb for that shape: it swaps *this
+              // modal's own stack entry* for the gallery route, so the gallery
+              // ends up rendered inside a modal slot whose `contentStyle` is
+              // `backgroundColor: 'transparent'`, with nothing left behind it.
+              // On web that reads as a blank white page. Every other exit from
+              // this screen uses `back()`, which is why only this button broke.
+              //
+              // `dismissTo` pops back to the gallery already in the stack and
+              // applies the params on the way, so the modal is torn down
+              // properly and the newly uploaded photo opens over a real screen.
+              const target = {
+                pathname: '/celebration/[celebrationId]',
+                params: {
+                  celebrationId: String(celebrationId),
+                  ...(latestPhotoId ? { openPhotoId: latestPhotoId } : {}),
+                },
+              };
+
+              // Nothing to dismiss to when the camera was deep-linked into
+              // directly and is the only entry in the stack. `replace` is
+              // correct there: there is no underlying screen to preserve.
+              if (router.canDismiss()) {
+                router.dismissTo(target as never);
                 return;
               }
-              router.replace(`/celebration/${celebrationId}` as never);
+              router.replace(target as never);
             }}
             style={S.photosBtn}
             accessibilityRole="button"
