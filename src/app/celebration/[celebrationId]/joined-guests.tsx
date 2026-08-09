@@ -8,6 +8,7 @@ import { AppText } from '@/components/ui/text';
 import { CloseIcon } from '@/components/ui/icons';
 import { colours, radii, spacing, layout } from '@/design';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
+import { createUniqueChannel } from '@/lib/supabase/realtime';
 import {
   celebrationDetailKeys,
   fetchCelebrationDetail,
@@ -49,8 +50,7 @@ export default function JoinedGuestsScreen() {
     if (!isBackendConfigured || !sessionId || !celebrationId) return;
 
     const client = requireSupabase();
-    const channel = client
-      .channel(`joined-guests-${sessionId}`)
+    const channel = createUniqueChannel(client, `joined-guests-${sessionId}`)
       .on(
         'postgres_changes',
         {

@@ -89,6 +89,7 @@ import {
   type EventChallenge,
 } from '@/services/challenges';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
+import { createUniqueChannel } from '@/lib/supabase/realtime';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -1379,8 +1380,7 @@ function EventDetailView({
     if (!primarySession?.id) return;
 
     const client = requireSupabase();
-    const channel = client
-      .channel(`celebration-media-${celebration.id}`)
+    const channel = createUniqueChannel(client, `celebration-media-${celebration.id}`)
       .on(
         'postgres_changes',
         {
@@ -1468,8 +1468,7 @@ function EventDetailView({
     if (!isBackendConfigured) return;
 
     const client = requireSupabase();
-    const channel = client
-      .channel(`celebration-challenges-${celebration.id}`)
+    const channel = createUniqueChannel(client, `celebration-challenges-${celebration.id}`)
       .on(
         'postgres_changes',
         {
