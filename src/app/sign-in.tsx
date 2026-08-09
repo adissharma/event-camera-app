@@ -49,70 +49,72 @@ export default function SignInScreen() {
   }
 
   return (
-    <Screen
-      stickyAction={
-        <Button
-          label={copy.auth.sendCode}
-          loading={isSending}
-          disabled={!isBackendConfigured}
-          disabledReason={
-            isBackendConfigured ? undefined : 'The app is not connected to a backend yet.'
-          }
-          haptic
-          onPress={handleSubmit}
-        />
-      }
-    >
-      <View style={{ gap: spacing.xl, maxWidth: layout.maxReadableWidth }}>
-        <View style={{ gap: spacing.md }}>
-          <AppText variant="eyebrow" tone="secondary">
-            {copy.welcome.eyebrow}
-          </AppText>
-          <AppText variant="displayLarge">{copy.auth.title}</AppText>
-          <AppText variant="bodyLarge" tone="secondary">
-            We will email you a six-digit code. No password to remember.
-          </AppText>
-        </View>
-
-        <TextField
-          label={copy.auth.emailLabel}
-          placeholder={copy.auth.emailPlaceholder}
-          value={email}
-          onChangeText={(next) => {
-            setEmail(next);
-            if (hasAttempted) setError(undefined);
-          }}
-          error={hasAttempted ? error : undefined}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoComplete="email"
-          textContentType="emailAddress"
-          autoCorrect={false}
-          returnKeyType="send"
-          onSubmitEditing={handleSubmit}
-          autoFocus
-        />
-
-        {!isBackendConfigured ? (
-          <View
-            style={{
-              padding: spacing.base,
-              borderRadius: 12,
-              borderWidth: layout.hairline,
-              borderColor: colours.borderStrong,
-              gap: spacing.xs,
-            }}
-          >
-            <AppText variant="labelLarge" tone="warning">
-              Backend not configured
+    <View style={{ flex: 1, backgroundColor: colours.background }}>
+      <Screen
+        stickyAction={
+          <Button
+            label={copy.auth.sendCode}
+            loading={isSending}
+            disabled={!isBackendConfigured}
+            disabledReason={
+              isBackendConfigured ? undefined : 'The app is not connected to a backend yet.'
+            }
+            haptic
+            onPress={handleSubmit}
+          />
+        }
+      >
+        <View style={{ gap: spacing.xl, maxWidth: layout.maxReadableWidth }}>
+          <View style={{ gap: spacing.md }}>
+            <AppText variant="eyebrow" tone="secondary">
+              {copy.welcome.eyebrow}
             </AppText>
-            <AppText variant="bodySmall" tone="secondary">
-              Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in
-              .env.local, then restart with `npx expo start --clear`.
+            <AppText variant="displayLarge">{copy.auth.title}</AppText>
+            <AppText variant="bodyLarge" tone="secondary">
+              We will email you a six-digit code. No password to remember.
             </AppText>
           </View>
-        ) : null}
-      </View>
-    </Screen>
+
+          <TextField
+            label={copy.auth.emailLabel}
+            placeholder={copy.auth.emailPlaceholder}
+            value={email}
+            onChangeText={(next) => {
+              setEmail(next);
+              if (hasAttempted) setError(undefined);
+            }}
+            error={hasAttempted ? error : undefined}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoComplete="email"
+            textContentType="emailAddress"
+            autoCorrect={false}
+            returnKeyType="send"
+            onSubmitEditing={handleSubmit}
+            autoFocus
+          />
+
+          {!isBackendConfigured ? (
+            <View
+              style={{
+                padding: spacing.base,
+                borderRadius: 12,
+                borderWidth: layout.hairline,
+                borderColor: colours.borderStrong,
+                gap: spacing.xs,
+              }}
+            >
+              <AppText variant="labelLarge" tone="warning">
+                Backend not configured
+              </AppText>
+              <AppText variant="bodySmall" tone="secondary">
+                Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in
+                .env.local, then restart with `npx expo start --clear`.
+              </AppText>
+            </View>
+          ) : null}
+        </View>
+      </Screen>
+    </View>
   );
 }

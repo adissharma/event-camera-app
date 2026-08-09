@@ -32,16 +32,7 @@ import { useAuth } from '@/features/auth/context';
 import { fetchMyProfile, profileKeys } from '@/services/profile';
 import { isBackendConfigured } from '@/lib/supabase/client';
 import { IS_APP_CLIP } from '@/config/app-config';
-
-/** Cover art for the development fallback, keyed the same way as the dashboard. */
-const COVER_MAP: Record<string, ReturnType<typeof require>> = {
-  modern: require('../../../assets/images/placeholders/create_event_cover.png'),
-  classic: require('../../../assets/images/placeholders/create_event_cover.png'),
-  vibrant: require('../../../assets/images/placeholders/create_event_cover.png'),
-  retro: require('../../../assets/images/placeholders/create_event_cover.png'),
-  editorial: require('../../../assets/images/placeholders/create_event_cover.png'),
-};
-const FALLBACK_COVER = require('../../../assets/images/placeholders/create_event_cover.png');
+import { useCoverSource } from '@/features/celebrations/cover-source';
 
 const NAME_MAX_LENGTH = 50;
 
@@ -115,6 +106,10 @@ export default function GuestEntryScreen() {
     enabled: Boolean(slug),
     retry: false,
   });
+
+  // Same resolver the host's dashboard and gallery use, so an invitation can
+  // never show different artwork from the event it leads to.
+  const coverSource = useCoverSource(preview?.coverStoragePath);
 
   // Load stored guest session if it exists on mount
   useEffect(() => {
@@ -241,7 +236,7 @@ export default function GuestEntryScreen() {
           bounces={false}
         >
           <GuestEventCover
-            coverSource={resolveCover(preview.coverStoragePath)}
+            coverSource={coverSource}
             coverHeight={coverHeight}
             title={preview.title}
             countdownLabel={countdown}
@@ -356,13 +351,6 @@ function readAccessToken(param?: string): string | null {
   return null;
 }
 
-function resolveCover(path: string | null) {
-  if (!path) return FALLBACK_COVER;
-  if (COVER_MAP[path]) return COVER_MAP[path];
-  // A real storage path or a local file URI from the host's own picker.
-  if (path.startsWith('http') || path.startsWith('file:')) return { uri: path };
-  return FALLBACK_COVER;
-}
 
 const S = StyleSheet.create({
   root: { flex: 1, backgroundColor: colours.background },

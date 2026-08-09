@@ -20,11 +20,16 @@ import { File } from 'expo-file-system';
  */
 export async function readLocalImageBytes(
   uri: string,
-): Promise<{ bytes: ArrayBuffer; sizeBytes: number | null }> {
+): Promise<{ bytes: ArrayBuffer; sizeBytes: number | null; mimeType?: string }> {
   if (Platform.OS === 'web') {
     const response = await fetch(uri);
-    const bytes = await response.arrayBuffer();
-    return { bytes, sizeBytes: bytes.byteLength };
+    // Via `blob()` rather than straight to `arrayBuffer()`, because a `blob:`
+    // URI carries its type nowhere in the string — the object URL is an opaque
+    // UUID. The Blob itself is the only place the real MIME type survives, and
+    // callers naming an upload need it.
+    const blob = await response.blob();
+    const bytes = await blob.arrayBuffer();
+    return { bytes, sizeBytes: bytes.byteLength, mimeType: blob.type || undefined };
   }
   const file = new File(uri);
   const bytes = await file.arrayBuffer();

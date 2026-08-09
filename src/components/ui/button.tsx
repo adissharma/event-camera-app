@@ -5,6 +5,7 @@ import {
   View,
   type PressableProps,
   type View as RNView,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import Animated, {
@@ -31,6 +32,7 @@ export interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> 
   /** Fires selection haptics on press. Off for navigation, on for commitment. */
   haptic?: boolean;
   style?: ViewStyle;
+  labelStyle?: TextStyle;
   /**
    * Why the button is unavailable. When `disabled` is set this is announced to
    * screen readers and should also be shown visibly next to the control — a
@@ -63,6 +65,7 @@ export const Button = forwardRef<RNView, ButtonProps>(function Button(
     disabled,
     disabledReason,
     style,
+    labelStyle,
     onPressIn,
     onPressOut,
     onPress,
@@ -125,7 +128,7 @@ export const Button = forwardRef<RNView, ButtonProps>(function Button(
         ) : (
           <>
             {leading ? <View>{leading}</View> : null}
-            <AppText variant="button" tone={labelTone(variant)}>
+            <AppText variant="button" tone={labelTone(variant)} style={labelStyle}>
               {label}
             </AppText>
           </>

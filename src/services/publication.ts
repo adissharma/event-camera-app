@@ -1,10 +1,10 @@
-import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 import { BRAND_CONFIG } from '@/config/brand';
 import { STORAGE_BUCKETS } from '@/config/app-config';
-import { buildCoverPath, normaliseExtension } from '@/features/media/storage-paths';
+import { buildCoverPath, normaliseExtension, inferMimeTypeFromUri } from '@/features/media/storage-paths';
+import { readLocalImageBytes } from '@/features/media/read-local-image';
 import { getPaymentProvider } from '@/features/payments';
 import { resolveReveal, type CreationDraft } from '@/features/celebrations/draft/types';
 import { assertCreatedCelebration } from '@/types/database';
@@ -140,8 +140,13 @@ export async function publishDraft(
     if (draft.coverLocalUri && celebrationId) {
       try {
         await uploadCover(draft.coverLocalUri, celebrationId);
-      } catch {
-        // Left for the dashboard to retry. Deliberately swallowed.
+      } catch (error) {
+        // Still non-fatal — an event without a cover works, and failing a
+        // whole publication over an image would be disproportionate. Logged
+        // rather than silently dropped, though: swallowing this without a
+        // trace is what let a cover upload that never worked on web look
+        // like a host had simply not chosen one.
+        console.error('[publication] cover upload failed', error);
       }
     }
 
@@ -277,26 +282,29 @@ export async function uploadCover(localUri: string, celebrationId: string): Prom
 
   const { data: celebration, error } = await client
     .from('celebrations')
-    .select('workspace_id')
+    .select('workspace_id, cover_storage_path')
     .eq('id', celebrationId)
     .single();
 
   if (error || !celebration) throw new PublicationError('Could not find the event', 'cover');
 
-  const extension = normaliseExtension(localUri.split('.').pop() ?? 'jpg');
-  const path = buildCoverPath(celebration.workspace_id, celebrationId, extension);
+  const previousPath = celebration.cover_storage_path;
 
-  // Read as base64 then convert: React Native's fetch(localUri).blob() is
-  // unreliable for file:// URIs across platforms.
-  const base64 = await FileSystem.readAsStringAsync(localUri, {
-    encoding: 'base64',
-  });
-  const bytes = decodeBase64(base64);
+  // `readLocalImageBytes` rather than `expo-file-system` directly: that module
+  // is a native-only bridge whose web build is a stub, so reading a picked
+  // cover threw on web and the upload never happened. It handles `file://` on
+  // native and `blob:`/`data:` in the browser, and reports the Blob's own MIME
+  // type — which is the only reliable source for a `blob:` URI, whose string
+  // is an opaque UUID with no extension to read.
+  const { bytes, mimeType } = await readLocalImageBytes(localUri);
+  const resolvedMime = mimeType || inferMimeTypeFromUri(localUri);
+  const extension = normaliseExtension(resolvedMime.split('/').pop() ?? 'jpg');
+  const path = buildCoverPath(celebration.workspace_id, celebrationId, extension);
 
   const { error: uploadError } = await client.storage
     .from(STORAGE_BUCKETS.covers)
     .upload(path, bytes, {
-      contentType: extension === 'png' ? 'image/png' : 'image/jpeg',
+      contentType: resolvedMime.startsWith('image/') ? resolvedMime : 'image/jpeg',
       upsert: true,
     });
 
@@ -307,29 +315,18 @@ export async function uploadCover(localUri: string, celebrationId: string): Prom
     .update({ cover_storage_path: path })
     .eq('id', celebrationId);
 
-  return path;
-}
-
-/** Base64 → bytes, without pulling in a polyfill for `atob`. */
-function decodeBase64(input: string): Uint8Array {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
-  const clean = input.replace(/=+$/, '');
-  const bytes = new Uint8Array((clean.length * 3) / 4);
-
-  let byteIndex = 0;
-  let buffer = 0;
-  let bits = 0;
-
-  for (const character of clean) {
-    const value = alphabet.indexOf(character);
-    if (value === -1) continue;
-    buffer = (buffer << 6) | value;
-    bits += 6;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes[byteIndex++] = (buffer >> bits) & 0xff;
+  // Best-effort tidy-up of the object this one replaces. Deliberately after
+  // the row points at the new path, and deliberately non-fatal: a leftover
+  // file is a housekeeping matter, whereas deleting first would leave the
+  // event with no cover at all if the upload then failed.
+  if (previousPath && previousPath !== path) {
+    const { error: removeError } = await client.storage
+      .from(STORAGE_BUCKETS.covers)
+      .remove([previousPath]);
+    if (removeError) {
+      console.warn('[publication] could not remove the previous cover', removeError);
     }
   }
 
-  return bytes.subarray(0, byteIndex);
+  return path;
 }

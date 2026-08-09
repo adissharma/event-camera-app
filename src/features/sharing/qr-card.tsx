@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Image, Platform, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { radii, spacing } from '@/design';
@@ -10,6 +10,63 @@ export interface QrCardProps {
   eventName: string;
   size?: number;
   footer?: ReactNode;
+}
+
+function WebQrImage({ value, size }: { value: string; size: number }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const qrcode = require('qrcode');
+        const nextDataUrl = await qrcode.toDataURL(value, {
+          errorCorrectionLevel: 'M',
+          margin: 2,
+          width: size,
+          color: {
+            dark: '#000000',
+            light: '#FFFFFF',
+          },
+        });
+
+        if (!cancelled) {
+          setDataUrl(nextDataUrl);
+        }
+      } catch (error) {
+        console.error('[qr-card] failed to generate web QR code', error);
+        if (!cancelled) {
+          setDataUrl(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [size, value]);
+
+  if (!dataUrl) {
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          backgroundColor: '#FFFFFF',
+          borderRadius: 12,
+        }}
+      />
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: dataUrl }}
+      style={{ width: size, height: size, borderRadius: 12 }}
+      resizeMode="cover"
+    />
+  );
 }
 
 /**
@@ -24,6 +81,8 @@ export interface QrCardProps {
  * card is printed small, creased, or read across a dim room.
  */
 export function QrCard({ value, eventName, size = 216, footer }: QrCardProps) {
+  const isWeb = Platform.OS === 'web';
+
   return (
     <View
       accessible
@@ -46,15 +105,19 @@ export function QrCard({ value, eventName, size = 216, footer }: QrCardProps) {
           elevation: 6,
         }}
       >
-        <QRCode
-          value={value}
-          size={size}
-          // Explicit pure black on pure white. This is the one place in the app
-          // that ignores the palette — a scanner is not an audience.
-          color="#000000"
-          backgroundColor="#FFFFFF"
-          ecl="M"
-        />
+        {isWeb ? (
+          <WebQrImage value={value} size={size} />
+        ) : (
+          <QRCode
+            value={value}
+            size={size}
+            // Explicit pure black on pure white. This is the one place in the app
+            // that ignores the palette — a scanner is not an audience.
+            color="#000000"
+            backgroundColor="#FFFFFF"
+            ecl="M"
+          />
+        )}
       </View>
 
       {footer ? <View style={{ width: '100%' }}>{footer}</View> : null}

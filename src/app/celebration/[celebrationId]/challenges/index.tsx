@@ -23,6 +23,12 @@ import { Button } from '@/components/ui/button';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { colours, radii, spacing } from '@/design';
 import { celebrationDetailKeys } from '@/services/celebration-detail';
+import { isBackendConfigured } from '@/lib/supabase/client';
+import {
+  listChallenges,
+  updateChallenge,
+  legacyChallengesKey,
+} from '@/services/challenges';
 import {
   CHALLENGE_BRIEFS as SHARED_CHALLENGE_BRIEFS,
   ChallengeIconSVG as SharedChallengeIconSVG,
@@ -192,16 +198,29 @@ export default function ViewChallengesScreen() {
     setCardTopMap((previous) => syncCardTopMap(previous, nextChallenges));
   }, []);
 
-  // Load from AsyncStorage
   const loadChallenges = useCallback(async () => {
     try {
-      const key = `__mock_challenges_${celebrationId}`;
-      const stored = await AsyncStorage.getItem(key);
-      if (stored) {
-        applyChallenges(JSON.parse(stored) as Challenge[]);
-      } else {
-        applyChallenges([...DEFAULT_CHALLENGES]);
+      if (isBackendConfigured) {
+        const remote = await listChallenges(
+          String(celebrationId),
+          DEFAULT_CHALLENGES.map((item) => ({ label: item.label, icon: item.icon })),
+        );
+        if (remote) {
+          applyChallenges(
+            remote.map((item) => ({
+              id: item.id,
+              label: item.label,
+              icon: item.icon,
+              instructions: item.instructions ?? undefined,
+              photo: item.photoUri,
+            })) as Challenge[],
+          );
+          return;
+        }
       }
+
+      const stored = await AsyncStorage.getItem(legacyChallengesKey(String(celebrationId)));
+      applyChallenges(stored ? (JSON.parse(stored) as Challenge[]) : [...DEFAULT_CHALLENGES]);
     } catch {
       applyChallenges([...DEFAULT_CHALLENGES]);
     } finally {
@@ -220,11 +239,20 @@ export default function ViewChallengesScreen() {
     }, [loadChallenges]),
   );
 
-  // Save back to AsyncStorage
+  // Persist the host's drag-reorder. Server-backed so guests see the same
+  // order the host arranged, rather than whatever their own device defaulted to.
   const saveChallengesOrder = useCallback(async (nextList: Challenge[]) => {
     try {
-      const key = `__mock_challenges_${celebrationId}`;
-      await AsyncStorage.setItem(key, JSON.stringify(nextList));
+      if (isBackendConfigured) {
+        await Promise.all(
+          nextList.map((item, index) => updateChallenge(item.id, { sortOrder: index })),
+        );
+      } else {
+        await AsyncStorage.setItem(
+          legacyChallengesKey(String(celebrationId)),
+          JSON.stringify(nextList),
+        );
+      }
       // Invalidate dashboard details
       queryClient.invalidateQueries({
         queryKey: celebrationDetailKeys.detail(String(celebrationId)),

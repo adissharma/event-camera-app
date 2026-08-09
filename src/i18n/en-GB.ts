@@ -30,11 +30,11 @@ export const enGB = {
   },
 
   welcome: {
+    /** Not used by the welcome screen itself — the sign-in and verify screens
+     *  share it as their brand eyebrow. */
     eyebrow: 'Shared event camera',
-    statement: 'The night, from every side.',
-    supporting: 'Guests scan a code and start shooting. No app, no account. You keep every photo.',
-    createEvent: 'Create an event',
-    signIn: 'I already have an account',
+    joinEvent: 'Join Event',
+    signUp: 'Not yet a member? Sign up',
   },
 
   auth: {

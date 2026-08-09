@@ -34,6 +34,7 @@ export interface UploadGuestPhotoParams {
   width?: number;
   height?: number;
   capturedAt?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UploadGuestPhotoResult {
@@ -65,6 +66,7 @@ export async function uploadGuestPhoto(
       p_mime_type: mimeType,
       p_file_size_bytes: fileSizeBytes,
       p_captured_at: params.capturedAt ?? new Date().toISOString(),
+      p_metadata: params.metadata ?? {},
     },
   );
 

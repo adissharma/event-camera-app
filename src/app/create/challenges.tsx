@@ -2,11 +2,19 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, View, Pressable, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
+import { isBackendConfigured } from '@/lib/supabase/client';
+import { celebrationDetailKeys } from '@/services/celebration-detail';
+import {
+  listChallenges,
+  replaceChallenges,
+  legacyChallengesKey,
+} from '@/services/challenges';
 import { colours, layout, radii, spacing } from '@/design';
 import Svg, { Path } from 'react-native-svg';
 
@@ -14,6 +22,12 @@ type Challenge = {
   id: string;
   label: string;
   icon: string;
+  /**
+   * Carried through this screen untouched. It is not edited here, but this
+   * step saves the whole list back, so omitting it would blank the host's
+   * guest instructions every time they reordered or added a challenge.
+   */
+  instructions?: string;
   photo?: string | null;
 };
 
@@ -63,6 +77,7 @@ function PlusIcon({ size = 16, color = colours.textPrimary }) {
 
 export default function ChallengesStep() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
   const [challenges, setChallenges] = useState<Challenge[]>(DEFAULT_CHALLENGES);
   const [saving, setSaving] = useState(false);
@@ -70,8 +85,28 @@ export default function ChallengesStep() {
   useEffect(() => {
     if (draft.editCelebrationId) {
       (async () => {
-        const key = `__mock_challenges_${draft.editCelebrationId}`;
-        const stored = await AsyncStorage.getItem(key);
+        const celebrationId = String(draft.editCelebrationId);
+        try {
+          if (isBackendConfigured) {
+            const remote = await listChallenges(celebrationId);
+            if (remote) {
+              setChallenges(
+                remote.map((item) => ({
+                  id: item.id,
+                  label: item.label,
+                  icon: item.icon,
+                  instructions: item.instructions ?? undefined,
+                  photo: item.photoUri,
+                })) as Challenge[],
+              );
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('[create/challenges] failed to load challenges', error);
+        }
+
+        const stored = await AsyncStorage.getItem(legacyChallengesKey(celebrationId));
         if (stored) {
           try {
             setChallenges(JSON.parse(stored) as Challenge[]);
@@ -125,10 +160,30 @@ export default function ChallengesStep() {
 
     setSaving(true);
     try {
-      const key = `__mock_challenges_${draft.editCelebrationId}`;
-      await AsyncStorage.setItem(key, JSON.stringify(challenges));
+      const celebrationId = String(draft.editCelebrationId);
+      if (isBackendConfigured) {
+        await replaceChallenges(
+          celebrationId,
+          challenges.map((item) => ({
+            id: item.id,
+            label: item.label,
+            icon: item.icon,
+            instructions: item.instructions ?? null,
+            photoUri: item.photo ?? null,
+          })),
+        );
+        queryClient.invalidateQueries({
+          queryKey: celebrationDetailKeys.detail(celebrationId),
+        });
+      } else {
+        await AsyncStorage.setItem(
+          legacyChallengesKey(celebrationId),
+          JSON.stringify(challenges),
+        );
+      }
       router.replace(`/celebration/${draft.editCelebrationId}/edit`);
-    } catch {
+    } catch (error) {
+      console.error('[create/challenges] failed to save challenges', error);
       Alert.alert('Error', 'Failed to save challenges.');
     } finally {
       setSaving(false);

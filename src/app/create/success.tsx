@@ -23,7 +23,7 @@ import {
   LinkIcon,
 } from '@/components/ui/icons';
 import { CoverScrim, SCRIM_LOCATIONS_SUCCESS } from '@/components/media/cover-scrim';
-import { resolveCover } from '@/features/celebrations/cover-source';
+import { useCoverSource } from '@/features/celebrations/cover-source';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   clearPublicationResult,
@@ -64,6 +64,10 @@ export default function SuccessScreen() {
   // Read once. The draft is cleared on mount, and the result is cleared on
   // unmount — neither can be a dependency of the render that follows.
   const [result] = useState(getPublicationResult);
+
+  // Same resolver as every other cover surface, so the first screen a host
+  // sees after publishing shows the photograph they actually chose.
+  const coverSource = useCoverSource(result?.coverStoragePath);
 
   const entrance = useEntrance(Boolean(result));
 
@@ -113,7 +117,7 @@ export default function SuccessScreen() {
         {/* ── Cover ─────────────────────────────────────────────── */}
         <View style={[S.cover, { height: coverHeight }]}>
           <Image
-            source={resolveCover(result.coverStoragePath)}
+            source={coverSource}
             style={S.coverImage}
             resizeMode="cover"
             accessibilityLabel={`Cover photograph for ${result.eventName}`}

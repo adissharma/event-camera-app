@@ -16,6 +16,7 @@ import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { uploadCover } from '@/services/publication';
+import { isLocalImageUri } from '@/features/media/storage-paths';
 import { updateEventSettings } from '@/services/celebration-detail';
 import { isBackendConfigured } from '@/lib/supabase/client';
 
@@ -37,7 +38,7 @@ export default function CoverStep() {
     if (!draft.editCelebrationId || !draft.editSessionId) return;
 
     let path = draft.coverStoragePath;
-    if (draft.coverLocalUri && (draft.coverLocalUri.startsWith('file://') || draft.coverLocalUri.startsWith('/'))) {
+    if (draft.coverLocalUri && isLocalImageUri(draft.coverLocalUri)) {
       if (isBackendConfigured) {
         path = await uploadCover(draft.coverLocalUri, draft.editCelebrationId);
       } else {

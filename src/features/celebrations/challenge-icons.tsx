@@ -356,7 +356,13 @@ export function resolveChallengeLabel(value: string) {
 }
 
 export function resolveChallengeBrief(value: string) {
-  return CHALLENGE_BRIEFS[normalizeChallengeIconValue(value)] ?? CHALLENGE_BRIEFS[value];
+  // Exact key first, normalised second — not the other way round. Several
+  // legacy names share one OpenMoji hexcode (`rings` and `engagement` are both
+  // `1F48D`), and `CHALLENGE_BRIEFS` spreads the hexcode aliases last, so the
+  // shared hexcode holds whichever brief was defined latest. Normalising first
+  // therefore handed `rings` the engagement brief. An exact legacy name is
+  // unambiguous, so it should never be resolved through a lossy alias.
+  return CHALLENGE_BRIEFS[value] ?? CHALLENGE_BRIEFS[normalizeChallengeIconValue(value)];
 }
 
 export function ChallengeIconSVG({

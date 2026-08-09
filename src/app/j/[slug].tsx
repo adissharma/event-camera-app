@@ -20,7 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/ui/text';
 import { CameraIcon, CameraSparkleIcon, ClockIcon, PersonIcon } from '@/components/ui/icons';
 import { CoverScrim } from '@/components/media/cover-scrim';
-import { resolveCover } from '@/features/celebrations/cover-source';
+import { useCoverSource } from '@/features/celebrations/cover-source';
 import { colours, layout, radii, spacing } from '@/design';
 import {
   fetchGuestEventPreview,
@@ -68,6 +68,9 @@ export default function GuestEntryScreen() {
     enabled: Boolean(slug),
     retry: false,
   });
+
+  // One resolver for every cover surface — see `cover-source`.
+  const coverSource = useCoverSource(preview?.coverStoragePath);
 
   // A device that has already joined goes straight through. The guest is asked
   // for a name once per event, not once per visit.
@@ -161,7 +164,7 @@ export default function GuestEntryScreen() {
           {/* ── Cover ─────────────────────────────────────────────── */}
           <View style={[S.cover, { height: coverHeight }]}>
             <Image
-              source={resolveCover(preview.coverStoragePath)}
+              source={coverSource}
               style={S.coverImage}
               resizeMode="cover"
               accessibilityLabel={`Cover photograph for ${preview.title}`}

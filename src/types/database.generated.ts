@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   graphql_public: {
     Tables: {
@@ -287,10 +287,6 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           ends_at: string | null
-          // Hand-added: `20260801140000_event_codes.sql` added this column
-          // after this file was last regenerated (`npx supabase gen types
-          // typescript --linked`). Regenerating will make this comment
-          // redundant but not wrong — remove it once that's run.
           event_code: string | null
           id: string
           inspiration_pack: Database["public"]["Enums"]["inspiration_pack"]
@@ -397,6 +393,53 @@ export type Database = {
           value_kind?: Database["public"]["Enums"]["entitlement_value_kind"]
         }
         Relationships: []
+      }
+      event_challenges: {
+        Row: {
+          celebration_id: string
+          created_at: string
+          deleted_at: string | null
+          icon: string
+          id: string
+          instructions: string | null
+          label: string
+          photo_uri: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          celebration_id: string
+          created_at?: string
+          deleted_at?: string | null
+          icon: string
+          id?: string
+          instructions?: string | null
+          label: string
+          photo_uri?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          celebration_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          icon?: string
+          id?: string
+          instructions?: string | null
+          label?: string
+          photo_uri?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_challenges_celebration_id_fkey"
+            columns: ["celebration_id"]
+            isOneToOne: false
+            referencedRelation: "celebrations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       event_sessions: {
         Row: {
@@ -1331,6 +1374,31 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_guest_media_upload_intent: {
+        Args: {
+          p_captured_at?: string
+          p_client_media_id: string
+          p_event_code: string
+          p_file_size_bytes?: number
+          p_guest_token: string
+          p_metadata?: Json
+          p_mime_type: string
+          p_source: Database["public"]["Enums"]["media_source"]
+        }
+        Returns: Json
+      }
+      create_host_media_upload_intent: {
+        Args: {
+          p_captured_at?: string
+          p_celebration_id: string
+          p_client_media_id: string
+          p_file_size_bytes?: number
+          p_metadata?: Json
+          p_mime_type: string
+          p_source: Database["public"]["Enums"]["media_source"]
+        }
+        Returns: Json
+      }
       create_media_upload_intent: {
         Args: {
           p_captured_at?: string
@@ -1350,6 +1418,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      delete_guest_media_item: {
+        Args: { p_guest_token: string; p_media_item_id: string }
+        Returns: Json
+      }
+      delete_host_media_item: {
+        Args: { p_media_item_id: string }
+        Returns: Json
       }
       ensure_personal_workspace: { Args: never; Returns: string }
       finalise_media_upload: {
@@ -1399,6 +1475,41 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      finalize_guest_media_upload: {
+        Args: {
+          p_checksum_algorithm?: string
+          p_checksum_value?: string
+          p_file_size_bytes: number
+          p_guest_token: string
+          p_height?: number
+          p_media_item_id: string
+          p_mime_type?: string
+          p_width?: number
+        }
+        Returns: Json
+      }
+      finalize_host_media_upload: {
+        Args: {
+          p_checksum_algorithm?: string
+          p_checksum_value?: string
+          p_file_size_bytes: number
+          p_height?: number
+          p_media_item_id: string
+          p_mime_type?: string
+          p_width?: number
+        }
+        Returns: Json
+      }
+      get_event_preview_by_code: {
+        Args: { p_event_code: string }
+        Returns: Database["public"]["CompositeTypes"]["guest_event_preview"]
+        SetofOptions: {
+          from: "*"
+          to: "guest_event_preview"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_guest_access_link: {
         Args: { p_event_session_id: string }
         Returns: {
@@ -1406,6 +1517,36 @@ export type Database = {
           expires_at: string
           is_active: boolean
         }[]
+      }
+      get_guest_challenge_photos: {
+        Args: { p_event_code: string; p_guest_token: string }
+        Returns: Json
+      }
+      get_guest_challenges: {
+        Args: { p_event_code: string; p_guest_token: string }
+        Returns: Json
+      }
+      get_guest_gallery: {
+        Args: { p_event_code: string; p_guest_token: string }
+        Returns: Json
+      }
+      get_host_challenge_photos: {
+        Args: { p_celebration_id: string }
+        Returns: Json
+      }
+      join_event_by_code: {
+        Args: {
+          p_device_fingerprint?: string
+          p_display_name: string
+          p_event_code: string
+        }
+        Returns: Database["public"]["CompositeTypes"]["joined_guest_session"]
+        SetofOptions: {
+          from: "*"
+          to: "joined_guest_session"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       join_event_session: {
         Args: {
@@ -1423,7 +1564,11 @@ export type Database = {
         }
       }
       publish_celebration: {
-        Args: { p_celebration_id: string; p_plan_key?: string }
+        Args: {
+          p_add_on_keys?: string[]
+          p_celebration_id: string
+          p_plan_key?: string
+        }
         Returns: Database["public"]["CompositeTypes"]["published_celebration"]
         SetofOptions: {
           from: "*"
@@ -1431,6 +1576,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      seed_event_challenges_if_empty: {
+        Args: { p_celebration_id: string; p_challenges: Json }
+        Returns: Json
       }
     }
     Enums: {
@@ -1541,6 +1690,14 @@ export type Database = {
         public_slug: string | null
         guest_access_token: string | null
       }
+      guest_event_preview: {
+        celebration_id: string | null
+        title: string | null
+        ends_at: string | null
+        shot_limit_per_guest: number | null
+        cover_storage_path: string | null
+        theme_accent: string | null
+      }
       joined_guest_session: {
         guest_session_id: string | null
         event_session_id: string | null
@@ -1565,6 +1722,7 @@ export type Database = {
         public_slug: string | null
         published_at: string | null
         was_already_published: boolean | null
+        event_code: string | null
       }
     }
   }

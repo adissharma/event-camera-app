@@ -56,7 +56,10 @@ export interface CelebrationDetail {
    * offline-mock array under that name) to avoid colliding with it.
    */
   mediaPhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; isMine?: boolean }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; isMine?: boolean; challengeId?: string | null }[]
+    | null;
+  challengePhotos:
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; challengeId: string; isMine?: boolean }[]
     | null;
 }
 
@@ -137,7 +140,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         ? await (async () => {
             const { data: mediaRows, error: mediaError } = await client
               .from('media_items')
-              .select('id, original_storage_path, captured_at, guest_sessions(display_name)')
+              .select('id, original_storage_path, captured_at, metadata, guest_sessions(display_name)')
               .eq('event_session_id', primarySession.id)
               .eq('status', 'ready')
               .is('deleted_at', null)
@@ -158,6 +161,41 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 capturedAt: m.captured_at,
                 displayName: (m.guest_sessions as any)?.display_name ?? 'Host',
                 isMine: false,
+                challengeId: typeof (m as any).metadata?.challenge_id === 'string'
+                  ? (m as any).metadata.challenge_id
+                  : null,
+              }));
+          })()
+        : [];
+
+      const challengePhotos = primarySession
+        ? await (async () => {
+            const { data: hostChallengeData, error: hostChallengeError } = await (client as any).rpc(
+              'get_host_challenge_photos',
+              { p_celebration_id: celebrationId },
+            );
+
+            const challengePayload = hostChallengeData as { challenge_photos?: any[] } | null;
+
+            if (!hostChallengeError && challengePayload?.challenge_photos) {
+              return challengePayload.challenge_photos.map((p: any) => ({
+                id: p.id,
+                storagePath: p.storage_path,
+                capturedAt: p.captured_at ?? null,
+                displayName: p.display_name ?? 'Guest',
+                challengeId: typeof p.challenge_id === 'string' ? p.challenge_id : '',
+              })).filter((item) => item.challengeId.length > 0);
+            }
+
+            if (hostChallengeError) {
+              console.error('[celebration-detail] failed to load host challenge photos', hostChallengeError);
+            }
+
+            return mediaPhotos
+              .filter((item): item is typeof item & { challengeId: string } => typeof item.challengeId === 'string' && item.challengeId.length > 0)
+              .map((item) => ({
+                ...item,
+                challengeId: item.challengeId,
               }));
           })()
         : [];
@@ -171,6 +209,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         viewerRole: 'host',
         guestShotsUsed: null,
         mediaPhotos,
+        challengePhotos,
       };
     }
 
@@ -253,6 +292,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
           viewerRole: 'host',
           guestShotsUsed: null,
           mediaPhotos: null,
+          challengePhotos: null,
         };
       }
     } catch (parseError) {
@@ -317,6 +357,28 @@ async function tryFetchCelebrationDetailAsGuest(
   const c = data?.celebration ?? {};
   const s = data?.session ?? {};
 
+  // Fetch challenge photos separately since get_guest_gallery doesn't include them
+  let guestChallengePhotos: any[] = [];
+  try {
+    const { data: challengeData, error: challengeError } = await (client as any).rpc(
+      'get_guest_challenge_photos',
+      {
+        p_event_code: found.slug,
+        p_guest_token: found.session.guestToken,
+      },
+    );
+
+    if (!challengeError && Array.isArray(challengeData?.challenge_photos)) {
+      guestChallengePhotos = challengeData.challenge_photos;
+    }
+
+    if (challengeError) {
+      console.warn('[celebration-detail] failed to load guest challenge photos', challengeError);
+    }
+  } catch (e) {
+    console.warn('[celebration-detail] error loading guest challenge photos', e);
+  }
+
   // Cast rather than satisfy the full generated row types: the RPC returns a
   // deliberately narrow projection (see the migration's comment), and a guest
   // has no legitimate way to see the columns it omits — `created_by` above
@@ -377,6 +439,17 @@ async function tryFetchCelebrationDetailAsGuest(
           storagePath: p.storage_path,
           capturedAt: p.captured_at ?? null,
           displayName: p.display_name ?? 'Guest',
+          isMine: p.is_mine === true,
+          challengeId: typeof p.challenge_id === 'string' ? p.challenge_id : null,
+        }))
+      : null,
+    challengePhotos: guestChallengePhotos
+      ? guestChallengePhotos.map((p: any) => ({
+          id: p.id,
+          storagePath: p.storage_path,
+          capturedAt: p.captured_at ?? null,
+          displayName: p.display_name ?? 'Guest',
+          challengeId: p.challenge_id,
           isMine: p.is_mine === true,
         }))
       : null,

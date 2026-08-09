@@ -38,14 +38,12 @@ export default function JoinedGuestsScreen() {
   const guestsQuery = useQuery({
     queryKey: sessionId ? celebrationDetailKeys.joinedGuests(sessionId) : ['celebrations', 'joined-guests', 'idle'],
     queryFn: () => fetchJoinedGuests(String(sessionId)),
-    enabled: Boolean(sessionId && detailQuery.data?.viewerRole === 'host'),
+    enabled: Boolean(sessionId),
   });
 
   const guests = guestsQuery.data ?? [];
   const joinedCount = guests.length;
-  const isHost = detailQuery.data?.viewerRole !== 'guest';
-
-  if (detailQuery.isLoading || (isHost && guestsQuery.isLoading)) {
+  if (detailQuery.isLoading || guestsQuery.isLoading) {
     return (
       <Screen>
         <View style={S.loadingRoot}>
@@ -71,7 +69,7 @@ export default function JoinedGuestsScreen() {
     );
   }
 
-  if (isHost && guestsQuery.isError) {
+  if (guestsQuery.isError) {
     return (
       <Screen>
         <View style={S.emptyState}>
@@ -109,47 +107,38 @@ export default function JoinedGuestsScreen() {
           </View>
         </View>
 
-        {!isHost ? (
-          <View style={S.emptyState}>
-            <AppText variant="titleMedium">Guest list unavailable</AppText>
-            <AppText variant="bodySmall" tone="secondary" align="center">
-              Only the event host can view the list of joined guests.
-            </AppText>
-          </View>
-        ) : (
-          <FlatList
-            style={{ flex: 1 }}
-            data={guests}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={S.listContent}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={S.emptyState}>
-                <AppText variant="titleMedium">No guests yet</AppText>
-                <AppText variant="bodySmall" tone="secondary" align="center">
-                  As people join the event, their names will appear here.
-                </AppText>
-              </View>
-            }
-            renderItem={({ item }: { item: JoinedGuest }) => {
-              const initials = initialsFor(item.displayName);
+        <FlatList
+          style={{ flex: 1 }}
+          data={guests}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={S.listContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={S.emptyState}>
+              <AppText variant="titleMedium">No guests yet</AppText>
+              <AppText variant="bodySmall" tone="secondary" align="center">
+                As people join the event, their names will appear here.
+              </AppText>
+            </View>
+          }
+          renderItem={({ item }: { item: JoinedGuest }) => {
+            const initials = initialsFor(item.displayName);
 
-              return (
-                <View style={S.row}>
-                  <View style={S.initialsBadge} accessible accessibilityLabel={`${item.displayName} initials ${initials}`}>
-                    <AppText style={S.initialsText}>{initials}</AppText>
-                  </View>
-
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <AppText variant="bodyLarge" numberOfLines={1} style={S.rowName}>
-                      {item.displayName}
-                    </AppText>
-                  </View>
+            return (
+              <View style={S.row}>
+                <View style={S.initialsBadge} accessible accessibilityLabel={`${item.displayName} initials ${initials}`}>
+                  <AppText style={S.initialsText}>{initials}</AppText>
                 </View>
-              );
-            }}
-          />
-        )}
+
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText variant="bodyLarge" numberOfLines={1} style={S.rowName}>
+                    {item.displayName}
+                  </AppText>
+                </View>
+              </View>
+            );
+          }}
+        />
       </View>
     </Screen>
   );

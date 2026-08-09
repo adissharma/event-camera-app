@@ -22,6 +22,10 @@ export interface ScreenProps {
   contentStyle?: ViewStyle;
   /** Extra bottom padding so content clears the sticky action while scrolling. */
   bottomInsetExtra?: number;
+  /** Optional override for the shell background. Defaults to the app canvas. */
+  backgroundColor?: string;
+  /** Optional override for the sticky action block background. Defaults to the app canvas. */
+  stickyActionBackgroundColor?: string;
 }
 
 /**
@@ -39,6 +43,8 @@ export function Screen({
   edgeToEdge = false,
   contentStyle,
   bottomInsetExtra = 0,
+  backgroundColor = colours.background,
+  stickyActionBackgroundColor = colours.background,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
@@ -69,7 +75,7 @@ export function Screen({
         paddingHorizontal: layout.gutter,
         paddingTop: spacing.base,
         paddingBottom: insets.bottom + spacing.base,
-        backgroundColor: colours.background,
+        backgroundColor: stickyActionBackgroundColor,
         borderTopWidth: layout.hairline,
         borderTopColor: colours.borderSubtle,
       }}
@@ -80,7 +86,7 @@ export function Screen({
 
   if (!stickyActionFollowsKeyboard) {
     return (
-      <View style={{ flex: 1, backgroundColor: colours.background }}>
+      <View style={{ flex: 1, backgroundColor }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -94,7 +100,7 @@ export function Screen({
 
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colours.background }}
+      style={{ flex: 1, backgroundColor }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       {body}

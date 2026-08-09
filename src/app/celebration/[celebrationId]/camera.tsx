@@ -63,6 +63,7 @@ interface PhotoItem {
   takenById?: string | null;
   postedAt?: string | null;
   submissionId?: string | null;
+  challengeId?: string | null;
 }
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
@@ -275,6 +276,7 @@ export default function CameraScreen() {
   const [torchOn, setTorchOn] = useState(false);
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [shareVisible, setShareVisible] = useState(false);
+  const [challengePreviewUri, setChallengePreviewUri] = useState<string | null>(null);
 
   // On web the torch and zoom are driven straight onto the live MediaStream
   // track rather than through `CameraView`'s props — see `web-camera-track`
@@ -573,57 +575,85 @@ export default function CameraScreen() {
     try {
       const userName = firstNameFrom(profile) || 'You';
       const userId = profile?.id ?? session?.user.id ?? guestAuth?.guestSessionId ?? null;
-      const submissionsKey = `__mock_challenge_submissions_${celebrationId}_${challengeId}`;
-      const storedSubmissions = await AsyncStorage.getItem(submissionsKey);
-      let submissions: PhotoItem[] = [];
-      if (storedSubmissions) {
-        try {
-          submissions = JSON.parse(storedSubmissions).map((item: any) => {
-            if (typeof item === 'string') {
-              return { uri: item, takenBy: 'Guest' };
-            }
-            return item as PhotoItem;
-          });
-        } catch {
-          submissions = [];
+      const metadata = {
+        challenge_id: challengeId,
+        submission_kind: 'challenge',
+      };
+
+      if (!isBackendConfigured) {
+        const submissionsKey = `__mock_challenge_submissions_${celebrationId}_${challengeId}`;
+        const storedSubmissions = await AsyncStorage.getItem(submissionsKey);
+        let submissions: PhotoItem[] = [];
+        if (storedSubmissions) {
+          try {
+            submissions = JSON.parse(storedSubmissions).map((item: any) => {
+              if (typeof item === 'string') {
+                return { uri: item, takenBy: 'Guest' };
+              }
+              return item as PhotoItem;
+            });
+          } catch {
+            submissions = [];
+          }
         }
+
+        const nextSubmissions = [
+          {
+            uri,
+            takenBy: userName,
+            takenById: userId,
+            postedAt: new Date().toISOString(),
+            submissionId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            challengeId,
+          },
+          ...submissions,
+        ];
+        await AsyncStorage.setItem(submissionsKey, JSON.stringify(nextSubmissions));
+      } else if (isGuest && guestAuth) {
+        await uploadGuestPhoto({
+          eventCode: guestAuth.slug,
+          guestToken: guestAuth.guestToken,
+          localUri: uri,
+          source: 'camera',
+          mimeType: 'image/jpeg',
+          metadata,
+        });
+      } else if (!isGuest && celebrationId) {
+        await uploadHostPhoto({
+          celebrationId: String(celebrationId),
+          localUri: uri,
+          source: 'camera',
+          mimeType: 'image/jpeg',
+          metadata,
+        });
+      } else {
+        throw new Error('No identity available to upload this challenge photo yet.');
       }
 
-      const nextSubmissions = [
-        {
-          uri,
-          takenBy: userName,
-          takenById: userId,
-          postedAt: new Date().toISOString(),
-          submissionId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-        },
-        ...submissions,
-      ];
-      await AsyncStorage.setItem(submissionsKey, JSON.stringify(nextSubmissions));
+      await AsyncStorage.setItem(
+        `__mock_pending_challenge_refresh_${celebrationId}`,
+        String(challengeId),
+      );
 
       await queryClient.invalidateQueries({
         queryKey: celebrationDetailKeys.detail(String(celebrationId)),
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
-      Alert.alert(
-        'Added to challenge',
-        'Your photo has been added to the challenge story.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              router.back();
-            },
-          },
-        ],
-        { cancelable: false },
-      );
+      router.back();
+      return true;
+    } catch (error) {
+      console.error('Failed to post challenge photo:', error);
+      Alert.alert('Upload failed', 'Your photo could not be added to the challenge. Please try again.');
+      return false;
     } finally {
       setIsUploading(false);
     }
   }
 
   async function handleCapture() {
+    if (isChallengeCapture && challengePreviewUri) {
+      return;
+    }
     if (outOfShots) {
       Alert.alert('Limit Reached', "You've reached the photo limit for this event.");
       return;
@@ -664,7 +694,7 @@ export default function CameraScreen() {
           // web capture's data: URI (no file extension to read).
           const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg';
           if (isChallengeCapture) {
-            await commitChallengePhoto(photo.uri);
+            setChallengePreviewUri(photo.uri);
           } else {
             await commitPhoto(photo.uri, 'camera', mimeType, photo.width, photo.height);
           }
@@ -720,17 +750,57 @@ export default function CameraScreen() {
     // — sharing it here as "the code" meant no code a host gave out could
     // actually join the event.
     if (!celebration || !celebration.event_code) return;
+    const invitationUrl = `${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`;
+    const message = `Join "${celebration.title}" on Candidly → ${invitationUrl}`;
+
     try {
-      await Share.share({
-        message: `Join "${celebration.title}" on Candidly → ${BRAND_CONFIG.guestDomain}/e/${celebration.event_code}`,
-      });
-    } catch {}
+      if (Platform.OS === 'web') {
+        const webNavigator = globalThis as typeof globalThis & {
+          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+          clipboard?: { writeText?: (text: string) => Promise<void> };
+        };
+
+        if (typeof webNavigator.share === 'function') {
+          await webNavigator.share({
+            title: celebration.title,
+            text: message,
+            url: invitationUrl,
+          });
+          return;
+        }
+
+        if (typeof webNavigator.clipboard?.writeText === 'function') {
+          await webNavigator.clipboard.writeText(invitationUrl);
+          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
+          return;
+        }
+      }
+
+      await Share.share({ message });
+    } catch {
+      if (Platform.OS === 'web') {
+        try {
+          await Clipboard.setStringAsync(invitationUrl);
+          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
+        } catch {
+          Alert.alert('Share unavailable', 'We could not open the share sheet. Please copy the invitation link instead.');
+        }
+      }
+    }
   }
 
   async function handleCopyCode() {
     if (!celebration || !celebration.event_code) return;
     await Clipboard.setStringAsync(celebration.event_code);
     Alert.alert('Copied', 'Event code copied to clipboard.');
+  }
+
+  async function handlePostChallengePreview() {
+    if (!challengePreviewUri || isUploading) return;
+    const posted = await commitChallengePhoto(challengePreviewUri);
+    if (posted) {
+      setChallengePreviewUri(null);
+    }
   }
 
 
@@ -907,6 +977,7 @@ export default function CameraScreen() {
           // whole constraint set — wiping whatever `useWebCameraTrack` last
           // applied. Native still drives flash and zoom through these props.
           flash={isWeb ? 'off' : flash}
+          mirror={facing === 'front'}
           enableTorch={false}
           zoom={isWeb ? 0 : zoom}
           onMountError={handleCameraMountError}
@@ -979,6 +1050,39 @@ export default function CameraScreen() {
           </View>
         </View>
       </View>
+
+      {isChallengeCapture && challengePreviewUri ? (
+        <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
+          <Image source={{ uri: challengePreviewUri }} style={S.challengePreviewImage} resizeMode="cover" />
+          <View style={S.challengePreviewScrim} />
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+            <Pressable
+              onPress={() => setChallengePreviewUri(null)}
+              disabled={isUploading}
+              style={({ pressed }) => [S.challengePreviewSecondaryBtn, pressed && { opacity: 0.86 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Retake photo"
+            >
+              <AppText style={S.challengePreviewSecondaryText}>Retake</AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => void handlePostChallengePreview()}
+              disabled={isUploading}
+              style={({ pressed }) => [
+                S.challengePreviewPrimaryBtn,
+                pressed && { opacity: 0.92 },
+                isUploading && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Post photo"
+            >
+              <AppText style={S.challengePreviewPrimaryText}>
+                {isUploading ? 'Posting…' : 'Post'}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* 3. Bottom Controls Panel */}
       <View style={[S.bottomPanel, { height: bottomPanelHeight + insets.bottom, paddingBottom: insets.bottom }]}>
@@ -1161,7 +1265,7 @@ export default function CameraScreen() {
   );
 }
 
-const S = StyleSheet.create({
+  const S = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#0B0B0C',
@@ -1288,6 +1392,60 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 20,
+  },
+
+  challengePreviewOverlay: {
+    backgroundColor: '#000000',
+    justifyContent: 'flex-end',
+    zIndex: 120,
+  },
+  challengePreviewImage: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+  },
+  challengePreviewScrim: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: 'rgba(11, 11, 12, 0.18)',
+  },
+  challengePreviewActions: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.xl,
+    gap: spacing.md,
+  },
+  challengePreviewSecondaryBtn: {
+    height: 52,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.28)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  challengePreviewSecondaryText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  challengePreviewPrimaryBtn: {
+    height: 54,
+    borderRadius: radii.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EFE9E0',
+  },
+  challengePreviewPrimaryText: {
+    color: '#0B0B0C',
+    fontWeight: '700',
+    fontSize: 16,
   },
 
   // Zoom Selector Pill

@@ -4,7 +4,7 @@ import { Animated, Modal, PanResponder, Platform, Pressable, View } from 'react-
 import { CloseIcon, EyeIcon, PencilIcon } from '@/components/ui/icons';
 import { colours, spacing } from '@/design';
 import { GuestEventCover } from '@/features/celebrations/guest-event-cover';
-import { resolveCover } from '@/features/celebrations/cover-source';
+import { useCoverSource } from '@/features/celebrations/cover-source';
 import type { CreationDraft } from '../draft/types';
 
 /**
@@ -113,9 +113,11 @@ export function GuestCoverPreview({
   );
 
   const accent = theme?.accent ?? colours.brandPrimary;
-  const coverSource = draft.coverLocalUri || draft.coverStoragePath
-    ? resolveCover(draft.coverLocalUri ?? draft.coverStoragePath)
-    : resolveCover(null);
+  // The host's freshly picked local file takes precedence over the stored
+  // path, so the preview updates the instant they choose a photo; both go
+  // through the shared resolver, which is what lets an already-uploaded cover
+  // (a bucket path) render here at all.
+  const coverSource = useCoverSource(draft.coverLocalUri ?? draft.coverStoragePath);
   const title = draft.title.trim() || 'Your event';
   const countdownLabel = formatRemaining(draft.endsAt);
   const shotsLeftLabel =

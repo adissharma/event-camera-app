@@ -70,6 +70,7 @@ import {
   type CelebrationDetail,
 } from '@/services/celebration-detail';
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
+import { deleteHostPhoto } from '@/services/media-delete';
 import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
@@ -81,9 +82,16 @@ import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
 import {
-  CHALLENGE_BRIEFS as SHARED_CHALLENGE_BRIEFS,
+  resolveChallengeBrief,
   ChallengeIconSVG as SharedChallengeIconSVG,
 } from '@/features/celebrations/challenge-icons';
+import {
+  listChallenges,
+  updateChallenge,
+  legacyChallengesKey,
+  type EventChallenge,
+} from '@/services/challenges';
+import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -94,27 +102,6 @@ const ROW_GAP = 20;
 /** Challenge chips */
 const CHIP_D = 68;  // outer circle diameter
 const CHIP_R = CHIP_D / 2;
-
-/**
- * The display URI for a `require`d bundled image, on every platform.
- *
- * Metro hands back a different shape per platform: a numeric asset handle on
- * native, and on web either a plain URL string or an object carrying one.
- * `Image.resolveAssetSource` only understands the native handle and, crucially,
- * **does not exist at all in react-native-web** — calling it there throws
- * `Image.default.resolveAssetSource is not a function`, which is precisely what
- * blanked this screen for any guest arriving in a fresh browser.
- */
-function bundledAssetUri(asset: unknown): string {
-  if (typeof asset === 'string') return asset;
-  if (asset && typeof asset === 'object' && typeof (asset as { uri?: unknown }).uri === 'string') {
-    return (asset as { uri: string }).uri;
-  }
-  // Native: a numeric handle only `resolveAssetSource` can dereference. Optional
-  // call, so a platform without it degrades to an empty URI instead of throwing.
-  return (Image as { resolveAssetSource?: (a: unknown) => { uri?: string } })
-    .resolveAssetSource?.(asset)?.uri ?? '';
-}
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
   return (
@@ -208,15 +195,10 @@ const ABSOLUTE_FILL = {
 
 // ─── Placeholder image maps ───────────────────────────────────────────────────
 
-const COVER_MAP: Record<string, ReturnType<typeof require>> = {
-  modern:      require('../../../../assets/images/placeholders/create_event_cover.png'),
-  classic:     require('../../../../assets/images/placeholders/create_event_cover.png'),
-  retro:       require('../../../../assets/images/placeholders/create_event_cover.png'),
-  film:        require('../../../../assets/images/placeholders/create_event_cover.png'),
-  editorial:   require('../../../../assets/images/placeholders/create_event_cover.png'),
-  documentary: require('../../../../assets/images/placeholders/create_event_cover.png'),
-  vibrant:     require('../../../../assets/images/placeholders/create_event_cover.png'),
-};
+// Cover art now resolves through `useCoverSource` in
+// `@/features/celebrations/cover-source`, which is the single place that
+// turns `celebrations.cover_storage_path` into something renderable. A local
+// theme-slug map used to stand in for that here and matched no real cover.
 
 const GALLERY_PRESETS = [
   { id: 'preset_1', source: require('../../../../assets/images/placeholders/christian_wedding.png') },
@@ -231,8 +213,25 @@ type Challenge = {
   id: string;
   label: string;
   icon: string;
+  /**
+   * The host's own "Guest instructions" from the edit-challenge screen. Saved
+   * per challenge, so it takes precedence over the icon's stock brief — that
+   * preset is only a starting point the form pre-fills, not the answer.
+   */
+  instructions?: string;
   photo?: string | null;
 };
+
+/** `event_challenges` row → the shape this screen renders. */
+function toScreenChallenge(row: EventChallenge): Challenge {
+  return {
+    id: row.id,
+    label: row.label,
+    icon: row.icon,
+    instructions: row.instructions ?? undefined,
+    photo: row.photoUri,
+  };
+}
 
 interface PhotoItem {
   uri: string;
@@ -240,6 +239,7 @@ interface PhotoItem {
   takenById?: string | null;
   postedAt?: string | null;
   submissionId?: string | null;
+  challengeId?: string | null;
   /**
    * The media item's id. Seeds the disposable treatment's per-photo
    * randomisation — deliberately not the URI, which is a signed URL that
@@ -293,130 +293,10 @@ const EXTRA_CHALLENGES: Array<{ label: string; icon: string }> = [
   { label: 'Gifts & Cards',   icon: 'gift' },
   { label: 'Confetti',        icon: 'confetti' },
 ];
-const CHALLENGE_BRIEFS: Record<string, { desc: string; instr: string }> = {
-  firstDance: {
-    desc: "Capture the couple's magical first dance as husband and wife.",
-    instr: "Wait for the music to slow, find a clear angle of the dancefloor, and snap a candid reaction or wide frame of their dip!"
-  },
-  rings: {
-    desc: "Get a close-up detail of the bride and groom's wedding bands.",
-    instr: "Look for a moment when they rest their hands together on a table, or ask to snap a macro shot of the rings catching the light."
-  },
-  group: {
-    desc: "Gather a group of friends or family for the ultimate group shot.",
-    instr: "Squeeze everyone close together, make sure all faces are visible and well-lit, and capture the joy of the celebration!"
-  },
-  decor: {
-    desc: "Capture the elegant table settings, flowers, and decorations.",
-    instr: "Shoot from a low angle to emphasize the candle arrangements, or frame the menu cards and place cards in soft focus."
-  },
-  candle: {
-    desc: "Snap a photo of the warm candlelit ambiance of the venue.",
-    instr: "Turn off your camera flash, steady your hands, and capture the flickering flames lighting up the guests' smiles."
-  },
-  champagne: {
-    desc: "Raise a glass and capture the sparkling champagne toast.",
-    instr: "Snap the glasses clinking mid-air, or capture the bubbles in the glass offset by the background bokeh."
-  },
-  cake: {
-    desc: "Document the detail or the cutting of the spectacular wedding cake.",
-    instr: "Frame the entire cake showing the floral decorations, or snap the couple sharing the first bite!"
-  },
-  bouquet: {
-    desc: "Capture the bridesmaids or the wedding bouquet in detail.",
-    instr: "Find the bridal party laughing together, or get a close-up of the delicate floral arrangements."
-  },
-  gift: {
-    desc: "Locate and snap the beautifully styled cards and gifts table.",
-    instr: "Highlight the guest book, the envelope box, or the handwritten signs."
-  },
-  confetti: {
-    desc: "Capture the explosive confetti or grand exit of the couple.",
-    instr: "Pre-focus on the aisle, wait for the couple to walk through the shower of petals, and snap a high-energy shot!"
-  },
-  // Birthday & Party
-  birthday: {
-    desc: "Capture the birthday person and their celebration moment.",
-    instr: "Get the birthday candles being blown out or the cake reveal for maximum joy!"
-  },
-  babyShower: {
-    desc: "Document the mom-to-be opening gifts with loved ones.",
-    instr: "Frame genuine reactions and the decorations celebrating the coming arrival."
-  },
-  bridalShower: {
-    desc: "Capture the bride's bridal shower with friends and games.",
-    instr: "Get candid laughter moments and personalized decorations telling her story."
-  },
-  engagement: {
-    desc: "Celebrate the newly engaged couple and their new ring.",
-    instr: "Focus on their hands together or their joyful reaction with family."
-  },
-  graduation: {
-    desc: "Document the graduate in their cap and gown moment.",
-    instr: "Capture both the formal shot and candid moments with loved ones celebrating."
-  },
-  housewarming: {
-    desc: "Frame the home and guests celebrating the new space.",
-    instr: "Highlight special features of the home or a group toast to new beginnings."
-  },
-  bachelorette: {
-    desc: "Capture the bride-to-be surrounded by her squad having fun.",
-    instr: "Get the group energy, silly moments, and the bride at the center."
-  },
-  anniversary: {
-    desc: "Celebrate the couple's milestone and their journey together.",
-    instr: "Capture them together in a heartfelt moment or with loved ones."
-  },
-  reunion: {
-    desc: "Document old friends reuniting and reliving memories together.",
-    instr: "Get nostalgic embraces, group shots, and genuine laughter between friends."
-  },
-  cocktail: {
-    desc: "Capture the elegance of the cocktail hour and mingling guests.",
-    instr: "Frame elegant drinks, the ambient lighting, and guests in conversation."
-  },
-  // Corporate & Formal
-  conference: {
-    desc: "Document speakers, panels, and networking moments.",
-    instr: "Capture keynote speakers, Q&A sessions, and attendees engaging."
-  },
-  teamBuilding: {
-    desc: "Capture the team in action during bonding activities.",
-    instr: "Get action shots, laughter, and moments of genuine connection."
-  },
-  gala: {
-    desc: "Document the elegant evening with dressed-up guests.",
-    instr: "Frame the venue, elegant attire, and social moments."
-  },
-  awards: {
-    desc: "Capture honorees on stage and celebration moments.",
-    instr: "Get acceptance speeches, trophy moments, and champagne toasts."
-  },
-  productLaunch: {
-    desc: "Document the product reveal and team celebration.",
-    instr: "Capture the unveiling, audience reactions, and team pride."
-  },
-  networking: {
-    desc: "Capture meaningful business conversations and connections.",
-    instr: "Frame one-on-one conversations, business card exchanges, and introductions."
-  },
-  retreat: {
-    desc: "Document outdoor activities and team bonding.",
-    instr: "Capture adventure moments, scenic backdrops, and genuine team connection."
-  },
-  training: {
-    desc: "Frame the learning and engagement during training sessions.",
-    instr: "Get instructor engagement, hands-on activities, and group participation."
-  },
-  holiday: {
-    desc: "Capture the festive spirit and team celebrations.",
-    instr: "Get holiday decorations, group gatherings, and seasonal cheer."
-  },
-  sports: {
-    desc: "Document action and team celebration moments.",
-    instr: "Capture intense game moments, victory celebrations, and team spirit!"
-  }
-};
+// Stock briefs live in `@/features/celebrations/challenge-icons` and are read
+// through `resolveChallengeBrief`, which also normalises legacy icon names and
+// OpenMoji hexcodes. A second copy used to sit here and had drifted to a subset
+// of the shared one, so the two surfaces disagreed about a challenge's brief.
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
@@ -918,6 +798,11 @@ function EventDetailView({
   const queryClient = useQueryClient();
   const { celebration, primarySession, metrics, viewerRole, mediaPhotos } = detail;
 
+  // The one cover for this event, shared with the dashboard card and the guest
+  // invitation. Re-signs automatically when the host replaces it, because a
+  // replacement writes a new storage path.
+  const coverSource = useCoverSource(celebration.cover_storage_path);
+
   const { session } = useAuth();
 
   const { data: profile } = useQuery({
@@ -1057,7 +942,6 @@ function EventDetailView({
   const [filteredCaptureState, setFilteredCaptureState] = useState<FilteredCaptureState>(null);
   const storyMountAnim = useRef(new Animated.Value(0)).current;
   const selectedChallengeRef = useRef<Challenge | null>(null);
-  const pendingChallengeRefreshRef = useRef<string | null>(null);
   const challengeStoryCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const challengeViewerSessionRef = useRef(0);
   const [guestAuth, setGuestAuth] = useState<{
@@ -1174,6 +1058,50 @@ function EventDetailView({
   }, []);
 
   const loadChallengeSubmissions = useCallback(async (challenge: Challenge) => {
+    if (isBackendConfigured && detail?.challengePhotos) {
+      const matching = detail.challengePhotos
+        .filter((item) => item.challengeId === challenge.id)
+        .sort((a, b) => {
+          const aTime = a.capturedAt ? new Date(a.capturedAt).getTime() : 0;
+          const bTime = b.capturedAt ? new Date(b.capturedAt).getTime() : 0;
+          return bTime - aTime;
+        });
+
+      if (matching.length === 0) return [];
+
+      // `challengePhotos` carries bucket paths, not URLs — the same shape
+      // `mediaPhotos` arrives in. The grid signs those before rendering; this
+      // list has to as well, or every submission renders as a blank frame with
+      // its caption intact, which is exactly how the bug presented.
+      const client = requireSupabase();
+      const { data, error } = await client.storage
+        .from('event-media')
+        .createSignedUrls(matching.map((item) => item.storagePath), 3600);
+
+      if (error || !data) {
+        console.error('[gallery] failed to sign challenge photo URLs', error);
+        return [];
+      }
+
+      const urlByPath = new Map(data.map((d) => [d.path, d.signedUrl]));
+
+      return matching
+        .map((item) => {
+          const signedUrl = urlByPath.get(item.storagePath);
+          if (!signedUrl) return null;
+          return {
+            id: item.id,
+            uri: signedUrl,
+            takenBy: item.displayName || 'Guest',
+            postedAt: item.capturedAt,
+            submissionId: item.id,
+            challengeId: item.challengeId,
+            isMine: item.isMine === true,
+          };
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null);
+    }
+
     const key = `__mock_challenge_submissions_${celebration.id}_${challenge.id}`;
     const stored = await AsyncStorage.getItem(key);
 
@@ -1202,52 +1130,65 @@ function EventDetailView({
     }
 
     return [];
-  }, [celebration.id]);
+  }, [celebration.id, detail?.challengePhotos]);
 
+  // Declared before the effect below that lists it as a dependency. A `const`
+  // is in its temporal dead zone until this line runs, and a dependency array
+  // is built during render — so referencing it from an earlier effect throws
+  // `Cannot access 'updateChallengeStory' before initialization` and takes the
+  // whole dashboard down with it.
   const updateChallengeStory = useCallback((challenge: Challenge, submissions: PhotoItem[], forceLatest = false) => {
     if (selectedChallengeRef.current?.id !== challenge.id) return;
     setStorySubmissions(submissions);
     if (forceLatest && submissions.length > 0) {
         setActiveSlideIndex(1);
-        if (pendingChallengeRefreshRef.current === challenge.id) {
-          pendingChallengeRefreshRef.current = null;
-          Alert.alert(
-            'Added to challenge',
-            `Your photo has been added to ${challenge.label}.`,
-          );
-        }
       }
   }, []);
 
+  // Keeps an open challenge story in sync when fresh submissions arrive from
+  // the server — the guest's own post included, which is what makes the photo
+  // appear straight after it is posted.
+  useEffect(() => {
+    if (!selectedChallengeRef.current || !isBackendConfigured || !detail?.challengePhotos) {
+      return;
+    }
+
+    const challenge = selectedChallengeRef.current;
+    void loadChallengeSubmissions(challenge).then((submissions) => {
+      if (selectedChallengeRef.current?.id !== challenge.id) return;
+      updateChallengeStory(challenge, submissions, false);
+    });
+  }, [detail?.challengePhotos, loadChallengeSubmissions, updateChallengeStory]);
+
   useFocusEffect(
     useCallback(() => {
-      const pendingChallengeId = pendingChallengeRefreshRef.current;
-      if (!pendingChallengeId) {
-        return;
-      }
-
-      const challenge =
-        challenges.find((item) => item.id === pendingChallengeId) ??
-        selectedChallengeRef.current;
-      if (!challenge) {
-        pendingChallengeRefreshRef.current = null;
-        return;
-      }
-
       let cancelled = false;
       void (async () => {
+        const pendingChallengeId = await AsyncStorage.getItem(`__mock_pending_challenge_refresh_${celebration.id}`);
+        if (!pendingChallengeId) {
+          return;
+        }
+
+        const challenge =
+          challenges.find((item) => item.id === pendingChallengeId) ??
+          selectedChallengeRef.current;
+        if (!challenge) {
+          await AsyncStorage.removeItem(`__mock_pending_challenge_refresh_${celebration.id}`);
+          return;
+        }
+
         const submissions = await loadChallengeSubmissions(challenge);
         if (cancelled) return;
+        await AsyncStorage.removeItem(`__mock_pending_challenge_refresh_${celebration.id}`);
         if (selectedChallengeRef.current?.id === challenge.id) {
           updateChallengeStory(challenge, submissions, true);
         }
-        pendingChallengeRefreshRef.current = null;
       })();
 
       return () => {
         cancelled = true;
       };
-    }, [challenges, loadChallengeSubmissions, updateChallengeStory]),
+    }, [celebration.id, challenges, loadChallengeSubmissions, updateChallengeStory]),
   );
 
   // Gesture handler for pan events. Reanimated's shared values update directly
@@ -1403,57 +1344,65 @@ function EventDetailView({
     };
   }, [mediaPhotos]);
 
-  // ── Load challenges & Pre-seed c3 (Best Group Photo) submissions ──
+  useEffect(() => {
+    if (!isBackendConfigured) return;
+    if (!primarySession?.id) return;
+
+    const client = requireSupabase();
+    const channel = client
+      .channel(`celebration-media-${celebration.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'media_items',
+          filter: `event_session_id=eq.${primarySession.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({
+            queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+          });
+          void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [celebration.id, primarySession?.id, queryClient]);
+
+  // ── Load challenges ──
+  //
+  // Declared before the realtime subscription below, which depends on it — see
+  // the note on `updateChallengeStory` for why ordering matters here.
   const loadChallenges = useCallback(async () => {
-    const submissionsKey = `__mock_challenge_submissions_${celebration.id}_c3`;
-    const submissionsStored = await AsyncStorage.getItem(submissionsKey);
-
-    let demoPhotos: PhotoItem[] = [];
-    if (!submissionsStored) {
-      const demoUris = [
-        require('../../../../assets/images/placeholders/iphone_group_1.png'),
-        require('../../../../assets/images/placeholders/iphone_group_2.png'),
-        require('../../../../assets/images/placeholders/iphone_group_3.png'),
-        require('../../../../assets/images/placeholders/iphone_group_4.png'),
-        require('../../../../assets/images/placeholders/iphone_group_5.png'),
-      ].map(bundledAssetUri);
-
-      const names = ['Emma', 'Daniel', 'Chloe', 'Ryan', 'Zoe'];
-      demoPhotos = demoUris.map((uri, idx) => ({
-        uri,
-        takenBy: names[idx % names.length],
-      }));
-
-      await AsyncStorage.setItem(submissionsKey, JSON.stringify(demoPhotos));
-    } else {
-      try {
-        const parsed = JSON.parse(submissionsStored);
-        demoPhotos = parsed.map((item: any) => {
-          if (typeof item === 'string') {
-            return { uri: item, takenBy: 'Guest' };
-          }
-          return item as PhotoItem;
-        });
-      } catch {}
+    // Server first, for both roles. A guest reads the host's real list through
+    // the guest RPC rather than inventing DEFAULT_CHALLENGES locally, which is
+    // what used to hide the host's instructions from the people they were for.
+    try {
+      const remote = await listChallenges(
+        celebration.id,
+        DEFAULT_CHALLENGES.map((item) => ({ label: item.label, icon: item.icon })),
+      );
+      if (remote) {
+        setChallenges(remote.map(toScreenChallenge));
+        return;
+      }
+    } catch (error) {
+      console.error('[gallery] failed to load challenges', error);
     }
 
-    const key = `__mock_challenges_${celebration.id}`;
-    const stored = await AsyncStorage.getItem(key);
+    // No backend configured: the offline development path.
+    const stored = await AsyncStorage.getItem(legacyChallengesKey(celebration.id));
     if (stored) {
       try {
-        let parsed = JSON.parse(stored) as Challenge[];
-        if (demoPhotos.length > 0) {
-          parsed = parsed.map((c) => (c.id === 'c3' && !c.photo ? { ...c, photo: demoPhotos[demoPhotos.length - 1].uri } : c));
-        }
-        setChallenges(parsed);
+        setChallenges(JSON.parse(stored) as Challenge[]);
+        return;
       } catch {}
-    } else {
-      let def = [...DEFAULT_CHALLENGES];
-      if (demoPhotos.length > 0) {
-        def = def.map((c) => (c.id === 'c3' ? { ...c, photo: demoPhotos[demoPhotos.length - 1].uri } : c));
-      }
-      setChallenges(def);
     }
+    setChallenges([...DEFAULT_CHALLENGES]);
   }, [celebration.id]);
 
   useFocusEffect(
@@ -1461,6 +1410,36 @@ function EventDetailView({
       void loadChallenges();
     }, [loadChallenges]),
   );
+
+  // Challenge edits from another device. `postgres_changes` carries the
+  // subscriber's own RLS, so this reaches hosts and collaborators — a host
+  // editing on their phone sees it on the web dashboard without refreshing.
+  // Guests have no policy on this table by design and pick edits up on their
+  // next fetch instead.
+  useEffect(() => {
+    if (!isBackendConfigured) return;
+
+    const client = requireSupabase();
+    const channel = client
+      .channel(`celebration-challenges-${celebration.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_challenges',
+          filter: `celebration_id=eq.${celebration.id}`,
+        },
+        () => {
+          void loadChallenges();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [celebration.id, loadChallenges]);
 
   // ── Sync server metrics ──
   useEffect(() => {
@@ -1498,9 +1477,11 @@ function EventDetailView({
   // ── Helpers ──
 
   function getCoverSource() {
-    if (celebration.cover_storage_path && COVER_MAP[celebration.cover_storage_path]) {
-      return COVER_MAP[celebration.cover_storage_path];
-    }
+    // The host's own cover wins. Only an event that has never had one falls
+    // through to the demo artwork — previously *every* event did, because this
+    // consulted a theme-slug map that a real bucket path never matches.
+    if (coverSource !== FALLBACK_COVER) return coverSource;
+    if (celebration.cover_storage_path) return coverSource;
     const sum = celebration.id.split('').reduce((s, c) => s + c.charCodeAt(0), 0);
     return GALLERY_PRESETS[sum % GALLERY_PRESETS.length].source;
   }
@@ -1543,10 +1524,69 @@ function EventDetailView({
 
   async function saveChallenges(next: Challenge[]) {
     setChallenges(next);
+
+    if (isBackendConfigured) {
+      // Only the cover thumbnail changes through this path (see
+      // `removeDeletedPhotoFromMockChallengeData`), so patch that field alone
+      // rather than rewriting rows the host may have edited elsewhere.
+      await Promise.all(
+        next.map((item) =>
+          updateChallenge(item.id, { photoUri: item.photo ?? null }).catch((error) => {
+            console.error('[gallery] failed to update challenge cover', error);
+          }),
+        ),
+      );
+      return;
+    }
+
     await AsyncStorage.setItem(
-      `__mock_challenges_${celebration.id}`,
+      legacyChallengesKey(celebration.id),
       JSON.stringify(next),
     );
+  }
+
+  async function removeDeletedPhotoFromMockChallengeData(deletedPhotoUri: string) {
+    const submissionsPrefix = `__mock_challenge_submissions_${celebration.id}_`;
+    const allKeys = await AsyncStorage.getAllKeys();
+    const submissionKeys = allKeys.filter((key) => key.startsWith(submissionsPrefix));
+    const updatedByKey = new Map<string, PhotoItem[]>();
+
+    for (const key of submissionKeys) {
+      const stored = await AsyncStorage.getItem(key);
+      if (!stored) {
+        updatedByKey.set(key, []);
+        continue;
+      }
+
+      try {
+        const parsed = JSON.parse(stored) as Array<PhotoItem | string>;
+        const next = parsed.filter((entry) => {
+          if (typeof entry === 'string') {
+            return entry !== deletedPhotoUri;
+          }
+          return entry.uri !== deletedPhotoUri;
+        }) as PhotoItem[];
+        updatedByKey.set(key, next);
+        await AsyncStorage.setItem(key, JSON.stringify(next));
+      } catch {
+        updatedByKey.set(key, []);
+      }
+    }
+
+    // Any challenge whose cover was the deleted photo falls back to its next
+    // submission. Works off the loaded list rather than re-reading local
+    // storage, since challenges now live on the server.
+    const affected = challenges.filter((item) => item.photo === deletedPhotoUri);
+    if (affected.length > 0) {
+      const nextChallenges = challenges.map((item) => {
+        if (item.photo !== deletedPhotoUri) return item;
+        const nextSubmissions = updatedByKey.get(`${submissionsPrefix}${item.id}`) ?? [];
+        return { ...item, photo: nextSubmissions[0]?.uri ?? null };
+      });
+      await saveChallenges(nextChallenges);
+    }
+
+    return updatedByKey;
   }
 
   // Shared with the reveal modal and the photo viewer. Deriving it here inline
@@ -1635,9 +1675,10 @@ function EventDetailView({
     (activeChallengeSubmission?.takenBy === guestName || activeChallengeSubmission?.takenBy === 'You');
   const canDeleteActiveChallengeSubmission =
     Boolean(activeChallengeSubmission) &&
-    ((Boolean(activeChallengeSubmission?.takenById) &&
-      Boolean(viewerId) &&
-      activeChallengeSubmission?.takenById === viewerId) ||
+    (viewerRole !== 'guest' ||
+      (Boolean(activeChallengeSubmission?.takenById) &&
+        Boolean(viewerId) &&
+        activeChallengeSubmission?.takenById === viewerId) ||
       isLegacyOwnChallengeSubmission);
 
   // The real photographs, blurred by the modal rather than substituted. A
@@ -1753,14 +1794,11 @@ function EventDetailView({
                 guestToken: guestAuth.guestToken,
               });
 
-              setPhotos((current) => {
-                const next = current.filter((item) => item.id !== photo.id);
-                if (next.length === 0) {
-                  closeHeroViewer();
-                } else if (index >= next.length) {
-                  setHeroIndex(next.length - 1);
-                }
-                return next;
+              const nextPhotos = photos.filter((item) => item.id !== photo.id);
+              setPhotos(nextPhotos);
+              closeHeroViewer();
+              void removeDeletedPhotoFromMockChallengeData(photo.uri).catch((error) => {
+                console.warn('[gallery] failed to clean mock challenge data after delete', error);
               });
 
               await queryClient.invalidateQueries({
@@ -1776,6 +1814,42 @@ function EventDetailView({
         },
       ],
     );
+  }
+
+  async function deleteHeroGalleryPhoto(photo: PhotoItem, index: number) {
+    if (viewerRole === 'guest') {
+      if (!photo.id || !guestAuth) return;
+      await deleteGuestPhoto({
+        mediaItemId: photo.id,
+        guestToken: guestAuth.guestToken,
+      });
+    } else if (isBackendConfigured && photo.id) {
+      await deleteHostPhoto({ mediaItemId: photo.id });
+    } else {
+      const key = `__mock_photos_${celebration.id}`;
+      const stored = await AsyncStorage.getItem(key);
+      if (stored) {
+        const parsed = JSON.parse(stored) as PhotoItem[];
+        const updated = parsed.filter((_, idx) => idx !== index);
+        await AsyncStorage.setItem(key, JSON.stringify(updated));
+      }
+    }
+
+    await removeDeletedPhotoFromMockChallengeData(photo.uri).catch((error) => {
+      console.warn('[gallery] failed to clean mock challenge data after delete', error);
+    });
+
+    const nextPhotos = photos.filter((item, idx) =>
+      photo.id ? item.id !== photo.id : idx !== index,
+    );
+    setPhotos(nextPhotos);
+    closeHeroViewer();
+
+    await queryClient.invalidateQueries({
+      queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+    });
+    void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
   }
 
   function closeHeroViewer() {
@@ -1876,6 +1950,7 @@ function EventDetailView({
   function navigateStorySlide(direction: 'prev' | 'next') {
     const current = activeSlideRef.current;
     const totalSlides = 1 + submissionCountRef.current;
+    setChallengeMenuVisible(false);
 
     if (direction === 'prev') {
       if (current > 0) {
@@ -1914,7 +1989,6 @@ function EventDetailView({
 
   async function handleChallengePhotoPress(challenge: Challenge) {
     const viewerSession = ++challengeViewerSessionRef.current;
-    pendingChallengeRefreshRef.current = null;
     setChallengeMenuVisible(false);
     if (challengeStoryCloseTimerRef.current !== null) {
       clearTimeout(challengeStoryCloseTimerRef.current);
@@ -1942,26 +2016,19 @@ function EventDetailView({
   }
 
   async function handleAddSubmission(challenge: Challenge) {
-    pendingChallengeRefreshRef.current = challenge.id;
     setChallengeMenuVisible(false);
     if (challengeStoryCloseTimerRef.current !== null) {
       clearTimeout(challengeStoryCloseTimerRef.current);
       challengeStoryCloseTimerRef.current = null;
     }
     requestAnimationFrame(() => {
-      router.push({
+      router.push(({
         pathname: `/celebration/${celebration.id}/camera`,
         params: {
           captureTarget: 'challenge',
           challengeId: challenge.id,
         },
-      } as never);
-      if (challengeStoryCloseTimerRef.current !== null) {
-        clearTimeout(challengeStoryCloseTimerRef.current);
-      }
-      challengeStoryCloseTimerRef.current = setTimeout(() => {
-        dismissStory();
-      }, 180);
+      }) as never);
     });
   }
 
@@ -1974,25 +2041,20 @@ function EventDetailView({
     }
 
     try {
-      const key = `__mock_challenge_submissions_${celebration.id}_${challenge.id}`;
-      const stored = await AsyncStorage.getItem(key);
-      if (!stored) return;
+      const deletedPhotoUri = activeSubmission.uri;
+      const currentSlideIndex = activeSlideIndex;
+      const submissionsPrefix = `__mock_challenge_submissions_${celebration.id}_`;
+      const updatedByKey = await removeDeletedPhotoFromMockChallengeData(deletedPhotoUri);
 
-      const parsed = JSON.parse(stored) as Array<PhotoItem | string>;
-      const next = parsed.filter((entry) => {
-        if (typeof entry === 'string') {
-          return entry !== activeSubmission.uri;
-        }
-        return activeSubmission.submissionId
-          ? entry.submissionId !== activeSubmission.submissionId
-          : entry.uri !== activeSubmission.uri;
-      });
-
-      await AsyncStorage.setItem(key, JSON.stringify(next));
-      const refreshed = await loadChallengeSubmissions(challenge);
+      const currentKey = `${submissionsPrefix}${challenge.id}`;
+      const refreshed = updatedByKey.get(currentKey) ?? await loadChallengeSubmissions(challenge);
       setStorySubmissions(refreshed);
-      setActiveSlideIndex(refreshed.length > 0 ? 1 : 0);
+      setActiveSlideIndex(refreshed.length === 0 ? 0 : Math.min(currentSlideIndex, refreshed.length));
       setChallengeMenuVisible(false);
+      void queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+      });
+      void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
     } catch {
       Alert.alert('Error', 'Could not delete this challenge photo.');
     }
@@ -2009,11 +2071,43 @@ function EventDetailView({
     // opaque URLs — sharing it here as "the code" meant no code a host ever
     // gave out could actually join the event.
     if (!celebration.event_code) return;
+    const invitationUrl = `${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`;
+    const message = `Join "${celebration.title}" on Candidly → ${invitationUrl}`;
+
     try {
-      await Share.share({
-        message: `Join "${celebration.title}" on Candidly → ${BRAND_CONFIG.guestDomain}/e/${celebration.event_code}`,
-      });
-    } catch {}
+      if (Platform.OS === 'web') {
+        const webNavigator = globalThis as typeof globalThis & {
+          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
+          clipboard?: { writeText?: (text: string) => Promise<void> };
+        };
+
+        if (typeof webNavigator.share === 'function') {
+          await webNavigator.share({
+            title: celebration.title,
+            text: message,
+            url: invitationUrl,
+          });
+          return;
+        }
+
+        if (typeof webNavigator.clipboard?.writeText === 'function') {
+          await webNavigator.clipboard.writeText(invitationUrl);
+          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
+          return;
+        }
+      }
+
+      await Share.share({ message });
+    } catch {
+      if (Platform.OS === 'web') {
+        try {
+          await Clipboard.setStringAsync(invitationUrl);
+          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
+        } catch {
+          Alert.alert('Share unavailable', 'We could not open the share sheet. Please copy the invitation link instead.');
+        }
+      }
+    }
   }
 
   async function handleCopyCode() {
@@ -2338,6 +2432,8 @@ function EventDetailView({
               >
                 <BackChevron />
               </Pressable>
+            ) : Platform.OS === 'web' ? (
+              <View style={[S.navBtn, { opacity: 0 }]} pointerEvents="none" />
             ) : (
               <Pressable
                 style={S.navBtn}
@@ -2802,17 +2898,11 @@ function EventDetailView({
                               text: 'Delete Photo',
                               style: 'destructive',
                               onPress: async () => {
-                                const key = `__mock_photos_${celebration.id}`;
-                                const stored = await AsyncStorage.getItem(key);
-                                if (stored) {
-                                  const parsed = JSON.parse(stored) as PhotoItem[];
-                                  const updated = parsed.filter((_, idx) => idx !== heroIndex);
-                                  await AsyncStorage.setItem(key, JSON.stringify(updated));
-                                  queryClient.invalidateQueries({
-                                    queryKey: celebrationDetailKeys.detail(String(celebration.id)),
-                                  });
-                                  closeHeroViewer();
-                                  Alert.alert('Photo deleted');
+                                try {
+                                  await deleteHeroGalleryPhoto(activePhoto, heroIndex);
+                                } catch (error) {
+                                  console.error('[gallery] failed to delete photo', error);
+                                  Alert.alert('Error', 'Could not delete this photo. Please try again.');
                                 }
                               },
                             },
@@ -3038,8 +3128,17 @@ function EventDetailView({
                       <View style={S.storyHeroDividerLine} />
                     </View>
 
+                    {/* The host's saved instructions first. The icon's stock
+                        brief is only the fallback for a challenge that has
+                        never been edited — reading the preset unconditionally
+                        is what made custom instructions look like they were
+                        never saved. `resolveChallengeBrief` (rather than a
+                        raw map lookup) is what the edit form pre-fills with,
+                        so an untouched challenge reads identically in both. */}
                     <AppText style={S.storyHeroDesc}>
-                      {CHALLENGE_BRIEFS[selectedChallenge.icon]?.instr || 'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'}
+                      {selectedChallenge.instructions?.trim() ||
+                        resolveChallengeBrief(selectedChallenge.icon)?.instr ||
+                        'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'}
                     </AppText>
                   </Animated.View>
                 ) : null}
@@ -3071,14 +3170,26 @@ function EventDetailView({
                         </View>
                       )}
                     </View>
-                    <Pressable
-                      onPress={dismissStory}
-                      style={S.storyCloseBtnNew}
-                      accessibilityRole="button"
-                      accessibilityLabel="Close story"
-                    >
-                      <CloseIcon size={24} color="#FFFFFF" />
-                    </Pressable>
+                    <View style={S.storyHeaderActions}>
+                      {activeSlideIndex > 0 && canDeleteActiveChallengeSubmission ? (
+                        <Pressable
+                          onPress={() => setChallengeMenuVisible(true)}
+                          style={S.storyHeaderMenuBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel="More options"
+                        >
+                          <OverflowDotsIcon size={20} />
+                        </Pressable>
+                      ) : null}
+                      <Pressable
+                        onPress={dismissStory}
+                        style={S.storyCloseBtnNew}
+                        accessibilityRole="button"
+                        accessibilityLabel="Close story"
+                      >
+                        <CloseIcon size={24} color="#FFFFFF" />
+                      </Pressable>
+                    </View>
                   </View>
                 </View>
 
@@ -3119,6 +3230,46 @@ function EventDetailView({
             </PanGestureHandler>
           );
         })() : null}
+
+      <Modal
+        visible={challengeMenuVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setChallengeMenuVisible(false)}
+      >
+        <Pressable style={S.modalOverlay} onPress={() => setChallengeMenuVisible(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[S.menuSheet, { minWidth: 240 }]}
+          >
+            <Pressable
+              style={[S.menuOption, S.menuOptionBorder]}
+              onPress={() => {
+                setChallengeMenuVisible(false);
+                Alert.alert(
+                  'Delete this photo?',
+                  'This will permanently remove it from the challenge story.',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete Photo',
+                      style: 'destructive',
+                      onPress: () => {
+                        void deleteActiveChallengeSubmission();
+                      },
+                    },
+                  ],
+                );
+              }}
+            >
+              <AppText style={S.menuDeleteText}>Delete photo</AppText>
+            </Pressable>
+            <Pressable style={[S.menuOption, S.menuCancelOption]} onPress={() => setChallengeMenuVisible(false)}>
+              <AppText style={S.menuCancelText}>Cancel</AppText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* ══════════════════════════════════════════════════════
           SAVE PHOTOS MODAL

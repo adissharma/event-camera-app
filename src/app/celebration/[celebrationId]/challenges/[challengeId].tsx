@@ -23,6 +23,14 @@ import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { colours, layout, radii, spacing } from '@/design';
 import { celebrationDetailKeys } from '@/services/celebration-detail';
+import { isBackendConfigured } from '@/lib/supabase/client';
+import {
+  listChallenges,
+  createChallenge,
+  updateChallenge,
+  deleteChallenge,
+  legacyChallengesKey,
+} from '@/services/challenges';
 import {
   ChallengeIconSVG,
   type ChallengeIconOption,
@@ -95,6 +103,29 @@ function OverflowDotsIcon({ size = 20, color = 'rgba(255, 255, 255, 0.75)' }) {
   );
 }
 
+/**
+ * The current challenge list, server-backed where a backend exists and local
+ * only on the offline development path. Returned in this screen's own
+ * `Challenge` shape so both branches below read the same way.
+ */
+async function loadChallengeList(celebrationId: string): Promise<Challenge[]> {
+  if (isBackendConfigured) {
+    const remote = await listChallenges(celebrationId);
+    if (remote) {
+      return remote.map((item) => ({
+        id: item.id,
+        label: item.label,
+        icon: item.icon,
+        instructions: item.instructions ?? undefined,
+        photo: item.photoUri,
+      }));
+    }
+  }
+
+  const stored = await AsyncStorage.getItem(legacyChallengesKey(celebrationId));
+  return stored ? (JSON.parse(stored) as Challenge[]) : [...DEFAULT_CHALLENGES];
+}
+
 // ── Add/Edit Challenge Form Component ──
 
 export default function ChallengeFormScreen() {
@@ -120,9 +151,7 @@ export default function ChallengeFormScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const key = `__mock_challenges_${celebrationId}`;
-        const stored = await AsyncStorage.getItem(key);
-        const list: Challenge[] = stored ? JSON.parse(stored) : [...DEFAULT_CHALLENGES];
+        const list = await loadChallengeList(String(celebrationId));
 
         if (isEdit) {
           const item = list.find((c) => c.id === challengeId);
@@ -179,12 +208,17 @@ export default function ChallengeFormScreen() {
             style: 'destructive',
             onPress: async () => {
               try {
-                const key = `__mock_challenges_${celebrationId}`;
-                const stored = await AsyncStorage.getItem(key);
-                const list: Challenge[] = stored ? JSON.parse(stored) : [...DEFAULT_CHALLENGES];
-                const updated = list.filter((item) => item.id !== challengeId);
-
-                await AsyncStorage.setItem(key, JSON.stringify(updated));
+                if (isBackendConfigured) {
+                  await deleteChallenge(String(challengeId));
+                } else {
+                  const key = legacyChallengesKey(String(celebrationId));
+                  const stored = await AsyncStorage.getItem(key);
+                  const list: Challenge[] = stored ? JSON.parse(stored) : [...DEFAULT_CHALLENGES];
+                  await AsyncStorage.setItem(
+                    key,
+                    JSON.stringify(list.filter((item) => item.id !== challengeId)),
+                  );
+                }
                 await AsyncStorage.removeItem(submissionsKey);
 
                 queryClient.invalidateQueries({
@@ -228,33 +262,53 @@ export default function ChallengeFormScreen() {
 
     setSaving(true);
     try {
-      const key = `__mock_challenges_${celebrationId}`;
-      const stored = await AsyncStorage.getItem(key);
-      const list: Challenge[] = stored ? JSON.parse(stored) : [...DEFAULT_CHALLENGES];
+      const list = await loadChallengeList(String(celebrationId));
 
       if (isEdit) {
-        // Edit challenge in place
-        const updated = list.map((c) =>
-          c.id === challengeId
-            ? { ...c, label: title.trim(), icon: selectedIcon, instructions: instructions.trim() }
-            : c
-        );
-        await AsyncStorage.setItem(key, JSON.stringify(updated));
+        if (isBackendConfigured) {
+          await updateChallenge(String(challengeId), {
+            label: title.trim(),
+            icon: selectedIcon,
+            instructions: instructions.trim(),
+          });
+        } else {
+          const updated = list.map((c) =>
+            c.id === challengeId
+              ? { ...c, label: title.trim(), icon: selectedIcon, instructions: instructions.trim() }
+              : c,
+          );
+          await AsyncStorage.setItem(
+            legacyChallengesKey(String(celebrationId)),
+            JSON.stringify(updated),
+          );
+        }
       } else {
         if (list.length >= MAX_CHALLENGES) {
           Alert.alert('Limit reached', "You can't add more than 10 challenges.");
           return;
         }
 
-        // Create new challenge
-        const newChallenge: Challenge = {
-          id: `c_${Date.now()}`,
-          label: title.trim(),
-          icon: selectedIcon,
-          instructions: instructions.trim(),
-          photo: null,
-        };
-        await AsyncStorage.setItem(key, JSON.stringify([...list, newChallenge]));
+        if (isBackendConfigured) {
+          await createChallenge(String(celebrationId), {
+            label: title.trim(),
+            icon: selectedIcon,
+            instructions: instructions.trim(),
+            // Appended to the end of the host's existing order.
+            sortOrder: list.length,
+          });
+        } else {
+          const newChallenge: Challenge = {
+            id: `c_${Date.now()}`,
+            label: title.trim(),
+            icon: selectedIcon,
+            instructions: instructions.trim(),
+            photo: null,
+          };
+          await AsyncStorage.setItem(
+            legacyChallengesKey(String(celebrationId)),
+            JSON.stringify([...list, newChallenge]),
+          );
+        }
       }
 
       // Sync React Query cache

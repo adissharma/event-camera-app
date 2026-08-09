@@ -28,6 +28,7 @@ export interface UploadHostPhotoParams {
   width?: number;
   height?: number;
   capturedAt?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UploadHostPhotoResult {
@@ -51,6 +52,7 @@ export async function uploadHostPhoto(
       p_mime_type: mimeType,
       p_file_size_bytes: fileSizeBytes,
       p_captured_at: params.capturedAt ?? new Date().toISOString(),
+      p_metadata: params.metadata ?? {},
     },
   );
 

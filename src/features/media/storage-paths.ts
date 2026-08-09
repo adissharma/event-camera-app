@@ -85,11 +85,24 @@ export function buildVariantPath(
   ].join('/');
 }
 
+/**
+ * Path for a newly uploaded cover.
+ *
+ * `version` defaults to a timestamp rather than `1`, so replacing a cover
+ * writes a *new* object instead of overwriting the old one. That is what makes
+ * a replacement actually show up: the previous scheme wrote every cover to
+ * `cover-v1.jpg`, so the URL for an event never changed and browsers, the
+ * image cache and the CDN all went on serving the old photograph. A distinct
+ * path sidesteps cache invalidation entirely rather than trying to defeat it
+ * with query strings.
+ *
+ * Pass an explicit `version` only when reconstructing a known existing path.
+ */
 export function buildCoverPath(
   workspaceId: string,
   celebrationId: string,
   extension: string,
-  version = 1,
+  version: number | string = Date.now(),
 ): string {
   return [
     assertId(workspaceId, 'workspaceId'),
@@ -155,6 +168,27 @@ export function inferMimeTypeFromUri(uri: string): string {
     default:
       return 'image/jpeg';
   }
+}
+
+/**
+ * True when `uri` points at an image on this device rather than at a bucket
+ * path already on the server.
+ *
+ * The distinction decides whether a cover still needs uploading. Testing for
+ * `file://` and a leading `/` alone — which is what the cover step used to do —
+ * covers only native: a browser's image picker hands back `blob:` or `data:`,
+ * so on web every freshly chosen cover looked like an already-uploaded path,
+ * the upload was skipped, and the photo never left the host's machine.
+ */
+export function isLocalImageUri(uri: string): boolean {
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('blob:') ||
+    uri.startsWith('data:') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('ph://') ||
+    uri.startsWith('/')
+  );
 }
 
 export const BUCKETS = STORAGE_BUCKETS;

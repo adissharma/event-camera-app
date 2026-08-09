@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { 
+import {
   ActivityIndicator, 
   Pressable, 
   View, 
@@ -28,6 +28,7 @@ import { colours, layout, radii, spacing, fontFamilies } from '@/design';
 import { copy } from '@/i18n';
 import { LOCALE_CONFIG, STORAGE_BUCKETS } from '@/config/app-config';
 import { requireSupabase } from '@/lib/supabase/client';
+import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import type { ThemeRow } from '@/types/database';
 
 const { width } = Dimensions.get('window');
@@ -186,14 +187,17 @@ function EventCardTile({ celebration, index, themes, onPress }) {
     }).start();
   }, [fadeAnim, index]);
 
-  // Resolve cover source: fallbacks assigned based on list index for visual diversity
+  // The host's own cover, resolved the same way every other surface resolves
+  // it. This used to call `getPublicUrl` against `celebration-covers`, which
+  // is a private bucket — the URL it produced could never load, so a real
+  // uploaded cover rendered as a broken image behind the card's gradient.
+  const resolvedCover = useCoverSource(celebration.coverStoragePath);
+
+  // Fallbacks assigned by list index for visual diversity.
   let coverSource = PLACEHOLDERS[index % PLACEHOLDERS.length];
-  if (celebration.coverStoragePath) {
-    const client = requireSupabase();
-    coverSource = { 
-      uri: client.storage.from(STORAGE_BUCKETS.covers).getPublicUrl(celebration.coverStoragePath).data.publicUrl 
-    };
-  } else {
+  if (celebration.coverStoragePath && resolvedCover !== FALLBACK_COVER) {
+    coverSource = resolvedCover as typeof coverSource;
+  } else if (!celebration.coverStoragePath) {
     // Custom overrides based on event title text for rich wedding layout previews
     const titleLower = celebration.title.toLowerCase();
     if (titleLower.includes('wedding') || titleLower.includes('marriage')) {

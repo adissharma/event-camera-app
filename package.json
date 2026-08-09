@@ -8,6 +8,7 @@
     "@expo-google-fonts/instrument-serif": "^0.4.1",
     "@expo/ui": "~57.0.7",
     "@hookform/resolvers": "^5.5.7",
+    "@paper-design/shaders-react": "^0.0.78",
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "@shopify/react-native-skia": "2.6.2",
