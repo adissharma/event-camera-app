@@ -56,10 +56,10 @@ export interface CelebrationDetail {
    * offline-mock array under that name) to avoid colliding with it.
    */
   mediaPhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; isMine?: boolean; challengeId?: string | null }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; isMine?: boolean; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
   challengePhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; challengeId: string; isMine?: boolean }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; challengeId: string; isMine?: boolean; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
 }
 
@@ -140,7 +140,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         ? await (async () => {
             const { data: mediaRows, error: mediaError } = await client
               .from('media_items')
-              .select('id, original_storage_path, captured_at, metadata, guest_sessions(display_name)')
+              .select('id, original_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name)')
               .eq('event_session_id', primarySession.id)
               .eq('status', 'ready')
               .is('deleted_at', null)
@@ -161,6 +161,8 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 capturedAt: m.captured_at,
                 displayName: (m.guest_sessions as any)?.display_name ?? 'Host',
                 isMine: false,
+                uploadedByUserId: (m as any).uploaded_by_user_id ?? null,
+                guestSessionId: (m as any).guest_session_id ?? null,
                 challengeId: typeof (m as any).metadata?.challenge_id === 'string'
                   ? (m as any).metadata.challenge_id
                   : null,
@@ -184,6 +186,9 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 capturedAt: p.captured_at ?? null,
                 displayName: p.display_name ?? 'Guest',
                 challengeId: typeof p.challenge_id === 'string' ? p.challenge_id : '',
+                isMine: p.is_mine === true,
+                uploadedByUserId: p.uploaded_by_user_id ?? null,
+                guestSessionId: p.guest_session_id ?? null,
               })).filter((item) => item.challengeId.length > 0);
             }
 
@@ -440,6 +445,8 @@ async function tryFetchCelebrationDetailAsGuest(
           capturedAt: p.captured_at ?? null,
           displayName: p.display_name ?? 'Guest',
           isMine: p.is_mine === true,
+          uploadedByUserId: p.uploaded_by_user_id ?? null,
+          guestSessionId: p.guest_session_id ?? null,
           challengeId: typeof p.challenge_id === 'string' ? p.challenge_id : null,
         }))
       : null,
@@ -451,6 +458,8 @@ async function tryFetchCelebrationDetailAsGuest(
           displayName: p.display_name ?? 'Guest',
           challengeId: p.challenge_id,
           isMine: p.is_mine === true,
+          uploadedByUserId: p.uploaded_by_user_id ?? null,
+          guestSessionId: p.guest_session_id ?? null,
         }))
       : null,
   };

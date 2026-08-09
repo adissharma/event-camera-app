@@ -237,6 +237,8 @@ interface PhotoItem {
   uri: string;
   takenBy: string;
   takenById?: string | null;
+  uploadedByUserId?: string | null;
+  guestSessionId?: string | null;
   postedAt?: string | null;
   submissionId?: string | null;
   challengeId?: string | null;
@@ -256,6 +258,32 @@ interface PhotoItem {
   capturedAt?: string | null;
   /** True when this visible real media item belongs to the current guest token. */
   isMine?: boolean;
+}
+
+function formatStoryTimestamp(timestamp?: string | null): string {
+  if (!timestamp) return '';
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) return '';
+
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  const time = date.toLocaleTimeString(undefined, {
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
+  if (sameDay) return `Today at ${time}`;
+
+  return date.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 type SavePhotoItem = {
@@ -1097,6 +1125,9 @@ function EventDetailView({
             submissionId: item.id,
             challengeId: item.challengeId,
             isMine: item.isMine === true,
+            uploadedByUserId: item.uploadedByUserId ?? null,
+            guestSessionId: item.guestSessionId ?? null,
+            takenById: item.guestSessionId ?? item.uploadedByUserId ?? null,
           };
         })
         .filter((item): item is NonNullable<typeof item> => item !== null);
@@ -1668,6 +1699,14 @@ function EventDetailView({
   });
 
   const activeChallengeSubmission = activeSlideIndex > 0 ? storySubmissions[activeSlideIndex - 1] : null;
+  const activeChallengeOwnerMatchesViewer =
+    Boolean(activeChallengeSubmission) &&
+    ((Boolean(activeChallengeSubmission?.guestSessionId) &&
+      Boolean(guestAuth?.guestSessionId) &&
+      activeChallengeSubmission?.guestSessionId === guestAuth?.guestSessionId) ||
+      (Boolean(activeChallengeSubmission?.uploadedByUserId) &&
+        Boolean(profile?.id ?? session?.user.id) &&
+        activeChallengeSubmission?.uploadedByUserId === (profile?.id ?? session?.user.id)));
   const isLegacyOwnChallengeSubmission =
     viewerRole === 'guest' &&
     Boolean(activeChallengeSubmission) &&
@@ -1675,10 +1714,9 @@ function EventDetailView({
     (activeChallengeSubmission?.takenBy === guestName || activeChallengeSubmission?.takenBy === 'You');
   const canDeleteActiveChallengeSubmission =
     Boolean(activeChallengeSubmission) &&
-    (viewerRole !== 'guest' ||
-      (Boolean(activeChallengeSubmission?.takenById) &&
-        Boolean(viewerId) &&
-        activeChallengeSubmission?.takenById === viewerId) ||
+    (viewerRole === 'host' ||
+      activeChallengeOwnerMatchesViewer ||
+      activeChallengeSubmission?.isMine === true ||
       isLegacyOwnChallengeSubmission);
 
   // The real photographs, blurred by the modal rather than substituted. A
@@ -2042,14 +2080,34 @@ function EventDetailView({
 
     try {
       const deletedPhotoUri = activeSubmission.uri;
+      const deletedPhotoId = activeSubmission.id ?? activeSubmission.submissionId ?? null;
       const currentSlideIndex = activeSlideIndex;
       const submissionsPrefix = `__mock_challenge_submissions_${celebration.id}_`;
-      const updatedByKey = await removeDeletedPhotoFromMockChallengeData(deletedPhotoUri);
+      let refreshed: PhotoItem[] | null = null;
 
-      const currentKey = `${submissionsPrefix}${challenge.id}`;
-      const refreshed = updatedByKey.get(currentKey) ?? await loadChallengeSubmissions(challenge);
-      setStorySubmissions(refreshed);
-      setActiveSlideIndex(refreshed.length === 0 ? 0 : Math.min(currentSlideIndex, refreshed.length));
+      if (isBackendConfigured && deletedPhotoId) {
+        if (viewerRole === 'guest') {
+          if (!guestAuth) return;
+          await deleteGuestPhoto({
+            mediaItemId: deletedPhotoId,
+            guestToken: guestAuth.guestToken,
+          });
+        } else {
+          await deleteHostPhoto({ mediaItemId: deletedPhotoId });
+        }
+
+        refreshed = storySubmissions.filter((item) => {
+          const itemId = item.id ?? item.submissionId ?? null;
+          return itemId ? itemId !== deletedPhotoId : item.uri !== deletedPhotoUri;
+        });
+      } else {
+        const updatedByKey = await removeDeletedPhotoFromMockChallengeData(deletedPhotoUri);
+        refreshed = updatedByKey.get(`${submissionsPrefix}${challenge.id}`) ?? null;
+      }
+
+      const nextSubmissions = refreshed ?? await loadChallengeSubmissions(challenge);
+      setStorySubmissions(nextSubmissions);
+      setActiveSlideIndex(nextSubmissions.length === 0 ? 0 : Math.min(currentSlideIndex, nextSubmissions.length));
       setChallengeMenuVisible(false);
       void queryClient.invalidateQueries({
         queryKey: celebrationDetailKeys.detail(String(celebration.id)),
@@ -2855,9 +2913,11 @@ function EventDetailView({
                 <AppText style={{ fontFamily: 'InstrumentSans_600SemiBold', fontSize: 15, color: '#FFFFFF' }}>
                   {activePhoto.takenBy || 'Riya Sharma'}
                 </AppText>
-                <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: 'rgba(255, 255, 255, 0.55)' }}>
-                  Today at 7:42 PM
-                </AppText>
+                {formatStoryTimestamp(activePhoto.capturedAt) ? (
+                  <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: 'rgba(255, 255, 255, 0.55)' }}>
+                    {formatStoryTimestamp(activePhoto.capturedAt)}
+                  </AppText>
+                ) : null}
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
@@ -3164,9 +3224,11 @@ function EventDetailView({
                           <AppText style={{ fontFamily: 'InstrumentSans_600SemiBold', fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
                             {storySubmissions[activeSlideIndex - 1].takenBy || 'Guest'}
                           </AppText>
-                          <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 12, color: 'rgba(255, 255, 255, 0.8)', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                            Today at 7:42 PM
-                          </AppText>
+                          {formatStoryTimestamp(storySubmissions[activeSlideIndex - 1].postedAt) ? (
+                            <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 12, color: 'rgba(255, 255, 255, 0.8)', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
+                              {formatStoryTimestamp(storySubmissions[activeSlideIndex - 1].postedAt)}
+                            </AppText>
+                          ) : null}
                         </View>
                       )}
                     </View>
