@@ -9,7 +9,6 @@ import {
   StyleSheet,
   Modal,
   Alert,
-  Share,
   NativeModules,
   Linking,
   Platform,
@@ -34,15 +33,12 @@ import { queryClient } from '@/lib/query-client';
 import { celebrationKeys } from '@/services/celebrations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Clipboard from 'expo-clipboard';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
-import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { CopyIcon, QrCodeIcon, ShareIcon } from '@/components/ui/icons';
-import { QrCard } from '@/features/sharing/qr-card';
-import { BRAND_CONFIG } from '@/config/brand';
+import { QrCodeIcon } from '@/components/ui/icons';
+import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import {
   fetchCelebrationDetail,
   type CelebrationDetail,
@@ -60,6 +56,7 @@ import type { MediaSource } from '@/types/database';
 interface PhotoItem {
   uri: string;
   takenBy: string;
+  id?: string;
   takenById?: string | null;
   postedAt?: string | null;
   submissionId?: string | null;
@@ -525,7 +522,7 @@ export default function CameraScreen() {
       setIsUploading(true);
       try {
         if (isGuest && guestAuth) {
-          await uploadGuestPhoto({
+          const uploadResult = await uploadGuestPhoto({
             eventCode: guestAuth.slug,
             guestToken: guestAuth.guestToken,
             localUri: uri,
@@ -534,8 +531,9 @@ export default function CameraScreen() {
             width,
             height,
           });
+          newPhoto.id = uploadResult.mediaItemId;
         } else if (!isGuest && celebrationId) {
-          await uploadHostPhoto({
+          const uploadResult = await uploadHostPhoto({
             celebrationId: String(celebrationId),
             localUri: uri,
             source,
@@ -543,6 +541,7 @@ export default function CameraScreen() {
             width,
             height,
           });
+          newPhoto.id = uploadResult.mediaItemId;
         } else {
           // Guest identity hasn't loaded yet (loadStoredGuestSessionByCelebrationId
           // is async — see the effect above). Rare in practice since the
@@ -553,6 +552,7 @@ export default function CameraScreen() {
         await queryClient.invalidateQueries({
           queryKey: celebrationDetailKeys.detail(String(celebrationId)),
         });
+        setPhotos([newPhoto, ...photos]);
       } catch (e) {
         console.error(`Failed to upload ${source} photo:`, e);
         Alert.alert('Upload failed', 'Your photo could not be uploaded. Please try again.');
@@ -745,58 +745,6 @@ export default function CameraScreen() {
     }
   }
 
-  async function handleShareLink() {
-    // `event_code` (short, meant to be spoken or typed) is what the guest
-    // join screen and `get_event_preview_by_code` look up by. `public_slug`
-    // is a different, deliberately unguessable column meant for opaque URLs
-    // — sharing it here as "the code" meant no code a host gave out could
-    // actually join the event.
-    if (!celebration || !celebration.event_code) return;
-    const invitationUrl = `${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`;
-    const message = `Join "${celebration.title}" on Candidly → ${invitationUrl}`;
-
-    try {
-      if (Platform.OS === 'web') {
-        const webNavigator = globalThis.navigator as Navigator & {
-          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-          clipboard?: { writeText?: (text: string) => Promise<void> };
-        };
-
-        if (typeof webNavigator.share === 'function') {
-          await webNavigator.share({
-            title: celebration.title,
-            text: message,
-            url: invitationUrl,
-          });
-          return;
-        }
-
-        if (typeof webNavigator.clipboard?.writeText === 'function') {
-          await webNavigator.clipboard.writeText(invitationUrl);
-          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
-          return;
-        }
-      }
-
-      await Share.share({ message });
-    } catch {
-      if (Platform.OS === 'web') {
-        try {
-          await Clipboard.setStringAsync(invitationUrl);
-          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
-        } catch {
-          Alert.alert('Share unavailable', 'We could not open the share sheet. Please copy the invitation link instead.');
-        }
-      }
-    }
-  }
-
-  async function handleCopyCode() {
-    if (!celebration || !celebration.event_code) return;
-    await Clipboard.setStringAsync(celebration.event_code);
-    Alert.alert('Copied', 'Event code copied to clipboard.');
-  }
-
   async function handlePostChallengePreview() {
     if (!challengePreviewUri || isUploading) return;
     const posted = await commitChallengePhoto(challengePreviewUri);
@@ -828,6 +776,7 @@ export default function CameraScreen() {
     isGuest && limit !== null && Boolean(detail) ? limit - shotsUsed : null;
   const outOfShots = remainingPhotos !== null && remainingPhotos <= 0;
   const latestPhotoUri = photos.length > 0 ? photos[0].uri : null;
+  const latestPhotoId = photos.length > 0 ? photos[0].id ?? null : null;
 
 
 
@@ -1148,7 +1097,16 @@ export default function CameraScreen() {
 
           {/* Photos Button */}
           <Pressable 
-            onPress={() => router.replace(`/celebration/${celebrationId}`)}
+            onPress={() => {
+              if (latestPhotoId) {
+                router.replace({
+                  pathname: `/celebration/${celebrationId}`,
+                  params: { openPhotoId: latestPhotoId },
+                } as never);
+                return;
+              }
+              router.replace(`/celebration/${celebrationId}` as never);
+            }}
             style={S.photosBtn}
             accessibilityRole="button"
             accessibilityLabel="Open gallery"
@@ -1188,80 +1146,13 @@ export default function CameraScreen() {
 
       {/* 5. Invite Modal */}
       {celebration && (
-      <Modal
-        visible={shareVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShareVisible(false)}
-      >
-        <Pressable style={S.modalOverlay} onPress={() => setShareVisible(false)}>
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={[S.modalSheet, { paddingBottom: insets.bottom + spacing.xl }]}
-          >
-            <View style={S.sheetHandle} />
-
-            <View style={S.inviteHeader}>
-              <AppText variant="titleLarge" style={S.inviteTitle}>
-                Invite Guests
-              </AppText>
-              <AppText variant="bodySmall" tone="secondary" style={S.inviteSubtitle}>
-                Scan the QR code or share the invitation to join.
-              </AppText>
-            </View>
-
-            {celebration.event_code ? (
-            <QrCard
-                value={`${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`}
-                eventName={celebration.title}
-                footer={
-                  <View style={S.inviteCodeRow}>
-                    <View style={S.inviteCodeTitleWrap}>
-                      <AppText variant="eyebrow" style={S.inviteCodeLabel}>
-                        EVENT CODE
-                      </AppText>
-                    </View>
-                    <View style={S.inviteCodeDividerRow}>
-                      <View style={S.inviteCodeDivider} />
-                    </View>
-                    <View style={S.inviteCodeActionRow}>
-                      <AppText variant="bodyLarge" style={S.inviteCodeValue} numberOfLines={1} ellipsizeMode="middle">
-                        {celebration.event_code}
-                      </AppText>
-                      <Pressable
-                        onPress={() => void handleCopyCode()}
-                        accessibilityRole="button"
-                        accessibilityLabel="Copy event code"
-                        hitSlop={8}
-                        style={({ pressed }) => [S.inviteCopyButton, pressed && { opacity: 0.88 }]}
-                      >
-                        <CopyIcon size={16} color="#FFFFFF" />
-                        <AppText variant="labelSmall" style={S.inviteCopyLabel}>
-                          Copy
-                        </AppText>
-                      </Pressable>
-                    </View>
-                  </View>
-                  }
-              />
-            ) : null}
-
-            <Button
-              label="Share Invitation"
-              variant="primary"
-              size="medium"
-              leading={<ShareIcon size={18} color={colours.textOnBrand} />}
-              onPress={handleShareLink}
-            />
-            <Pressable
-              style={{ paddingVertical: spacing.sm, alignItems: 'center' }}
-              onPress={() => setShareVisible(false)}
-            >
-              <AppText variant="bodySmall" tone="secondary">Close</AppText>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        <InviteShareSheet
+          visible={shareVisible}
+          eventName={celebration.title}
+          eventCode={celebration.event_code}
+          bottomInset={insets.bottom}
+          onClose={() => setShareVisible(false)}
+        />
       )}
     </View>
   );
@@ -1663,6 +1554,13 @@ export default function CameraScreen() {
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: 5,
+  },
+  inviteLinkValue: {
+    flex: 1,
+    color: '#F1E7DA',
+    textAlign: 'left',
+    fontSize: 14,
+    lineHeight: 20,
   },
   inviteCopyButton: {
     flexDirection: 'row',

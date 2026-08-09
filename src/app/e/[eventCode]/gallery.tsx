@@ -18,10 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
-import { CameraIcon, ClockIcon, LockIcon, CloseIcon, CopyIcon, ShareIcon } from '@/components/ui/icons';
-import { QrCard } from '@/features/sharing/qr-card';
-import { BRAND_CONFIG } from '@/config/brand';
+import { CameraIcon, ClockIcon, LockIcon, CloseIcon, ShareIcon } from '@/components/ui/icons';
+import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import { colours, radii, spacing, layout } from '@/design';
 import {
   fetchGuestGallery,
@@ -46,7 +44,6 @@ export default function GuestGalleryScreen() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activePhoto, setActivePhoto] = useState<any | null>(null);
   const [shareVisible, setShareVisible] = useState(false);
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
 
   const fileInputRef = useRef<any>(null);
 
@@ -105,53 +102,6 @@ export default function GuestGalleryScreen() {
       AlertNativeFallback();
     }
   }, []);
-
-  const invitationUrl = `${BRAND_CONFIG.guestDomain}/j/${String(eventCode)}`;
-
-  const handleCopyInviteLink = useCallback(async () => {
-    try {
-      const webNavigator = globalThis.navigator as Navigator & {
-        clipboard?: { writeText?: (text: string) => Promise<void> };
-      };
-
-      if (typeof webNavigator.clipboard?.writeText !== 'function') {
-        throw new Error('Clipboard unavailable');
-      }
-
-      await webNavigator.clipboard.writeText(invitationUrl);
-      setCopyNotice('Invitation link copied');
-      setTimeout(() => setCopyNotice(null), 1800);
-    } catch {
-      if (typeof window !== 'undefined') {
-        window.alert('We could not copy the invitation link. Please copy it from your browser address bar.');
-      }
-    }
-  }, [invitationUrl]);
-
-  const handleShareInviteLink = useCallback(async () => {
-    if (!data) return;
-    const message = `Join "${data.celebration.title}" on Candidly → ${invitationUrl}`;
-
-    try {
-      const webNavigator = globalThis.navigator as Navigator & {
-        share?: (shareData: { title?: string; text?: string; url?: string }) => Promise<void>;
-        clipboard?: { writeText?: (text: string) => Promise<void> };
-      };
-
-      if (typeof webNavigator.share === 'function') {
-        await webNavigator.share({
-          title: data.celebration.title,
-          text: message,
-          url: invitationUrl,
-        });
-        return;
-      }
-
-      await handleCopyInviteLink();
-    } catch (error) {
-      console.error('[guest-gallery] failed to share invitation', error);
-    }
-  }, [data, handleCopyInviteLink, invitationUrl]);
 
   const AlertNativeFallback = () => {
     if (typeof window === 'undefined') return;
@@ -413,70 +363,13 @@ export default function GuestGalleryScreen() {
         </Modal>
       )}
 
-      <Modal
+      <InviteShareSheet
         visible={shareVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShareVisible(false)}
-      >
-        <Pressable style={S.modalOverlay} onPress={() => setShareVisible(false)}>
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={[S.shareSheet, { paddingBottom: insets.bottom + spacing.xl }]}
-          >
-            <View style={S.sheetHandle} />
-            <View style={S.shareHeader}>
-              <AppText variant="titleLarge" style={S.shareTitle}>Invite Guests</AppText>
-              <AppText variant="bodySmall" tone="secondary" style={S.shareSubtitle}>
-                Scan the QR code or share the invitation to join.
-              </AppText>
-            </View>
-
-            <QrCard
-              value={invitationUrl}
-              eventName={celebration.title}
-              size={screenWidth > 420 ? 236 : 208}
-              footer={
-                <View style={S.inviteLinkBlock}>
-                  <AppText variant="eyebrow" style={S.inviteLinkLabel}>INVITE LINK</AppText>
-                  <Pressable
-                    onPress={handleCopyInviteLink}
-                    style={({ pressed }) => [S.inviteLinkRow, pressed && { opacity: 0.86 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="Copy invitation link"
-                  >
-                    <AppText variant="bodySmall" style={S.inviteLinkText} numberOfLines={1} ellipsizeMode="middle">
-                      {invitationUrl}
-                    </AppText>
-                    <View style={S.inviteCopyPill}>
-                      <CopyIcon size={15} color="#FFFFFF" />
-                      <AppText variant="labelSmall" style={S.inviteCopyText}>Copy</AppText>
-                    </View>
-                  </Pressable>
-                  {copyNotice ? (
-                    <AppText variant="caption" style={S.copyNotice}>{copyNotice}</AppText>
-                  ) : null}
-                </View>
-              }
-            />
-
-            <Button
-              label="Share Invitation"
-              variant="primary"
-              size="medium"
-              leading={<ShareIcon size={18} color={colours.textOnBrand} />}
-              onPress={handleShareInviteLink}
-            />
-            <Pressable
-              style={S.shareClose}
-              onPress={() => setShareVisible(false)}
-              accessibilityRole="button"
-            >
-              <AppText variant="bodySmall" tone="secondary">Close</AppText>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        eventName={celebration.title}
+        eventCode={String(eventCode)}
+        bottomInset={insets.bottom}
+        onClose={() => setShareVisible(false)}
+      />
     </View>
   );
 }

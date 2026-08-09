@@ -35,7 +35,6 @@ import ReanimatedAnimated, {
 } from 'react-native-reanimated';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import type { PanGestureHandlerEventPayload } from 'react-native-gesture-handler';
-import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,7 +49,6 @@ import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { useAuth } from '@/features/auth/context';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
-import { BRAND_CONFIG } from '@/config/brand';
 import { shouldShowHostControls } from '@/lib/platform-guards';
 import {
   loadStoredGuestSession,
@@ -59,10 +57,9 @@ import {
 } from '@/services/guest-session';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
 import { SegmentedControl } from '@/components/forms/segmented-control';
-import { CloseIcon, CopyIcon, LockIcon, ShareIcon } from '@/components/ui/icons';
-import { QrCard } from '@/features/sharing/qr-card';
+import { CloseIcon, LockIcon } from '@/components/ui/icons';
+import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import {
   archiveCelebration,
   celebrationDetailKeys,
@@ -765,6 +762,7 @@ export default function CelebrationDashboard({ celebrationId: propCelebrationId 
     queryKey: celebrationDetailKeys.detail(String(celebrationId)),
     queryFn: () => fetchCelebrationDetail(String(celebrationId)),
     enabled: Boolean(celebrationId),
+    refetchInterval: isBackendConfigured ? 10000 : false,
   });
 
   const archive = useMutation({
@@ -821,6 +819,7 @@ function EventDetailView({
   archiving: boolean;
 }) {
   const router = useRouter();
+  const { openPhotoId } = useLocalSearchParams<{ openPhotoId?: string }>();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -1024,9 +1023,7 @@ function EventDetailView({
   }, [selectedChallenge]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [storySubmissions, setStorySubmissions] = useState<PhotoItem[]>([]);
-  const [guestsJoined, setGuestsJoined] = useState(
-    Math.max(1, metrics.guestsJoined),
-  );
+  const [guestsJoined, setGuestsJoined] = useState(metrics.guestsJoined);
 
   // ── Countdown ──
   const [countdown, setCountdown] = useState({
@@ -1399,6 +1396,24 @@ function EventDetailView({
           void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
         },
       )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'guest_sessions',
+          filter: `event_session_id=eq.${primarySession.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({
+            queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: celebrationDetailKeys.joinedGuests(String(primarySession.id)),
+          });
+          void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+        },
+      )
       .subscribe();
 
     return () => {
@@ -1476,7 +1491,7 @@ function EventDetailView({
 
   // ── Sync server metrics ──
   useEffect(() => {
-    setGuestsJoined(Math.max(1, metrics.guestsJoined));
+    setGuestsJoined(metrics.guestsJoined);
   }, [metrics.guestsJoined]);
 
   // ── Countdown clock ──
@@ -1733,6 +1748,7 @@ function EventDetailView({
   const [heroVisible, setHeroVisible] = useState(false);
   const [heroIndex, setHeroIndex] = useState(0);
   const [heroStartBounds, setHeroStartBounds] = useState({ x: 16, y: 300, width: CELL_W, height: CELL_H });
+  const lastOpenedPhotoIdRef = useRef<string | null>(null);
   const [heroMenuVisible, setHeroMenuVisible] = useState(false);
 
   // Two independent reasons to disable the native swipe-back gesture here,
@@ -1814,6 +1830,20 @@ function EventDetailView({
       speed: 12,
     }).start();
   }
+
+  useEffect(() => {
+    if (!openPhotoId || lastOpenedPhotoIdRef.current === openPhotoId) {
+      return;
+    }
+
+    const index = photos.findIndex((photo) => photo.id === openPhotoId);
+    if (index < 0) {
+      return;
+    }
+
+    lastOpenedPhotoIdRef.current = openPhotoId;
+    handlePhotoPress(index);
+  }, [openPhotoId, photos]);
 
   function deleteGuestGalleryPhoto(photo: PhotoItem, index: number) {
     if (!photo.id || !guestAuth) return;
@@ -2124,58 +2154,6 @@ function EventDetailView({
 
   function handleAddChallenge() {
     router.push(`/celebration/${celebration.id}/challenges/new` as never);
-  }
-
-  async function handleShareLink() {
-    // `event_code` (short, guessable-by-design for a spoken/typed code) is
-    // what the guest join screen and `get_event_preview_by_code` look up by.
-    // `public_slug` is a different, deliberately unguessable column meant for
-    // opaque URLs — sharing it here as "the code" meant no code a host ever
-    // gave out could actually join the event.
-    if (!celebration.event_code) return;
-    const invitationUrl = `${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`;
-    const message = `Join "${celebration.title}" on Candidly → ${invitationUrl}`;
-
-    try {
-      if (Platform.OS === 'web') {
-        const webNavigator = globalThis.navigator as Navigator & {
-          share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
-          clipboard?: { writeText?: (text: string) => Promise<void> };
-        };
-
-        if (typeof webNavigator.share === 'function') {
-          await webNavigator.share({
-            title: celebration.title,
-            text: message,
-            url: invitationUrl,
-          });
-          return;
-        }
-
-        if (typeof webNavigator.clipboard?.writeText === 'function') {
-          await webNavigator.clipboard.writeText(invitationUrl);
-          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
-          return;
-        }
-      }
-
-      await Share.share({ message });
-    } catch {
-      if (Platform.OS === 'web') {
-        try {
-          await Clipboard.setStringAsync(invitationUrl);
-          Alert.alert('Link copied', 'The invitation link has been copied to your clipboard.');
-        } catch {
-          Alert.alert('Share unavailable', 'We could not open the share sheet. Please copy the invitation link instead.');
-        }
-      }
-    }
-  }
-
-  async function handleCopyCode() {
-    if (!celebration.event_code) return;
-    await Clipboard.setStringAsync(celebration.event_code);
-    Alert.alert('Copied', 'Event code copied to clipboard.');
   }
 
   async function openSavePhotos() {
@@ -3029,80 +3007,13 @@ function EventDetailView({
       {/* ══════════════════════════════════════════════════════
           SHARE MODAL
           ══════════════════════════════════════════════════════ */}
-      <Modal
+      <InviteShareSheet
         visible={shareVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShareVisible(false)}
-      >
-        <Pressable style={S.modalOverlay} onPress={() => setShareVisible(false)}>
-          <Pressable
-            onPress={(event) => event.stopPropagation()}
-            style={[S.modalSheet, { paddingBottom: insets.bottom + spacing.xl }]}
-          >
-            <View style={S.sheetHandle} />
-
-            <View style={S.inviteHeader}>
-              <AppText variant="titleLarge" style={S.inviteTitle}>
-              Invite Guests
-              </AppText>
-              <AppText variant="bodySmall" tone="secondary" style={S.inviteSubtitle}>
-                Scan the QR code or share the invitation to join.
-              </AppText>
-            </View>
-
-            {celebration.event_code ? (
-              <QrCard
-                value={`${BRAND_CONFIG.guestDomain}/j/${celebration.event_code}`}
-                eventName={celebration.title}
-                footer={
-                  <View style={S.inviteCodeRow}>
-                    <View style={S.inviteCodeTitleWrap}>
-                      <AppText variant="eyebrow" style={S.inviteCodeLabel}>
-                        EVENT CODE
-                      </AppText>
-                    </View>
-                    <View style={S.inviteCodeDividerRow}>
-                      <View style={S.inviteCodeDivider} />
-                    </View>
-                    <View style={S.inviteCodeActionRow}>
-                      <AppText variant="bodyLarge" style={S.inviteCodeValue} numberOfLines={1} ellipsizeMode="middle">
-                        {celebration.event_code}
-                      </AppText>
-                      <Pressable
-                        onPress={() => void handleCopyCode()}
-                        accessibilityRole="button"
-                        accessibilityLabel="Copy event code"
-                        hitSlop={8}
-                        style={({ pressed }) => [S.inviteCopyButton, pressed && { opacity: 0.88 }]}
-                      >
-                        <CopyIcon size={16} color="#FFFFFF" />
-                        <AppText variant="labelSmall" style={S.inviteCopyLabel}>
-                          Copy
-                        </AppText>
-                      </Pressable>
-                    </View>
-                  </View>
-                }
-              />
-            ) : null}
-
-            <Button
-              label="Share Invitation"
-              variant="primary"
-              size="medium"
-              leading={<ShareIcon size={18} color={colours.textOnBrand} />}
-              onPress={handleShareLink}
-            />
-            <Pressable
-              style={{ paddingVertical: spacing.sm, alignItems: 'center' }}
-              onPress={() => setShareVisible(false)}
-            >
-              <AppText variant="bodySmall" tone="secondary">Close</AppText>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
+        eventName={celebration.title}
+        eventCode={celebration.event_code}
+        bottomInset={insets.bottom}
+        onClose={() => setShareVisible(false)}
+      />
 
       {/* ══════════════════════════════════════════════════════
           INSTAGRAM STORY CHALLENGE VIEWER
@@ -3971,6 +3882,13 @@ const S = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     letterSpacing: 5,
+  },
+  inviteLinkValue: {
+    flex: 1,
+    color: '#F1E7DA',
+    textAlign: 'left',
+    fontSize: 14,
+    lineHeight: 20,
   },
   inviteCopyButton: {
     flexDirection: 'row',

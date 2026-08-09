@@ -1,11 +1,13 @@
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { useEffect } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { CloseIcon } from '@/components/ui/icons';
 import { colours, radii, spacing, layout } from '@/design';
+import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import {
   celebrationDetailKeys,
   fetchCelebrationDetail,
@@ -26,6 +28,7 @@ function initialsFor(name: string) {
 export default function JoinedGuestsScreen() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const detailQuery = useQuery({
     queryKey: celebrationDetailKeys.detail(String(celebrationId)),
@@ -37,9 +40,36 @@ export default function JoinedGuestsScreen() {
 
   const guestsQuery = useQuery({
     queryKey: sessionId ? celebrationDetailKeys.joinedGuests(sessionId) : ['celebrations', 'joined-guests', 'idle'],
-    queryFn: () => fetchJoinedGuests(String(sessionId)),
+    queryFn: () => fetchJoinedGuests(String(sessionId), String(celebrationId)),
     enabled: Boolean(sessionId),
+    refetchInterval: isBackendConfigured ? 10000 : false,
   });
+
+  useEffect(() => {
+    if (!isBackendConfigured || !sessionId || !celebrationId) return;
+
+    const client = requireSupabase();
+    const channel = client
+      .channel(`joined-guests-${sessionId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'guest_sessions',
+          filter: `event_session_id=eq.${sessionId}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({ queryKey: celebrationDetailKeys.joinedGuests(sessionId) });
+          void queryClient.invalidateQueries({ queryKey: celebrationDetailKeys.detail(String(celebrationId)) });
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [celebrationId, queryClient, sessionId]);
 
   const guests = guestsQuery.data ?? [];
   const joinedCount = guests.length;
@@ -144,7 +174,7 @@ export default function JoinedGuestsScreen() {
   );
 }
 
-const S = {
+const S = StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -226,4 +256,4 @@ const S = {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
   },
-};
+});

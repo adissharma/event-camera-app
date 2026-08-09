@@ -307,7 +307,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
   throw new Error('This invitation is no longer available.');
 }
 
-export async function fetchJoinedGuests(eventSessionId: string): Promise<JoinedGuest[]> {
+export async function fetchJoinedGuests(eventSessionId: string, celebrationId?: string): Promise<JoinedGuest[]> {
   if (!isBackendConfigured) {
     return [];
   }
@@ -319,14 +319,15 @@ export async function fetchJoinedGuests(eventSessionId: string): Promise<JoinedG
     .eq('event_session_id', eventSessionId)
     .order('created_at', { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    if (celebrationId) {
+      const guestRows = await fetchJoinedGuestsAsGuest(celebrationId);
+      if (guestRows) return guestRows;
+    }
+    throw error;
+  }
 
-  return (data ?? []).map((guest) => ({
-    id: guest.id,
-    displayName: guest.display_name?.trim() || 'Guest',
-    createdAt: guest.created_at,
-    lastSeenAt: guest.last_seen_at,
-  }));
+  return mapJoinedGuests(data ?? []);
 }
 
 /**
@@ -364,6 +365,7 @@ async function tryFetchCelebrationDetailAsGuest(
 
   // Fetch challenge photos separately since get_guest_gallery doesn't include them
   let guestChallengePhotos: any[] = [];
+  let joinedGuests: JoinedGuest[] = [];
   try {
     const { data: challengeData, error: challengeError } = await (client as any).rpc(
       'get_guest_challenge_photos',
@@ -382,6 +384,12 @@ async function tryFetchCelebrationDetailAsGuest(
     }
   } catch (e) {
     console.warn('[celebration-detail] error loading guest challenge photos', e);
+  }
+
+  try {
+    joinedGuests = await fetchJoinedGuestsAsGuest(celebrationId) ?? [];
+  } catch (e) {
+    console.warn('[celebration-detail] error loading joined guest count', e);
   }
 
   // Cast rather than satisfy the full generated row types: the RPC returns a
@@ -423,11 +431,7 @@ async function tryFetchCelebrationDetailAsGuest(
     sessions: [primarySession],
     primarySession,
     metrics: {
-      // A guest token cannot see workspace-wide counts — those columns are
-      // exactly what RLS exists to hide from them. Real per-guest numbers
-      // stay out of this host-shaped metrics type; the guest's own shots
-      // used is carried separately below, in `guestShotsUsed`.
-      guestsJoined: 0,
+      guestsJoined: joinedGuests.length,
       contributors: 0,
       photos: Array.isArray(data?.photos) ? data.photos.length : 0,
     },
@@ -463,6 +467,38 @@ async function tryFetchCelebrationDetailAsGuest(
         }))
       : null,
   };
+}
+
+async function fetchJoinedGuestsAsGuest(celebrationId: string): Promise<JoinedGuest[] | null> {
+  const found = await loadStoredGuestSessionByCelebrationId(celebrationId);
+  if (!found) return null;
+
+  const client = requireSupabase();
+  const { data, error } = await (client as any).rpc('get_guest_joined_guests', {
+    p_celebration_id: celebrationId,
+    p_guest_token: found.session.guestToken,
+  });
+
+  if (error) {
+    console.error('[celebration-detail] guest RPC get_guest_joined_guests failed', {
+      celebrationId,
+      slug: found.slug,
+      message: error.message,
+      code: error.code,
+    });
+    return null;
+  }
+
+  return mapJoinedGuests(Array.isArray(data) ? data : []);
+}
+
+function mapJoinedGuests(rows: any[]): JoinedGuest[] {
+  return rows.map((guest) => ({
+    id: guest.id,
+    displayName: guest.display_name?.trim() || guest.displayName?.trim?.() || 'Guest',
+    createdAt: guest.created_at ?? guest.createdAt,
+    lastSeenAt: guest.last_seen_at ?? guest.lastSeenAt ?? guest.created_at ?? guest.createdAt,
+  }));
 }
 
 async function fetchMetrics(eventSessionId: string): Promise<EventMetrics> {
