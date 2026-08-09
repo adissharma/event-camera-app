@@ -1100,8 +1100,11 @@ export default function CameraScreen() {
             onPress={() => {
               if (latestPhotoId) {
                 router.replace({
-                  pathname: `/celebration/${celebrationId}`,
-                  params: { openPhotoId: latestPhotoId },
+                  pathname: '/celebration/[celebrationId]',
+                  params: {
+                    celebrationId: String(celebrationId),
+                    openPhotoId: latestPhotoId,
+                  },
                 } as never);
                 return;
               }

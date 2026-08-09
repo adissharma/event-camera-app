@@ -2093,8 +2093,9 @@ function EventDetailView({
     }
     requestAnimationFrame(() => {
       router.push(({
-        pathname: `/celebration/${celebration.id}/camera`,
+        pathname: '/celebration/[celebrationId]/camera',
         params: {
+          celebrationId: String(celebration.id),
           captureTarget: 'challenge',
           challengeId: challenge.id,
         },
