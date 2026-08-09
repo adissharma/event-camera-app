@@ -332,19 +332,21 @@ export function normalizeChallengeIconValue(value: string) {
 }
 
 export function resolveChallengeEmoji(value: string) {
+  const stripPresentationSelectors = (emoji: string) => emoji.replace(/[\uFE0E\uFE0F]/g, '');
+
   if (LEGACY_ICON_TO_HEXCODE[value]) {
-    return HEXCODE_TO_ENTRY.get(LEGACY_ICON_TO_HEXCODE[value])?.emoji ?? '✨';
+    return stripPresentationSelectors(HEXCODE_TO_ENTRY.get(LEGACY_ICON_TO_HEXCODE[value])?.emoji ?? '✨');
   }
 
   if (HEXCODE_TO_ENTRY.has(value)) {
-    return HEXCODE_TO_ENTRY.get(value)!.emoji;
+    return stripPresentationSelectors(HEXCODE_TO_ENTRY.get(value)!.emoji);
   }
 
   if (EMOJI_TO_ENTRY.has(value)) {
-    return value;
+    return stripPresentationSelectors(value);
   }
 
-  return '✨';
+  return stripPresentationSelectors('✨');
 }
 
 export function resolveChallengeLabel(value: string) {

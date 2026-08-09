@@ -966,6 +966,7 @@ function EventDetailView({
   const [selectedSaveKeys, setSelectedSaveKeys] = useState<string[]>([]);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [challengeMenuVisible, setChallengeMenuVisible] = useState(false);
+  const [challengeDeleteConfirmVisible, setChallengeDeleteConfirmVisible] = useState(false);
   const filteredCaptureRef = useRef<View | null>(null);
   const [filteredCaptureState, setFilteredCaptureState] = useState<FilteredCaptureState>(null);
   const storyMountAnim = useRef(new Animated.Value(0)).current;
@@ -1077,6 +1078,7 @@ function EventDetailView({
     // would snap the story back to centre and fade out from there — the
     // flash at the end of the swipe. It is reset when the story next opens.
     setChallengeMenuVisible(false);
+    setChallengeDeleteConfirmVisible(false);
     selectedChallengeRef.current = null;
     setSelectedChallenge(null);
   };
@@ -2107,13 +2109,15 @@ function EventDetailView({
 
       const nextSubmissions = refreshed ?? await loadChallengeSubmissions(challenge);
       setStorySubmissions(nextSubmissions);
-      setActiveSlideIndex(nextSubmissions.length === 0 ? 0 : Math.min(currentSlideIndex, nextSubmissions.length));
+      setActiveSlideIndex(nextSubmissions.length === 0 ? 0 : Math.max(0, currentSlideIndex - 1));
       setChallengeMenuVisible(false);
+      setChallengeDeleteConfirmVisible(false);
       void queryClient.invalidateQueries({
         queryKey: celebrationDetailKeys.detail(String(celebration.id)),
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
-    } catch {
+    } catch (error) {
+      console.error('[challenge-story] failed to delete photo', error);
       Alert.alert('Error', 'Could not delete this challenge photo.');
     }
   }
@@ -2134,7 +2138,7 @@ function EventDetailView({
 
     try {
       if (Platform.OS === 'web') {
-        const webNavigator = globalThis as typeof globalThis & {
+        const webNavigator = globalThis.navigator as Navigator & {
           share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
           clipboard?: { writeText?: (text: string) => Promise<void> };
         };
@@ -2627,7 +2631,7 @@ function EventDetailView({
           {showGuestbook && (
             <Pressable
               style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
-              onPress={() => Alert.alert('Audio Guestbook', 'Welcome to the Guest Book! Leave warm messages and audio memories for the host. 🎙️')}
+              onPress={() => Alert.alert('Audio Guestbook', '(Coming soon) Leave warm messages and audio memories for the host.')}
               accessibilityRole="button"
               accessibilityLabel="Guest Book"
             >
@@ -3308,25 +3312,45 @@ function EventDetailView({
               style={[S.menuOption, S.menuOptionBorder]}
               onPress={() => {
                 setChallengeMenuVisible(false);
-                Alert.alert(
-                  'Delete this photo?',
-                  'This will permanently remove it from the challenge story.',
-                  [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                      text: 'Delete Photo',
-                      style: 'destructive',
-                      onPress: () => {
-                        void deleteActiveChallengeSubmission();
-                      },
-                    },
-                  ],
-                );
+                setChallengeDeleteConfirmVisible(true);
               }}
             >
               <AppText style={S.menuDeleteText}>Delete photo</AppText>
             </Pressable>
             <Pressable style={[S.menuOption, S.menuCancelOption]} onPress={() => setChallengeMenuVisible(false)}>
+              <AppText style={S.menuCancelText}>Cancel</AppText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={challengeDeleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setChallengeDeleteConfirmVisible(false)}
+      >
+        <Pressable style={S.modalOverlay} onPress={() => setChallengeDeleteConfirmVisible(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[S.menuSheet, S.deleteConfirmSheet]}
+          >
+            <View style={S.deleteConfirmCopy}>
+              <AppText style={S.deleteConfirmTitle}>Delete this photo?</AppText>
+              <AppText style={S.deleteConfirmBody}>
+                This will permanently remove it from the challenge story.
+              </AppText>
+            </View>
+            <Pressable
+              style={[S.menuOption, S.menuOptionBorder]}
+              onPress={() => void deleteActiveChallengeSubmission()}
+            >
+              <AppText style={S.menuDeleteText}>Delete photo</AppText>
+            </Pressable>
+            <Pressable
+              style={[S.menuOption, S.menuCancelOption]}
+              onPress={() => setChallengeDeleteConfirmVisible(false)}
+            >
               <AppText style={S.menuCancelText}>Cancel</AppText>
             </Pressable>
           </Pressable>
@@ -4307,6 +4331,31 @@ const S = StyleSheet.create({
     backgroundColor: '#1C1C1E',
     borderRadius: 16,
     overflow: 'hidden',
+  },
+  deleteConfirmSheet: {
+    alignSelf: 'center',
+    width: '86%',
+    maxWidth: 340,
+  },
+  deleteConfirmCopy: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
+    gap: spacing.xs,
+    alignItems: 'center',
+  },
+  deleteConfirmTitle: {
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 18,
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  deleteConfirmBody: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: 'rgba(255, 255, 255, 0.64)',
+    textAlign: 'center',
   },
   menuOption: {
     paddingVertical: 16,

@@ -755,7 +755,7 @@ export default function CameraScreen() {
 
     try {
       if (Platform.OS === 'web') {
-        const webNavigator = globalThis as typeof globalThis & {
+        const webNavigator = globalThis.navigator as Navigator & {
           share?: (data: { title?: string; text?: string; url?: string }) => Promise<void>;
           clipboard?: { writeText?: (text: string) => Promise<void> };
         };

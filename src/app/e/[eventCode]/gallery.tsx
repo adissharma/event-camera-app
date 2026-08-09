@@ -18,7 +18,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
-import { CameraIcon, ClockIcon, LockIcon, CloseIcon } from '@/components/ui/icons';
+import { Button } from '@/components/ui/button';
+import { CameraIcon, ClockIcon, LockIcon, CloseIcon, CopyIcon, ShareIcon } from '@/components/ui/icons';
+import { QrCard } from '@/features/sharing/qr-card';
+import { BRAND_CONFIG } from '@/config/brand';
 import { colours, radii, spacing, layout } from '@/design';
 import {
   fetchGuestGallery,
@@ -42,6 +45,8 @@ export default function GuestGalleryScreen() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activePhoto, setActivePhoto] = useState<any | null>(null);
+  const [shareVisible, setShareVisible] = useState(false);
+  const [copyNotice, setCopyNotice] = useState<string | null>(null);
 
   const fileInputRef = useRef<any>(null);
 
@@ -100,6 +105,53 @@ export default function GuestGalleryScreen() {
       AlertNativeFallback();
     }
   }, []);
+
+  const invitationUrl = `${BRAND_CONFIG.guestDomain}/j/${String(eventCode)}`;
+
+  const handleCopyInviteLink = useCallback(async () => {
+    try {
+      const webNavigator = globalThis.navigator as Navigator & {
+        clipboard?: { writeText?: (text: string) => Promise<void> };
+      };
+
+      if (typeof webNavigator.clipboard?.writeText !== 'function') {
+        throw new Error('Clipboard unavailable');
+      }
+
+      await webNavigator.clipboard.writeText(invitationUrl);
+      setCopyNotice('Invitation link copied');
+      setTimeout(() => setCopyNotice(null), 1800);
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.alert('We could not copy the invitation link. Please copy it from your browser address bar.');
+      }
+    }
+  }, [invitationUrl]);
+
+  const handleShareInviteLink = useCallback(async () => {
+    if (!data) return;
+    const message = `Join "${data.celebration.title}" on Candidly → ${invitationUrl}`;
+
+    try {
+      const webNavigator = globalThis.navigator as Navigator & {
+        share?: (shareData: { title?: string; text?: string; url?: string }) => Promise<void>;
+        clipboard?: { writeText?: (text: string) => Promise<void> };
+      };
+
+      if (typeof webNavigator.share === 'function') {
+        await webNavigator.share({
+          title: data.celebration.title,
+          text: message,
+          url: invitationUrl,
+        });
+        return;
+      }
+
+      await handleCopyInviteLink();
+    } catch (error) {
+      console.error('[guest-gallery] failed to share invitation', error);
+    }
+  }, [data, handleCopyInviteLink, invitationUrl]);
 
   const AlertNativeFallback = () => {
     if (typeof window === 'undefined') return;
@@ -244,7 +296,18 @@ export default function GuestGalleryScreen() {
 
       {/* Header Info */}
       <View style={S.header}>
-        <AppText variant="displaySmall" style={S.title}>{celebration.title}</AppText>
+        <View style={S.headerTitleRow}>
+          <AppText variant="displaySmall" style={S.title}>{celebration.title}</AppText>
+          <Pressable
+            onPress={() => setShareVisible(true)}
+            style={({ pressed }) => [S.sharePill, pressed && { opacity: 0.82 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Share invitation"
+          >
+            <ShareIcon size={16} color={colours.textOnBrand} />
+            <AppText variant="labelSmall" style={S.sharePillText}>Share invitation</AppText>
+          </Pressable>
+        </View>
         
         <View style={S.metaRow}>
           <View style={S.metaCol}>
@@ -349,6 +412,71 @@ export default function GuestGalleryScreen() {
           </View>
         </Modal>
       )}
+
+      <Modal
+        visible={shareVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShareVisible(false)}
+      >
+        <Pressable style={S.modalOverlay} onPress={() => setShareVisible(false)}>
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={[S.shareSheet, { paddingBottom: insets.bottom + spacing.xl }]}
+          >
+            <View style={S.sheetHandle} />
+            <View style={S.shareHeader}>
+              <AppText variant="titleLarge" style={S.shareTitle}>Invite Guests</AppText>
+              <AppText variant="bodySmall" tone="secondary" style={S.shareSubtitle}>
+                Scan the QR code or share the invitation to join.
+              </AppText>
+            </View>
+
+            <QrCard
+              value={invitationUrl}
+              eventName={celebration.title}
+              size={screenWidth > 420 ? 236 : 208}
+              footer={
+                <View style={S.inviteLinkBlock}>
+                  <AppText variant="eyebrow" style={S.inviteLinkLabel}>INVITE LINK</AppText>
+                  <Pressable
+                    onPress={handleCopyInviteLink}
+                    style={({ pressed }) => [S.inviteLinkRow, pressed && { opacity: 0.86 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy invitation link"
+                  >
+                    <AppText variant="bodySmall" style={S.inviteLinkText} numberOfLines={1} ellipsizeMode="middle">
+                      {invitationUrl}
+                    </AppText>
+                    <View style={S.inviteCopyPill}>
+                      <CopyIcon size={15} color="#FFFFFF" />
+                      <AppText variant="labelSmall" style={S.inviteCopyText}>Copy</AppText>
+                    </View>
+                  </Pressable>
+                  {copyNotice ? (
+                    <AppText variant="caption" style={S.copyNotice}>{copyNotice}</AppText>
+                  ) : null}
+                </View>
+              }
+            />
+
+            <Button
+              label="Share Invitation"
+              variant="primary"
+              size="medium"
+              leading={<ShareIcon size={18} color={colours.textOnBrand} />}
+              onPress={handleShareInviteLink}
+            />
+            <Pressable
+              style={S.shareClose}
+              onPress={() => setShareVisible(false)}
+              accessibilityRole="button"
+            >
+              <AppText variant="bodySmall" tone="secondary">Close</AppText>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -403,9 +531,29 @@ const S = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colours.borderSubtle,
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
   title: {
+    flex: 1,
     color: colours.textPrimary,
     marginBottom: spacing.xs,
+  },
+  sharePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    borderRadius: radii.pill,
+    backgroundColor: colours.brandPrimary,
+    paddingHorizontal: spacing.sm,
+    minHeight: 36,
+  },
+  sharePillText: {
+    color: colours.textOnBrand,
+    fontWeight: '700',
   },
   metaRow: {
     flexDirection: 'row',
@@ -528,5 +676,84 @@ const S = StyleSheet.create({
   modalAuthor: {
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  shareSheet: {
+    backgroundColor: '#09090A',
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
+    paddingHorizontal: 24,
+    paddingTop: spacing.lg,
+    gap: spacing.lg,
+    maxHeight: '92%',
+  },
+  sheetHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colours.borderStrong,
+    alignSelf: 'center',
+    marginBottom: spacing.sm,
+  },
+  shareHeader: {
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  shareTitle: {
+    color: '#FFFFFF',
+    textAlign: 'center',
+    fontSize: 30,
+    lineHeight: 34,
+  },
+  shareSubtitle: {
+    color: 'rgba(255,255,255,0.62)',
+    textAlign: 'center',
+    maxWidth: 300,
+    lineHeight: 22,
+  },
+  inviteLinkBlock: {
+    alignSelf: 'stretch',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+  },
+  inviteLinkLabel: {
+    color: 'rgba(255,255,255,0.56)',
+    textAlign: 'center',
+    letterSpacing: 3,
+  },
+  inviteLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
+  inviteLinkText: {
+    flex: 1,
+    color: '#F1E7DA',
+  },
+  inviteCopyPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.78)',
+  },
+  inviteCopyText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+  },
+  copyNotice: {
+    color: colours.success,
+    textAlign: 'center',
+  },
+  shareClose: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
   },
 });
