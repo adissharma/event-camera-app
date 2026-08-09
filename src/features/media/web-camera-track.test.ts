@@ -27,7 +27,7 @@ describe('readTrackCapabilities', () => {
 
   it('survives a browser without getCapabilities at all', () => {
     const track = {} as unknown as MediaStreamTrack;
-    expect(readTrackCapabilities(track)).toEqual({ torch: false, zoom: null });
+    expect(readTrackCapabilities(track)).toEqual({ torch: false, zoom: null, focusMode: [] });
   });
 
   it('ignores a degenerate zoom range rather than dividing by zero later', () => {
@@ -39,6 +39,11 @@ describe('readTrackCapabilities', () => {
       min: 1,
       max: 8,
     });
+  });
+
+  it('keeps browser-reported focus modes for front-camera sharpening', () => {
+    expect(readTrackCapabilities(trackWithCapabilities({ focusMode: ['manual', 'continuous'] })).focusMode)
+      .toEqual(['manual', 'continuous']);
   });
 });
 
@@ -61,7 +66,13 @@ describe('toNativeZoom', () => {
 });
 
 describe('applyCameraSettings', () => {
-  const bothSupported: WebCameraCapabilities = { torch: true, zoom: { min: 1, max: 5 } };
+  const bothSupported: WebCameraCapabilities = { torch: true, zoom: { min: 1, max: 5 }, focusMode: [] };
+
+  const highResolutionConstraints = {
+    width: { ideal: 1920 },
+    height: { ideal: 1080 },
+    frameRate: { ideal: 30 },
+  };
 
   it('sends torch and zoom in a SINGLE applyConstraints call', async () => {
     // The whole point of this module: `applyConstraints` replaces the track's
@@ -70,40 +81,70 @@ describe('applyCameraSettings', () => {
     const applyConstraints = jest.fn().mockResolvedValue(undefined);
     const track = { applyConstraints } as unknown as MediaStreamTrack;
 
-    await applyCameraSettings(track, bothSupported, { torchOn: true, zoom: 0.5 });
+    await applyCameraSettings(track, bothSupported, { facing: 'back', torchOn: true, zoom: 0.5 });
 
     expect(applyConstraints).toHaveBeenCalledTimes(1);
-    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true, zoom: 3 }] });
+    expect(applyConstraints).toHaveBeenCalledWith({
+      ...highResolutionConstraints,
+      advanced: [{ torch: true, zoom: 3 }],
+    });
   });
 
   it('still sends torch: false so switching the light off takes effect', async () => {
     const applyConstraints = jest.fn().mockResolvedValue(undefined);
     const track = { applyConstraints } as unknown as MediaStreamTrack;
 
-    await applyCameraSettings(track, bothSupported, { torchOn: false, zoom: 0 });
+    await applyCameraSettings(track, bothSupported, { facing: 'back', torchOn: false, zoom: 0 });
 
-    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: false, zoom: 1 }] });
+    expect(applyConstraints).toHaveBeenCalledWith({
+      ...highResolutionConstraints,
+      advanced: [{ torch: false, zoom: 1 }],
+    });
   });
 
   it('omits keys the camera does not support', async () => {
     const applyConstraints = jest.fn().mockResolvedValue(undefined);
     const track = { applyConstraints } as unknown as MediaStreamTrack;
 
-    await applyCameraSettings(track, { torch: false, zoom: { min: 0, max: 4 } }, {
+    await applyCameraSettings(track, { torch: false, zoom: { min: 0, max: 4 }, focusMode: [] }, {
+      facing: 'back',
       torchOn: true,
       zoom: 1,
     });
 
-    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 4 }] });
+    expect(applyConstraints).toHaveBeenCalledWith({
+      ...highResolutionConstraints,
+      advanced: [{ zoom: 4 }],
+    });
   });
 
-  it('does not call the camera at all when it supports neither', async () => {
-    const applyConstraints = jest.fn();
+  it('still asks for a high-resolution stream when the camera supports neither torch nor zoom', async () => {
+    const applyConstraints = jest.fn().mockResolvedValue(undefined);
     const track = { applyConstraints } as unknown as MediaStreamTrack;
 
-    await applyCameraSettings(track, { torch: false, zoom: null }, { torchOn: true, zoom: 1 });
+    await applyCameraSettings(track, { torch: false, zoom: null, focusMode: [] }, {
+      facing: 'back',
+      torchOn: true,
+      zoom: 1,
+    });
 
-    expect(applyConstraints).not.toHaveBeenCalled();
+    expect(applyConstraints).toHaveBeenCalledWith(highResolutionConstraints);
+  });
+
+  it('prefers continuous focus on the front camera when the browser exposes it', async () => {
+    const applyConstraints = jest.fn().mockResolvedValue(undefined);
+    const track = { applyConstraints } as unknown as MediaStreamTrack;
+
+    await applyCameraSettings(
+      track,
+      { torch: false, zoom: null, focusMode: ['manual', 'continuous'] },
+      { facing: 'front', torchOn: false, zoom: 0 },
+    );
+
+    expect(applyConstraints).toHaveBeenCalledWith({
+      ...highResolutionConstraints,
+      advanced: [{ focusMode: 'continuous' }],
+    });
   });
 
   it('swallows a rejected constraint instead of breaking the viewfinder', async () => {
@@ -112,7 +153,7 @@ describe('applyCameraSettings', () => {
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await expect(
-      applyCameraSettings(track, bothSupported, { torchOn: true, zoom: 0.5 }),
+      applyCameraSettings(track, bothSupported, { facing: 'back', torchOn: true, zoom: 0.5 }),
     ).resolves.toBeUndefined();
 
     expect(warn).toHaveBeenCalled();

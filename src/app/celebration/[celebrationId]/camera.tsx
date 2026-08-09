@@ -427,6 +427,8 @@ export default function CameraScreen() {
     // A deliberate flip starts a fresh recovery budget: the previous failure,
     // if any, is no longer what the viewfinder is trying to do.
     isRecoveringFacing.current = false;
+    setTorchOn(false);
+    setZoom(MIN_ZOOM);
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   }
 

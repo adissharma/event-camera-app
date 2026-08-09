@@ -38,9 +38,11 @@ export interface WebCameraCapabilities {
   torch: boolean;
   /** The live camera's native zoom range, when it is zoomable at all. */
   zoom: { min: number; max: number } | null;
+  /** Browser-supported focus modes, when exposed by the camera track. */
+  focusMode: string[];
 }
 
-const NO_CAPABILITIES: WebCameraCapabilities = { torch: false, zoom: null };
+const NO_CAPABILITIES: WebCameraCapabilities = { torch: false, zoom: null, focusMode: [] };
 
 /** How often to look for the track while the stream is still being opened. */
 const TRACK_POLL_INTERVAL_MS = 120;
@@ -63,6 +65,7 @@ export function readTrackCapabilities(track: MediaStreamTrack): WebCameraCapabil
   const capabilities = track.getCapabilities() as MediaTrackCapabilities & {
     torch?: boolean | boolean[];
     zoom?: { min: number; max: number };
+    focusMode?: string[];
   };
 
   // Chrome reports `torch: true`; the spec allows a `[false, true]` sequence.
@@ -80,7 +83,7 @@ export function readTrackCapabilities(track: MediaStreamTrack): WebCameraCapabil
       ? { min: zoomCapability.min, max: zoomCapability.max }
       : null;
 
-  return { torch, zoom };
+  return { torch, zoom, focusMode: Array.isArray(capabilities.focusMode) ? capabilities.focusMode : [] };
 }
 
 /** Maps this app's normalised 0–1 zoom onto the camera's own range. */
@@ -99,15 +102,26 @@ export function toNativeZoom(normalised: number, range: { min: number; max: numb
 export async function applyCameraSettings(
   track: MediaStreamTrack,
   capabilities: WebCameraCapabilities,
-  settings: { torchOn: boolean; zoom: number },
+  settings: { facing: 'front' | 'back'; torchOn: boolean; zoom: number },
 ): Promise<void> {
   const advanced: Record<string, unknown> = {};
   if (capabilities.torch) advanced.torch = settings.torchOn;
   if (capabilities.zoom) advanced.zoom = toNativeZoom(settings.zoom, capabilities.zoom);
-  if (Object.keys(advanced).length === 0) return;
+  if (settings.facing === 'front') {
+    if (capabilities.focusMode.includes('continuous')) {
+      advanced.focusMode = 'continuous';
+    } else if (capabilities.focusMode.includes('manual')) {
+      advanced.focusMode = 'manual';
+    }
+  }
 
   try {
-    await track.applyConstraints({ advanced: [advanced] } as MediaTrackConstraints);
+    await track.applyConstraints({
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+      frameRate: { ideal: 30 },
+      ...(Object.keys(advanced).length > 0 ? { advanced: [advanced] } : {}),
+    } as MediaTrackConstraints);
   } catch (error) {
     // A camera that advertises a capability can still refuse a given value.
     // That is not fatal — the viewfinder keeps working at its current
@@ -168,7 +182,7 @@ export function useWebCameraTrack(settings: {
           : nextCapabilities,
       );
 
-      void applyCameraSettings(track, nextCapabilities, { torchOn, zoom });
+      void applyCameraSettings(track, nextCapabilities, { facing, torchOn, zoom });
     };
 
     attempt();
