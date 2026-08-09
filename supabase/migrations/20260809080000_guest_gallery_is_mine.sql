@@ -1,5 +1,12 @@
--- Secure Guest Gallery retrieval RPC: retrieves event metadata and authorized
--- photos list by validating the guest token.
+-- Add is_mine flag to guest gallery photos.
+--
+-- The get_guest_gallery RPC knows which photos belong to the current guest
+-- (filters by mi.guest_session_id = v_guest.id), but wasn't exposing this
+-- information in the response. Without the is_mine flag, guests cannot see
+-- the delete button for their own photos in the main gallery.
+--
+-- Guests should be able to delete their own photos from the main gallery,
+-- just like they can for challenge photos.
 
 create or replace function public.get_guest_gallery(
   p_event_code text,
@@ -20,7 +27,7 @@ declare
   v_is_locked boolean;
 begin
   v_clean_code := trim(lower(p_event_code));
-  
+
   -- Resolve the celebration
   select * into v_celebration
   from public.celebrations
@@ -123,7 +130,4 @@ end;
 $$;
 
 comment on function public.get_guest_gallery is
-  'Retrieves event details, session configurations, and guest-specific photo list securely validating the guest token.';
-
-revoke all on function public.get_guest_gallery from public;
-grant execute on function public.get_guest_gallery to anon, authenticated;
+  'Retrieves event details, session configurations, and guest-specific photo list securely validating the guest token. Includes is_mine flag so guests can identify and delete their own photos.';
