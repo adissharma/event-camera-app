@@ -381,6 +381,9 @@ export default function CameraScreen() {
   const recordingActiveRef = useRef(false);
   const recordingStopRequestedRef = useRef(false);
   const webRecorderRef = useRef<MediaRecorder | null>(null);
+  // `expo-camera`'s web camera stream never includes a microphone track (see
+  // `stopWebMicStream` below), so recording acquires one independently.
+  const webMicStreamRef = useRef<MediaStream | null>(null);
   const webRecorderMimeType = isWeb ? getPreferredWebRecorderMimeType() : undefined;
   const hasShownFirstLimitNoticeRef = useRef(false);
   const hasShownFiveLeftNoticeRef = useRef(false);
@@ -444,6 +447,9 @@ export default function CameraScreen() {
       if (recordingActiveRef.current) {
         if (Platform.OS === 'web') {
           webRecorderRef.current?.stop();
+          // `onstop` may never run once this screen has unmounted, so the
+          // microphone is released synchronously here too.
+          stopWebMicStream();
         } else {
           cameraRef.current?.stopRecording?.();
         }
@@ -1061,6 +1067,20 @@ export default function CameraScreen() {
     }
   }
 
+  /**
+   * `expo-camera`'s web layer opens its preview stream through
+   * `WebUserMediaManager.requestUserMediaAsync`, which defaults its `isMuted`
+   * parameter to `true` — and `getStreamDevice` always calls it with no
+   * audio argument, regardless of `CameraView`'s own `mute` prop. So on web
+   * the live camera stream never has a microphone track, no matter what this
+   * screen passes. `startVideoRecording` requests one separately and stops
+   * it here once recording ends, fails, or this screen unmounts.
+   */
+  function stopWebMicStream() {
+    webMicStreamRef.current?.getTracks().forEach((track) => track.stop());
+    webMicStreamRef.current = null;
+  }
+
   async function startVideoRecording() {
     if (
       !supportsVideoRecording ||
@@ -1110,18 +1130,26 @@ export default function CameraScreen() {
           throw new Error('No live camera track is available for recording.');
         }
 
-        const clonedTracks = [
-          videoTrack.clone(),
-          ...previewStream
-            .getAudioTracks()
-            .filter((track) => track.readyState === 'live')
-            .map((track) => track.clone()),
-        ];
-        const recordingStream = new MediaStream(clonedTracks);
         const preferredMimeType = webRecorderMimeType;
         if (!preferredMimeType) {
           throw new Error('This browser cannot record an MP4 video for cross-device playback.');
         }
+
+        // `previewStream` never carries a microphone track — see
+        // `stopWebMicStream` — so one is requested independently here. A
+        // denied or unavailable microphone still leaves a working, silent
+        // recording rather than failing the capture outright.
+        let micTrack: MediaStreamTrack | null = null;
+        try {
+          const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          webMicStreamRef.current = micStream;
+          micTrack = micStream.getAudioTracks()[0] ?? null;
+        } catch (micError) {
+          console.warn('Microphone unavailable — recording video without audio.', micError);
+        }
+
+        const clonedTracks = [videoTrack.clone(), ...(micTrack ? [micTrack] : [])];
+        const recordingStream = new MediaStream(clonedTracks);
         const recorder = preferredMimeType
           ? new MediaRecorder(recordingStream, { mimeType: preferredMimeType })
           : new MediaRecorder(recordingStream);
@@ -1139,6 +1167,7 @@ export default function CameraScreen() {
 
           recorder.onerror = () => {
             clonedTracks.forEach((track) => track.stop());
+            stopWebMicStream();
             webRecorderRef.current = null;
             reject(new Error('The browser could not finish recording this video.'));
           };
@@ -1146,6 +1175,7 @@ export default function CameraScreen() {
           recorder.onstop = () => {
             try {
               clonedTracks.forEach((track) => track.stop());
+              stopWebMicStream();
               webRecorderRef.current = null;
 
               const mimeType = normaliseMimeType(
@@ -1219,6 +1249,7 @@ export default function CameraScreen() {
       });
     } catch (error) {
       console.error('Failed to record video:', error);
+      stopWebMicStream();
       Alert.alert(
         'Recording failed',
         error instanceof Error ? error.message : 'We could not record that video. Please try again.',
