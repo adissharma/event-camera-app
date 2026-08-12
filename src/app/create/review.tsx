@@ -29,7 +29,7 @@ import { copy } from '@/i18n';
 export default function ReviewStep() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { draft, reset } = useCreationDraft();
+  const { draft } = useCreationDraft();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const { data: themes = [] } = useQuery({
@@ -99,7 +99,7 @@ export default function ReviewStep() {
             : date(hostReveal.revealAt),
     },
     {
-      step: 'reveal',
+      step: 'guest-reveal',
       label: 'Guests’ access',
       value:
         guestReveal.mode === 'instant'

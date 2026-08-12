@@ -157,6 +157,22 @@ export function inferMimeTypeFromUri(uri: string): string {
   const withoutQuery = uri.split('?')[0] ?? uri;
   const ext = withoutQuery.split('.').pop()?.toLowerCase();
   switch (ext) {
+    case 'm4a':
+      return 'audio/mp4';
+    case 'aac':
+      return 'audio/aac';
+    case 'mp3':
+      return 'audio/mpeg';
+    case 'wav':
+      return 'audio/wav';
+    case 'webm':
+      return 'video/webm';
+    case 'mp4':
+      return 'video/mp4';
+    case 'mov':
+      return 'video/quicktime';
+    case 'm4v':
+      return 'video/x-m4v';
     case 'png':
       return 'image/png';
     case 'heic':
@@ -168,6 +184,19 @@ export function inferMimeTypeFromUri(uri: string): string {
     default:
       return 'image/jpeg';
   }
+}
+
+export function normaliseMimeType(mimeType: string | null | undefined): string {
+  const trimmed = mimeType?.trim().toLowerCase() ?? '';
+  if (!trimmed) return '';
+  return trimmed.split(';', 1)[0]?.trim() ?? '';
+}
+
+export function inferMediaTypeFromMimeType(mimeType: string): 'photo' | 'video' | 'audio' {
+  const normalised = normaliseMimeType(mimeType);
+  if (normalised.startsWith('video/')) return 'video';
+  if (normalised.startsWith('audio/')) return 'audio';
+  return 'photo';
 }
 
 /**

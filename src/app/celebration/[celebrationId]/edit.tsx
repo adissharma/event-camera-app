@@ -62,7 +62,7 @@ export default function EditEventScreen() {
 
   const { celebration, primarySession } = data;
 
-  const handleEditField = (field: 'name' | 'closing' | 'cover' | 'photo-limit' | 'reveal' | 'treatment' | 'challenges') => {
+  const handleEditField = (field: 'name' | 'closing' | 'cover' | 'photo-limit' | 'reveal' | 'treatment' | 'challenges' | 'guestbook') => {
     // The database has one reveal setting for the whole session — nothing
     // distinguishes a host's view from a guest's (see reveal/state.ts). Both
     // tiers of the reveal step's UI are seeded from that single value, so
@@ -116,6 +116,8 @@ export default function EditEventScreen() {
       router.push('/create/treatment');
     } else if (field === 'challenges') {
       router.push(`/celebration/${celebrationId}/challenges` as never);
+    } else if (field === 'guestbook') {
+      router.push(`/celebration/${celebrationId}/guestbook-settings` as never);
     }
   };
 
@@ -244,6 +246,16 @@ export default function EditEventScreen() {
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Challenges</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>Manage Challenges</AppText>
+              </View>
+              <ChevronRightIcon />
+            </Pressable>
+
+            <View style={styles.separator} />
+
+            <Pressable onPress={() => handleEditField('guestbook')} style={styles.row}>
+              <View style={styles.rowLabelContainer}>
+                <AppText variant="labelLarge" style={styles.rowLabel}>Guestbook</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>Edit message</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>

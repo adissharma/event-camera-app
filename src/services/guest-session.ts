@@ -31,6 +31,8 @@ export interface GuestEventPreview {
   endsAt: string | null;
   /** Null means unlimited. */
   shotLimit: number | null;
+  /** Real event-wide total, including challenge submissions. */
+  photoCount: number;
   shotsUsed: number;
   coverStoragePath: string | null;
   themeAccent: string | null;
@@ -141,6 +143,50 @@ async function resolveThemeAccent(themeKey: string | null | undefined): Promise<
     return typeof accent === 'string' && /^#[0-9a-fA-F]{6}$/.test(accent) ? accent : null;
   } catch {
     return null;
+  }
+}
+
+async function countMockEventPhotos(celebrationId: string): Promise<number> {
+  const basePhotosKey = `__mock_photos_${celebrationId}`;
+  const challengePrefix = `__mock_challenge_submissions_${celebrationId}_`;
+
+  try {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      const storedBase = window.localStorage.getItem(basePhotosKey);
+      const basePhotos = storedBase ? (JSON.parse(storedBase) as unknown[]) : [];
+
+      let challengeCount = 0;
+      for (let index = 0; index < window.localStorage.length; index += 1) {
+        const key = window.localStorage.key(index);
+        if (!key || !key.startsWith(challengePrefix)) continue;
+        const raw = window.localStorage.getItem(key);
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw) as unknown[];
+          challengeCount += parsed.length;
+        } catch {}
+      }
+
+      return basePhotos.length + challengeCount;
+    }
+
+    const storedBase = await AsyncStorage.getItem(basePhotosKey);
+    const basePhotos = storedBase ? (JSON.parse(storedBase) as unknown[]) : [];
+    const keys = await AsyncStorage.getAllKeys();
+    const challengeKeys = keys.filter((key) => key.startsWith(challengePrefix));
+    const challengeValues = challengeKeys.length > 0 ? await AsyncStorage.multiGet(challengeKeys) : [];
+    const challengeCount = challengeValues.reduce((total, [, raw]) => {
+      if (!raw) return total;
+      try {
+        return total + (JSON.parse(raw) as unknown[]).length;
+      } catch {
+        return total;
+      }
+    }, 0);
+
+    return basePhotos.length + challengeCount;
+  } catch {
+    return 0;
   }
 }
 
@@ -263,6 +309,7 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       title: string;
       ends_at: string | null;
       shot_limit_per_guest: number | null;
+      photo_count?: number | null;
       cover_storage_path: string | null;
       theme_accent?: string | null;
       default_theme_id?: string | null;
@@ -280,6 +327,7 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       title: preview.title,
       endsAt: preview.ends_at,
       shotLimit: preview.shot_limit_per_guest,
+      photoCount: preview.photo_count ?? 0,
       shotsUsed: stored?.shotsUsed ?? 0,
       coverStoragePath: preview.cover_storage_path,
       themeAccent:
@@ -312,6 +360,7 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       title: found.title,
       endsAt: found.primarySession?.ends_at ?? found.endsAt ?? null,
       shotLimit: found.primarySession?.shot_limit_per_guest ?? 20,
+      photoCount: await countMockEventPhotos(found.id),
       shotsUsed: stored?.shotsUsed ?? 0,
       coverStoragePath: found.coverStoragePath ?? null,
       themeAccent: (await resolveThemeAccent(found.defaultThemeId ?? null)) ?? null,
@@ -466,6 +515,9 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
         storage_path: p.uri || p.storage_path,
         captured_at: p.captured_at || new Date().toISOString(),
         display_name: p.takenBy || 'Guest',
+        is_mine: true,
+        guest_session_id: `guest_${guestToken}`,
+        media_type: p.media_type ?? 'photo',
       })),
     };
   }
@@ -546,6 +598,9 @@ export async function fetchGuestGallery(slug: string, guestToken: string) {
         storage_path: p.uri || p.storage_path,
         captured_at: p.captured_at || new Date().toISOString(),
         display_name: p.takenBy || 'Guest',
+        is_mine: true,
+        guest_session_id: `guest_${guestToken}`,
+        media_type: p.media_type ?? 'photo',
       })),
     };
   }

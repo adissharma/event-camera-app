@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -27,8 +28,10 @@ import {
   clearStoredGuestSession,
   compressImageWeb,
   uploadGuestPhoto,
+  guestSessionStorage,
   type GuestSession,
 } from '@/services/guest-session';
+import { deleteGuestPhoto } from '@/services/guest-media-upload';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 
 export default function GuestGalleryScreen() {
@@ -227,6 +230,87 @@ export default function GuestGalleryScreen() {
   const shotsRemaining = session.shot_limit_per_guest === null
     ? null
     : Math.max(0, session.shot_limit_per_guest - guest.shots_used);
+  const activeMediaLabel = activePhoto?.media_type === 'video' ? 'video' : 'photo';
+  const activeMediaLabelTitle = activePhoto?.media_type === 'video' ? 'Video' : 'Photo';
+  const canDeleteActivePhoto =
+    Boolean(activePhoto?.id) &&
+    Boolean(storedSession?.guestToken) &&
+    (activePhoto?.is_mine === true ||
+      (Boolean(activePhoto?.guest_session_id) &&
+        activePhoto?.guest_session_id === storedSession?.guestSessionId));
+
+  async function deleteActivePhotoNow() {
+    if (!activePhoto?.id || !storedSession?.guestToken || !eventCode) return;
+    const deletedMediaItemId = activePhoto.id;
+
+    const result = await deleteGuestPhoto({
+      mediaItemId: deletedMediaItemId,
+      guestToken: storedSession.guestToken,
+    });
+
+    const nextSession = {
+      ...storedSession,
+      shotsUsed: result.shotsUsed,
+    };
+    await guestSessionStorage.set(String(eventCode), nextSession);
+    setStoredSession(nextSession);
+    setActivePhoto(null);
+
+    queryClient.setQueryData(['guest', 'gallery', String(eventCode)], (current: any) => {
+      if (!current) return current;
+      return {
+        ...current,
+        guest: {
+          ...current.guest,
+          shots_used: result.shotsUsed,
+        },
+        photos: Array.isArray(current.photos)
+          ? current.photos.filter((item: any) => item.id !== deletedMediaItemId)
+          : current.photos,
+      };
+    });
+
+    await refetch();
+    await queryClient.invalidateQueries({
+      queryKey: ['guest', 'gallery', String(eventCode)],
+    });
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }
+
+  function confirmDeleteActivePhoto() {
+    if (!activePhoto?.id || !storedSession?.guestToken) return;
+
+    const confirmDelete = async () => {
+      try {
+        await deleteActivePhotoNow();
+      } catch (deleteError) {
+        console.error(`[guest-gallery] failed to delete ${activeMediaLabel}`, deleteError);
+        Alert.alert('Error', `Could not delete this ${activeMediaLabel}. Please try again.`);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`Delete this ${activeMediaLabel}? This will remove it from the event gallery.`)) {
+        void confirmDelete();
+      }
+      return;
+    }
+
+    Alert.alert(
+      `Delete this ${activeMediaLabel}?`,
+      'This will remove it from the event gallery.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Delete ${activeMediaLabelTitle}`,
+          style: 'destructive',
+          onPress: () => {
+            void confirmDelete();
+          },
+        },
+      ],
+    );
+  }
 
   const numColumns = screenWidth > 600 ? 3 : 2;
   const imageSize = Math.floor(screenWidth / numColumns) - 2;
@@ -358,6 +442,18 @@ export default function GuestGalleryScreen() {
               <AppText variant="caption" tone="secondary">
                 {new Date(activePhoto.captured_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </AppText>
+              {canDeleteActivePhoto ? (
+                <Pressable
+                  onPress={confirmDeleteActivePhoto}
+                  style={({ pressed }) => [S.deleteButton, pressed && { opacity: 0.82 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Delete this ${activeMediaLabel}`}
+                >
+                  <AppText variant="labelSmall" style={S.deleteButtonText}>
+                    Delete {activeMediaLabelTitle}
+                  </AppText>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </Modal>
@@ -569,6 +665,19 @@ const S = StyleSheet.create({
   modalAuthor: {
     color: '#FFFFFF',
     fontWeight: 'bold',
+  },
+  deleteButton: {
+    marginTop: spacing.sm,
+    borderRadius: radii.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.24)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  deleteButtonText: {
+    color: '#FF7A7A',
+    fontWeight: '700',
   },
   shareSheet: {
     backgroundColor: '#09090A',

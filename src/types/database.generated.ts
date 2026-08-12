@@ -1349,6 +1349,7 @@ export type Database = {
     Functions: {
       create_celebration_with_default_session: {
         Args: {
+          p_allowed_media_types?: Database["public"]["Enums"]["media_type"][]
           p_camera_roll_upload_limit?: number
           p_capture_mode?: Database["public"]["Enums"]["capture_mode"]
           p_celebration_type?: Database["public"]["Enums"]["celebration_type"]
@@ -1381,6 +1382,7 @@ export type Database = {
           p_event_code: string
           p_file_size_bytes?: number
           p_guest_token: string
+          p_media_type: Database["public"]["Enums"]["media_type"]
           p_metadata?: Json
           p_mime_type: string
           p_source: Database["public"]["Enums"]["media_source"]
@@ -1393,6 +1395,7 @@ export type Database = {
           p_celebration_id: string
           p_client_media_id: string
           p_file_size_bytes?: number
+          p_media_type: Database["public"]["Enums"]["media_type"]
           p_metadata?: Json
           p_mime_type: string
           p_source: Database["public"]["Enums"]["media_source"]
@@ -1479,6 +1482,7 @@ export type Database = {
         Args: {
           p_checksum_algorithm?: string
           p_checksum_value?: string
+          p_duration_ms?: number
           p_file_size_bytes: number
           p_guest_token: string
           p_height?: number
@@ -1492,6 +1496,7 @@ export type Database = {
         Args: {
           p_checksum_algorithm?: string
           p_checksum_value?: string
+          p_duration_ms?: number
           p_file_size_bytes: number
           p_height?: number
           p_media_item_id: string

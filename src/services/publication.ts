@@ -5,6 +5,7 @@ import { BRAND_CONFIG } from '@/config/brand';
 import { STORAGE_BUCKETS } from '@/config/app-config';
 import { buildCoverPath, normaliseExtension, inferMimeTypeFromUri } from '@/features/media/storage-paths';
 import { readLocalImageBytes } from '@/features/media/read-local-image';
+import { resolveDraftAllowedMediaTypes } from '@/features/media/event-media';
 import { getPaymentProvider } from '@/features/payments';
 import { resolveReveal, type CreationDraft } from '@/features/celebrations/draft/types';
 import { assertCreatedCelebration } from '@/types/database';
@@ -98,6 +99,7 @@ export async function publishDraft(
     const client = requireSupabase();
     const reveal = resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
     const themeId = await resolveThemeId(draft.themeSlug);
+    const allowedMediaTypes = resolveDraftAllowedMediaTypes(draft);
 
     let celebrationId = existingCelebrationId;
     let eventSessionId: string | undefined;
@@ -118,6 +120,7 @@ export async function publishDraft(
         p_capture_mode: draft.captureMode,
         p_shot_limit_per_guest: draft.shotLimitPerGuest ?? undefined,
         p_camera_roll_upload_limit: draft.cameraRollUploadLimit,
+        p_allowed_media_types: allowedMediaTypes,
         p_reveal_mode: reveal.mode,
         p_reveal_at: reveal.revealAt ?? undefined,
         p_gallery_visibility: draft.galleryVisibility,

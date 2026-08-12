@@ -1,20 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
+import { useEvent, useEventListener } from 'expo';
 import {
   Animated,
   ActivityIndicator,
+  AppState,
   View,
   Image,
   useWindowDimensions,
   Pressable,
   StyleSheet,
-  Modal,
   Alert,
-  NativeModules,
   Linking,
   Platform,
+  PanResponder,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import { File } from 'expo-file-system';
+import { VideoView, useVideoPlayer } from 'expo-video';
 let CameraView: any = null;
 let useCameraPermissions: any = () => [null, () => {}];
 let hasNativeCamera = false;
@@ -33,7 +36,7 @@ import { queryClient } from '@/lib/query-client';
 import { celebrationKeys } from '@/services/celebrations';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
 import { AppText } from '@/components/ui/text';
@@ -52,6 +55,10 @@ import { uploadGuestPhoto } from '@/services/guest-media-upload';
 import { uploadHostPhoto } from '@/services/host-media-upload';
 import { useWebCameraTrack } from '@/features/media/web-camera-track';
 import type { MediaSource } from '@/types/database';
+import { eventAllowsVideoCapture } from '@/features/media/event-media';
+import { uploadGuestMedia } from '@/services/guest-media-upload';
+import { uploadHostMedia } from '@/services/host-media-upload';
+import { normaliseMimeType } from '@/features/media/storage-paths';
 
 interface PhotoItem {
   uri: string;
@@ -61,6 +68,84 @@ interface PhotoItem {
   postedAt?: string | null;
   submissionId?: string | null;
   challengeId?: string | null;
+  mediaType?: 'photo' | 'video';
+  durationMs?: number | null;
+  mimeType?: string | null;
+}
+
+type VideoPreview = {
+  uri: string;
+  mimeType: string;
+  width?: number | null;
+  height?: number | null;
+  durationMs: number;
+  source: MediaSource;
+  challengeId?: string | null;
+};
+
+type PendingChallengePost = {
+  challengeId: string;
+  mediaItemId: string;
+  localUri: string;
+  mediaType: 'photo' | 'video';
+  postedAt: string;
+  durationMs?: number | null;
+  mimeType?: string | null;
+};
+
+function formatUploadFailure(mediaType: 'photo' | 'video', error: unknown) {
+  const fallback = `Your ${mediaType} could not be uploaded. Please try again.`;
+  if (!(error instanceof Error) || !error.message) return fallback;
+  return `${fallback}\n\n${error.message}`;
+}
+
+function getWebCameraVideoElement(container: unknown): HTMLVideoElement | null {
+  if (Platform.OS !== 'web') return null;
+  if (!container || typeof (container as Element).querySelector !== 'function') return null;
+  const video = (container as Element).querySelector('video');
+  return video instanceof HTMLVideoElement ? video : null;
+}
+
+function releaseVideoPreviewUri(uri: string) {
+  if (Platform.OS === 'web' && uri.startsWith('blob:')) {
+    URL.revokeObjectURL(uri);
+  }
+}
+
+function getPreferredWebRecorderMimeType(): string | undefined {
+  if (Platform.OS !== 'web' || typeof MediaRecorder === 'undefined') return undefined;
+
+  const candidates = [
+    'video/mp4;codecs=h264,aac',
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4;codecs=avc1.4D002A,mp4a.40.2',
+    'video/mp4',
+  ];
+
+  return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
+}
+
+function InlineVideoPreview({ uri, autoPlay = false }: { uri: string; autoPlay?: boolean }) {
+  const player = useVideoPlayer({ uri }, (instance) => {
+    instance.loop = false;
+    instance.muted = false;
+    if (autoPlay) {
+      instance.play();
+      return;
+    }
+    instance.pause();
+  });
+
+  return (
+    <View style={S.inlineVideoPreviewWrap}>
+      <VideoView
+        player={player}
+        style={S.inlineVideoPreviewVideo}
+        contentFit="contain"
+        nativeControls
+      />
+    </View>
+  );
 }
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
@@ -103,6 +188,7 @@ const PILL_INSET = 20;
 /** Counter type, sized to sit inside PILL_HEIGHT without clipping. */
 const COUNTER_SIZE = 22;
 const COUNTER_LEADING = 28;
+const MAX_VIDEO_DURATION_MS = 30_000;
 
 /**
  * The widest zoom level, on the normalised 0–1 scale `CameraView.zoom` uses.
@@ -225,6 +311,7 @@ export default function CameraScreen() {
   const primarySession = detail?.primarySession;
   const limit = primarySession?.shot_limit_per_guest ?? null;
   const isChallengeCapture = captureTarget === 'challenge' && Boolean(challengeId);
+  const videoCaptureEnabled = eventAllowsVideoCapture(primarySession);
 
   // ── Upload pipeline ──
   //
@@ -274,6 +361,19 @@ export default function CameraScreen() {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [shareVisible, setShareVisible] = useState(false);
   const [challengePreviewUri, setChallengePreviewUri] = useState<string | null>(null);
+  const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_VIDEO_DURATION_MS);
+  const [captureType, setCaptureType] = useState<'photo' | 'video'>('photo');
+  const recordingStartRef = useRef<number | null>(null);
+  const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordingActiveRef = useRef(false);
+  const recordingStopRequestedRef = useRef(false);
+  const webRecorderRef = useRef<MediaRecorder | null>(null);
+  const webRecorderMimeType = isWeb ? getPreferredWebRecorderMimeType() : undefined;
+  const hasShownFirstLimitNoticeRef = useRef(false);
+  const hasShownFiveLeftNoticeRef = useRef(false);
+  const captureModeAnim = useRef(new Animated.Value(captureType === 'video' ? 1 : 0)).current;
 
   // On web the torch and zoom are driven straight onto the live MediaStream
   // track rather than through `CameraView`'s props — see `web-camera-track`
@@ -301,9 +401,62 @@ export default function CameraScreen() {
    * correctly hidden, without the risk of hiding it when it does work.
    */
   const showFlashControl = !isWeb || facing === 'back';
+  const showPhotoLibraryAction = showCameraRollAction && captureType === 'photo';
 
   /** Guards `handleCameraMountError` against reverting `facing` in a loop. */
   const isRecoveringFacing = useRef(false);
+
+  const supportsVideoRecording =
+    videoCaptureEnabled && (!isWeb || Boolean(webRecorderMimeType));
+
+  useEffect(() => {
+    if (!videoCaptureEnabled && captureType !== 'photo') {
+      setCaptureType('photo');
+    }
+  }, [videoCaptureEnabled, captureType]);
+
+  useEffect(() => {
+    Animated.timing(captureModeAnim, {
+      toValue: captureType === 'video' ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [captureModeAnim, captureType]);
+
+  useEffect(() => {
+    return () => {
+      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+      if (recordingActiveRef.current) {
+        if (Platform.OS === 'web') {
+          webRecorderRef.current?.stop();
+        } else {
+          cameraRef.current?.stopRecording?.();
+        }
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (videoPreview?.uri) {
+        releaseVideoPreviewUri(videoPreview.uri);
+      }
+    };
+  }, [videoPreview]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active' && recordingActiveRef.current) {
+        recordingStopRequestedRef.current = true;
+        if (Platform.OS === 'web') {
+          webRecorderRef.current?.stop();
+        } else {
+          cameraRef.current?.stopRecording?.();
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   // ── Animation Values ──
   const shutterFlashOpacity = useRef(new Animated.Value(0)).current;
@@ -429,6 +582,18 @@ export default function CameraScreen() {
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   }
 
+  function setCaptureMode(next: 'photo' | 'video') {
+    if (!videoCaptureEnabled || isRecording || next === captureType) return;
+    if (isWeb && next === 'video' && !webRecorderMimeType) {
+      Alert.alert(
+        'Video not supported here',
+        'This browser can record video, but not yet in a format that plays reliably in the iPhone app. Please use the iOS app for video on this event for now.',
+      );
+      return;
+    }
+    setCaptureType(next);
+  }
+
   /**
    * Recovery when a camera fails to start — a single-camera device, another
    * app holding the camera, a mid-session permission hiccup. Without this the
@@ -459,6 +624,33 @@ export default function CameraScreen() {
       'Camera unavailable',
       "Couldn't switch cameras. This device may only have one, or another app is using it.",
     );
+  }
+
+  function maybeShowGuestLimitMilestone(shotsUsedAfterUpload: number) {
+    if (!isGuest || limit === null) return;
+
+    const remainingAfterUpload = Math.max(0, limit - shotsUsedAfterUpload);
+
+    if (shotsUsedAfterUpload === 1 && !hasShownFirstLimitNoticeRef.current) {
+      hasShownFirstLimitNoticeRef.current = true;
+      Alert.alert(
+        'You\'re in',
+        `Lovely start. You’ve now got ${remainingAfterUpload} moment${remainingAfterUpload === 1 ? '' : 's'} left to capture the story.`,
+      );
+      return;
+    }
+
+    if (
+      limit > 5 &&
+      remainingAfterUpload === 5 &&
+      !hasShownFiveLeftNoticeRef.current
+    ) {
+      hasShownFiveLeftNoticeRef.current = true;
+      Alert.alert(
+        '5 moments left',
+        'You’re down to your final 5 moments, so make them count.',
+      );
+    }
   }
 
   /**
@@ -532,6 +724,7 @@ export default function CameraScreen() {
             height,
           });
           newPhoto.id = uploadResult.mediaItemId;
+          maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
         } else if (!isGuest && celebrationId) {
           const uploadResult = await uploadHostPhoto({
             celebrationId: String(celebrationId),
@@ -555,7 +748,7 @@ export default function CameraScreen() {
         setPhotos([newPhoto, ...photos]);
       } catch (e) {
         console.error(`Failed to upload ${source} photo:`, e);
-        Alert.alert('Upload failed', 'Your photo could not be uploaded. Please try again.');
+        Alert.alert('Upload failed', formatUploadFailure('photo', e));
         // The server never received it — only the local, session-only
         // thumbnail needs undoing.
         setPhotos(photos);
@@ -568,7 +761,144 @@ export default function CameraScreen() {
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
   }
 
-  async function commitChallengePhoto(uri: string) {
+  async function commitVideo(preview: VideoPreview) {
+    setIsUploading(true);
+    try {
+      let postedMediaItemId: string | null = null;
+      const postedAt = new Date().toISOString();
+      if (!isBackendConfigured) {
+        const item: PhotoItem = {
+          uri: preview.uri,
+          takenBy: firstNameFrom(profile) || 'You',
+          id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          postedAt,
+          mediaType: 'video',
+          durationMs: preview.durationMs,
+          mimeType: preview.mimeType,
+          challengeId: preview.challengeId ?? null,
+        };
+        postedMediaItemId = item.id ?? null;
+        const key = preview.challengeId
+          ? `__mock_challenge_submissions_${celebrationId}_${preview.challengeId}`
+          : `__mock_photos_${celebrationId}`;
+        const stored = await AsyncStorage.getItem(key);
+        let current: PhotoItem[] = [];
+        if (stored) {
+          try {
+            current = JSON.parse(stored).map((value: any) =>
+              typeof value === 'string' ? { uri: value, takenBy: 'Guest', mediaType: 'photo' } : value,
+            );
+          } catch {
+            current = [];
+          }
+        }
+        await AsyncStorage.setItem(key, JSON.stringify([item, ...current]));
+      } else if (isGuest && guestAuth) {
+        const uploadResult = await uploadGuestMedia({
+          eventCode: guestAuth.slug,
+          guestToken: guestAuth.guestToken,
+          localUri: preview.uri,
+          source: preview.source,
+          mediaType: 'video',
+          mimeType: preview.mimeType,
+          width: preview.width ?? undefined,
+          height: preview.height ?? undefined,
+          durationMs: preview.durationMs,
+          metadata: preview.challengeId
+            ? {
+                challenge_id: preview.challengeId,
+                submission_kind: 'challenge',
+              }
+            : undefined,
+        });
+        postedMediaItemId = uploadResult.mediaItemId;
+        maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
+      } else if (!isGuest && celebrationId) {
+        const uploadResult = await uploadHostMedia({
+          celebrationId: String(celebrationId),
+          localUri: preview.uri,
+          source: preview.source,
+          mediaType: 'video',
+          mimeType: preview.mimeType,
+          width: preview.width ?? undefined,
+          height: preview.height ?? undefined,
+          durationMs: preview.durationMs,
+          metadata: preview.challengeId
+            ? {
+                challenge_id: preview.challengeId,
+                submission_kind: 'challenge',
+              }
+            : undefined,
+        });
+        postedMediaItemId = uploadResult.mediaItemId;
+      } else {
+        throw new Error('No identity available to upload this video yet.');
+      }
+
+      if (preview.challengeId) {
+        const pending: PendingChallengePost = {
+          challengeId: String(preview.challengeId),
+          mediaItemId: postedMediaItemId ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          localUri: preview.uri,
+          mediaType: 'video',
+          postedAt,
+          durationMs: preview.durationMs,
+          mimeType: preview.mimeType,
+        };
+        await AsyncStorage.setItem(
+          `__mock_pending_challenge_refresh_${celebrationId}`,
+          JSON.stringify(pending),
+        );
+      }
+
+      await queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebrationId)),
+      });
+      void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+
+      if (preview.challengeId) {
+        const target = {
+          pathname: '/celebration/[celebrationId]',
+          params: {
+            celebrationId: String(celebrationId),
+            openChallengeId: String(preview.challengeId),
+            ...(postedMediaItemId ? { openChallengeMediaId: postedMediaItemId } : {}),
+            challengePostedAt: String(Date.now()),
+          },
+        };
+        if (router.canDismiss()) {
+          router.dismissTo(target as never);
+        } else {
+          router.replace(target as never);
+        }
+        setVideoPreview(null);
+        return;
+      }
+
+      const galleryTarget = {
+        pathname: '/celebration/[celebrationId]',
+        params: {
+          celebrationId: String(celebrationId),
+          videoPostedAt: String(Date.now()),
+        },
+      };
+
+      if (router.canDismiss()) {
+        router.dismissTo(galleryTarget as never);
+      } else {
+        router.replace(galleryTarget as never);
+      }
+
+      deleteLocalVideo(preview.uri, 'posting');
+    } catch (error) {
+      console.error('Failed to upload video:', error);
+      Alert.alert('Upload failed', formatUploadFailure('video', error));
+    } finally {
+      setIsUploading(false);
+    }
+  }
+
+  async function commitChallengePhoto(uri: string): Promise<string | false> {
     if (!celebrationId || !challengeId) {
       throw new Error('Missing challenge capture context.');
     }
@@ -577,6 +907,8 @@ export default function CameraScreen() {
     try {
       const userName = firstNameFrom(profile) || 'You';
       const userId = profile?.id ?? session?.user.id ?? guestAuth?.guestSessionId ?? null;
+      const postedAt = new Date().toISOString();
+      let postedMediaItemId: string | null = null;
       const metadata = {
         challenge_id: challengeId,
         submission_kind: 'challenge',
@@ -599,20 +931,23 @@ export default function CameraScreen() {
           }
         }
 
+        postedMediaItemId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         const nextSubmissions = [
           {
             uri,
             takenBy: userName,
             takenById: userId,
-            postedAt: new Date().toISOString(),
-            submissionId: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+            postedAt,
+            id: postedMediaItemId,
+            submissionId: postedMediaItemId,
             challengeId,
+            mediaType: 'photo' as const,
           },
           ...submissions,
         ];
         await AsyncStorage.setItem(submissionsKey, JSON.stringify(nextSubmissions));
       } else if (isGuest && guestAuth) {
-        await uploadGuestPhoto({
+        const uploadResult = await uploadGuestPhoto({
           eventCode: guestAuth.slug,
           guestToken: guestAuth.guestToken,
           localUri: uri,
@@ -620,39 +955,300 @@ export default function CameraScreen() {
           mimeType: 'image/jpeg',
           metadata,
         });
+        postedMediaItemId = uploadResult.mediaItemId;
       } else if (!isGuest && celebrationId) {
-        await uploadHostPhoto({
+        const uploadResult = await uploadHostPhoto({
           celebrationId: String(celebrationId),
           localUri: uri,
           source: 'camera',
           mimeType: 'image/jpeg',
           metadata,
         });
+        postedMediaItemId = uploadResult.mediaItemId;
       } else {
         throw new Error('No identity available to upload this challenge photo yet.');
       }
 
+      const pending: PendingChallengePost = {
+        challengeId: String(challengeId),
+        mediaItemId: postedMediaItemId ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        localUri: uri,
+        mediaType: 'photo',
+        postedAt,
+        mimeType: 'image/jpeg',
+      };
       await AsyncStorage.setItem(
         `__mock_pending_challenge_refresh_${celebrationId}`,
-        String(challengeId),
+        JSON.stringify(pending),
       );
 
       await queryClient.invalidateQueries({
         queryKey: celebrationDetailKeys.detail(String(celebrationId)),
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
-      router.back();
-      return true;
+      const target = {
+        pathname: '/celebration/[celebrationId]',
+        params: {
+          celebrationId: String(celebrationId),
+          openChallengeId: String(challengeId),
+          ...(postedMediaItemId ? { openChallengeMediaId: postedMediaItemId } : {}),
+          challengePostedAt: String(Date.now()),
+        },
+      };
+      if (router.canDismiss()) {
+        router.dismissTo(target as never);
+      } else {
+        router.replace(target as never);
+      }
+      return postedMediaItemId ?? pending.mediaItemId;
     } catch (error) {
       console.error('Failed to post challenge photo:', error);
-      Alert.alert('Upload failed', 'Your photo could not be added to the challenge. Please try again.');
+      Alert.alert('Upload failed', formatUploadFailure('photo', error));
       return false;
     } finally {
       setIsUploading(false);
     }
   }
 
+  function clearRecordingTimer() {
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+    }
+  }
+
+  async function startVideoRecording() {
+    if (
+      !supportsVideoRecording ||
+      recordingActiveRef.current ||
+      isUploading ||
+      outOfShots ||
+      (!isWeb && !cameraRef.current?.recordAsync)
+    ) {
+      return;
+    }
+
+    recordingActiveRef.current = true;
+    recordingStopRequestedRef.current = false;
+    setRecordingRemainingMs(MAX_VIDEO_DURATION_MS);
+    setIsRecording(true);
+    recordingStartRef.current = Date.now();
+    clearRecordingTimer();
+    recordingTimerRef.current = setInterval(() => {
+      const startedAt = recordingStartRef.current;
+      if (!startedAt) return;
+      const elapsedMs = Date.now() - startedAt;
+      const remainingMs = Math.max(0, MAX_VIDEO_DURATION_MS - elapsedMs);
+      setRecordingRemainingMs(remainingMs);
+      if (remainingMs === 0 && !recordingStopRequestedRef.current) {
+        recordingStopRequestedRef.current = true;
+        if (isWeb) {
+          webRecorderRef.current?.stop();
+        } else {
+          cameraRef.current?.stopRecording?.();
+        }
+      }
+    }, 100);
+
+    try {
+      if (isWeb) {
+        const previewElement = getWebCameraVideoElement(cameraContainerRef.current);
+        const previewStream = previewElement?.srcObject;
+
+        if (!(previewStream instanceof MediaStream)) {
+          throw new Error('The browser camera stream is not ready yet.');
+        }
+
+        const videoTrack = previewStream
+          .getVideoTracks()
+          .find((track) => track.readyState === 'live');
+        if (!videoTrack) {
+          throw new Error('No live camera track is available for recording.');
+        }
+
+        const clonedTracks = [
+          videoTrack.clone(),
+          ...previewStream
+            .getAudioTracks()
+            .filter((track) => track.readyState === 'live')
+            .map((track) => track.clone()),
+        ];
+        const recordingStream = new MediaStream(clonedTracks);
+        const preferredMimeType = webRecorderMimeType;
+        if (!preferredMimeType) {
+          throw new Error('This browser cannot record an MP4 video for cross-device playback.');
+        }
+        const recorder = preferredMimeType
+          ? new MediaRecorder(recordingStream, { mimeType: preferredMimeType })
+          : new MediaRecorder(recordingStream);
+
+        webRecorderRef.current = recorder;
+
+        const recording = await new Promise<VideoPreview>((resolve, reject) => {
+          const chunks: Blob[] = [];
+
+          recorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+              chunks.push(event.data);
+            }
+          };
+
+          recorder.onerror = () => {
+            clonedTracks.forEach((track) => track.stop());
+            webRecorderRef.current = null;
+            reject(new Error('The browser could not finish recording this video.'));
+          };
+
+          recorder.onstop = () => {
+            try {
+              clonedTracks.forEach((track) => track.stop());
+              webRecorderRef.current = null;
+
+              const mimeType = normaliseMimeType(
+                recorder.mimeType || preferredMimeType || chunks[0]?.type || 'video/webm',
+              ) || 'video/webm';
+              const blob = new Blob(chunks, { type: mimeType });
+              if (blob.size <= 0) {
+                reject(new Error('The browser produced an empty video file.'));
+                return;
+              }
+
+              const durationMs = Math.min(
+                MAX_VIDEO_DURATION_MS,
+                Math.max(100, Date.now() - (recordingStartRef.current ?? Date.now())),
+              );
+
+              resolve({
+                uri: URL.createObjectURL(blob),
+                mimeType: blob.type || mimeType,
+                width: previewElement?.videoWidth ?? null,
+                height: previewElement?.videoHeight ?? null,
+                durationMs,
+                source: 'camera',
+                challengeId: isChallengeCapture ? String(challengeId) : null,
+              });
+            } catch (error) {
+              reject(
+                error instanceof Error
+                  ? error
+                  : new Error('The browser could not prepare that video.'),
+              );
+            }
+          };
+
+          recorder.start(250);
+        });
+
+        setVideoPreview(recording);
+        return;
+      }
+
+      const recording = await cameraRef.current.recordAsync({
+        maxDuration: 30,
+        codec: Platform.OS === 'ios' ? 'avc1' : undefined,
+      });
+
+      if (!recording?.uri) {
+        throw new Error('The camera stopped without returning a video file.');
+      }
+
+      const localFile = new File(recording.uri);
+      const fileInfo = localFile.info();
+      if (!fileInfo.exists || !fileInfo.size || fileInfo.size <= 0) {
+        throw new Error(`Camera returned an empty video file: ${recording.uri}`);
+      }
+
+      const durationMs = Math.min(
+        MAX_VIDEO_DURATION_MS,
+        Math.max(100, Date.now() - (recordingStartRef.current ?? Date.now())),
+      );
+      setVideoPreview({
+        uri: recording.uri,
+        mimeType: Platform.OS === 'ios' ? 'video/quicktime' : 'video/mp4',
+        width: null,
+        height: null,
+        durationMs,
+        source: 'camera',
+        challengeId: isChallengeCapture ? String(challengeId) : null,
+      });
+    } catch (error) {
+      console.error('Failed to record video:', error);
+      Alert.alert(
+        'Recording failed',
+        error instanceof Error ? error.message : 'We could not record that video. Please try again.',
+      );
+    } finally {
+      clearRecordingTimer();
+      recordingStartRef.current = null;
+      recordingActiveRef.current = false;
+      recordingStopRequestedRef.current = false;
+      setIsRecording(false);
+    }
+  }
+
+  function stopVideoRecording() {
+    if (!recordingActiveRef.current || recordingStopRequestedRef.current) return;
+    recordingStopRequestedRef.current = true;
+    if (isWeb) {
+      webRecorderRef.current?.stop();
+      return;
+    }
+    cameraRef.current?.stopRecording?.();
+  }
+
+  async function retakeVideo() {
+    if (!videoPreview || isUploading) return;
+    const uri = videoPreview.uri;
+    setVideoPreview(null);
+    deleteLocalVideo(uri, 'retake');
+  }
+
+  function deleteLocalVideo(uri: string, reason: 'retake' | 'posting') {
+    try {
+      if (Platform.OS === 'web') {
+        releaseVideoPreviewUri(uri);
+        return;
+      }
+      const file = new File(uri);
+      if (file.info().exists) file.delete();
+    } catch (error) {
+      console.warn(`Could not remove temporary video after ${reason}:`, error);
+    }
+  }
+
+  const viewfinderPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_event, gestureState) =>
+        videoCaptureEnabled &&
+        !isRecording &&
+        Math.abs(gestureState.dx) > 16 &&
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.35,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderRelease: (_event, gestureState) => {
+        if (!videoCaptureEnabled || isRecording) return;
+        if (gestureState.dx <= -24) {
+          setCaptureMode('video');
+          return;
+        }
+        if (gestureState.dx >= 24) {
+          setCaptureMode('photo');
+        }
+      },
+    }),
+  ).current;
+
   async function handleCapture() {
+    if (captureType === 'video' && supportsVideoRecording) {
+      if (isRecording) {
+        stopVideoRecording();
+        return;
+      }
+      if (videoPreview || challengePreviewUri) {
+        return;
+      }
+      await startVideoRecording();
+      return;
+    }
     if (isChallengeCapture && challengePreviewUri) {
       return;
     }
@@ -907,7 +1503,11 @@ export default function CameraScreen() {
       </View>
 
       {/* 2. Full-Screen Camera View Container */}
-      <View ref={cameraContainerRef} style={[S.viewfinderContainer, { height: viewfinderHeight }]}>
+      <View
+        ref={cameraContainerRef}
+        style={[S.viewfinderContainer, { height: viewfinderHeight }]}
+        {...viewfinderPanResponder.panHandlers}
+      >
         <CameraView
           // Flipping on web has to tear the old stream down before the new one
           // is requested. The library only ever gives Chrome a SOFT
@@ -929,6 +1529,8 @@ export default function CameraScreen() {
           // applied. Native still drives flash and zoom through these props.
           flash={isWeb ? 'off' : flash}
           mirror={facing === 'front'}
+          mode={captureType === 'video' ? 'video' : 'picture'}
+          mute={false}
           enableTorch={false}
           zoom={isWeb ? 0 : zoom}
           onMountError={handleCameraMountError}
@@ -954,20 +1556,47 @@ export default function CameraScreen() {
           </View>
         )}
 
+        {isRecording ? (
+          <View style={S.recordingPill}>
+            <View style={S.recordingDot} />
+            <AppText style={S.recordingText}>
+              {`00:${Math.ceil(recordingRemainingMs / 1000)}`.padStart(5, '0')}
+            </AppText>
+          </View>
+        ) : null}
+
         {/* Camera-roll action — mirrors the shots-left tag on the opposite
             corner. Visible only when capture_mode allows a library source;
             no separate toggle, this reads the same setting the shots-left
             count and the shutter's own capture_mode gate already use. */}
-        {showCameraRollAction && (
-          <Pressable
-            onPress={handlePickFromLibrary}
-            disabled={outOfShots || isUploading}
-            style={[S.cameraRollTag, (outOfShots || isUploading) && { opacity: 0.4 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Add photo from camera roll"
+        {showPhotoLibraryAction && (
+          <Animated.View
+            style={[
+              S.cameraRollTagWrap,
+              {
+                opacity: captureModeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 0],
+                }),
+                transform: [{
+                  translateY: captureModeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 8],
+                  }),
+                }],
+              },
+            ]}
           >
-            <CameraRollPlusIcon size={20} />
-          </Pressable>
+            <Pressable
+              onPress={handlePickFromLibrary}
+              disabled={outOfShots || isUploading}
+              style={[S.cameraRollTag, (outOfShots || isUploading) && { opacity: 0.4 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Add photo from camera roll"
+            >
+              <CameraRollPlusIcon size={20} />
+            </Pressable>
+          </Animated.View>
         )}
 
         {/* Zoom Selector Controls */}
@@ -1002,20 +1631,55 @@ export default function CameraScreen() {
         </View>
       </View>
 
-      {isChallengeCapture && challengePreviewUri ? (
+      {videoPreview ? (
+        <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
+          <InlineVideoPreview uri={videoPreview.uri} />
+          <View style={S.challengePreviewScrim} pointerEvents="none" />
+          <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
+            <Pressable
+              onPress={() => void retakeVideo()}
+              disabled={isUploading}
+              style={({ pressed }) => [S.challengePreviewCloseBtn, pressed && { opacity: 0.86 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Discard video and retake"
+            >
+              <CloseChevron size={18} />
+            </Pressable>
+          </View>
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+            <Pressable
+              onPress={() => void commitVideo(videoPreview)}
+              disabled={isUploading}
+              style={({ pressed }) => [
+                S.challengePreviewPrimaryBtn,
+                pressed && { opacity: 0.92 },
+                isUploading && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Post video"
+            >
+              <AppText style={S.challengePreviewPrimaryText}>
+                {isUploading ? 'Posting…' : 'Post'}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : isChallengeCapture && challengePreviewUri ? (
         <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
           <Image source={{ uri: challengePreviewUri }} style={S.challengePreviewImage} resizeMode="cover" />
           <View style={S.challengePreviewScrim} />
-          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+          <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
             <Pressable
               onPress={() => setChallengePreviewUri(null)}
               disabled={isUploading}
-              style={({ pressed }) => [S.challengePreviewSecondaryBtn, pressed && { opacity: 0.86 }]}
+              style={({ pressed }) => [S.challengePreviewCloseBtn, pressed && { opacity: 0.86 }]}
               accessibilityRole="button"
-              accessibilityLabel="Retake photo"
+              accessibilityLabel="Discard photo and retake"
             >
-              <AppText style={S.challengePreviewSecondaryText}>Retake</AppText>
+              <CloseChevron size={18} />
             </Pressable>
+          </View>
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
             <Pressable
               onPress={() => void handlePostChallengePreview()}
               disabled={isUploading}
@@ -1036,7 +1700,7 @@ export default function CameraScreen() {
       ) : null}
 
       {/* 3. Bottom Controls Panel */}
-      <View style={[S.bottomPanel, { height: bottomPanelHeight + insets.bottom, paddingBottom: insets.bottom }]}>
+      <View style={[S.bottomPanel, { minHeight: bottomPanelHeight + insets.bottom, paddingBottom: insets.bottom }]}>
         <View style={S.bottomControlsRow}>
           {/* Flash Button — web only has an on/off torch, not the native
               off/on/auto strobe, so the icon reflects whichever state this
@@ -1063,26 +1727,38 @@ export default function CameraScreen() {
           {/* Flip Camera Button */}
           <Pressable 
             onPress={toggleFacing} 
-            style={S.controlBtn}
+            style={[S.controlBtn, isRecording && { opacity: 0.35 }]}
+            disabled={isRecording}
             accessibilityRole="button"
             accessibilityLabel="Flip camera"
           >
             <FlipIcon />
           </Pressable>
 
-          {/* Shutter Button */}
           <Pressable
             onPress={handleCapture}
             disabled={outOfShots || isUploading}
             style={({ pressed }) => [
               S.shutterBtn,
+              captureType === 'video' && S.shutterBtnVideoMode,
+              isRecording && S.shutterBtnRecording,
               pressed && { opacity: 0.8 },
               (outOfShots || isUploading) && { opacity: 0.4 },
             ]}
             accessibilityRole="button"
-            accessibilityLabel="Take photo"
+            accessibilityLabel={
+              captureType === 'video'
+                ? (isRecording ? 'Stop video recording' : 'Start video recording')
+                : 'Take photo'
+            }
           >
-            <View style={S.shutterBtnInner} />
+            <View
+              style={[
+                S.shutterBtnInner,
+                captureType === 'video' && S.shutterBtnInnerVideoMode,
+                isRecording && S.shutterBtnInnerRecording,
+              ]}
+            />
           </Pressable>
 
           {/* QR Invite Button */}
@@ -1141,6 +1817,49 @@ export default function CameraScreen() {
             )}
           </Pressable>
         </View>
+
+        {videoCaptureEnabled ? (
+          <View style={S.captureModeRail}>
+            <View style={S.captureModeLabelRow}>
+              <Animated.View
+                style={[
+                  S.captureModeSelection,
+                  {
+                    transform: [{
+                      translateX: captureModeAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, 74],
+                      }),
+                    }],
+                  },
+                ]}
+              />
+              {([
+                { key: 'photo', label: 'PHOTO' },
+                { key: 'video', label: 'VIDEO' },
+              ] as const).map((option) => (
+                <Pressable
+                  key={option.key}
+                  onPress={() => setCaptureMode(option.key)}
+                  disabled={isRecording}
+                  style={S.captureModeTapTarget}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Switch to ${option.label.toLowerCase()} mode`}
+                >
+                  <AppText
+                    style={[
+                      S.captureModeLabel,
+                      captureType === option.key && S.captureModeLabelActive,
+                      isRecording && { opacity: 0.45 },
+                    ]}
+                  >
+                    {option.label}
+                  </AppText>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ) : null}
       </View>
 
       {/* 4. Flying Image Animation layer */}
@@ -1293,12 +2012,54 @@ export default function CameraScreen() {
     color: '#FFFFFF',
     textAlign: 'center',
   },
-
+  recordingPill: {
+    position: 'absolute',
+    top: PILL_INSET,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: 'rgba(11, 11, 12, 0.78)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    height: PILL_HEIGHT,
+    zIndex: 20,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: '#FF453A',
+  },
+  recordingText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  inlineVideoPreviewWrap: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  inlineVideoPreviewVideo: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000000',
+  },
   // Camera-Roll Pill — same family as photosLeftTag, opposite corner.
-  cameraRollTag: {
+  cameraRollTagWrap: {
     position: 'absolute',
     bottom: PILL_INSET,
     right: PILL_INSET,
+    zIndex: 20,
+  },
+  cameraRollTag: {
     backgroundColor: 'rgba(11, 11, 12, 0.65)',
     height: PILL_HEIGHT,
     width: PILL_HEIGHT,
@@ -1335,19 +2096,21 @@ export default function CameraScreen() {
     paddingTop: spacing.xl,
     gap: spacing.md,
   },
-  challengePreviewSecondaryBtn: {
-    height: 52,
-    borderRadius: radii.pill,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.28)',
+  challengePreviewTopActions: {
+    position: 'absolute',
+    top: 0,
+    right: layout.gutter,
+    zIndex: 2,
+  },
+  challengePreviewCloseBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  challengePreviewSecondaryText: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-    fontSize: 15,
+    backgroundColor: 'rgba(11, 11, 12, 0.66)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
   },
   challengePreviewPrimaryBtn: {
     height: 54,
@@ -1402,8 +2165,51 @@ export default function CameraScreen() {
   // ── Bottom Panel ──
   bottomPanel: {
     backgroundColor: '#0B0B0C',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     paddingHorizontal: layout.gutter,
+    paddingTop: spacing.sm,
+  },
+  shutterRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureModeRail: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  captureModeLabelRow: {
+    position: 'relative',
+    width: 148,
+    height: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  captureModeSelection: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 74,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+  },
+  captureModeTapTarget: {
+    width: 74,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  captureModeLabel: {
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 12,
+    letterSpacing: 0.9,
+    color: 'rgba(255,255,255,0.58)',
+  },
+  captureModeLabelActive: {
+    color: '#FFFFFF',
   },
   bottomControlsRow: {
     flexDirection: 'row',
@@ -1418,6 +2224,10 @@ export default function CameraScreen() {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  controlBtnSpacer: {
+    width: 44,
+    height: 44,
+  },
   shutterBtn: {
     width: 76,
     height: 76,
@@ -1428,11 +2238,26 @@ export default function CameraScreen() {
     justifyContent: 'center',
     backgroundColor: 'transparent',
   },
+  shutterBtnVideoMode: {
+    borderColor: 'rgba(255, 255, 255, 0.92)',
+  },
+  shutterBtnRecording: {
+    borderColor: 'rgba(255, 59, 48, 0.72)',
+  },
   shutterBtnInner: {
     width: 58,
     height: 58,
     borderRadius: 29,
     backgroundColor: '#FFFFFF',
+  },
+  shutterBtnInnerVideoMode: {
+    backgroundColor: '#FF453A',
+  },
+  shutterBtnInnerRecording: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    backgroundColor: '#FF453A',
   },
   photosBtn: {
     width: 44,

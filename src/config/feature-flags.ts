@@ -13,7 +13,7 @@ export const FEATURE_FLAGS = {
   /** Multiple functions (Mehndi, Sangeet, Reception…) per celebration. */
   multiEventCreation: false,
   /** Short guest video contributions. */
-  videoContributions: false,
+  videoContributions: true,
   /** Audio Guestbook recording. */
   audioGuestbook: false,
   /** Written guest messages. */

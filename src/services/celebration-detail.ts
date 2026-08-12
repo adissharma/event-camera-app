@@ -56,10 +56,10 @@ export interface CelebrationDetail {
    * offline-mock array under that name) to avoid colliding with it.
    */
   mediaPhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; isMine?: boolean; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; isMine?: boolean; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
   challengePhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; challengeId: string; isMine?: boolean; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; challengeId: string; isMine?: boolean; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
 }
 
@@ -140,7 +140,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         ? await (async () => {
             const { data: mediaRows, error: mediaError } = await client
               .from('media_items')
-              .select('id, original_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name)')
+              .select('id, original_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name), media_type, duration_ms, mime_type, width, height')
               .eq('event_session_id', primarySession.id)
               .eq('status', 'ready')
               .is('deleted_at', null)
@@ -152,6 +152,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
             }
 
             return (mediaRows ?? [])
+              .filter((m) => (m as any).metadata?.submission_kind !== 'guestbook')
               .filter((m): m is typeof m & { original_storage_path: string } =>
                 Boolean(m.original_storage_path),
               )
@@ -160,6 +161,11 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 storagePath: m.original_storage_path,
                 capturedAt: m.captured_at,
                 displayName: (m.guest_sessions as any)?.display_name ?? 'Host',
+                mediaType: (m as any).media_type ?? 'photo',
+                durationMs: (m as any).duration_ms ?? null,
+                mimeType: (m as any).mime_type ?? null,
+                width: (m as any).width ?? null,
+                height: (m as any).height ?? null,
                 isMine: false,
                 uploadedByUserId: (m as any).uploaded_by_user_id ?? null,
                 guestSessionId: (m as any).guest_session_id ?? null,
@@ -185,6 +191,11 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 storagePath: p.storage_path,
                 capturedAt: p.captured_at ?? null,
                 displayName: p.display_name ?? 'Guest',
+                mediaType: p.media_type ?? 'photo',
+                durationMs: p.duration_ms ?? null,
+                mimeType: p.mime_type ?? null,
+                width: p.width ?? null,
+                height: p.height ?? null,
                 challengeId: typeof p.challenge_id === 'string' ? p.challenge_id : '',
                 isMine: p.is_mine === true,
                 uploadedByUserId: p.uploaded_by_user_id ?? null,
@@ -428,6 +439,7 @@ async function tryFetchCelebrationDetailAsGuest(
     shot_limit_per_guest: s.shot_limit_per_guest ?? null,
     guest_downloads_enabled: s.guest_downloads_enabled ?? true,
     capture_mode: s.capture_mode ?? 'camera_and_library',
+    allowed_media_types: s.allowed_media_types ?? ['photo'],
     moderation_enabled: false,
   } as unknown as EventSessionRow;
 
@@ -453,6 +465,11 @@ async function tryFetchCelebrationDetailAsGuest(
           storagePath: p.storage_path,
           capturedAt: p.captured_at ?? null,
           displayName: p.display_name ?? 'Guest',
+          mediaType: p.media_type ?? 'photo',
+          durationMs: p.duration_ms ?? null,
+          mimeType: p.mime_type ?? null,
+          width: p.width ?? null,
+          height: p.height ?? null,
           isMine: p.is_mine === true,
           uploadedByUserId: p.uploaded_by_user_id ?? null,
           guestSessionId: p.guest_session_id ?? null,
@@ -465,6 +482,11 @@ async function tryFetchCelebrationDetailAsGuest(
           storagePath: p.storage_path,
           capturedAt: p.captured_at ?? null,
           displayName: p.display_name ?? 'Guest',
+          mediaType: p.media_type ?? 'photo',
+          durationMs: p.duration_ms ?? null,
+          mimeType: p.mime_type ?? null,
+          width: p.width ?? null,
+          height: p.height ?? null,
           challengeId: p.challenge_id,
           isMine: p.is_mine === true,
           uploadedByUserId: p.uploaded_by_user_id ?? null,

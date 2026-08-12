@@ -28,6 +28,7 @@ export const CREATION_STEPS = [
   'cover',
   'photo-limit',
   'reveal',
+  'guest-reveal',
   'treatment',
   'package',
 ] as const;

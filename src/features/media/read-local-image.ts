@@ -18,7 +18,7 @@ import { File } from 'expo-file-system';
  * web uses that instead. Native keeps the `expo-file-system` bridge, which
  * is what a real `file://` URI needs.
  */
-export async function readLocalImageBytes(
+export async function readLocalMediaBytes(
   uri: string,
 ): Promise<{ bytes: ArrayBuffer; sizeBytes: number | null; mimeType?: string }> {
   if (Platform.OS === 'web') {
@@ -34,4 +34,10 @@ export async function readLocalImageBytes(
   const file = new File(uri);
   const bytes = await file.arrayBuffer();
   return { bytes, sizeBytes: file.size ?? bytes.byteLength };
+}
+
+export async function readLocalImageBytes(
+  uri: string,
+): Promise<{ bytes: ArrayBuffer; sizeBytes: number | null; mimeType?: string }> {
+  return readLocalMediaBytes(uri);
 }

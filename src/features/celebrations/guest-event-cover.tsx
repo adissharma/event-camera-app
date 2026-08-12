@@ -36,6 +36,7 @@ export interface GuestEventCoverProps {
   title: string;
   countdownLabel: string;
   shotsLeftLabel: string;
+  shotsLeftDetailLabel?: string;
   accent?: string | null;
   height?: ViewStyle['height'];
   coverHeight?: ViewStyle['height'];
@@ -60,6 +61,7 @@ export function GuestEventCover({
   title,
   countdownLabel,
   shotsLeftLabel,
+  shotsLeftDetailLabel = 'Shots left',
   accent: providedAccent,
   height,
   coverHeight,
@@ -117,7 +119,11 @@ export function GuestEventCover({
           <View style={[S.detailRow, preview && S.detailRowPreview]}>
             <Detail icon={<ClockIcon size={preview ? 14 : 18} color={accent} />} value={countdownLabel} label="Time left" />
             <View style={S.detailDivider} />
-            <Detail icon={<CameraIcon size={preview ? 14 : 18} color={accent} />} value={shotsLeftLabel} label="Shots left" />
+            <Detail
+              icon={<CameraIcon size={preview ? 14 : 18} color={accent} />}
+              value={shotsLeftLabel}
+              label={shotsLeftDetailLabel}
+            />
           </View>
         </View>
       </View>

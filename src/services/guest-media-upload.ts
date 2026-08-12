@@ -1,9 +1,9 @@
 import * as Crypto from 'expo-crypto';
 
 import { requireSupabase } from '@/lib/supabase/client';
-import { inferMimeTypeFromUri } from '@/features/media/storage-paths';
-import { readLocalImageBytes } from '@/features/media/read-local-image';
-import type { MediaSource } from '@/types/database';
+import { inferMediaTypeFromMimeType, inferMimeTypeFromUri, normaliseMimeType } from '@/features/media/storage-paths';
+import { readLocalMediaBytes } from '@/features/media/read-local-image';
+import type { MediaSource, MediaType } from '@/types/database';
 
 /**
  * Real guest media upload pipeline (camera capture and camera-roll picks).
@@ -23,38 +23,54 @@ import type { MediaSource } from '@/types/database';
  *      allowance is never reduced for it — there is nothing to roll back.
  */
 
-export interface UploadGuestPhotoParams {
+export interface UploadGuestMediaParams {
   eventCode: string;
   guestToken: string;
   /** file:// URI on native, blob:/data: on web. */
   localUri: string;
   source: MediaSource;
+  mediaType?: Extract<MediaType, 'photo' | 'video' | 'audio'>;
   /** From the picker/camera asset when known; inferred from the URI otherwise. */
   mimeType?: string;
   width?: number;
   height?: number;
+  durationMs?: number | null;
   capturedAt?: string;
   metadata?: Record<string, unknown>;
 }
 
-export interface UploadGuestPhotoResult {
+export interface UploadGuestMediaResult {
   mediaItemId: string;
   storagePath: string;
   /** The guest's total shots used after this upload, from the server. */
   shotsUsed: number;
 }
 
+export type UploadGuestPhotoParams = UploadGuestMediaParams;
+export type UploadGuestPhotoResult = UploadGuestMediaResult;
+
 export interface DeleteGuestPhotoResult {
   mediaItemId: string;
   shotsUsed: number;
 }
 
-export async function uploadGuestPhoto(
-  params: UploadGuestPhotoParams,
-): Promise<UploadGuestPhotoResult> {
+export async function uploadGuestMedia(
+  params: UploadGuestMediaParams,
+): Promise<UploadGuestMediaResult> {
   const client = requireSupabase();
-  const mimeType = params.mimeType ?? inferMimeTypeFromUri(params.localUri);
-  const { bytes, sizeBytes: fileSizeBytes } = await readLocalImageBytes(params.localUri);
+  const requestedMimeType = normaliseMimeType(params.mimeType ?? inferMimeTypeFromUri(params.localUri));
+  const mediaType = params.mediaType ?? inferMediaTypeFromMimeType(requestedMimeType);
+  const { bytes, sizeBytes: fileSizeBytes, mimeType: detectedMimeType } = await readLocalMediaBytes(params.localUri);
+  const mimeType =
+    requestedMimeType ||
+    normaliseMimeType(detectedMimeType) ||
+    normaliseMimeType(inferMimeTypeFromUri(params.localUri));
+  const mediaLabel =
+    mediaType === 'video' ? 'video' : mediaType === 'audio' ? 'audio' : 'photo';
+
+  if (!fileSizeBytes || fileSizeBytes <= 0 || bytes.byteLength <= 0) {
+    throw new Error(`${mediaLabel} upload aborted: local file is empty (${params.localUri}).`);
+  }
 
   const { data: intentData, error: intentError } = await (client as any).rpc(
     'create_guest_media_upload_intent',
@@ -62,6 +78,7 @@ export async function uploadGuestPhoto(
       p_event_code: params.eventCode,
       p_guest_token: params.guestToken,
       p_client_media_id: Crypto.randomUUID(),
+      p_media_type: mediaType,
       p_source: params.source,
       p_mime_type: mimeType,
       p_file_size_bytes: fileSizeBytes,
@@ -70,7 +87,7 @@ export async function uploadGuestPhoto(
     },
   );
 
-  if (intentError) throw intentError;
+  if (intentError) throw new Error(`Guest ${mediaLabel} upload intent failed: ${intentError.message}`);
 
   const intent = intentData as {
     media_item_id: string;
@@ -83,7 +100,7 @@ export async function uploadGuestPhoto(
     .from(intent.bucket)
     .upload(intent.storage_path, bytes, { contentType: mimeType, upsert: false });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) throw new Error(`Guest ${mediaLabel} storage upload failed: ${uploadError.message}`);
 
   const { data: finalizeData, error: finalizeError } = await (client as any).rpc(
     'finalize_guest_media_upload',
@@ -94,10 +111,11 @@ export async function uploadGuestPhoto(
       p_mime_type: mimeType,
       p_width: params.width ?? null,
       p_height: params.height ?? null,
+      p_duration_ms: params.durationMs ?? null,
     },
   );
 
-  if (finalizeError) throw finalizeError;
+  if (finalizeError) throw new Error(`Guest ${mediaLabel} finalisation failed: ${finalizeError.message}`);
 
   const result = finalizeData as {
     media_item_id: string;
@@ -111,6 +129,12 @@ export async function uploadGuestPhoto(
     storagePath: result.storage_path,
     shotsUsed: result.shots_used,
   };
+}
+
+export async function uploadGuestPhoto(
+  params: UploadGuestPhotoParams,
+): Promise<UploadGuestPhotoResult> {
+  return uploadGuestMedia({ ...params, mediaType: 'photo' });
 }
 
 export async function deleteGuestPhoto({

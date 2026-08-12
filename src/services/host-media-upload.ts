@@ -1,9 +1,9 @@
 import * as Crypto from 'expo-crypto';
 
 import { requireSupabase } from '@/lib/supabase/client';
-import { inferMimeTypeFromUri } from '@/features/media/storage-paths';
-import { readLocalImageBytes } from '@/features/media/read-local-image';
-import type { MediaSource } from '@/types/database';
+import { inferMediaTypeFromMimeType, inferMimeTypeFromUri, normaliseMimeType } from '@/features/media/storage-paths';
+import { readLocalMediaBytes } from '@/features/media/read-local-image';
+import type { MediaSource, MediaType } from '@/types/database';
 
 /**
  * Real host media upload pipeline — mirrors `guest-media-upload.ts` so a
@@ -18,36 +18,53 @@ import type { MediaSource } from '@/types/database';
  * `20260804180000_host_media_upload_pipeline.sql`.
  */
 
-export interface UploadHostPhotoParams {
+export interface UploadHostMediaParams {
   celebrationId: string;
   /** file:// URI on native, blob:/data: on web. */
   localUri: string;
   source: MediaSource;
+  mediaType?: Extract<MediaType, 'photo' | 'video' | 'audio'>;
   /** From the picker/camera asset when known; inferred from the URI otherwise. */
   mimeType?: string;
   width?: number;
   height?: number;
+  durationMs?: number | null;
   capturedAt?: string;
   metadata?: Record<string, unknown>;
 }
 
-export interface UploadHostPhotoResult {
+export interface UploadHostMediaResult {
   mediaItemId: string;
   storagePath: string;
 }
 
-export async function uploadHostPhoto(
-  params: UploadHostPhotoParams,
-): Promise<UploadHostPhotoResult> {
+export type UploadHostPhotoParams = UploadHostMediaParams;
+export type UploadHostPhotoResult = UploadHostMediaResult;
+
+export async function uploadHostMedia(
+  params: UploadHostMediaParams,
+): Promise<UploadHostMediaResult> {
   const client = requireSupabase();
-  const mimeType = params.mimeType ?? inferMimeTypeFromUri(params.localUri);
-  const { bytes, sizeBytes: fileSizeBytes } = await readLocalImageBytes(params.localUri);
+  const requestedMimeType = normaliseMimeType(params.mimeType ?? inferMimeTypeFromUri(params.localUri));
+  const mediaType = params.mediaType ?? inferMediaTypeFromMimeType(requestedMimeType);
+  const { bytes, sizeBytes: fileSizeBytes, mimeType: detectedMimeType } = await readLocalMediaBytes(params.localUri);
+  const mimeType =
+    requestedMimeType ||
+    normaliseMimeType(detectedMimeType) ||
+    normaliseMimeType(inferMimeTypeFromUri(params.localUri));
+  const mediaLabel =
+    mediaType === 'video' ? 'video' : mediaType === 'audio' ? 'audio' : 'photo';
+
+  if (!fileSizeBytes || fileSizeBytes <= 0 || bytes.byteLength <= 0) {
+    throw new Error(`${mediaLabel} upload aborted: local file is empty (${params.localUri}).`);
+  }
 
   const { data: intentData, error: intentError } = await (client as any).rpc(
     'create_host_media_upload_intent',
     {
       p_celebration_id: params.celebrationId,
       p_client_media_id: Crypto.randomUUID(),
+      p_media_type: mediaType,
       p_source: params.source,
       p_mime_type: mimeType,
       p_file_size_bytes: fileSizeBytes,
@@ -56,7 +73,7 @@ export async function uploadHostPhoto(
     },
   );
 
-  if (intentError) throw intentError;
+  if (intentError) throw new Error(`Host ${mediaLabel} upload intent failed: ${intentError.message}`);
 
   const intent = intentData as {
     media_item_id: string;
@@ -69,7 +86,7 @@ export async function uploadHostPhoto(
     .from(intent.bucket)
     .upload(intent.storage_path, bytes, { contentType: mimeType, upsert: false });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) throw new Error(`Host ${mediaLabel} storage upload failed: ${uploadError.message}`);
 
   const { data: finalizeData, error: finalizeError } = await (client as any).rpc(
     'finalize_host_media_upload',
@@ -79,10 +96,11 @@ export async function uploadHostPhoto(
       p_mime_type: mimeType,
       p_width: params.width ?? null,
       p_height: params.height ?? null,
+      p_duration_ms: params.durationMs ?? null,
     },
   );
 
-  if (finalizeError) throw finalizeError;
+  if (finalizeError) throw new Error(`Host ${mediaLabel} finalisation failed: ${finalizeError.message}`);
 
   const result = finalizeData as {
     media_item_id: string;
@@ -94,4 +112,10 @@ export async function uploadHostPhoto(
     mediaItemId: result.media_item_id,
     storagePath: result.storage_path,
   };
+}
+
+export async function uploadHostPhoto(
+  params: UploadHostPhotoParams,
+): Promise<UploadHostPhotoResult> {
+  return uploadHostMedia({ ...params, mediaType: 'photo' });
 }

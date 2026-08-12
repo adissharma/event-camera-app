@@ -218,6 +218,7 @@ export default function GuestEntryScreen() {
   const shotsLeft =
     preview.shotLimit === null ? null : Math.max(0, preview.shotLimit - preview.shotsUsed);
   const accent = preview.themeAccent ?? colours.accentWarm;
+  const eventEnded = countdown === 'Ended';
 
   return (
     <View style={S.root}>
@@ -240,7 +241,14 @@ export default function GuestEntryScreen() {
             coverHeight={coverHeight}
             title={preview.title}
             countdownLabel={countdown}
-            shotsLeftLabel={shotsLeft === null ? '∞' : String(shotsLeft)}
+            shotsLeftLabel={
+              eventEnded
+                ? String(preview.photoCount)
+                : shotsLeft === null
+                  ? '∞'
+                  : String(shotsLeft)
+            }
+            shotsLeftDetailLabel={eventEnded ? 'Moments captured' : 'Shots left'}
             accent={accent}
             welcomeName={showReturningWelcome ? name : showSignedInWelcome ? profile?.display_name ?? null : null}
             welcomePrefix={showReturningWelcome ? 'Welcome back' : 'Welcome'}

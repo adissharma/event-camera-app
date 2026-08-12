@@ -75,10 +75,12 @@
       "expo-sharing",
       "@react-native-community/datetimepicker",
       "expo-video",
+      "expo-audio",
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera"
+          "cameraPermission": "Allow $(PRODUCT_NAME) to access your camera",
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone"
         }
       ]
     ],

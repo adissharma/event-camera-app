@@ -41,9 +41,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Asset as ExpoAsset } from 'expo-asset';
+import { useEventListener } from 'expo';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
+import * as Sharing from 'expo-sharing';
 import { LinearGradient } from 'expo-linear-gradient';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
@@ -54,6 +57,7 @@ import {
   loadStoredGuestSession,
   loadStoredGuestSessionByCelebrationId,
   clearStoredGuestSession,
+  guestSessionStorage,
 } from '@/services/guest-session';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
@@ -90,12 +94,15 @@ import {
 } from '@/services/challenges';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { createUniqueChannel } from '@/lib/supabase/realtime';
+import { inferMimeTypeFromUri } from '@/features/media/storage-paths';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
 const GALLERY_PADDING = 16;
-const GRID_GAP = 16;
-const ROW_GAP = 20;
+const GALLERY_EDGE_INSET = 0;
+const GRID_GAP = 4;
+const ROW_GAP = 4;
+const GALLERY_COLUMNS = 3;
 
 /** Challenge chips */
 const CHIP_D = 68;  // outer circle diameter
@@ -256,6 +263,32 @@ interface PhotoItem {
   capturedAt?: string | null;
   /** True when this visible real media item belongs to the current guest token. */
   isMine?: boolean;
+  mediaType?: 'photo' | 'video';
+  durationMs?: number | null;
+  mimeType?: string | null;
+}
+
+type PendingChallengePost = {
+  challengeId: string;
+  mediaItemId?: string | null;
+  localUri?: string | null;
+  mediaType?: 'photo' | 'video';
+  postedAt?: string | null;
+  durationMs?: number | null;
+  mimeType?: string | null;
+};
+
+function parsePendingChallengePost(raw: string | null): PendingChallengePost | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as PendingChallengePost;
+    if (typeof parsed?.challengeId === 'string' && parsed.challengeId.length > 0) {
+      return parsed;
+    }
+  } catch {
+    // Older camera builds stored just the challenge id.
+  }
+  return { challengeId: raw };
 }
 
 function formatStoryTimestamp(timestamp?: string | null): string {
@@ -287,12 +320,14 @@ function formatStoryTimestamp(timestamp?: string | null): string {
 type SavePhotoItem = {
   key: string;
   uri: string;
-  source: ImageSourcePropType;
+  source: ImageSourcePropType | null;
   takenBy: string;
   isChallenge: boolean;
   challengeLabel?: string;
   seedKey: string;
   capturedAt?: string | null;
+  mediaType?: 'photo' | 'video';
+  durationMs?: number | null;
 };
 
 type FilteredCaptureState = {
@@ -405,41 +440,6 @@ function SettingsIcon({ size = 22, color = '#FFFFFF' }) {
         d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"
         stroke={color}
         strokeWidth={2.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function LiveDot() {
-  return (
-    <View style={S.liveDotCircle} />
-  );
-}
-
-function PeopleSmall() {
-  return (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"
-        stroke="rgba(255,255,255,0.65)"
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function ClockSmall() {
-  return (
-    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-      <Circle cx={12} cy={12} r={9} stroke="rgba(255,255,255,0.65)" strokeWidth={1.8} />
-      <Path
-        d="M12 7v5l3 3"
-        stroke="rgba(255,255,255,0.65)"
-        strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -751,6 +751,139 @@ function GuestbookIcon({ size = 24, color = '#EFE9E0' }) {
   );
 }
 
+function formatMediaDuration(durationMs?: number | null): string | null {
+  if (!durationMs || durationMs <= 0) return null;
+  const totalSeconds = Math.ceil(durationMs / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${`${seconds}`.padStart(2, '0')}`;
+}
+
+function VideoPoster({
+  uri,
+  style,
+  controls = false,
+  autoPlay = false,
+  muted = true,
+  contentFit = 'cover',
+  onEnd,
+}: {
+  uri: string;
+  style?: any;
+  controls?: boolean;
+  autoPlay?: boolean;
+  muted?: boolean;
+  contentFit?: 'contain' | 'cover';
+  onEnd?: () => void;
+}) {
+  const player = useVideoPlayer({ uri }, (instance) => {
+    instance.loop = false;
+    instance.muted = muted;
+    if (autoPlay) {
+      instance.play();
+      return;
+    }
+    instance.pause();
+  });
+
+  useEventListener(player, 'playToEnd', () => {
+    player.pause();
+    onEnd?.();
+  });
+
+  return (
+    <VideoView
+      player={player}
+      style={style}
+      contentFit={contentFit}
+      nativeControls={controls}
+    />
+  );
+}
+
+/**
+ * A Challenge story slide that plays a video the way an Instagram story does:
+ * it starts on its own as soon as the slide becomes active, and hands over to
+ * the next slide when playback reaches the end.
+ *
+ * Three details are load-bearing.
+ *
+ * The source is pinned on mount. Challenge submissions are re-signed on every
+ * dashboard poll — ten seconds — so the same video arrives back with a fresh
+ * URL each time. `useVideoPlayer` keys its player on the source, so letting
+ * that new URL through tears the player down and rebuilds it mid-playback: the
+ * video restarts every ten seconds and, on anything slower than a fast
+ * connection, never gets past buffering. That is the black screen. The call
+ * site keys this component by submission id, so a genuinely different
+ * submission still gets its own player.
+ *
+ * Playback is also kicked off from a status listener, not only from the
+ * construction callback. `play()` on a player that has not finished loading
+ * does nothing, so a slide mounted before the first frame arrives would
+ * otherwise sit paused on black waiting for a tap that the design never offers.
+ *
+ * On Android the view is a TextureView. A SurfaceView punches a hole through
+ * the window, which renders black inside the transformed, Reanimated-driven
+ * story overlay this sits in.
+ */
+function StoryVideoSlide({ uri, onEnd }: { uri: string; onEnd: () => void }) {
+  const pinnedUri = useRef(uri).current;
+  const [ready, setReady] = useState(false);
+
+  const player = useVideoPlayer({ uri: pinnedUri }, (instance) => {
+    instance.loop = false;
+    // Browsers refuse to autoplay audio that the user did not ask for; muting
+    // is the price of the video starting at all on web.
+    instance.muted = Platform.OS === 'web';
+    instance.play();
+  });
+
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status !== 'readyToPlay') return;
+    setReady(true);
+    player.play();
+  });
+
+  useEventListener(player, 'playToEnd', () => {
+    player.pause();
+    onEnd();
+  });
+
+  // Leaving the slide has to silence the video, not merely hide it. The player
+  // is released when this unmounts, but release is asynchronous on native and
+  // the audio carries on until it lands.
+  useEffect(
+    () => () => {
+      try {
+        player.pause();
+      } catch {
+        // Already released by the time the story closed. Nothing to stop.
+      }
+    },
+    [player],
+  );
+
+  return (
+    <View style={[ABSOLUTE_FILL, { backgroundColor: '#000000' }]}>
+      <VideoView
+        player={player}
+        style={{ width: '100%', height: '100%' }}
+        contentFit="cover"
+        nativeControls={false}
+        {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : null)}
+      />
+      {ready ? null : (
+        <View
+          style={[ABSOLUTE_FILL, { alignItems: 'center', justifyContent: 'center' }]}
+          pointerEvents="none"
+        >
+          <ActivityIndicator color="#FFFFFF" />
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ─── Route entry ──────────────────────────────────────────────────────────────
 
 export default function CelebrationDashboard({ celebrationId: propCelebrationId }: { celebrationId?: string } = {}) {
@@ -820,7 +953,13 @@ function EventDetailView({
   archiving: boolean;
 }) {
   const router = useRouter();
-  const { openPhotoId } = useLocalSearchParams<{ openPhotoId?: string }>();
+  const { openPhotoId, videoPostedAt, openChallengeId, openChallengeMediaId, challengePostedAt } = useLocalSearchParams<{
+    openPhotoId?: string;
+    videoPostedAt?: string;
+    openChallengeId?: string;
+    openChallengeMediaId?: string;
+    challengePostedAt?: string;
+  }>();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -842,6 +981,8 @@ function EventDetailView({
   // Dev Override Role check
   const [devRole, setDevRole] = useState<string | null>(null);
   const [guestName, setGuestName] = useState<string | null>(null);
+  const [videoPostedToastVisible, setVideoPostedToastVisible] = useState(false);
+  const lastVideoPostedToastRef = useRef<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('__dev_role').then(setDevRole);
@@ -951,7 +1092,9 @@ function EventDetailView({
     1,
   ] as const;
 
-  const CELL_W = (screenWidth - GALLERY_PADDING * 2 - GRID_GAP) / 2;
+  const CELL_W =
+    (screenWidth - GALLERY_EDGE_INSET * 2 - GRID_GAP * (GALLERY_COLUMNS - 1)) /
+    GALLERY_COLUMNS;
   const CELL_H = CELL_W * (16 / 9);
 
   // ── State ──
@@ -964,6 +1107,7 @@ function EventDetailView({
   const [saveMode, setSaveMode] = useState<'original' | 'filtered'>('original');
   const [saveItems, setSaveItems] = useState<SavePhotoItem[]>([]);
   const [selectedSaveKeys, setSelectedSaveKeys] = useState<string[]>([]);
+  const [saveVideosSelected, setSaveVideosSelected] = useState(true);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [challengeMenuVisible, setChallengeMenuVisible] = useState(false);
   const [challengeDeleteConfirmVisible, setChallengeDeleteConfirmVisible] = useState(false);
@@ -973,6 +1117,8 @@ function EventDetailView({
   const selectedChallengeRef = useRef<Challenge | null>(null);
   const challengeStoryCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const challengeViewerSessionRef = useRef(0);
+  const pendingChallengePostRef = useRef<PendingChallengePost | null>(null);
+  const lastChallengePostedAtRef = useRef<string | null>(null);
   const [guestAuth, setGuestAuth] = useState<{
     slug: string;
     guestToken: string;
@@ -1125,6 +1271,9 @@ function EventDetailView({
             submissionId: item.id,
             challengeId: item.challengeId,
             isMine: item.isMine === true,
+            mediaType: item.mediaType ?? 'photo',
+            durationMs: item.durationMs ?? null,
+            mimeType: item.mimeType ?? null,
             uploadedByUserId: item.uploadedByUserId ?? null,
             guestSessionId: item.guestSessionId ?? null,
             takenById: item.guestSessionId ?? item.uploadedByUserId ?? null,
@@ -1168,13 +1317,61 @@ function EventDetailView({
   // is built during render — so referencing it from an earlier effect throws
   // `Cannot access 'updateChallengeStory' before initialization` and takes the
   // whole dashboard down with it.
-  const updateChallengeStory = useCallback((challenge: Challenge, submissions: PhotoItem[], forceLatest = false) => {
+  const updateChallengeStory = useCallback((
+    challenge: Challenge,
+    submissions: PhotoItem[],
+    forceLatest = false,
+    targetSubmissionId?: string | null,
+  ) => {
     if (selectedChallengeRef.current?.id !== challenge.id) return;
-    setStorySubmissions(submissions);
-    if (forceLatest && submissions.length > 0) {
-        setActiveSlideIndex(1);
+
+    const pending = pendingChallengePostRef.current;
+    let nextSubmissions = submissions;
+    if (
+      pending?.challengeId === challenge.id &&
+      pending.mediaItemId &&
+      pending.localUri &&
+      !submissions.some((item) => item.id === pending.mediaItemId || item.submissionId === pending.mediaItemId)
+    ) {
+      nextSubmissions = [
+        {
+          id: pending.mediaItemId,
+          submissionId: pending.mediaItemId,
+          uri: pending.localUri,
+          takenBy: guestName ?? firstNameFrom(profile) ?? 'You',
+          postedAt: pending.postedAt ?? new Date().toISOString(),
+          challengeId: challenge.id,
+          isMine: true,
+          mediaType: pending.mediaType ?? 'photo',
+          durationMs: pending.durationMs ?? null,
+          mimeType: pending.mimeType ?? null,
+          guestSessionId: guestAuth?.guestSessionId ?? null,
+          uploadedByUserId: profile?.id ?? session?.user.id ?? null,
+        },
+        ...submissions,
+      ];
+    }
+
+    setStorySubmissions(nextSubmissions);
+
+    const targetId = targetSubmissionId ?? pending?.mediaItemId ?? null;
+    if (targetId) {
+      const targetIndex = nextSubmissions.findIndex(
+        (item) => item.id === targetId || item.submissionId === targetId,
+      );
+      if (targetIndex >= 0) {
+        setActiveSlideIndex(targetIndex + 1);
+        if (pending?.mediaItemId === targetId && submissions.some((item) => item.id === targetId || item.submissionId === targetId)) {
+          pendingChallengePostRef.current = null;
+        }
+        return;
       }
-  }, []);
+    }
+
+    if (forceLatest && nextSubmissions.length > 0) {
+      setActiveSlideIndex(1);
+    }
+  }, [guestAuth?.guestSessionId, guestName, profile, session?.user.id]);
 
   // Keeps an open challenge story in sync when fresh submissions arrive from
   // the server — the guest's own post included, which is what makes the photo
@@ -1187,7 +1384,13 @@ function EventDetailView({
     const challenge = selectedChallengeRef.current;
     void loadChallengeSubmissions(challenge).then((submissions) => {
       if (selectedChallengeRef.current?.id !== challenge.id) return;
-      updateChallengeStory(challenge, submissions, false);
+      const pending = pendingChallengePostRef.current;
+      updateChallengeStory(
+        challenge,
+        submissions,
+        false,
+        pending?.challengeId === challenge.id ? pending.mediaItemId ?? null : null,
+      );
     });
   }, [detail?.challengePhotos, loadChallengeSubmissions, updateChallengeStory]);
 
@@ -1195,13 +1398,15 @@ function EventDetailView({
     useCallback(() => {
       let cancelled = false;
       void (async () => {
-        const pendingChallengeId = await AsyncStorage.getItem(`__mock_pending_challenge_refresh_${celebration.id}`);
-        if (!pendingChallengeId) {
+        const pendingRaw = await AsyncStorage.getItem(`__mock_pending_challenge_refresh_${celebration.id}`);
+        const pending = parsePendingChallengePost(pendingRaw);
+        if (!pending) {
           return;
         }
+        pendingChallengePostRef.current = pending;
 
         const challenge =
-          challenges.find((item) => item.id === pendingChallengeId) ??
+          challenges.find((item) => item.id === pending.challengeId) ??
           selectedChallengeRef.current;
         if (!challenge) {
           await AsyncStorage.removeItem(`__mock_pending_challenge_refresh_${celebration.id}`);
@@ -1211,8 +1416,10 @@ function EventDetailView({
         const submissions = await loadChallengeSubmissions(challenge);
         if (cancelled) return;
         await AsyncStorage.removeItem(`__mock_pending_challenge_refresh_${celebration.id}`);
+        selectedChallengeRef.current = challenge;
+        setSelectedChallenge(challenge);
         if (selectedChallengeRef.current?.id === challenge.id) {
-          updateChallengeStory(challenge, submissions, true);
+          updateChallengeStory(challenge, submissions, true, pending.mediaItemId ?? null);
         }
       })();
 
@@ -1221,6 +1428,43 @@ function EventDetailView({
       };
     }, [celebration.id, challenges, loadChallengeSubmissions, updateChallengeStory]),
   );
+
+  useEffect(() => {
+    if (!openChallengeId || !challengePostedAt || lastChallengePostedAtRef.current === challengePostedAt) {
+      return;
+    }
+
+    lastChallengePostedAtRef.current = challengePostedAt;
+    const existingPending = pendingChallengePostRef.current;
+    const pending: PendingChallengePost = {
+      ...(existingPending?.challengeId === String(openChallengeId) &&
+      (!openChallengeMediaId || existingPending.mediaItemId === String(openChallengeMediaId))
+        ? existingPending
+        : null),
+      challengeId: String(openChallengeId),
+      mediaItemId: openChallengeMediaId ? String(openChallengeMediaId) : null,
+    };
+    pendingChallengePostRef.current = pending;
+
+    const challenge =
+      challenges.find((item) => item.id === pending.challengeId) ??
+      selectedChallengeRef.current;
+    if (!challenge) return;
+
+    selectedChallengeRef.current = challenge;
+    setSelectedChallenge(challenge);
+    void loadChallengeSubmissions(challenge).then((submissions) => {
+      if (selectedChallengeRef.current?.id !== challenge.id) return;
+      updateChallengeStory(challenge, submissions, true, pending.mediaItemId ?? null);
+    });
+  }, [
+    challengePostedAt,
+    challenges,
+    loadChallengeSubmissions,
+    openChallengeId,
+    openChallengeMediaId,
+    updateChallengeStory,
+  ]);
 
   // Gesture handler for pan events. Reanimated's shared values update directly
   // on the UI thread without going through the JS bridge, eliminating jank.
@@ -1362,6 +1606,12 @@ function EventDetailView({
                 capturedAt: p.capturedAt,
                 id: p.id,
                 isMine: p.isMine === true,
+                uploadedByUserId: p.uploadedByUserId ?? null,
+                guestSessionId: p.guestSessionId ?? null,
+                takenById: p.guestSessionId ?? p.uploadedByUserId ?? null,
+                mediaType: p.mediaType ?? 'photo',
+                durationMs: p.durationMs ?? null,
+                mimeType: p.mimeType ?? null,
               }
             : null;
         })
@@ -1557,16 +1807,19 @@ function EventDetailView({
         isChallenge: existing.isChallenge || item.isChallenge,
         challengeLabel: existing.challengeLabel ?? item.challengeLabel,
         takenBy: existing.takenBy || item.takenBy,
+        mediaType: existing.mediaType ?? item.mediaType,
+        durationMs: existing.durationMs ?? item.durationMs,
     });
   }
 
-  function buildCountdownLabel() {
-    if (countdown.isOngoing) return null;
-    if (countdown.isCompleted) return 'EVENT ENDED';
+  function buildTimeLeftValue() {
+    if (countdown.isOngoing) return 'Soon';
+    if (countdown.isCompleted) return 'Ended';
     const { days, hours, minutes } = countdown;
-    if (days >= 1) return `ENDS IN ${days} DAYS`;
-    if (hours >= 1) return `ENDS IN ${hours} HOURS`;
-    return `ENDS IN ${minutes} MIN`;
+    if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`;
+    if (hours >= 1) return `${hours} hour${hours === 1 ? '' : 's'}`;
+    const safeMinutes = Math.max(1, minutes);
+    return `${safeMinutes} min`;
   }
 
   async function saveChallenges(next: Challenge[]) {
@@ -1715,6 +1968,7 @@ function EventDetailView({
   });
 
   const activeChallengeSubmission = activeSlideIndex > 0 ? storySubmissions[activeSlideIndex - 1] : null;
+  const activeChallengeMediaLabel = activeChallengeSubmission?.mediaType === 'video' ? 'video' : 'photo';
   const activeChallengeOwnerMatchesViewer =
     Boolean(activeChallengeSubmission) &&
     ((Boolean(activeChallengeSubmission?.guestSessionId) &&
@@ -1790,10 +2044,10 @@ function EventDetailView({
   }, [heroIndex, heroPanX]);
 
   function getThumbBounds(idx: number) {
-    const col = idx % 2;
-    const row = Math.floor(idx / 2);
-    const x = col === 0 ? 16 : 16 + CELL_W + 16;
-    const y = 350 + row * (CELL_H + 20);
+    const col = idx % GALLERY_COLUMNS;
+    const row = Math.floor(idx / GALLERY_COLUMNS);
+    const x = GALLERY_EDGE_INSET + col * (CELL_W + GRID_GAP);
+    const y = 350 + row * (CELL_H + ROW_GAP);
     return { x, y, width: CELL_W, height: CELL_H };
   }
 
@@ -1844,45 +2098,97 @@ function EventDetailView({
     handlePhotoPress(index);
   }, [openPhotoId, photos]);
 
-  function deleteGuestGalleryPhoto(photo: PhotoItem, index: number) {
+  useEffect(() => {
+    if (!videoPostedAt || lastVideoPostedToastRef.current === videoPostedAt) {
+      return;
+    }
+
+    lastVideoPostedToastRef.current = videoPostedAt;
+    setVideoPostedToastVisible(true);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+    const timer = setTimeout(() => {
+      setVideoPostedToastVisible(false);
+    }, 2600);
+
+    return () => clearTimeout(timer);
+  }, [videoPostedAt]);
+
+  async function runGuestDelete(photo: PhotoItem, index: number) {
     if (!photo.id || !guestAuth) return;
 
-    setHeroMenuVisible(false);
+    const result = await deleteGuestPhoto({
+      mediaItemId: photo.id as string,
+      guestToken: guestAuth.guestToken,
+    });
+
+    const nextPhotos = photos.filter((item) => item.id !== photo.id);
+    setPhotos(nextPhotos);
+    closeHeroViewer();
+
+    const storedGuest = await guestSessionStorage.get(guestAuth.slug);
+    if (storedGuest) {
+      await guestSessionStorage.set(guestAuth.slug, {
+        ...storedGuest,
+        shotsUsed: result.shotsUsed,
+      });
+    }
+
+    void removeDeletedPhotoFromMockChallengeData(photo.uri).catch((error) => {
+      console.warn('[gallery] failed to clean mock challenge data after delete', error);
+    });
+
+    await queryClient.invalidateQueries({
+      queryKey: celebrationDetailKeys.detail(celebration.id),
+    });
+    void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+  }
+
+  function confirmGuestDelete(
+    photo: PhotoItem,
+    index: number,
+    mediaLabel: 'photo' | 'video',
+  ) {
+    const mediaLabelTitle = mediaLabel === 'video' ? 'Video' : 'Photo';
+    const confirmDelete = async () => {
+      try {
+        await runGuestDelete(photo, index);
+      } catch (error) {
+        console.error(`[gallery] failed to delete guest ${mediaLabel}`, error);
+        Alert.alert('Error', `Could not delete this ${mediaLabel}. Please try again.`);
+      }
+    };
+
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.confirm(`Delete this ${mediaLabel}? This will remove it from the event gallery.`)) {
+        void confirmDelete();
+      }
+      return;
+    }
+
     Alert.alert(
-      'Delete this photo?',
+      `Delete this ${mediaLabel}?`,
       'This will remove it from the event gallery.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Photo',
+          text: `Delete ${mediaLabelTitle}`,
           style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteGuestPhoto({
-                mediaItemId: photo.id as string,
-                guestToken: guestAuth.guestToken,
-              });
-
-              const nextPhotos = photos.filter((item) => item.id !== photo.id);
-              setPhotos(nextPhotos);
-              closeHeroViewer();
-              void removeDeletedPhotoFromMockChallengeData(photo.uri).catch((error) => {
-                console.warn('[gallery] failed to clean mock challenge data after delete', error);
-              });
-
-              await queryClient.invalidateQueries({
-                queryKey: celebrationDetailKeys.detail(celebration.id),
-              });
-              void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
-              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-            } catch (error) {
-              console.error('[gallery] failed to delete guest photo', error);
-              Alert.alert('Error', 'Could not delete this photo. Please try again.');
-            }
+          onPress: () => {
+            void confirmDelete();
           },
         },
       ],
     );
+  }
+
+  function deleteGuestGalleryPhoto(photo: PhotoItem, index: number) {
+    if (!photo.id || !guestAuth) return;
+
+    const mediaLabel = photo.mediaType === 'video' ? 'video' : 'photo';
+    setHeroMenuVisible(false);
+    confirmGuestDelete(photo, index, mediaLabel);
   }
 
   async function deleteHeroGalleryPhoto(photo: PhotoItem, index: number) {
@@ -2035,6 +2341,16 @@ function EventDetailView({
     }
   }
 
+  function advanceStoryAfterMediaEnds() {
+    const current = activeSlideRef.current;
+    const totalSlides = 1 + submissionCountRef.current;
+    setChallengeMenuVisible(false);
+
+    if (current < totalSlides - 1) {
+      setActiveSlideIndex(current + 1);
+    }
+  }
+
   async function handlePickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -2147,8 +2463,8 @@ function EventDetailView({
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
     } catch (error) {
-      console.error('[challenge-story] failed to delete photo', error);
-      Alert.alert('Error', 'Could not delete this challenge photo.');
+      console.error(`[challenge-story] failed to delete ${activeChallengeMediaLabel}`, error);
+      Alert.alert('Error', `Could not delete this challenge ${activeChallengeMediaLabel}.`);
     }
   }
 
@@ -2163,20 +2479,22 @@ function EventDetailView({
       setSaveMode('original');
       setSaveItems([]);
       setSelectedSaveKeys([]);
+      setSaveVideosSelected(true);
 
       const itemsByUri = new Map<string, SavePhotoItem>();
       const challengeById = new Map(challenges.map((challenge) => [challenge.id, challenge]));
 
       photos.forEach((photo) => {
-        const source = resolvePhotoSourceForSaving(photo.uri);
         mergeSaveItem(itemsByUri, {
           key: photo.id ?? photo.uri,
           uri: photo.uri,
-          source,
+          source: photo.mediaType === 'video' ? null : resolvePhotoSourceForSaving(photo.uri),
           takenBy: photo.takenBy || 'Guest',
           isChallenge: false,
           seedKey: photo.id ?? photo.uri,
           capturedAt: photo.capturedAt ?? null,
+          mediaType: photo.mediaType ?? 'photo',
+          durationMs: photo.durationMs ?? null,
         });
       });
 
@@ -2212,6 +2530,7 @@ function EventDetailView({
               isChallenge: true,
               challengeLabel: challenge?.label ?? 'Challenge photo',
               seedKey: `${challengeId}:${submissionIndex}:${uri}`,
+              mediaType: 'photo',
             });
 
             // Keep older data that only stored the current hero shot on the
@@ -2225,6 +2544,7 @@ function EventDetailView({
                 isChallenge: true,
                 challengeLabel: challenge.label,
                 seedKey: `${challengeId}:hero:${challenge.photo}`,
+                mediaType: 'photo',
               });
             }
           });
@@ -2239,6 +2559,7 @@ function EventDetailView({
             isChallenge: true,
             challengeLabel: challenge.label,
             seedKey: `${challengeId}:hero:${challenge.photo}`,
+            mediaType: 'photo',
           });
         }
       }
@@ -2299,9 +2620,10 @@ function EventDetailView({
       return sourceUri;
     }
 
-    const extension =
-      sourceUri.split('.').pop()?.split('?')[0]?.toLowerCase() ?? 'jpg';
-    const safeExt = extension.length <= 5 ? extension : 'jpg';
+    const sourcePath = sourceUri.split(/[?#]/, 1)[0] ?? sourceUri;
+    const fallbackExtension = item.mediaType === 'video' ? 'mp4' : 'jpg';
+    const extension = sourcePath.split('.').pop()?.toLowerCase() ?? fallbackExtension;
+    const safeExt = /^[a-z0-9]{1,5}$/.test(extension) ? extension : fallbackExtension;
     const destinationFile = new FileSystem.File(
       FileSystem.Paths.cache,
       `candidly-save-${celebration.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`,
@@ -2310,7 +2632,58 @@ function EventDetailView({
     return downloaded.uri;
   }
 
+  async function shareGalleryMediaToInstagram(photo: PhotoItem) {
+    void Haptics.selectionAsync().catch(() => {});
+    const isVideo = photo.mediaType === 'video';
+    const mediaLabel = isVideo ? 'video' : 'photo';
+
+    try {
+      if (Platform.OS === 'web') {
+        await Share.share({
+          title: `Share ${mediaLabel} to Instagram`,
+          message: photo.uri,
+          url: photo.uri,
+        });
+        return;
+      }
+
+      if (!(await Sharing.isAvailableAsync())) {
+        throw new Error('Sharing is not available on this device.');
+      }
+
+      const localUri = await ensureLocalSaveUri({
+        key: photo.id ?? photo.uri,
+        uri: photo.uri,
+        source: isVideo ? null : resolvePhotoSourceForSaving(photo.uri),
+        takenBy: photo.takenBy,
+        isChallenge: Boolean(photo.challengeId),
+        seedKey: photo.id ?? photo.uri,
+        capturedAt: photo.capturedAt,
+        mediaType: photo.mediaType ?? 'photo',
+        durationMs: photo.durationMs,
+      });
+      const mimeType = photo.mimeType ?? inferMimeTypeFromUri(localUri);
+
+      await Sharing.shareAsync(localUri, {
+        dialogTitle: `Share ${mediaLabel} to Instagram`,
+        mimeType,
+        UTI: isVideo ? 'public.movie' : 'public.image',
+      });
+    } catch (error) {
+      console.error(`[gallery] failed to share ${mediaLabel} to Instagram`, error);
+      Alert.alert(
+        'Could not share',
+        error instanceof Error
+          ? error.message
+          : `This ${mediaLabel} could not be shared. Please try again.`,
+      );
+    }
+  }
+
   async function renderFilteredSave(item: SavePhotoItem) {
+    if (item.mediaType === 'video') {
+      return ensureLocalSaveUri(item);
+    }
     const localUri = await ensureLocalSaveUri(item);
     const source = { uri: localUri };
     const size = await new Promise<{ width: number; height: number }>((resolve, reject) => {
@@ -2378,7 +2751,9 @@ function EventDetailView({
         return;
       }
 
-      const selectedItems = saveItems.filter((item) => selectedSaveKeys.includes(item.key));
+      const selectedItems = saveItems.filter((item) =>
+        selectedSaveKeys.includes(item.key) && (saveVideosSelected || item.mediaType !== 'video'),
+      );
       let savedCount = 0;
 
       for (const item of selectedItems) {
@@ -2394,7 +2769,7 @@ function EventDetailView({
       setSaveVisible(false);
       Alert.alert(
         'Saved',
-        `Saved ${savedCount} photo${savedCount === 1 ? '' : 's'} to your library.`,
+        `Saved ${savedCount} item${savedCount === 1 ? '' : 's'} to your library.`,
       );
     } catch {
       Alert.alert('Error', 'Failed to save the selected photos.');
@@ -2404,9 +2779,8 @@ function EventDetailView({
   }
 
   // ── Derived ──
-  const isLive = !countdown.isCompleted && !countdown.isOngoing;
-  const countdownLabel = buildCountdownLabel();
   const eventHasEnded = countdown.isCompleted;
+  const timeLeftValue = buildTimeLeftValue();
 
   return (
     <View style={S.root}>
@@ -2507,11 +2881,9 @@ function EventDetailView({
             </View>
           </View>
 
-          {/* Event info overlaid on bottom of hero image */}
           <View style={S.heroInfo}>
-            {/* End Date in cover style (eyebrow, tone secondary, uppercase) */}
             {celebration.ends_at ? (
-              <AppText variant="eyebrow" tone="secondary">
+              <AppText variant="eyebrow" tone="secondary" align="center">
                 {new Intl.DateTimeFormat(LOCALE_CONFIG.locale, {
                   day: 'numeric',
                   month: 'long',
@@ -2520,57 +2892,12 @@ function EventDetailView({
                 }).format(new Date(celebration.ends_at))}
               </AppText>
             ) : null}
-
-            {/* Title — Instrument Serif display face */}
-            <AppText variant="displayHero" style={S.heroTitle} numberOfLines={3}>
+            <AppText variant="displayHero" align="center" style={S.heroTitle} numberOfLines={3}>
               {celebration.title}
             </AppText>
-
-            {/* Status row: [ ● LIVE ] · 👥 1 GUEST JOINED · 🕒 ENDS IN 4 DAYS */}
-            <View style={S.statusRow}>
-              {isLive && (
-                <View style={S.liveBadge}>
-                  <LiveDot />
-                  <AppText style={S.liveBadgeText}>LIVE</AppText>
-                </View>
-              )}
-              {countdown.isCompleted && (
-                <View style={S.liveBadge}>
-                  <AppText style={S.liveBadgeText}>ENDED</AppText>
-                </View>
-              )}
-
-              <AppText style={S.statusDot}>•</AppText>
-
-              <Pressable
-                onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
-                accessibilityRole="button"
-                accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
-                hitSlop={8}
-                style={({ pressed }) => [S.statusItemPressable, pressed && S.statusItemPressed]}
-              >
-                <View style={S.statusItem}>
-                  <PeopleSmall />
-                  <AppText style={S.statusText}>
-                    {guestsJoined} JOINED
-                  </AppText>
-                </View>
-              </Pressable>
-
-              {countdownLabel && (
-                <>
-                  <AppText style={S.statusDot}>•</AppText>
-                  <View style={S.statusItem}>
-                    <ClockSmall />
-                    <AppText style={S.statusText}>{countdownLabel}</AppText>
-                  </View>
-                </>
-              )}
-            </View>
           </View>
         </View>
 
-        {/* ── PERSONALIZED GUEST WELCOME ─── */}
         {!isHost && guestName && (
           <View style={S.guestWelcome}>
             <AppText variant="eyebrow" tone="secondary" style={S.guestWelcomeEyebrow}>
@@ -2582,14 +2909,55 @@ function EventDetailView({
           </View>
         )}
 
-        {/* ── CHALLENGE CHIPS (Instagram Highlights Style) ─── */}
+          <View style={S.galleryStatsRow}>
+          <View style={S.galleryStatItem}>
+            <AppText variant="titleMedium" style={S.galleryStatValue}>
+              {photos.length}
+            </AppText>
+            <AppText variant="eyebrow" tone="secondary" align="center">
+              Photos
+            </AppText>
+          </View>
+
+          <AppText style={S.galleryStatDot}>•</AppText>
+
+          <Pressable
+            onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
+            accessibilityRole="button"
+            accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
+            hitSlop={8}
+            style={({ pressed }) => [
+              S.galleryStatItem,
+              S.galleryStatPressable,
+              pressed && S.galleryStatPressed,
+            ]}
+          >
+            <AppText variant="titleMedium" style={S.galleryStatValue}>
+              {guestsJoined}
+            </AppText>
+            <AppText variant="eyebrow" tone="secondary" align="center">
+              Joined
+            </AppText>
+          </Pressable>
+
+          <AppText style={S.galleryStatDot}>•</AppText>
+
+          <View style={S.galleryStatItem}>
+            <AppText variant="titleMedium" style={S.galleryStatValue}>
+              {timeLeftValue}
+            </AppText>
+            <AppText variant="eyebrow" tone="secondary" align="center">
+              Time left
+            </AppText>
+          </View>
+        </View>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={S.chipsContent}
           style={S.chipsScroll}
         >
-          {/* "Add Challenge" chip — dashed ring + center "+" (visible to host only) */}
           {isHost && (
             <Pressable
               style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
@@ -2605,170 +2973,138 @@ function EventDetailView({
             </Pressable>
           )}
 
-          {/* "Guest Book" chip — pink/purple/yellow gradient border matching Instagram story highlights */}
-          {showGuestbook && (
-            <Pressable
-              style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
-              onPress={() => Alert.alert('Audio Guestbook', '(Coming soon) Leave warm messages and audio memories for the host.')}
-              accessibilityRole="button"
-              accessibilityLabel="Guest Book"
-            >
-              <LinearGradient
-                colors={['#C13584', '#E1306C', '#F77737', '#FCAF45']}
-                start={{ x: 0, y: 1 }}
-                end={{ x: 1, y: 0 }}
-                style={S.instagramGradientOuter}
+            {showGuestbook && (
+              <Pressable
+                style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
+                onPress={() => router.push(`/celebration/${celebration.id}/guestbook` as never)}
+                accessibilityRole="button"
+                accessibilityLabel="Guestbook"
               >
-                <View style={S.instagramInnerCircle}>
-                  <View style={S.instagramContentCircle}>
-                    <GuestbookIcon size={24} color="#EFE9E0" />
+                <LinearGradient
+                  colors={['#C13584', '#E1306C', '#F77737', '#FCAF45']}
+                  start={{ x: 0, y: 1 }}
+                  end={{ x: 1, y: 0 }}
+                  style={S.instagramGradientOuter}
+                >
+                  <View style={S.instagramInnerCircle}>
+                    <View style={S.instagramContentCircle}>
+                      <GuestbookIcon size={24} color="#EFE9E0" />
+                    </View>
                   </View>
+                </LinearGradient>
+                <AppText style={S.chipLabel} numberOfLines={2}>Guestbook</AppText>
+              </Pressable>
+            )}
+
+            {challenges.map((challenge) => (
+              <Pressable
+                key={challenge.id}
+                style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
+                onPress={() => handleChallengePhotoPress(challenge)}
+                accessibilityRole="button"
+                accessibilityLabel={`Challenge: ${challenge.label}`}
+                hitSlop={18}
+                pressRetentionOffset={18}
+              >
+                <View style={S.chipOuter}>
+                  {challenge.photo ? (
+                    <Image
+                      source={{ uri: challenge.photo }}
+                      style={S.chipPhoto}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={S.chipIconBg}>
+                      <SharedChallengeIconSVG type={challenge.icon} size={28} />
+                    </View>
+                  )}
                 </View>
-              </LinearGradient>
-              <AppText style={S.chipLabel} numberOfLines={2}>Guest Book</AppText>
-            </Pressable>
-          )}
+                <AppText style={S.chipLabel} numberOfLines={2}>
+                  {challenge.label}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
 
-          {/* Existing challenge chips */}
-          {challenges.map((challenge) => (
-            <Pressable
-              key={challenge.id}
-              style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
-              onPress={() => handleChallengePhotoPress(challenge)}
-              accessibilityRole="button"
-              accessibilityLabel={`Challenge: ${challenge.label}`}
-              hitSlop={18}
-              pressRetentionOffset={18}
-            >
-              <View style={S.chipOuter}>
-                {challenge.photo ? (
-                  /* Real photo: circular highlight crop */
-                  <Image
-                    source={{ uri: challenge.photo }}
-                    style={S.chipPhoto}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  /* Placeholder: line art SVG on dark ring background */
-                  <View style={S.chipIconBg}>
-                    <SharedChallengeIconSVG type={challenge.icon} size={28} />
-                  </View>
-                )}
-              </View>
-              <AppText style={S.chipLabel} numberOfLines={2}>
-                {challenge.label}
+          {visiblePhotos.length > 0 ? (
+            <View style={S.gallery}>
+              {Array.from({ length: GALLERY_COLUMNS }, (_, columnIndex) => (
+                <View
+                  key={`gallery-column-${columnIndex}`}
+                  style={[S.galleryCol, columnIndex > 0 && { marginLeft: GRID_GAP }]}
+                >
+                  {visiblePhotos
+                    .filter((_, photoIndex) => photoIndex % GALLERY_COLUMNS === columnIndex)
+                    .map((photo, rowIndex) => {
+                      const originalIndex = rowIndex * GALLERY_COLUMNS + columnIndex;
+                      const locked = Boolean(photo.locked);
+                      return (
+                        <Pressable
+                          key={photo.id ?? `${columnIndex}-${rowIndex}`}
+                          onPress={(e) => handlePhotoPress(originalIndex, e)}
+                          style={({ pressed }) => [
+                            S.galleryCell,
+                            { width: CELL_W, height: CELL_H },
+                            pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                          ]}
+                        >
+                          {photo.mediaType === 'video' ? (
+                            <VideoPoster uri={photo.uri} style={S.galleryCellImg} />
+                          ) : (
+                            <TreatedPhoto
+                              source={getPhotoSource(photo.uri)}
+                              style={S.galleryCellImg}
+                              resizeMode="cover"
+                              blurRadius={locked ? 45 : 0}
+                              treatment={primarySession?.photo_treatment}
+                              dateStampEnabled={primarySession?.date_stamp_enabled}
+                              capturedAt={photo.capturedAt}
+                              seedKey={photo.id}
+                            />
+                          )}
+                          {photo.mediaType === 'video' && !locked ? (
+                            <View style={S.videoBadge}>
+                              <AppText style={S.videoBadgeText}>
+                                {formatMediaDuration(photo.durationMs) ?? 'Video'}
+                              </AppText>
+                            </View>
+                          ) : null}
+                          {locked && (
+                            <View style={S.lockOverlay}>
+                              <View style={S.lockCircle}>
+                                <LockIcon size={18} color="#FFFFFF" />
+                              </View>
+                              {revealCountdownWords && (
+                                <AppText style={S.lockCountdownText}>
+                                  Revealed in {revealCountdownWords}
+                                </AppText>
+                              )}
+                            </View>
+                          )}
+                          {!locked && (
+                            <View style={[S.photoNameTag, { maxWidth: Math.max(0, CELL_W - 24) }]}>
+                              <AppText
+                                style={S.photoNameText}
+                                numberOfLines={1}
+                                ellipsizeMode="tail"
+                              >
+                                {photo.takenBy || 'Guest'}
+                              </AppText>
+                            </View>
+                          )}
+                        </Pressable>
+                      );
+                    })}
+                </View>
+              ))}
+            </View>
+          ) : (
+            <View style={S.emptyGallery}>
+              <AppText variant="bodySmall" tone="secondary" align="center">
+                No moments yet.{'\n'}Be the first to add one.
               </AppText>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* ── 9:16 PORTRAIT GALLERY GRID ───────────────────── */}
-        {visiblePhotos.length > 0 ? (
-          <View style={S.gallery}>
-            {/* Left column */}
-            <View style={S.galleryCol}>
-              {visiblePhotos
-                .filter((_, i) => i % 2 === 0)
-                .map((photo, i) => {
-                  const originalIndex = i * 2;
-                  const locked = Boolean(photo.locked);
-                  return (
-                    <Pressable
-                      key={`L${i}`}
-                      onPress={(e) => handlePhotoPress(originalIndex, e)}
-                      style={({ pressed }) => [
-                        S.galleryCell,
-                        { width: CELL_W, height: CELL_H },
-                        pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-                      ]}
-                    >
-                      <TreatedPhoto
-                        source={getPhotoSource(photo.uri)}
-                        style={S.galleryCellImg}
-                        resizeMode="cover"
-                        blurRadius={locked ? 45 : 0}
-                        treatment={primarySession?.photo_treatment}
-                        dateStampEnabled={primarySession?.date_stamp_enabled}
-                        capturedAt={photo.capturedAt}
-                        seedKey={photo.id}
-                      />
-                      {locked && (
-                        <View style={S.lockOverlay}>
-                          <View style={S.lockCircle}>
-                            <LockIcon size={18} color="#FFFFFF" />
-                          </View>
-                          {revealCountdownWords && (
-                            <AppText style={S.lockCountdownText}>
-                              Revealed in {revealCountdownWords}
-                            </AppText>
-                          )}
-                        </View>
-                      )}
-                      {!locked && (
-                        <View style={S.photoNameTag}>
-                          <AppText style={S.photoNameText}>{photo.takenBy || 'Guest'}</AppText>
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
             </View>
-            {/* Right column */}
-            <View style={[S.galleryCol, { marginLeft: GRID_GAP }]}>
-              {visiblePhotos
-                .filter((_, i) => i % 2 === 1)
-                .map((photo, i) => {
-                  const originalIndex = i * 2 + 1;
-                  const locked = Boolean(photo.locked);
-                  return (
-                    <Pressable
-                      key={`R${i}`}
-                      onPress={(e) => handlePhotoPress(originalIndex, e)}
-                      style={({ pressed }) => [
-                        S.galleryCell,
-                        { width: CELL_W, height: CELL_H },
-                        pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-                      ]}
-                    >
-                      <TreatedPhoto
-                        source={getPhotoSource(photo.uri)}
-                        style={S.galleryCellImg}
-                        resizeMode="cover"
-                        blurRadius={locked ? 45 : 0}
-                        treatment={primarySession?.photo_treatment}
-                        dateStampEnabled={primarySession?.date_stamp_enabled}
-                        capturedAt={photo.capturedAt}
-                        seedKey={photo.id}
-                      />
-                      {locked && (
-                        <View style={S.lockOverlay}>
-                          <View style={S.lockCircle}>
-                            <LockIcon size={18} color="#FFFFFF" />
-                          </View>
-                          {revealCountdownWords && (
-                            <AppText style={S.lockCountdownText}>
-                              Revealed in {revealCountdownWords}
-                            </AppText>
-                          )}
-                        </View>
-                      )}
-                      {!locked && (
-                        <View style={S.photoNameTag}>
-                          <AppText style={S.photoNameText}>{photo.takenBy || 'Guest'}</AppText>
-                        </View>
-                      )}
-                    </Pressable>
-                  );
-                })}
-            </View>
-          </View>
-        ) : (
-          <View style={S.emptyGallery}>
-            <AppText variant="bodySmall" tone="secondary" align="center">
-              No moments yet.{'\n'}Be the first to add one.
-            </AppText>
-          </View>
-        )}
+          )}
 
       </Animated.ScrollView>
 
@@ -2778,7 +3114,16 @@ function EventDetailView({
       {heroVisible && (() => {
         const activePhoto = photos[heroIndex] ?? null;
         if (!activePhoto) return null;
-        const canDeleteGuestPhoto = viewerRole === 'guest' && activePhoto.isMine === true && Boolean(activePhoto.id) && Boolean(guestAuth);
+        const activeMediaLabel = activePhoto.mediaType === 'video' ? 'video' : 'photo';
+        const activeMediaLabelTitle = activePhoto.mediaType === 'video' ? 'Video' : 'Photo';
+        const canDeleteGuestPhoto =
+          viewerRole === 'guest' &&
+          Boolean(activePhoto.id) &&
+          Boolean(guestAuth) &&
+          (activePhoto.isMine === true ||
+            (Boolean(activePhoto.guestSessionId) &&
+              Boolean(guestAuth?.guestSessionId) &&
+              activePhoto.guestSessionId === guestAuth?.guestSessionId));
 
         const targetX = 16;
         const targetY = Math.max(insets.top + 48, 56);
@@ -2865,15 +3210,25 @@ function EventDetailView({
                 zIndex: 20,
               }}
             >
-              <TreatedPhoto
-                source={getPhotoSource(activePhoto.uri)}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-                treatment={primarySession?.photo_treatment}
-                dateStampEnabled={primarySession?.date_stamp_enabled}
-                capturedAt={activePhoto.capturedAt}
-                seedKey={activePhoto.id}
-              />
+              {activePhoto.mediaType === 'video' ? (
+                <VideoPoster
+                  uri={activePhoto.uri}
+                  style={{ width: '100%', height: '100%' }}
+                  controls
+                  autoPlay
+                  contentFit="contain"
+                />
+              ) : (
+                <TreatedPhoto
+                  source={getPhotoSource(activePhoto.uri)}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="cover"
+                  treatment={primarySession?.photo_treatment}
+                  dateStampEnabled={primarySession?.date_stamp_enabled}
+                  capturedAt={activePhoto.capturedAt}
+                  seedKey={activePhoto.id}
+                />
+              )}
             </Animated.View>
 
             <Animated.View
@@ -2900,10 +3255,19 @@ function EventDetailView({
                     {formatStoryTimestamp(activePhoto.capturedAt)}
                   </AppText>
                 ) : null}
+                {activePhoto.mediaType === 'video' ? (
+                  <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 13, color: 'rgba(255, 255, 255, 0.55)' }}>
+                    {formatMediaDuration(activePhoto.durationMs) ?? 'Video'}
+                  </AppText>
+                ) : null}
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 20 }}>
-                <Pressable onPress={() => { void Haptics.selectionAsync(); Alert.alert('Instagram Story', 'Exporting story...'); }}>
+                <Pressable
+                  onPress={() => void shareGalleryMediaToInstagram(activePhoto)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Share ${activeMediaLabel} to Instagram`}
+                >
                   <InstagramStoryIcon />
                 </Pressable>
                 <Pressable onPress={() => { void Haptics.selectionAsync(); Share.share({ message: `Photo by ${activePhoto.takenBy || 'Guest'}` }); }}>
@@ -2932,19 +3296,19 @@ function EventDetailView({
                       onPress={() => {
                         setHeroMenuVisible(false);
                         Alert.alert(
-                          'Delete this photo?',
+                          `Delete this ${activeMediaLabel}?`,
                           'This will permanently remove it from the event gallery.',
                           [
                             { text: 'Cancel', style: 'cancel' },
                             {
-                              text: 'Delete Photo',
+                              text: `Delete ${activeMediaLabelTitle}`,
                               style: 'destructive',
                               onPress: async () => {
                                 try {
                                   await deleteHeroGalleryPhoto(activePhoto, heroIndex);
                                 } catch (error) {
-                                  console.error('[gallery] failed to delete photo', error);
-                                  Alert.alert('Error', 'Could not delete this photo. Please try again.');
+                                  console.error(`[gallery] failed to delete ${activeMediaLabel}`, error);
+                                  Alert.alert('Error', `Could not delete this ${activeMediaLabel}. Please try again.`);
                                 }
                               },
                             },
@@ -2952,7 +3316,7 @@ function EventDetailView({
                         );
                       }}
                     >
-                      <AppText style={S.menuDeleteText}>Delete Photo</AppText>
+                      <AppText style={S.menuDeleteText}>Delete {activeMediaLabelTitle}</AppText>
                     </Pressable>
                   )}
                   {canDeleteGuestPhoto && (
@@ -2960,7 +3324,7 @@ function EventDetailView({
                       style={[S.menuOption, S.menuOptionBorder]}
                       onPress={() => deleteGuestGalleryPhoto(activePhoto, heroIndex)}
                     >
-                      <AppText style={S.menuDeleteText}>Delete Photo</AppText>
+                      <AppText style={S.menuDeleteText}>Delete {activeMediaLabelTitle}</AppText>
                     </Pressable>
                   )}
                   <Pressable style={[S.menuOption, S.menuCancelOption]} onPress={() => setHeroMenuVisible(false)}>
@@ -3020,8 +3384,15 @@ function EventDetailView({
           ══════════════════════════════════════════════════════ */}
       {selectedChallenge ? (() => {
           const totalSlides = 1 + storySubmissions.length;
-          const coverPhoto = storySubmissions.length > 0
-            ? { uri: storySubmissions[storySubmissions.length - 1].uri }
+          // The intro slide's backdrop is a blurred still, so it has to come
+          // from a photo. A video URI handed to `Image` decodes to nothing and
+          // renders black, so fall back through the photo submissions and then
+          // to the event cover.
+          const backdropSubmission = [...storySubmissions]
+            .reverse()
+            .find((item) => item.mediaType !== 'video');
+          const coverPhoto = backdropSubmission
+            ? { uri: backdropSubmission.uri }
             : getCoverSource();
 
       return (
@@ -3038,6 +3409,20 @@ function EventDetailView({
                     style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
                     resizeMode="cover"
                     blurRadius={35}
+                  />
+                ) : storySubmissions[activeSlideIndex - 1].mediaType === 'video' ? (
+                  // Keyed by submission, not by URL: the URL is re-signed on
+                  // every poll, and remounting on that would restart playback
+                  // every ten seconds. Keying by submission still gives each
+                  // video its own player, including two videos back to back.
+                  <StoryVideoSlide
+                    key={
+                      storySubmissions[activeSlideIndex - 1].submissionId ??
+                      storySubmissions[activeSlideIndex - 1].id ??
+                      `slide-${activeSlideIndex}`
+                    }
+                    uri={storySubmissions[activeSlideIndex - 1].uri}
+                    onEnd={advanceStoryAfterMediaEnds}
                   />
                 ) : (
                   <Image
@@ -3226,7 +3611,7 @@ function EventDetailView({
                 setChallengeDeleteConfirmVisible(true);
               }}
             >
-              <AppText style={S.menuDeleteText}>Delete photo</AppText>
+              <AppText style={S.menuDeleteText}>Delete {activeChallengeMediaLabel}</AppText>
             </Pressable>
             <Pressable style={[S.menuOption, S.menuCancelOption]} onPress={() => setChallengeMenuVisible(false)}>
               <AppText style={S.menuCancelText}>Cancel</AppText>
@@ -3247,7 +3632,7 @@ function EventDetailView({
             style={[S.menuSheet, S.deleteConfirmSheet]}
           >
             <View style={S.deleteConfirmCopy}>
-              <AppText style={S.deleteConfirmTitle}>Delete this photo?</AppText>
+              <AppText style={S.deleteConfirmTitle}>Delete this {activeChallengeMediaLabel}?</AppText>
               <AppText style={S.deleteConfirmBody}>
                 This will permanently remove it from the challenge story.
               </AppText>
@@ -3256,7 +3641,7 @@ function EventDetailView({
               style={[S.menuOption, S.menuOptionBorder]}
               onPress={() => void deleteActiveChallengeSubmission()}
             >
-              <AppText style={S.menuDeleteText}>Delete photo</AppText>
+              <AppText style={S.menuDeleteText}>Delete {activeChallengeMediaLabel}</AppText>
             </Pressable>
             <Pressable
               style={[S.menuOption, S.menuCancelOption]}
@@ -3354,6 +3739,22 @@ function EventDetailView({
                     </View>
                     <AppText style={S.saveCheckboxLabel}>Select Challenges</AppText>
                   </Pressable>
+                  {saveItems.some((item) => item.mediaType === 'video') ? (
+                    <Pressable
+                      style={S.saveCheckboxAction}
+                      onPress={() => setSaveVideosSelected((current) => !current)}
+                    >
+                      <View
+                        style={[
+                          S.saveCheckboxBox,
+                          saveVideosSelected && S.saveCheckboxBoxSelected,
+                        ]}
+                      >
+                        {saveVideosSelected ? <CheckIcon size={12} color="#000000" /> : null}
+                      </View>
+                      <AppText style={S.saveCheckboxLabel}>Videos</AppText>
+                    </Pressable>
+                  ) : null}
                 </View>
 
                 <FlatList
@@ -3373,19 +3774,30 @@ function EventDetailView({
                           pressed && { opacity: 0.92 },
                         ]}
                       >
-                        <TreatedPhoto
-                          source={item.source}
-                          style={S.saveGridImage}
-                          resizeMode="cover"
-                          treatment={saveMode === 'filtered' ? primarySession?.photo_treatment : 'original'}
-                          dateStampEnabled={primarySession?.date_stamp_enabled}
-                          capturedAt={item.capturedAt}
-                          seedKey={item.seedKey}
-                          compact
-                        />
+                        {item.mediaType === 'video' ? (
+                          <VideoPoster uri={item.uri} style={S.saveGridImage} />
+                        ) : (
+                          <TreatedPhoto
+                            source={item.source as ImageSourcePropType}
+                            style={S.saveGridImage}
+                            resizeMode="cover"
+                            treatment={saveMode === 'filtered' ? primarySession?.photo_treatment : 'original'}
+                            dateStampEnabled={primarySession?.date_stamp_enabled}
+                            capturedAt={item.capturedAt}
+                            seedKey={item.seedKey}
+                            compact
+                          />
+                        )}
                         <View style={[S.saveCheckBadge, isSelected && S.saveCheckBadgeSelected]}>
                           {isSelected ? <CheckIcon size={14} color="#000000" /> : null}
                         </View>
+                        {item.mediaType === 'video' ? (
+                          <View style={S.saveVideoBadge}>
+                            <AppText style={S.saveVideoBadgeText}>
+                              {formatMediaDuration(item.durationMs) ?? 'Video'}
+                            </AppText>
+                          </View>
+                        ) : null}
                         {item.isChallenge ? (
                           <View style={S.saveChallengeBadge}>
                             <AppText style={S.saveChallengeBadgeText} numberOfLines={1}>
@@ -3454,6 +3866,18 @@ function EventDetailView({
           reveal.dismiss();
         }}
       />
+
+      {videoPostedToastVisible ? (
+        <View
+          pointerEvents="none"
+          style={[
+            S.videoPostedToast,
+            { top: Math.max(insets.top + spacing.base, spacing.xl) },
+          ]}
+        >
+          <AppText style={S.videoPostedToastText}>Video posted to the gallery</AppText>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -3471,6 +3895,24 @@ const S = StyleSheet.create({
     backgroundColor: colours.background,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  videoPostedToast: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 320,
+    elevation: 320,
+    backgroundColor: 'rgba(239, 233, 224, 0.96)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(11, 11, 12, 0.08)',
+  },
+  videoPostedToastText: {
+    color: '#0B0B0C',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
   },
 
   // ── Hero ──
@@ -3530,60 +3972,6 @@ const S = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
-
-  // ── Status row ──
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flexWrap: 'wrap',
-    marginTop: spacing.xxs,
-  },
-  liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.10)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 6,
-  },
-  liveDotCircle: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#5DFF8A',
-  },
-  liveBadgeText: {
-    fontFamily: 'InstrumentSans_700Bold',
-    fontSize: 10,
-    letterSpacing: 1.2,
-    color: '#FFFFFF',
-  },
-  statusItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statusItemPressable: {
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-  },
-  statusItemPressed: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  statusText: {
-    fontFamily: 'InstrumentSans_600SemiBold',
-    fontSize: 11,
-    letterSpacing: 1.1,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  statusDot: {
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.35)',
-  },
-
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
     marginTop: 16,
@@ -3591,7 +3979,7 @@ const S = StyleSheet.create({
   chipsContent: {
     paddingLeft: GALLERY_PADDING,     // Aligns first circle perfectly with left edge of gallery below
     paddingRight: GALLERY_PADDING,
-    gap: 14,                          // Fixed 14px gap between circles
+    gap: 8,                           // Tighter spacing so the challenge strip feels denser
     paddingBottom: spacing.xs,
   },
   chipWrap: {
@@ -3676,15 +4064,50 @@ const S = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // ── Gallery stats ──
+  galleryStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: GALLERY_PADDING,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  galleryStatItem: {
+    gap: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  galleryStatPressable: {
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    alignItems: 'center',
+    marginVertical: -spacing.xs,
+  },
+  galleryStatPressed: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  galleryStatValue: {
+    color: colours.textPrimary,
+    textAlign: 'center',
+  },
+  galleryStatDot: {
+    color: 'rgba(255,255,255,0.24)',
+    fontSize: 12,
+    marginHorizontal: 2,
+  },
+
   // ── Gallery ──
   gallery: {
     flexDirection: 'row',
-    marginTop: 32,                    // 32px spacing between challenge row and gallery
-    paddingHorizontal: GALLERY_PADDING,
+    marginTop: spacing.sm,
+    paddingHorizontal: GALLERY_EDGE_INSET,
   },
   galleryCol: {
     flex: 1,
-    gap: ROW_GAP,                     // 20px vertical spacing between gallery rows
+    gap: ROW_GAP,
   },
   galleryCell: {
     borderRadius: 22,                 // Softer 22px rounded corners for a premium appearance
@@ -3697,7 +4120,7 @@ const S = StyleSheet.create({
   },
   photoNameTag: {
     position: 'absolute',
-    bottom: 12,
+    top: 12,
     left: 12,
     backgroundColor: 'rgba(11, 11, 12, 0.55)',
     paddingHorizontal: 8,
@@ -3739,6 +4162,22 @@ const S = StyleSheet.create({
     fontSize: 10,
     color: '#EFE9E0',
     letterSpacing: 0.5,
+    flexShrink: 1,
+  },
+  videoBadge: {
+    position: 'absolute',
+    right: 12,
+    bottom: 12,
+    backgroundColor: 'rgba(11, 11, 12, 0.72)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  videoBadgeText: {
+    color: '#FFFFFF',
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 10,
+    letterSpacing: 0.3,
   },
   emptyGallery: {
     marginTop: spacing.xxl,
@@ -4288,6 +4727,20 @@ const S = StyleSheet.create({
     fontFamily: 'InstrumentSans_500Medium',
     fontSize: 16,
     color: '#FFFFFF',
+  },
+  saveVideoBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    backgroundColor: 'rgba(11, 11, 12, 0.76)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+  },
+  saveVideoBadgeText: {
+    color: '#FFFFFF',
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 10,
   },
   menuDeleteText: {
     fontFamily: 'InstrumentSans_600SemiBold',

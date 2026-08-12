@@ -80,11 +80,17 @@ export const enGB = {
     previewGallery: 'Gallery',
 
     // Step 4
-    photoLimitHeading: 'How many photos can each guest take?',
-    photoLimitSupporting:
-      'A limit makes people think before they shoot. It tends to produce better photos, not fewer.',
+    photoLimitHeading: 'How many Moments can each guest capture?',
+    photoLimitLimited: 'Limited',
+    photoLimitLimitedDescription: 'Choose a set number per guest.',
     photoLimitUnlimited: 'Unlimited',
+    photoLimitUnlimitedDescription: 'No limit.',
+    photoLimitUnlimitedSupporting: '{price}',
     photoLimitCount: '{count} photos',
+    photoLimitCustom: 'Custom',
+    photoLimitCustomLabel: 'Photos per guest',
+    photoLimitCustomPlaceholder: 'Enter a number',
+    photoLimitCustomHint: 'Set the number of photos each guest can take.',
     cameraRollToggle: 'Allow adding from camera roll',
     cameraRollToggleDescription: 'As well as taking photos in the app.',
     cameraRollAnytime: 'Any time',

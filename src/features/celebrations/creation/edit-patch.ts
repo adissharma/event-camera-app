@@ -31,12 +31,10 @@ export function buildEditPatch(step: CreationStep, draft: CreationDraft): EventS
         // `undefined` means "not yet chosen". Sending it would leave the
         // column untouched while still reporting a successful save.
         shotLimitPerGuest: draft.shotLimitPerGuest ?? null,
-        // The camera-roll toggle writes through `captureMode`. This step
-        // renders it, so this step must save it.
         captureMode: draft.captureMode,
-        galleryVisibility: draft.galleryVisibility,
       };
 
+    case 'guest-reveal':
     case 'reveal': {
       const { mode, revealAt } = resolveReveal(
         draft.guestRevealChoice,

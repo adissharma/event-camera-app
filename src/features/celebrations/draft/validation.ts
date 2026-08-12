@@ -130,6 +130,91 @@ export const revealSchema = z
     { message: 'Guests cannot view photos before you do', path: ['guestCustomRevealAt'] }
   );
 
+export const hostRevealSchema = z
+  .object({
+    hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
+    hostCustomRevealAt: z.string().nullable(),
+  })
+  .refine(
+    (val) => val.hostRevealChoice !== 'custom' || val.hostCustomRevealAt !== null,
+    { message: 'Choose a day and time for your custom reveal', path: ['hostCustomRevealAt'] }
+  )
+  .refine(
+    (val) =>
+      val.hostRevealChoice !== 'custom' ||
+      !val.hostCustomRevealAt ||
+      new Date(val.hostCustomRevealAt).getTime() > Date.now(),
+    { message: 'Choose a reveal time in the future for yourself', path: ['hostCustomRevealAt'] }
+  );
+
+export const guestRevealSchema = z
+  .object({
+    hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
+    hostCustomRevealAt: z.string().nullable(),
+    guestRevealChoice: z.enum(['during', 'at_close', 'custom', 'never']),
+    guestCustomRevealAt: z.string().nullable(),
+    galleryVisibility: z.enum(['all_guests', 'own_only', 'hosts_only']),
+  })
+  .refine(
+    (val) => val.guestRevealChoice !== 'custom' || val.guestCustomRevealAt !== null,
+    { message: 'Choose a day and time for the guest custom reveal', path: ['guestCustomRevealAt'] }
+  )
+  .refine(
+    (val) =>
+      val.guestRevealChoice !== 'custom' ||
+      !val.guestCustomRevealAt ||
+      new Date(val.guestCustomRevealAt).getTime() > Date.now(),
+    { message: 'Choose a reveal time in the future for guests', path: ['guestCustomRevealAt'] }
+  )
+  .refine(
+    (val) => {
+      if (val.guestRevealChoice === 'never') {
+        return true;
+      }
+
+      if (val.hostRevealChoice === 'at_close' && val.guestRevealChoice === 'during') {
+        return false;
+      }
+      return true;
+    },
+    { message: 'Guests cannot view photos before you can view them', path: ['guestRevealChoice'] }
+  )
+  .refine(
+    (val) => {
+      if (val.guestRevealChoice === 'never') {
+        return true;
+      }
+
+      if (val.hostRevealChoice === 'custom' && val.guestRevealChoice !== 'custom') {
+        return false;
+      }
+      return true;
+    },
+    { message: 'Guests must have a custom reveal if yours is custom', path: ['guestRevealChoice'] }
+  )
+  .refine(
+    (val) => {
+      if (val.guestRevealChoice === 'never') {
+        return true;
+      }
+
+      if (
+        val.hostRevealChoice === 'custom' &&
+        val.guestRevealChoice === 'custom' &&
+        val.hostCustomRevealAt &&
+        val.guestCustomRevealAt
+      ) {
+        return new Date(val.guestCustomRevealAt).getTime() >= new Date(val.hostCustomRevealAt).getTime();
+      }
+      return true;
+    },
+    { message: 'Guests cannot view photos before you do', path: ['guestCustomRevealAt'] }
+  )
+  .refine(
+    (val) => (val.guestRevealChoice === 'never' ? val.galleryVisibility === 'hosts_only' : true),
+    { message: 'Only you can view the gallery if guests never see the photos', path: ['galleryVisibility'] }
+  );
+
 export const packageSchema = z.object({
   planKey: z.string().min(1, 'Choose a package to continue'),
 });
@@ -152,14 +237,21 @@ const STEP_VALIDATORS: Record<CreationStep, (draft: CreationDraft) => string | n
     firstError(photoLimitSchema.safeParse({ shotLimitPerGuest: d.shotLimitPerGuest })),
   reveal: (d) =>
     firstError(
-      revealSchema.safeParse({
+      hostRevealSchema.safeParse({
+        hostRevealChoice: d.hostRevealChoice,
+        hostCustomRevealAt: d.hostCustomRevealAt,
+      }),
+    ),
+  'guest-reveal': (d) =>
+    firstError(
+      guestRevealSchema.safeParse({
         hostRevealChoice: d.hostRevealChoice,
         hostCustomRevealAt: d.hostCustomRevealAt,
         guestRevealChoice: d.guestRevealChoice,
         guestCustomRevealAt: d.guestCustomRevealAt,
+        galleryVisibility: d.galleryVisibility,
       }),
-    ) ??
-    firstError(privacySchema.safeParse({ galleryVisibility: d.galleryVisibility })),
+    ),
   treatment: () => null,
   package: (d) => firstError(packageSchema.safeParse({ planKey: d.planKey ?? '' })),
 };
