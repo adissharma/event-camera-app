@@ -81,6 +81,7 @@ type VideoPreview = {
   durationMs: number;
   source: MediaSource;
   challengeId?: string | null;
+  guestbook?: boolean;
 };
 
 type PendingChallengePost = {
@@ -311,7 +312,11 @@ export default function CameraScreen() {
   const primarySession = detail?.primarySession;
   const limit = primarySession?.shot_limit_per_guest ?? null;
   const isChallengeCapture = captureTarget === 'challenge' && Boolean(challengeId);
-  const videoCaptureEnabled = eventAllowsVideoCapture(primarySession);
+  const isGuestbookCapture = captureTarget === 'guestbook';
+  // The Guestbook is a distinct feature from the main gallery's photo/video
+  // toggle — a host disabling video contributions for the gallery should not
+  // silently break Guestbook video messages, so this bypasses that gate.
+  const videoCaptureEnabled = isGuestbookCapture || eventAllowsVideoCapture(primarySession);
 
   // ── Upload pipeline ──
   //
@@ -320,7 +325,7 @@ export default function CameraScreen() {
   // hosts and guests, so the setting controls what actions are available to both.
   const isGuest = detail?.viewerRole === 'guest';
   const captureMode = primarySession?.capture_mode ?? 'camera_and_library';
-  const showCameraRollAction = captureMode !== 'camera_only' && !isChallengeCapture;
+  const showCameraRollAction = captureMode !== 'camera_only' && !isChallengeCapture && !isGuestbookCapture;
   const [guestAuth, setGuestAuth] = useState<{
     slug: string;
     guestToken: string;
@@ -351,7 +356,11 @@ export default function CameraScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [isPhotosLoaded, setIsPhotosLoaded] = useState(false);
-  const [facing, setFacing] = useState<'front' | 'back'>('back');
+  // Guestbook messages are spoken to camera, so they default to the selfie
+  // camera — every other capture target keeps the rear camera default.
+  const [facing, setFacing] = useState<'front' | 'back'>(
+    captureTarget === 'guestbook' ? 'front' : 'back',
+  );
   // Real per-shot flash strobe (off/on/auto), meaningful only on native — see
   // `toggleFlash` for why web drives a completely different prop.
   const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
@@ -364,7 +373,9 @@ export default function CameraScreen() {
   const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_VIDEO_DURATION_MS);
-  const [captureType, setCaptureType] = useState<'photo' | 'video'>('photo');
+  const [captureType, setCaptureType] = useState<'photo' | 'video'>(
+    isGuestbookCapture ? 'video' : 'photo',
+  );
   const recordingStartRef = useRef<number | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingActiveRef = useRef(false);
@@ -410,10 +421,14 @@ export default function CameraScreen() {
     videoCaptureEnabled && (!isWeb || Boolean(webRecorderMimeType));
 
   useEffect(() => {
+    if (isGuestbookCapture) {
+      if (captureType !== 'video') setCaptureType('video');
+      return;
+    }
     if (!videoCaptureEnabled && captureType !== 'photo') {
       setCaptureType('photo');
     }
-  }, [videoCaptureEnabled, captureType]);
+  }, [videoCaptureEnabled, captureType, isGuestbookCapture]);
 
   useEffect(() => {
     Animated.timing(captureModeAnim, {
@@ -583,7 +598,7 @@ export default function CameraScreen() {
   }
 
   function setCaptureMode(next: 'photo' | 'video') {
-    if (!videoCaptureEnabled || isRecording || next === captureType) return;
+    if (isGuestbookCapture || !videoCaptureEnabled || isRecording || next === captureType) return;
     if (isWeb && next === 'video' && !webRecorderMimeType) {
       Alert.alert(
         'Video not supported here',
@@ -780,7 +795,9 @@ export default function CameraScreen() {
         postedMediaItemId = item.id ?? null;
         const key = preview.challengeId
           ? `__mock_challenge_submissions_${celebrationId}_${preview.challengeId}`
-          : `__mock_photos_${celebrationId}`;
+          : preview.guestbook
+            ? `__mock_guestbook_${celebrationId}`
+            : `__mock_photos_${celebrationId}`;
         const stored = await AsyncStorage.getItem(key);
         let current: PhotoItem[] = [];
         if (stored) {
@@ -809,10 +826,16 @@ export default function CameraScreen() {
                 challenge_id: preview.challengeId,
                 submission_kind: 'challenge',
               }
-            : undefined,
+            : preview.guestbook
+              ? { submission_kind: 'guestbook' }
+              : undefined,
         });
         postedMediaItemId = uploadResult.mediaItemId;
-        maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
+        // Guestbook messages are not part of the guest's photo/video shot
+        // allowance, so `shotsUsed` here would be misleading if surfaced.
+        if (!preview.guestbook) {
+          maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
+        }
       } else if (!isGuest && celebrationId) {
         const uploadResult = await uploadHostMedia({
           celebrationId: String(celebrationId),
@@ -828,7 +851,9 @@ export default function CameraScreen() {
                 challenge_id: preview.challengeId,
                 submission_kind: 'challenge',
               }
-            : undefined,
+            : preview.guestbook
+              ? { submission_kind: 'guestbook' }
+              : undefined,
         });
         postedMediaItemId = uploadResult.mediaItemId;
       } else {
@@ -872,6 +897,25 @@ export default function CameraScreen() {
           router.replace(target as never);
         }
         setVideoPreview(null);
+        return;
+      }
+
+      if (preview.guestbook) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ['guestbook', 'guest', String(celebrationId)] }),
+          queryClient.invalidateQueries({ queryKey: ['guestbook', 'host', String(celebrationId)] }),
+        ]);
+        const guestbookTarget = {
+          pathname: '/celebration/[celebrationId]/guestbook',
+          params: { celebrationId: String(celebrationId) },
+        };
+        if (router.canDismiss()) {
+          router.dismissTo(guestbookTarget as never);
+        } else {
+          router.replace(guestbookTarget as never);
+        }
+        setVideoPreview(null);
+        deleteLocalVideo(preview.uri, 'posting');
         return;
       }
 
@@ -1126,6 +1170,7 @@ export default function CameraScreen() {
                 durationMs,
                 source: 'camera',
                 challengeId: isChallengeCapture ? String(challengeId) : null,
+                guestbook: isGuestbookCapture,
               });
             } catch (error) {
               reject(
@@ -1170,6 +1215,7 @@ export default function CameraScreen() {
         durationMs,
         source: 'camera',
         challengeId: isChallengeCapture ? String(challengeId) : null,
+        guestbook: isGuestbookCapture,
       });
     } catch (error) {
       console.error('Failed to record video:', error);
@@ -1219,13 +1265,14 @@ export default function CameraScreen() {
   const viewfinderPanResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_event, gestureState) =>
+        !isGuestbookCapture &&
         videoCaptureEnabled &&
         !isRecording &&
         Math.abs(gestureState.dx) > 16 &&
         Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.35,
       onPanResponderTerminationRequest: () => false,
       onPanResponderRelease: (_event, gestureState) => {
-        if (!videoCaptureEnabled || isRecording) return;
+        if (isGuestbookCapture || !videoCaptureEnabled || isRecording) return;
         if (gestureState.dx <= -24) {
           setCaptureMode('video');
           return;
@@ -1491,10 +1538,10 @@ export default function CameraScreen() {
 
         <View style={S.headerTitleGroup}>
           <AppText style={S.headerTitle} numberOfLines={1}>
-            {celebration?.title ?? 'Event'}
+            {isGuestbookCapture ? 'Guestbook' : celebration?.title ?? 'Event'}
           </AppText>
           <AppText style={S.headerSubtitle}>
-            {getSubtitle()}
+            {isGuestbookCapture ? 'Video message' : getSubtitle()}
           </AppText>
         </View>
 
@@ -1548,7 +1595,7 @@ export default function CameraScreen() {
         />
 
         {/* Remaining Photos Limit Tag */}
-        {remainingPhotos !== null && (
+        {!isGuestbookCapture && remainingPhotos !== null && (
           <View style={S.photosLeftTag}>
             <AppText style={S.photosLeftCount}>
               {displayedCount !== null ? displayedCount : remainingPhotos}
@@ -1761,18 +1808,27 @@ export default function CameraScreen() {
             />
           </Pressable>
 
-          {/* QR Invite Button */}
-          <Pressable 
-            onPress={() => setShareVisible(true)} 
-            style={S.controlBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Invite guests"
-          >
-            <QrCodeIcon size={24} color="#FFFFFF" />
-          </Pressable>
+          {/* QR Invite Button — hidden for the Guestbook, which is not an
+              invite surface. A same-sized spacer keeps the shutter centred. */}
+          {isGuestbookCapture ? (
+            <View style={S.controlBtnSpacer} />
+          ) : (
+            <Pressable
+              onPress={() => setShareVisible(true)}
+              style={S.controlBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Invite guests"
+            >
+              <QrCodeIcon size={24} color="#FFFFFF" />
+            </Pressable>
+          )}
 
-          {/* Photos Button */}
-          <Pressable 
+          {/* Photos Button — hidden for the Guestbook; it has no event
+              gallery preview of its own. */}
+          {isGuestbookCapture ? (
+            <View style={S.controlBtnSpacer} />
+          ) : (
+          <Pressable
             onPress={() => {
               // This screen is a `transparentModal` sitting on top of the
               // gallery, which is still mounted underneath it.
@@ -1816,9 +1872,10 @@ export default function CameraScreen() {
               </View>
             )}
           </Pressable>
+          )}
         </View>
 
-        {videoCaptureEnabled ? (
+        {videoCaptureEnabled && !isGuestbookCapture ? (
           <View style={S.captureModeRail}>
             <View style={S.captureModeLabelRow}>
               <Animated.View

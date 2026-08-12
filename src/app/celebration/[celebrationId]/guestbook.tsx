@@ -379,8 +379,8 @@ export default function GuestbookScreen() {
     : 'Your message is private and can only be seen by the host.';
 
   const openRecorder = () => router.push({
-    pathname: '/celebration/[celebrationId]/guestbook-recorder',
-    params: { celebrationId: String(celebrationId) },
+    pathname: '/celebration/[celebrationId]/camera',
+    params: { celebrationId: String(celebrationId), captureTarget: 'guestbook' },
   } as never);
 
   const messageHeading = isHost
