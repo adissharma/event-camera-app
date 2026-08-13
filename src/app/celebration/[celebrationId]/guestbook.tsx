@@ -24,6 +24,7 @@ import {
   View,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect } from 'react-native-svg';
@@ -85,6 +86,45 @@ function GuestbookHeroIcon({ size = 32, color = '#FFFFFF' }) {
       <Path d="M9 7h6M9 11h6M9 15h4" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
     </Svg>
   );
+}
+
+/** Thickness of the gradient frame around the Guestbook. */
+const BORDER_WIDTH = 2;
+
+/**
+ * An approximation of the display's corner radius, in points.
+ *
+ * The gradient frame below hugs the screen edge, so on a phone with rounded
+ * corners a square frame runs straight into the display mask and loses its
+ * corners. Matching the curve keeps the whole frame on screen.
+ *
+ * Neither React Native nor Expo exposes the real radius — on iOS it is a
+ * private `UIScreen` property — so this infers it from the top safe-area
+ * inset, the one public signal that tracks the same hardware generations: a
+ * Dynamic Island sits on the most rounded displays, a notch on slightly less
+ * rounded ones, and a square-cornered phone has neither.
+ *
+ * Each band deliberately rounds up. A radius at least as large as the
+ * display's keeps every pixel of the frame inside the mask; guessing small
+ * clips the corners, which is the thing being fixed here. Guessing large
+ * costs a barely perceptible sliver of background at each corner instead, so
+ * the error is worth taking in that direction.
+ */
+function useScreenCornerRadius(): number {
+  const insets = useSafeAreaInsets();
+
+  // A browser viewport has square corners even on a rounded phone.
+  if (Platform.OS === 'web') return 0;
+  // Android reports the status bar height here whatever the display shape, so
+  // the inset says nothing about curvature. Nearly all current Android phones
+  // are rounded, and modestly so.
+  if (Platform.OS === 'android') return 28;
+  // 59pt in practice on every Dynamic Island iPhone.
+  if (insets.top >= 51) return 55;
+  // 44–50pt across the notched iPhones (X through 14).
+  if (insets.top >= 30) return 48;
+  // Home-button iPhones and iPads: genuinely square.
+  return 0;
 }
 
 type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
@@ -236,6 +276,7 @@ export default function GuestbookScreen() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const cornerRadius = useScreenCornerRadius();
 
   const [resolvedMessages, setResolvedMessages] = useState<ResolvedMessage[]>([]);
   const [isSigningUrls, setIsSigningUrls] = useState(false);
@@ -376,10 +417,17 @@ export default function GuestbookScreen() {
         colors={['#C13584', '#8B5CF6', '#F77737', '#FCAF45']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
+        style={[StyleSheet.absoluteFill, { borderRadius: cornerRadius }]}
         pointerEvents="none"
       />
-      <View style={styles.innerRoot}>
+      {/* Concentric with the frame: an inner radius one border-width smaller
+          keeps the gradient an even thickness the whole way round the curve. */}
+      <View
+        style={[
+          styles.innerRoot,
+          { borderRadius: Math.max(0, cornerRadius - BORDER_WIDTH) },
+        ]}
+      >
         {isLoading && !payload ? (
           <View style={styles.loading}>
             <ActivityIndicator color={colours.textSecondary} />
@@ -483,10 +531,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0B0B0C',
   },
-  /** Inset by 2pt so the gradient behind it reads as a border. */
+  /** Inset all round so the gradient behind it reads as a border. */
   innerRoot: {
     flex: 1,
-    margin: 2,
+    margin: BORDER_WIDTH,
     backgroundColor: '#0B0B0C',
     overflow: 'hidden',
   },
