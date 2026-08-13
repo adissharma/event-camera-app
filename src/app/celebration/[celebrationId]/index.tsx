@@ -1924,9 +1924,9 @@ function EventDetailView({
     if (countdown.isCompleted) return 'Ended';
     const { days, hours, minutes } = countdown;
     if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`;
-    if (hours >= 1) return `${hours} hour${hours === 1 ? '' : 's'}`;
+    if (hours >= 1) return `${hours} hrs`;
     const safeMinutes = Math.max(1, minutes);
-    return `${safeMinutes} min`;
+    return `${safeMinutes} mins`;
   }
 
   async function saveChallenges(next: Challenge[]) {
@@ -3022,7 +3022,7 @@ function EventDetailView({
               {photos.length}
             </AppText>
             <AppText variant="eyebrow" tone="secondary" align="center">
-              Photos
+              Moments
             </AppText>
           </View>
 
