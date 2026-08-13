@@ -42,6 +42,7 @@ import {
 } from '@/services/guestbook';
 import { requireSupabase } from '@/lib/supabase/client';
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
+import { deleteHostPhoto } from '@/services/media-delete';
 import {
   StoryViewer,
   formatStoryTimestamp,
@@ -369,9 +370,12 @@ export default function GuestbookScreen() {
   const activeMessage =
     activeSlideIndex > 0 ? resolvedMessages[activeSlideIndex - 1] ?? null : null;
 
-  // Guests only ever receive their own messages, and hosts do not author them,
-  // so the delete affordance belongs to the guest side alone.
-  const canDeleteActive = !isHost && Boolean(activeMessage);
+  // A host moderates the whole Guestbook; a guest may remove what they wrote.
+  // Since `get_guest_guestbook` only ever returns the caller's own messages, a
+  // guest looking at a message is by definition looking at one they can delete
+  // — but without a token there is nothing to authenticate the delete with.
+  const canDeleteActive =
+    Boolean(activeMessage) && (isHost || Boolean(guestMeta?.guestToken));
 
   const description =
     payload?.guestbook.instructions?.trim() || 'Leave a message for the host.';
@@ -391,13 +395,28 @@ export default function GuestbookScreen() {
 
   async function confirmDeleteActiveMessage() {
     setMenuVisible(false);
-    if (!activeMessage || !guestMeta?.guestToken) return;
+    if (!activeMessage) return;
 
     try {
-      await deleteGuestPhoto({
-        mediaItemId: activeMessage.id,
-        guestToken: guestMeta.guestToken,
-      });
+      // Both RPCs are media-type agnostic and enforce their own rule: the host
+      // one checks the caller manages the event session, the guest one checks
+      // the supplied token owns the row. Neither can be talked into deleting
+      // something the caller has no claim on.
+      if (isHost) {
+        await deleteHostPhoto({ mediaItemId: activeMessage.id });
+      } else {
+        if (!guestMeta?.guestToken) return;
+        await deleteGuestPhoto({
+          mediaItemId: activeMessage.id,
+          guestToken: guestMeta.guestToken,
+        });
+      }
+
+      // Step back a slide, as the challenge viewer does, so the viewer lands on
+      // the message before the one they just removed rather than being silently
+      // advanced onto the next person's.
+      setActiveSlideIndex((current) => Math.max(0, current - 1));
+
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['guestbook', 'guest', String(celebrationId)] }),
         queryClient.invalidateQueries({ queryKey: ['guestbook', 'host', String(celebrationId)] }),
@@ -501,14 +520,20 @@ export default function GuestbookScreen() {
             <Pressable
               style={styles.menuOption}
               onPress={() => {
-                Alert.alert('Delete message?', 'This will remove your Guestbook message.', [
-                  { text: 'Cancel', style: 'cancel', onPress: () => setMenuVisible(false) },
-                  {
-                    text: 'Delete',
-                    style: 'destructive',
-                    onPress: () => void confirmDeleteActiveMessage(),
-                  },
-                ]);
+                Alert.alert(
+                  'Delete message?',
+                  isHost
+                    ? `This permanently removes ${activeMessage?.displayName?.trim() || 'this guest'}'s message from your Guestbook.`
+                    : 'This will remove your Guestbook message.',
+                  [
+                    { text: 'Cancel', style: 'cancel', onPress: () => setMenuVisible(false) },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => void confirmDeleteActiveMessage(),
+                    },
+                  ],
+                );
               }}
             >
               <AppText style={styles.menuDeleteText}>Delete message</AppText>
