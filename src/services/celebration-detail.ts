@@ -540,10 +540,13 @@ async function fetchMetrics(eventSessionId: string): Promise<EventMetrics> {
       .eq('event_session_id', eventSessionId),
     client
       .from('media_items')
-      .select('guest_session_id', { count: 'exact' })
+      .select('guest_session_id, metadata', { count: 'exact' })
       .eq('event_session_id', eventSessionId)
       .eq('status', 'ready')
-      .is('deleted_at', null),
+      .is('deleted_at', null)
+      // Guestbook messages are private and never appear in the gallery grid,
+      // so counting them here would report more moments than the host can see.
+      .or('metadata->>submission_kind.is.null,metadata->>submission_kind.neq.guestbook'),
   ]);
 
   const contributors = new Set(

@@ -119,7 +119,7 @@ export default function GuestbookSettingsScreen() {
           Guestbook
         </AppText>
         <AppText variant="bodyMedium" tone="secondary" style={styles.subtitle}>
-          Edit the short note guests see before they leave a private audio or video message for you.
+          Edit the short note guests see before they leave a private video message for you.
         </AppText>
       </View>
 

@@ -19,22 +19,10 @@ import {
   Alert,
   Share,
   ScrollView,
-  Dimensions,
   Platform,
   PanResponder,
   type ImageSourcePropType,
 } from 'react-native';
-import ReanimatedAnimated, {
-  Extrapolate,
-  interpolate,
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
-import { PanGestureHandler } from 'react-native-gesture-handler';
-import type { PanGestureHandlerEventPayload } from 'react-native-gesture-handler';
 import { useLocalSearchParams, useRouter, useNavigation, useFocusEffect } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -87,6 +75,12 @@ import {
   ChallengeIconSVG as SharedChallengeIconSVG,
 } from '@/features/celebrations/challenge-icons';
 import {
+  OverflowDotsIcon,
+  StoryViewer,
+  formatStoryTimestamp,
+  playWithSoundFallback,
+} from '@/features/celebrations/story-viewer';
+import {
   listChallenges,
   updateChallenge,
   legacyChallengesKey,
@@ -118,40 +112,6 @@ function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </Svg>
-  );
-}
-
-function OverflowDotsIcon({ size = 18, color = '#FFFFFF' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Circle cx={5} cy={12} r={2} fill={color} />
-      <Circle cx={12} cy={12} r={2} fill={color} />
-      <Circle cx={19} cy={12} r={2} fill={color} />
-    </Svg>
-  );
-}
-
-function VolumeIcon({ muted, size = 18, color = '#FFFFFF' }: { muted: boolean; size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4 9v6h4l5 4V5L8 9H4Z"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinejoin="round"
-        fill={color}
-      />
-      {muted ? (
-        <Path d="M17 9l5 6M22 9l-5 6" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
-      ) : (
-        <Path
-          d="M16.5 8.5a5 5 0 0 1 0 7M19 6a9 9 0 0 1 0 12"
-          stroke={color}
-          strokeWidth={1.8}
-          strokeLinecap="round"
-        />
-      )}
     </Svg>
   );
 }
@@ -313,32 +273,6 @@ function parsePendingChallengePost(raw: string | null): PendingChallengePost | n
     // Older camera builds stored just the challenge id.
   }
   return { challengeId: raw };
-}
-
-function formatStoryTimestamp(timestamp?: string | null): string {
-  if (!timestamp) return '';
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return '';
-
-  const now = new Date();
-  const sameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-
-  const time = date.toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-
-  if (sameDay) return `Today at ${time}`;
-
-  return date.toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 type SavePhotoItem = {
@@ -783,48 +717,6 @@ function formatMediaDuration(durationMs?: number | null): string | null {
   return `${minutes}:${`${seconds}`.padStart(2, '0')}`;
 }
 
-function getWebVideoElement(container: unknown): HTMLVideoElement | null {
-  if (Platform.OS !== 'web') return null;
-  if (!container || typeof (container as Element).querySelector !== 'function') return null;
-  const video = (container as Element).querySelector('video');
-  return video instanceof HTMLVideoElement ? video : null;
-}
-
-/**
- * Starts playback with sound, falling back to muted if the browser blocks it.
- *
- * `expo-video`'s own `player.play()` is fire-and-forget on web — it calls the
- * underlying `<video>`'s `play()` but never looks at the promise it returns,
- * so a browser autoplay-policy rejection (unmuted playback outside a direct
- * user gesture) is silently swallowed and the video is left paused with no
- * retry. Driving the real `<video>` element here recovers that promise: on a
- * rejection this falls back to a muted autoplay, which browsers always allow,
- * rather than leaving the viewer looking at a frozen frame. Native controls
- * (where shown) still let the viewer unmute with one tap.
- *
- * A no-op on native, where there is no such restriction and `player.play()`
- * already works.
- */
-function playWithSoundFallback(
-  container: unknown,
-  player: { muted: boolean; play: () => void },
-  onFallbackToMuted?: () => void,
-) {
-  const video = getWebVideoElement(container);
-  if (!video) {
-    player.play();
-    return;
-  }
-  const playResult = video.play();
-  if (playResult && typeof playResult.catch === 'function') {
-    playResult.catch(() => {
-      player.muted = true;
-      onFallbackToMuted?.();
-      player.play();
-    });
-  }
-}
-
 function VideoPoster({
   uri,
   style,
@@ -883,110 +775,6 @@ function VideoPoster({
   );
 }
 
-/**
- * A Challenge story slide that plays a video the way an Instagram story does:
- * it starts on its own as soon as the slide becomes active, and hands over to
- * the next slide when playback reaches the end.
- *
- * Three details are load-bearing.
- *
- * The source is pinned on mount. Challenge submissions are re-signed on every
- * dashboard poll — ten seconds — so the same video arrives back with a fresh
- * URL each time. `useVideoPlayer` keys its player on the source, so letting
- * that new URL through tears the player down and rebuilds it mid-playback: the
- * video restarts every ten seconds and, on anything slower than a fast
- * connection, never gets past buffering. That is the black screen. The call
- * site keys this component by submission id, so a genuinely different
- * submission still gets its own player.
- *
- * Playback is also kicked off from a status listener, not only from the
- * construction callback. `play()` on a player that has not finished loading
- * does nothing, so a slide mounted before the first frame arrives would
- * otherwise sit paused on black waiting for a tap that the design never offers.
- *
- * On Android the view is a TextureView. A SurfaceView punches a hole through
- * the window, which renders black inside the transformed, Reanimated-driven
- * story overlay this sits in.
- *
- * Mute is a controlled prop rather than internal state: the toggle button
- * lives in the story header, outside this component, and needs to affect
- * whichever slide is currently playing.
- */
-function StoryVideoSlide({
-  uri,
-  muted,
-  onMutedByBrowser,
-  onEnd,
-}: {
-  uri: string;
-  muted: boolean;
-  /** Fires if the browser silently blocked unmuted autoplay and this fell
-   * back to muted, so the header toggle can reflect what's actually playing. */
-  onMutedByBrowser: () => void;
-  onEnd: () => void;
-}) {
-  const pinnedUri = useRef(uri).current;
-  const containerRef = useRef<any>(null);
-  const [ready, setReady] = useState(false);
-
-  const player = useVideoPlayer({ uri: pinnedUri }, (instance) => {
-    instance.loop = false;
-    instance.muted = muted;
-    // The container ref is not attached yet on this first call — see the
-    // `statusChange` listener below, which is what actually lands playback.
-    playWithSoundFallback(containerRef.current, instance, onMutedByBrowser);
-  });
-
-  useEventListener(player, 'statusChange', ({ status }) => {
-    if (status !== 'readyToPlay') return;
-    setReady(true);
-    playWithSoundFallback(containerRef.current, player, onMutedByBrowser);
-  });
-
-  useEventListener(player, 'playToEnd', () => {
-    player.pause();
-    onEnd();
-  });
-
-  // Reflects the header mute toggle onto whichever slide is live.
-  useEffect(() => {
-    player.muted = muted;
-  }, [muted, player]);
-
-  // Leaving the slide has to silence the video, not merely hide it. The player
-  // is released when this unmounts, but release is asynchronous on native and
-  // the audio carries on until it lands.
-  useEffect(
-    () => () => {
-      try {
-        player.pause();
-      } catch {
-        // Already released by the time the story closed. Nothing to stop.
-      }
-    },
-    [player],
-  );
-
-  return (
-    <View ref={containerRef} style={[ABSOLUTE_FILL, { backgroundColor: '#000000' }]}>
-      <VideoView
-        player={player}
-        style={{ width: '100%', height: '100%' }}
-        contentFit="cover"
-        nativeControls={false}
-        {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : null)}
-      />
-      {ready ? null : (
-        <View
-          style={[ABSOLUTE_FILL, { alignItems: 'center', justifyContent: 'center' }]}
-          pointerEvents="none"
-        >
-          <ActivityIndicator color="#FFFFFF" />
-        </View>
-      )}
-    </View>
-  );
-}
 
 // ─── Route entry ──────────────────────────────────────────────────────────────
 
@@ -1217,7 +1005,6 @@ function EventDetailView({
   const [challengeDeleteConfirmVisible, setChallengeDeleteConfirmVisible] = useState(false);
   const filteredCaptureRef = useRef<View | null>(null);
   const [filteredCaptureState, setFilteredCaptureState] = useState<FilteredCaptureState>(null);
-  const storyMountAnim = useRef(new Animated.Value(0)).current;
   const selectedChallengeRef = useRef<Challenge | null>(null);
   const challengeStoryCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const challengeViewerSessionRef = useRef(0);
@@ -1259,24 +1046,10 @@ function EventDetailView({
   }, [viewerRole, celebration.id]);
 
   useEffect(() => {
-    if (selectedChallenge) {
-      storyMountAnim.setValue(0);
-      Animated.spring(storyMountAnim, {
-        toValue: 1,
-        friction: 8,
-        tension: 60,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [selectedChallenge]);
-  useEffect(() => {
     selectedChallengeRef.current = selectedChallenge;
   }, [selectedChallenge]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [storySubmissions, setStorySubmissions] = useState<PhotoItem[]>([]);
-  // Unmuted by default — see `StoryVideoSlide`'s `onMutedByBrowser`, which
-  // flips this if a browser silently blocks unmuted autoplay.
-  const [storyMuted, setStoryMuted] = useState(false);
   const [guestsJoined, setGuestsJoined] = useState(metrics.guestsJoined);
 
   // ── Countdown ──
@@ -1288,53 +1061,25 @@ function EventDetailView({
   // ── Parallax ──
   const scrollY = useRef(new Animated.Value(0)).current;
 
-  // ── Drag to Dismiss story ──
-  // Reanimated shared value runs on the UI thread, so gesture updates are
-  // smooth and don't go through the JS bridge — no jank on iOS.
-  const dragY = useSharedValue(0);
 
   /**
-   * The PanResponder below is built once and kept for the life of the screen,
-   * so its handlers close over the FIRST render's values permanently. Reading
-   * `activeSlideIndex` and `storySubmissions` directly in there meant the tap
-   * handler always saw `0` and `[]`: every right-tap computed "already on the
-   * last slide" and closed the viewer, and every left-tap did nothing. These
-   * refs are what let the handler see the current values.
+   * Bumping the viewer session invalidates any in-flight submission load, so a
+   * response that lands after the story closed cannot re-populate it. The
+   * swipe-out animation itself lives in `StoryViewer`, which only calls this
+   * once it has finished playing.
    */
-  const activeSlideRef = useRef(0);
-  const submissionCountRef = useRef(0);
-  useEffect(() => { activeSlideRef.current = activeSlideIndex; }, [activeSlideIndex]);
-  useEffect(() => { submissionCountRef.current = storySubmissions.length; }, [storySubmissions]);
-
-  /**
-   * Guards the swipe-down dismiss below against a stalled JS-driven
-   * animation — see where it is scheduled, in `onPanResponderRelease`, for
-   * why that can happen. Only ever reads/writes stable things (a ref and a
-   * `useState` setter), so it is safe for the `panResponder` below to close
-   * over this one instance for the life of the screen.
-   */
-  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dismissStory = () => {
     challengeViewerSessionRef.current += 1;
-    if (dismissTimerRef.current !== null) {
-      clearTimeout(dismissTimerRef.current);
-      dismissTimerRef.current = null;
-    }
     if (challengeStoryCloseTimerRef.current !== null) {
       clearTimeout(challengeStoryCloseTimerRef.current);
       challengeStoryCloseTimerRef.current = null;
     }
-    // `dragY` is deliberately NOT reset here. The modal fades out over
-    // roughly 300ms after `selectedChallenge` goes null, so zeroing it now
-    // would snap the story back to centre and fade out from there — the
-    // flash at the end of the swipe. It is reset when the story next opens.
     setChallengeMenuVisible(false);
     setChallengeDeleteConfirmVisible(false);
     selectedChallengeRef.current = null;
     setSelectedChallenge(null);
   };
   useEffect(() => () => {
-    if (dismissTimerRef.current !== null) clearTimeout(dismissTimerRef.current);
     if (challengeStoryCloseTimerRef.current !== null) clearTimeout(challengeStoryCloseTimerRef.current);
   }, []);
 
@@ -1573,46 +1318,6 @@ function EventDetailView({
     updateChallengeStory,
   ]);
 
-  // Gesture handler for pan events. Reanimated's shared values update directly
-  // on the UI thread without going through the JS bridge, eliminating jank.
-  const handlePanEvent = (event: any) => {
-    if (event.translationY !== undefined) {
-      // Gesture is active — track the drag
-      if (event.translationY > 0) {
-        dragY.value = event.translationY;
-      }
-    }
-  };
-
-  const handlePanStateChange = (event: any) => {
-    // State change handler for end of gesture
-    if (event.nativeEvent.state === 5) {
-      // END state
-      const { height } = Dimensions.get('window');
-      const viewerSession = challengeViewerSessionRef.current;
-
-      // Swipe down to dismiss.
-      if (event.nativeEvent.translationY > 60 || event.nativeEvent.velocityY > 1.2) {
-        // Animate out with Reanimated's timing (UI thread, no jank).
-        dragY.value = withTiming(height, { duration: 200 });
-        dismissTimerRef.current = setTimeout(() => {
-          if (challengeViewerSessionRef.current !== viewerSession) return;
-          dismissStory();
-        }, 220);
-      } else {
-        // Spring back into place, also on the UI thread.
-        dragY.value = withSpring(0, { damping: 10, mass: 1, stiffness: 100 });
-      }
-    } else if (event.nativeEvent.state === 3) {
-      // FAILED state
-      dragY.value = withSpring(0);
-    }
-  };
-
-  // Animated style for the story overlay — driven by Reanimated on the UI thread.
-  const storyOverlayAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: dragY.value }],
-  }));
   const imageParallax = scrollY.interpolate({
     inputRange: [0, HERO_H],
     outputRange: [0, PARALLAX_RANGE],
@@ -2429,35 +2134,6 @@ function EventDetailView({
     })
   ).current;
 
-  function navigateStorySlide(direction: 'prev' | 'next') {
-    const current = activeSlideRef.current;
-    const totalSlides = 1 + submissionCountRef.current;
-    setChallengeMenuVisible(false);
-
-    if (direction === 'prev') {
-      if (current > 0) {
-        setActiveSlideIndex(current - 1);
-      }
-      return;
-    }
-
-    if (current < totalSlides - 1) {
-      setActiveSlideIndex(current + 1);
-    } else {
-      dismissStory();
-    }
-  }
-
-  function advanceStoryAfterMediaEnds() {
-    const current = activeSlideRef.current;
-    const totalSlides = 1 + submissionCountRef.current;
-    setChallengeMenuVisible(false);
-
-    if (current < totalSlides - 1) {
-      setActiveSlideIndex(current + 1);
-    }
-  }
-
   async function handlePickPhoto() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -2495,16 +2171,6 @@ function EventDetailView({
       if (challengeViewerSessionRef.current !== viewerSession) return;
       updateChallengeStory(challenge, loadedSubmissions);
     });
-
-    // Cleared on the way in rather than on the way out, so the dismissed story
-    // can stay off-screen for the whole of the modal's fade-out.
-    dragY.value = 0;
-    // Belt and braces against a pending dismiss timer from a swipe on the
-    // previous story somehow still being outstanding — see `dismissStory`.
-    if (dismissTimerRef.current !== null) {
-      clearTimeout(dismissTimerRef.current);
-      dismissTimerRef.current = null;
-    }
   }
 
   async function handleAddSubmission(challenge: Challenge) {
@@ -3491,7 +3157,6 @@ function EventDetailView({
           INSTAGRAM STORY CHALLENGE VIEWER
           ══════════════════════════════════════════════════════ */}
       {selectedChallenge ? (() => {
-          const totalSlides = 1 + storySubmissions.length;
           // The intro slide's backdrop is a blurred still, so it has to come
           // from a photo. A video URI handed to `Image` decodes to nothing and
           // renders black, so fall back through the photo submissions and then
@@ -3503,213 +3168,37 @@ function EventDetailView({
             ? { uri: backdropSubmission.uri }
             : getCoverSource();
 
-      return (
-            <PanGestureHandler
-              onGestureEvent={handlePanEvent}
-              onHandlerStateChange={handlePanStateChange}
-              activeOffsetY={[-12, 12]}
-              failOffsetX={[-24, 24]}
-            >
-              <ReanimatedAnimated.View style={[S.storyOverlay, storyOverlayAnimatedStyle]}>
-                {activeSlideIndex === 0 ? (
-                  <Image
-                    source={coverPhoto}
-                    style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
-                    resizeMode="cover"
-                    blurRadius={35}
-                  />
-                ) : storySubmissions[activeSlideIndex - 1].mediaType === 'video' ? (
-                  // Keyed by submission, not by URL: the URL is re-signed on
-                  // every poll, and remounting on that would restart playback
-                  // every ten seconds. Keying by submission still gives each
-                  // video its own player, including two videos back to back.
-                  <StoryVideoSlide
-                    key={
-                      storySubmissions[activeSlideIndex - 1].submissionId ??
-                      storySubmissions[activeSlideIndex - 1].id ??
-                      `slide-${activeSlideIndex}`
-                    }
-                    uri={storySubmissions[activeSlideIndex - 1].uri}
-                    muted={storyMuted}
-                    onMutedByBrowser={() => setStoryMuted(true)}
-                    onEnd={advanceStoryAfterMediaEnds}
-                  />
-                ) : (
-                  <Image
-                    source={{ uri: storySubmissions[activeSlideIndex - 1].uri }}
-                    style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
-                    resizeMode="cover"
-                  />
-                )}
-
-                <View
-                  style={[
-                    ABSOLUTE_FILL,
-                    { backgroundColor: activeSlideIndex === 0 ? 'rgba(0, 0, 0, 0.40)' : 'rgba(11, 11, 12, 0.25)' },
-                  ]}
-                />
-
-                <View style={ABSOLUTE_FILL} pointerEvents="box-none">
-                  <View style={{ flex: 1, flexDirection: 'row' }} pointerEvents="box-none">
-                    <Pressable
-                      style={S.storyTapZone}
-                      accessibilityRole="button"
-                      accessibilityLabel="Previous story photo"
-                      onPress={() => navigateStorySlide('prev')}
-                    />
-                    <Pressable
-                      style={S.storyTapZone}
-                      accessibilityRole="button"
-                      accessibilityLabel="Next story photo"
-                      onPress={() => navigateStorySlide('next')}
-                    />
-                  </View>
-                </View>
-
-                {activeSlideIndex === 0 ? (
-                  <Animated.View
-                    pointerEvents="none"
-                    style={[
-                      S.storyHeroContainer,
-                      {
-                        opacity: storyMountAnim,
-                        transform: [{
-                          translateY: storyMountAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [20, 0],
-                          }),
-                        }],
-                      },
-                    ]}
-                  >
-                    <View style={S.storyHeroIconRing}>
-                      <SharedChallengeIconSVG type={selectedChallenge.icon} size={32} />
-                    </View>
-                    <AppText style={S.storyHeroTitle}>{selectedChallenge.label}</AppText>
-
-                    <View style={S.storyHeroDividerRow}>
-                      <View style={S.storyHeroDividerLine} />
-                      <Svg width={14} height={14} viewBox="0 0 14 14" fill="none">
-                        <Path
-                          d="M7 0C7 3.866 3.866 7 0 7C3.866 7 7 10.134 7 14C7 10.134 10.134 7 14 7C10.134 7 7 3.866 7 0Z"
-                          fill="rgba(255, 255, 255, 0.6)"
-                        />
-                      </Svg>
-                      <View style={S.storyHeroDividerLine} />
-                    </View>
-
-                    {/* The host's saved instructions first. The icon's stock
-                        brief is only the fallback for a challenge that has
-                        never been edited — reading the preset unconditionally
-                        is what made custom instructions look like they were
-                        never saved. `resolveChallengeBrief` (rather than a
-                        raw map lookup) is what the edit form pre-fills with,
-                        so an untouched challenge reads identically in both. */}
-                    <AppText style={S.storyHeroDesc}>
-                      {selectedChallenge.instructions?.trim() ||
-                        resolveChallengeBrief(selectedChallenge.icon)?.instr ||
-                        'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'}
-                    </AppText>
-                  </Animated.View>
-                ) : null}
-
-                <View style={[S.storyHeader, { paddingTop: insets.top + spacing.sm }]}>
-                  <View style={S.storyProgressBarRow}>
-                    {Array.from({ length: totalSlides }).map((_, i) => (
-                      <View key={i} style={S.storyProgressBarOuter}>
-                        <View
-                          style={[
-                            S.storyProgressBarInner,
-                            { width: i < activeSlideIndex ? '100%' : (i === activeSlideIndex ? '100%' : '0%') },
-                          ]}
-                        />
-                      </View>
-                    ))}
-                  </View>
-
-                  <View style={S.storyHeaderRowNew}>
-                    <View style={{ flex: 1, paddingLeft: 4 }}>
-                      {activeSlideIndex > 0 && (
-                        <View style={{ gap: 2 }}>
-                          <AppText style={{ fontFamily: 'InstrumentSans_600SemiBold', fontSize: 14, color: '#FFFFFF', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                            {storySubmissions[activeSlideIndex - 1].takenBy || 'Guest'}
-                          </AppText>
-                          {formatStoryTimestamp(storySubmissions[activeSlideIndex - 1].postedAt) ? (
-                            <AppText style={{ fontFamily: 'InstrumentSans_400Regular', fontSize: 12, color: 'rgba(255, 255, 255, 0.8)', textShadowColor: 'rgba(0, 0, 0, 0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 }}>
-                              {formatStoryTimestamp(storySubmissions[activeSlideIndex - 1].postedAt)}
-                            </AppText>
-                          ) : null}
-                        </View>
-                      )}
-                    </View>
-                    <View style={S.storyHeaderActions}>
-                      {activeSlideIndex > 0 && storySubmissions[activeSlideIndex - 1]?.mediaType === 'video' ? (
-                        <Pressable
-                          onPress={() => setStoryMuted((prev) => !prev)}
-                          style={S.storyHeaderMenuBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel={storyMuted ? 'Unmute video' : 'Mute video'}
-                        >
-                          <VolumeIcon muted={storyMuted} size={20} />
-                        </Pressable>
-                      ) : null}
-                      {activeSlideIndex > 0 && canDeleteActiveChallengeSubmission ? (
-                        <Pressable
-                          onPress={() => setChallengeMenuVisible(true)}
-                          style={S.storyHeaderMenuBtn}
-                          accessibilityRole="button"
-                          accessibilityLabel="More options"
-                        >
-                          <OverflowDotsIcon size={20} />
-                        </Pressable>
-                      ) : null}
-                      <Pressable
-                        onPress={dismissStory}
-                        style={S.storyCloseBtnNew}
-                        accessibilityRole="button"
-                        accessibilityLabel="Close story"
-                      >
-                        <CloseIcon size={24} color="#FFFFFF" />
-                      </Pressable>
-                    </View>
-                  </View>
-                </View>
-
-                {activeSlideIndex === 0 ? (
-                  <Animated.View
-                    style={[
-                      S.storyHeroCTAWrap,
-                      {
-                        bottom: insets.bottom + 24,
-                        opacity: storyMountAnim,
-                        transform: [{
-                          translateY: storyMountAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [40, 0],
-                          }),
-                        }],
-                      },
-                    ]}
-                  >
-                    <Pressable
-                      onPress={() => handleAddSubmission(selectedChallenge)}
-                      style={({ pressed }) => [S.storyHeroCTA, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
-                    >
-                      <AppText style={S.storyHeroCTAText}>📸 Add Yours</AppText>
-                    </Pressable>
-                  </Animated.View>
-                ) : (
-                  <View style={[S.storyBottomBar, { paddingBottom: Math.max(insets.bottom, spacing.base) }]}>
-                    <Pressable
-                      onPress={() => handleAddSubmission(selectedChallenge)}
-                      style={({ pressed }) => [S.storyAddYoursBtn, pressed && { opacity: 0.8 }]}
-                    >
-                      <AppText style={S.storyAddYoursBtnText}>📸 Add Yours</AppText>
-                    </Pressable>
-                  </View>
-                )}
-              </ReanimatedAnimated.View>
-            </PanGestureHandler>
+          return (
+            <StoryViewer
+              backdrop={{ kind: 'blurredImage', source: coverPhoto }}
+              icon={<SharedChallengeIconSVG type={selectedChallenge.icon} size={32} />}
+              title={selectedChallenge.label}
+              /* The host's saved instructions first. The icon's stock brief is
+                 only the fallback for a challenge that has never been edited —
+                 reading the preset unconditionally is what made custom
+                 instructions look like they were never saved.
+                 `resolveChallengeBrief` (rather than a raw map lookup) is what
+                 the edit form pre-fills with, so an untouched challenge reads
+                 identically in both. */
+              description={
+                selectedChallenge.instructions?.trim() ||
+                resolveChallengeBrief(selectedChallenge.icon)?.instr ||
+                'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'
+              }
+              submissions={storySubmissions}
+              activeSlideIndex={activeSlideIndex}
+              onChangeSlideIndex={(index) => {
+                setChallengeMenuVisible(false);
+                setActiveSlideIndex(index);
+              }}
+              onDismiss={dismissStory}
+              cta={{
+                label: '📸 Add Yours',
+                onPress: () => handleAddSubmission(selectedChallenge),
+              }}
+              canDeleteActive={canDeleteActiveChallengeSubmission}
+              onPressOverflow={() => setChallengeMenuVisible(true)}
+            />
           );
         })() : null}
 
@@ -4650,152 +4139,6 @@ const S = StyleSheet.create({
   },
 
   // ── Story Viewer styles ──
-  storyOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#000000',
-    zIndex: 250,
-    elevation: 250,
-  },
-  storyHeader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: spacing.base,
-    zIndex: 10,
-  },
-  storyProgressBarRow: {
-    flexDirection: 'row',
-    gap: 4,
-    width: '100%',
-    marginBottom: spacing.sm,
-  },
-  storyProgressBarOuter: {
-    flex: 1,
-    height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
-    borderRadius: 1.5,
-    overflow: 'hidden',
-  },
-  storyProgressBarInner: {
-    height: '100%',
-    backgroundColor: '#FFFFFF',
-  },
-  storyHeaderRowNew: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  storyHeaderActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-  },
-  storyHeaderMenuBtn: {
-    padding: spacing.xs,
-  },
-  storyCloseBtnNew: {
-    padding: spacing.xs,
-  },
-  storyHeroContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  storyHeroIconRing: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xl,
-  },
-  storyHeroTitle: {
-    fontFamily: 'InstrumentSerif_400Regular',
-    fontSize: 40,
-    lineHeight: 46,
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: spacing.md,
-  },
-  storyHeroDividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginVertical: spacing.md,
-    width: 140,
-  },
-  storyHeroDividerLine: {
-    flex: 1,
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-  },
-  storyHeroDesc: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    textAlign: 'center',
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  storyHeroCTAWrap: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    alignItems: 'center',
-    zIndex: 10,
-  },
-  storyTapZone: {
-    flex: 1,
-  },
-  storyHeroCTA: {
-    width: '100%',
-    height: 56,
-    backgroundColor: '#FFFFFF',
-    borderRadius: radii.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  storyHeroCTAText: {
-    fontFamily: 'InstrumentSans_600SemiBold',
-    fontSize: 16,
-    color: '#000000',
-  },
-  storyBottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    paddingHorizontal: spacing.xl,
-    zIndex: 10,
-  },
-  storyAddYoursBtn: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: radii.pill,
-    height: 50,
-    paddingHorizontal: spacing.xl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-    width: '100%',
-  },
-  storyAddYoursBtnText: {
-    color: '#000000',
-    fontSize: 15,
-    fontWeight: '700',
-  },
   circleHeaderBtn: {
     width: 36,
     height: 36,
