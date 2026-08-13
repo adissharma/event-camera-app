@@ -132,6 +132,30 @@ function OverflowDotsIcon({ size = 18, color = '#FFFFFF' }) {
   );
 }
 
+function VolumeIcon({ muted, size = 18, color = '#FFFFFF' }: { muted: boolean; size?: number; color?: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 9v6h4l5 4V5L8 9H4Z"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+        fill={color}
+      />
+      {muted ? (
+        <Path d="M17 9l5 6M22 9l-5 6" stroke={color} strokeWidth={1.8} strokeLinecap="round" />
+      ) : (
+        <Path
+          d="M16.5 8.5a5 5 0 0 1 0 7M19 6a9 9 0 0 1 0 12"
+          stroke={color}
+          strokeWidth={1.8}
+          strokeLinecap="round"
+        />
+      )}
+    </Svg>
+  );
+}
+
 function InstagramStoryIcon({ size = 22, color = '#FFFFFF' }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -759,6 +783,48 @@ function formatMediaDuration(durationMs?: number | null): string | null {
   return `${minutes}:${`${seconds}`.padStart(2, '0')}`;
 }
 
+function getWebVideoElement(container: unknown): HTMLVideoElement | null {
+  if (Platform.OS !== 'web') return null;
+  if (!container || typeof (container as Element).querySelector !== 'function') return null;
+  const video = (container as Element).querySelector('video');
+  return video instanceof HTMLVideoElement ? video : null;
+}
+
+/**
+ * Starts playback with sound, falling back to muted if the browser blocks it.
+ *
+ * `expo-video`'s own `player.play()` is fire-and-forget on web — it calls the
+ * underlying `<video>`'s `play()` but never looks at the promise it returns,
+ * so a browser autoplay-policy rejection (unmuted playback outside a direct
+ * user gesture) is silently swallowed and the video is left paused with no
+ * retry. Driving the real `<video>` element here recovers that promise: on a
+ * rejection this falls back to a muted autoplay, which browsers always allow,
+ * rather than leaving the viewer looking at a frozen frame. Native controls
+ * (where shown) still let the viewer unmute with one tap.
+ *
+ * A no-op on native, where there is no such restriction and `player.play()`
+ * already works.
+ */
+function playWithSoundFallback(
+  container: unknown,
+  player: { muted: boolean; play: () => void },
+  onFallbackToMuted?: () => void,
+) {
+  const video = getWebVideoElement(container);
+  if (!video) {
+    player.play();
+    return;
+  }
+  const playResult = video.play();
+  if (playResult && typeof playResult.catch === 'function') {
+    playResult.catch(() => {
+      player.muted = true;
+      onFallbackToMuted?.();
+      player.play();
+    });
+  }
+}
+
 function VideoPoster({
   uri,
   style,
@@ -776,14 +842,28 @@ function VideoPoster({
   contentFit?: 'contain' | 'cover';
   onEnd?: () => void;
 }) {
+  const containerRef = useRef<any>(null);
   const player = useVideoPlayer({ uri }, (instance) => {
     instance.loop = false;
     instance.muted = muted;
     if (autoPlay) {
-      instance.play();
+      // The container ref is not attached yet on this very first call (it
+      // fires before mount commits), so this attempt just falls through to
+      // a plain `play()` — the `statusChange` listener below is what
+      // actually lands the (sound-aware) attempt once the video is ready.
+      playWithSoundFallback(containerRef.current, instance);
       return;
     }
     instance.pause();
+  });
+
+  // `player.play()` before the source has finished loading is a no-op with
+  // no retry, so a video that was not already buffered — the common case for
+  // a signed URL fetched fresh — would otherwise sit paused forever despite
+  // `autoPlay`. This is what was making gallery videos fail to autoplay.
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status !== 'readyToPlay' || !autoPlay) return;
+    playWithSoundFallback(containerRef.current, player);
   });
 
   useEventListener(player, 'playToEnd', () => {
@@ -792,12 +872,14 @@ function VideoPoster({
   });
 
   return (
-    <VideoView
-      player={player}
-      style={style}
-      contentFit={contentFit}
-      nativeControls={controls}
-    />
+    <View ref={containerRef} style={style}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit={contentFit}
+        nativeControls={controls}
+      />
+    </View>
   );
 }
 
@@ -825,29 +907,51 @@ function VideoPoster({
  * On Android the view is a TextureView. A SurfaceView punches a hole through
  * the window, which renders black inside the transformed, Reanimated-driven
  * story overlay this sits in.
+ *
+ * Mute is a controlled prop rather than internal state: the toggle button
+ * lives in the story header, outside this component, and needs to affect
+ * whichever slide is currently playing.
  */
-function StoryVideoSlide({ uri, onEnd }: { uri: string; onEnd: () => void }) {
+function StoryVideoSlide({
+  uri,
+  muted,
+  onMutedByBrowser,
+  onEnd,
+}: {
+  uri: string;
+  muted: boolean;
+  /** Fires if the browser silently blocked unmuted autoplay and this fell
+   * back to muted, so the header toggle can reflect what's actually playing. */
+  onMutedByBrowser: () => void;
+  onEnd: () => void;
+}) {
   const pinnedUri = useRef(uri).current;
+  const containerRef = useRef<any>(null);
   const [ready, setReady] = useState(false);
 
   const player = useVideoPlayer({ uri: pinnedUri }, (instance) => {
     instance.loop = false;
-    // Browsers refuse to autoplay audio that the user did not ask for; muting
-    // is the price of the video starting at all on web.
-    instance.muted = Platform.OS === 'web';
-    instance.play();
+    instance.muted = muted;
+    // The container ref is not attached yet on this first call — see the
+    // `statusChange` listener below, which is what actually lands playback.
+    playWithSoundFallback(containerRef.current, instance, onMutedByBrowser);
   });
 
   useEventListener(player, 'statusChange', ({ status }) => {
     if (status !== 'readyToPlay') return;
     setReady(true);
-    player.play();
+    playWithSoundFallback(containerRef.current, player, onMutedByBrowser);
   });
 
   useEventListener(player, 'playToEnd', () => {
     player.pause();
     onEnd();
   });
+
+  // Reflects the header mute toggle onto whichever slide is live.
+  useEffect(() => {
+    player.muted = muted;
+  }, [muted, player]);
 
   // Leaving the slide has to silence the video, not merely hide it. The player
   // is released when this unmounts, but release is asynchronous on native and
@@ -864,7 +968,7 @@ function StoryVideoSlide({ uri, onEnd }: { uri: string; onEnd: () => void }) {
   );
 
   return (
-    <View style={[ABSOLUTE_FILL, { backgroundColor: '#000000' }]}>
+    <View ref={containerRef} style={[ABSOLUTE_FILL, { backgroundColor: '#000000' }]}>
       <VideoView
         player={player}
         style={{ width: '100%', height: '100%' }}
@@ -1170,6 +1274,9 @@ function EventDetailView({
   }, [selectedChallenge]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [storySubmissions, setStorySubmissions] = useState<PhotoItem[]>([]);
+  // Unmuted by default — see `StoryVideoSlide`'s `onMutedByBrowser`, which
+  // flips this if a browser silently blocks unmuted autoplay.
+  const [storyMuted, setStoryMuted] = useState(false);
   const [guestsJoined, setGuestsJoined] = useState(metrics.guestsJoined);
 
   // ── Countdown ──
@@ -3216,6 +3323,7 @@ function EventDetailView({
                   style={{ width: '100%', height: '100%' }}
                   controls
                   autoPlay
+                  muted={false}
                   contentFit="contain"
                 />
               ) : (
@@ -3422,6 +3530,8 @@ function EventDetailView({
                       `slide-${activeSlideIndex}`
                     }
                     uri={storySubmissions[activeSlideIndex - 1].uri}
+                    muted={storyMuted}
+                    onMutedByBrowser={() => setStoryMuted(true)}
                     onEnd={advanceStoryAfterMediaEnds}
                   />
                 ) : (
@@ -3533,6 +3643,16 @@ function EventDetailView({
                       )}
                     </View>
                     <View style={S.storyHeaderActions}>
+                      {activeSlideIndex > 0 && storySubmissions[activeSlideIndex - 1]?.mediaType === 'video' ? (
+                        <Pressable
+                          onPress={() => setStoryMuted((prev) => !prev)}
+                          style={S.storyHeaderMenuBtn}
+                          accessibilityRole="button"
+                          accessibilityLabel={storyMuted ? 'Unmute video' : 'Mute video'}
+                        >
+                          <VolumeIcon muted={storyMuted} size={20} />
+                        </Pressable>
+                      ) : null}
                       {activeSlideIndex > 0 && canDeleteActiveChallengeSubmission ? (
                         <Pressable
                           onPress={() => setChallengeMenuVisible(true)}
