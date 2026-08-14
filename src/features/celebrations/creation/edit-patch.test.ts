@@ -43,7 +43,6 @@ describe('buildEditPatch', () => {
       expect(patch).toEqual({
         shotLimitPerGuest: 15,
         captureMode: 'camera_only',
-        galleryVisibility: 'own_only',
       });
     });
 

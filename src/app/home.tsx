@@ -175,7 +175,17 @@ function getStatusLabel(celebration: CelebrationSummary) {
 }
 
 // Staggered animated Event card tile component (9:16 aspect ratio, no arrow icon)
-function EventCardTile({ celebration, index, themes, onPress }) {
+function EventCardTile({ 
+  celebration, 
+  index, 
+  themes, 
+  onPress 
+}: { 
+  celebration: CelebrationSummary; 
+  index: number; 
+  themes?: ThemeRow[]; 
+  onPress: () => void; 
+}) {
   const fadeAnim = useState(() => new Animated.Value(0))[0];
 
   useEffect(() => {
@@ -209,7 +219,7 @@ function EventCardTile({ celebration, index, themes, onPress }) {
   const theme = (themes ?? []).find(
     (t: ThemeRow) => t.id === celebration.defaultThemeId || t.slug === celebration.defaultThemeId,
   );
-  const accentColor = theme?.design_tokens?.accent || colours.textPrimary;
+  const accentColor = (theme?.design_tokens as Record<string, string> | null)?.accent || colours.textPrimary;
 
   const statusLabel = getStatusLabel(celebration);
   const isCompleted = !statusLabel;
@@ -234,7 +244,7 @@ function EventCardTile({ celebration, index, themes, onPress }) {
       <Pressable style={styles.eventCard} onPress={onPress}>
         <Image 
           source={coverSource} 
-          style={[StyleSheet.absoluteFillObject, { width: '100%', height: '100%' }]} 
+          style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]} 
           resizeMode="cover" 
         />
         
@@ -554,7 +564,7 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <Pressable 
-            style={StyleSheet.absoluteFillObject} 
+            style={StyleSheet.absoluteFill} 
             onPress={() => setScannerModalVisible(false)} 
           />
           
@@ -576,8 +586,7 @@ export default function HomeScreen() {
                 {/* Camera View Simulation */}
                 <Image 
                   source={require('../../assets/images/placeholders/gallery_blurred_half.png')} 
-                  style={StyleSheet.absoluteFillObject} 
-                  opacity={0.4} 
+                  style={[StyleSheet.absoluteFill, { opacity: 0.4 }]} 
                 />
                 
                 {/* Neon scanning laser line */}
@@ -645,7 +654,7 @@ export default function HomeScreen() {
       >
         <View style={styles.modalOverlay}>
           <Pressable 
-            style={StyleSheet.absoluteFillObject} 
+            style={StyleSheet.absoluteFill} 
             onPress={() => setProfileModalVisible(false)} 
           />
           

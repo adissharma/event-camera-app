@@ -394,13 +394,13 @@ function Thumbnail({
   const phasedDriftX = drift.interpolate({
     inputRange: shiftedInputs,
     outputRange: [0, 8, -5, 7, -4, 6, -3, 4, 0], // Quick bounces with decreasing amplitude
-    extrapolate: 'cycle',
+    extrapolate: 'clamp',
   });
 
   const phasedDriftY = drift.interpolate({
     inputRange: shiftedInputs,
     outputRange: [0, -6, 4, -5, 3, -4, 2, -3, 0], // Offset bounces for natural motion
-    extrapolate: 'cycle',
+    extrapolate: 'clamp',
   });
 
   const left = screen.width * slot.x - slot.size / 2;

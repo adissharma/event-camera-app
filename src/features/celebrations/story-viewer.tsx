@@ -327,7 +327,7 @@ export function StoryViewer({
   // blocks unmuted autoplay, so the toggle reflects what is actually playing.
   const [muted, setMuted] = useState(false);
 
-  const mountAnim = useRef(new Animated.Value(0)).current;
+  const [mountAnim] = useState(() => new Animated.Value(0));
   useEffect(() => {
     mountAnim.setValue(0);
     Animated.spring(mountAnim, {

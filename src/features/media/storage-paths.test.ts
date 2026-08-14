@@ -96,7 +96,7 @@ describe('storage paths', () => {
 
   describe('other buckets', () => {
     it('builds a cover path', () => {
-      expect(buildCoverPath(W, C, 'jpg')).toBe(`${W}/${C}/cover-v1.jpg`);
+      expect(buildCoverPath(W, C, 'jpg', 1)).toBe(`${W}/${C}/cover-v1.jpg`);
     });
 
     it('builds a QR asset path', () => {

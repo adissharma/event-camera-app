@@ -117,7 +117,6 @@ export interface CreationDraft {
   // Step 11
   qrTemplateKey: string;
 
-  editCelebrationId?: string | null;
   editSessionId?: string | null;
 }
 

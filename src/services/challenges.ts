@@ -229,7 +229,7 @@ export async function updateChallenge(
  */
 export async function replaceChallenges(
   celebrationId: string,
-  next: Array<{ id?: string; label: string; icon: string; instructions?: string | null; photoUri?: string | null }>,
+  next: { id?: string; label: string; icon: string; instructions?: string | null; photoUri?: string | null }[],
 ): Promise<EventChallenge[]> {
   const client = requireSupabase();
 

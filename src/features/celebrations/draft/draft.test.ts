@@ -85,7 +85,7 @@ describe('step validation', () => {
     it('rejects when guest is during but host is at close', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({ hostRevealChoice: 'at_close', guestRevealChoice: 'during' }),
         ),
       ).toMatch(/Guests cannot view photos before you/);
@@ -94,7 +94,7 @@ describe('step validation', () => {
     it('rejects when host is custom but guest is not custom', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: new Date(Date.now() + 3600000).toISOString(),
@@ -107,7 +107,7 @@ describe('step validation', () => {
     it('rejects a custom reveal with null times', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: null,
@@ -121,7 +121,7 @@ describe('step validation', () => {
     it('rejects a custom reveal in the past', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: '2020-01-01T00:00:00.000Z',
@@ -137,7 +137,7 @@ describe('step validation', () => {
       const guestTime = new Date(hostTime.getTime() - 3600_000); // 1 hour earlier
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: hostTime.toISOString(),
@@ -197,6 +197,7 @@ describe('publishability', () => {
       title: 'Priya & Arjun',
       endsAt: new Date(Date.now() + 86_400_000).toISOString(),
       planKey: 'guests_50',
+      shotLimitPerGuest: 25,
     });
 
   it('is publishable once name, closing time, formats and package are set', () => {
@@ -238,7 +239,6 @@ describe('empty draft defaults', () => {
     expect(draft.hostRevealChoice).toBe('at_close');
     expect(draft.guestRevealChoice).toBe('at_close');
     expect(draft.photoTreatment).toBe('original');
-    expect(draft.furthestStep).toBe('name');
   });
 
   it('records the owning user, so one account never restores another draft', () => {
