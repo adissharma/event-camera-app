@@ -36,34 +36,72 @@ export function InviteShareSheet({
   bottomInset = 0,
   onClose,
 }: InviteShareSheetProps) {
-  const [copyNotice, setCopyNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: 'success' | 'error' } | null>(null);
   const invitationUrl = useMemo(
     () => (eventCode ? buildInvitationUrl(eventCode) : null),
     [eventCode],
   );
 
-  async function copyInvitationLink() {
-    if (!invitationUrl) return;
+  function showNotice(text: string, tone: 'success' | 'error' = 'success') {
+    setNotice({ text, tone });
+    // An error is worth reading; a confirmation is not.
+    setTimeout(() => setNotice(null), tone === 'error' ? 4000 : 1800);
+  }
+
+  /**
+   * Reports a failure wherever the viewer can actually see it.
+   *
+   * `Alert.alert` is a no-op on react-native-web — literally `static alert() {}`
+   * — so every failure path that relied on it told web users nothing at all:
+   * the button appeared to do nothing. Native keeps the system alert it has
+   * always shown; web falls back to the sheet's own inline notice.
+   */
+  function reportFailure(title: string, message: string) {
+    if (Platform.OS === 'web') {
+      showNotice(message, 'error');
+      return;
+    }
+    Alert.alert(title, message);
+  }
+
+  /** Resolves true when the link actually reached the clipboard. */
+  async function copyInvitationLink(): Promise<boolean> {
+    if (!invitationUrl) return false;
+
+    const webNavigator = globalThis.navigator as Navigator & {
+      clipboard?: { writeText?: (text: string) => Promise<void> };
+    };
+
+    // Web has two independent clipboard paths, and the modern one is not the
+    // reliable one. `navigator.clipboard.writeText` rejects in plenty of
+    // ordinary situations — a denied permission, a non-secure origin,
+    // Safari's stricter gesture rules — whereas `expo-clipboard` falls back
+    // internally to `document.execCommand('copy')`, which still works in
+    // several of them. Treating the first rejection as fatal, as this did,
+    // gave up while a working path sat unused. That mattered twice over:
+    // `navigator.share` is absent on most desktop browsers, so Share
+    // Invitation lands here too, and a single rejection took out both
+    // actions at once.
+    if (Platform.OS === 'web' && typeof webNavigator.clipboard?.writeText === 'function') {
+      try {
+        await webNavigator.clipboard.writeText(invitationUrl);
+        showNotice('Invitation link copied');
+        return true;
+      } catch {
+        // Fall through to the more forgiving path below.
+      }
+    }
 
     try {
-      if (Platform.OS === 'web') {
-        const webNavigator = globalThis.navigator as Navigator & {
-          clipboard?: { writeText?: (text: string) => Promise<void> };
-        };
-
-        if (typeof webNavigator.clipboard?.writeText === 'function') {
-          await webNavigator.clipboard.writeText(invitationUrl);
-        } else {
-          await Clipboard.setStringAsync(invitationUrl);
-        }
-      } else {
-        await Clipboard.setStringAsync(invitationUrl);
-      }
-
-      setCopyNotice('Invitation link copied');
-      setTimeout(() => setCopyNotice(null), 1800);
+      await Clipboard.setStringAsync(invitationUrl);
+      showNotice('Invitation link copied');
+      return true;
     } catch {
-      Alert.alert('Copy unavailable', 'We could not copy the invitation link. Please try again.');
+      reportFailure(
+        'Copy unavailable',
+        'We could not copy the invitation link. You can select the link above and copy it manually.',
+      );
+      return false;
     }
   }
 
@@ -86,6 +124,9 @@ export function InviteShareSheet({
           return;
         }
 
+        // No Web Share API — most desktop browsers. Copying the link is the
+        // closest equivalent, and `copyInvitationLink` reports its own
+        // outcome either way.
         await copyInvitationLink();
         return;
       }
@@ -154,9 +195,15 @@ export function InviteShareSheet({
                       </AppText>
                     </Pressable>
                   </View>
-                  {copyNotice ? (
-                    <AppText variant="caption" style={S.copyNotice}>
-                      {copyNotice}
+                  {notice ? (
+                    <AppText
+                      variant="caption"
+                      style={[
+                        S.copyNotice,
+                        { color: notice.tone === 'error' ? colours.error : colours.success },
+                      ]}
+                    >
+                      {notice.text}
                     </AppText>
                   ) : null}
                 </View>
@@ -189,6 +236,9 @@ const S = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(5,5,6,0.88)',
     justifyContent: 'flex-end',
+    // Keeps the sheet centred once it stops filling the viewport — see the
+    // `maxWidth` below, which is the only case where that happens.
+    alignItems: 'center',
   },
   modalSheet: {
     backgroundColor: '#09090A',
@@ -198,6 +248,22 @@ const S = StyleSheet.create({
     paddingTop: spacing.lg,
     gap: spacing.lg,
     maxHeight: '92%',
+    width: '100%',
+    /**
+     * A bottom sheet is proportioned for a phone. Left unbounded it spans
+     * whatever it is given, and in a desktop browser that is the entire
+     * window — which strands the invite link against the far left edge, sends
+     * its own Copy button a thousand pixels away to the right, and turns
+     * `Share Invitation` into a full-width bar. The result reads as a page
+     * footer rather than as the same sheet iOS shows.
+     *
+     * Deliberately a plain `maxWidth` rather than a `Platform.OS === 'web'`
+     * branch: the app is phone-only on iOS (`supportsTablet: false`) and the
+     * widest phone it runs on is 440pt, so this is a no-op on every native
+     * device and on mobile web. It only ever engages on a wide browser
+     * window, which is precisely where the layout needed adapting.
+     */
+    maxWidth: 480,
   },
   sheetHandle: {
     width: 36,
@@ -285,7 +351,6 @@ const S = StyleSheet.create({
     fontWeight: '600',
   },
   copyNotice: {
-    color: colours.success,
     textAlign: 'center',
   },
   shareClose: {
