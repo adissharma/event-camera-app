@@ -6,6 +6,8 @@ import { BRAND_ASSETS, BRAND_CONFIG } from '@/config/brand';
 import { colours, layout, radii, spacing } from '@/design';
 import type { MediaBoxStyle } from '@/types/style';
 
+const STORIES_LOGO_ASPECT_RATIO = 1254 / 350;
+
 export interface BrandLogoProps {
   /** `primary` on light surfaces, `light` on imagery, `mark` where space is tight. */
   variant?: 'primary' | 'light' | 'mark';
@@ -70,7 +72,7 @@ export function BrandLogo({ variant = 'primary', height = 32, style }: BrandLogo
       accessibilityLabel={BRAND_CONFIG.appName}
       source={source}
       contentFit="contain"
-      style={[{ height, aspectRatio: 3.6, width: height * 3.6 }, style]}
+      style={[{ height, aspectRatio: STORIES_LOGO_ASPECT_RATIO, width: height * STORIES_LOGO_ASPECT_RATIO }, style]}
     />
   );
 }

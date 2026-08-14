@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "event-camera-app",
+    "name": "Stories.",
     "slug": "event-camera-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -17,7 +17,9 @@
       ],
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSSupportsLiveActivities": true
+        "NSSupportsLiveActivities": true,
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library so photos can be shared to Instagram.",
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos so they can be shared to Instagram."
       },
       "runtimeVersion": {
         "policy": "appVersion"
@@ -56,6 +58,8 @@
     },
     "web": {
       "output": "static",
+      "name": "Stories.",
+      "shortName": "Stories.",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -63,6 +67,19 @@
       "@bacons/apple-targets",
       "./plugins/with-live-activity-module",
       "expo-router",
+      "expo-build-properties",
+      [
+        "react-native-share",
+        {
+          "ios": [
+            "instagram",
+            "instagram-stories"
+          ],
+          "android": [
+            "com.instagram.android"
+          ]
+        }
+      ],
       [
         "expo-splash-screen",
         {

@@ -1,8 +1,7 @@
 /**
  * Central brand configuration.
  *
- * The public product name is NOT final. `Koto` is a temporary working name and
- * fallback label only.
+ * Every user-visible product name should resolve through this module.
  *
  * Every user-visible reference to the brand must resolve through this module.
  * Nothing in screens, migrations, table names, buckets, RPC names, analytics
@@ -13,8 +12,8 @@
  */
 
 export const BRAND_CONFIG = {
-  appName: 'Candidly',
-  shortName: 'Candidly',
+  appName: 'Stories.',
+  shortName: 'Stories.',
   tagline: 'Every guest. Every angle.',
   supportEmail: 'support@example.com',
   websiteUrl: 'https://example.com',

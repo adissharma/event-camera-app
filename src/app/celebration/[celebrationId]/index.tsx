@@ -32,9 +32,6 @@ import { Asset as ExpoAsset } from 'expo-asset';
 import { useEventListener } from 'expo';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
-import * as Sharing from 'expo-sharing';
-import * as Linking from 'expo-linking';
-import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -70,6 +67,7 @@ import { canViewerSeePhotos, msUntilReveal, formatRevealCountdownWords } from '@
 import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal';
 import { serverNow } from '@/services/server-time';
 import { LOCALE_CONFIG } from '@/config/app-config';
+import { BRAND_CONFIG } from '@/config/brand';
 import { colours, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
 import {
@@ -91,7 +89,7 @@ import {
 } from '@/services/challenges';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { createUniqueChannel } from '@/lib/supabase/realtime';
-import { inferMimeTypeFromUri } from '@/features/media/storage-paths';
+import { sharePhotoToInstagram } from '@/features/sharing/share-to-instagram';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -177,6 +175,9 @@ function CheckIcon({ size = 18, color = '#FFFFFF' }) {
  * `undefined`, so every view styled with it was laid out at zero size — which
  * is why the story viewer's touch overlay received no taps or swipes at all.
  */
+/** The square brand mark. The wordmark is too wide for the nav's left slot. */
+const GALLERY_NAV_MARK = require('../../../../assets/brand/gallery-icon.png');
+
 const ABSOLUTE_FILL = {
   position: 'absolute',
   top: 0,
@@ -2412,7 +2413,7 @@ function EventDetailView({
     const safeExt = /^[a-z0-9]{1,5}$/.test(extension) ? extension : fallbackExtension;
     const destinationFile = new FileSystem.File(
       FileSystem.Paths.cache,
-      `candidly-save-${celebration.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`,
+      `stories-save-${celebration.id}-${Date.now()}-${Math.random().toString(36).slice(2)}.${safeExt}`,
     );
     const downloaded = await FileSystem.File.downloadFileAsync(sourceUri, destinationFile);
     return downloaded.uri;
@@ -2486,49 +2487,7 @@ function EventDetailView({
   }
 
   async function shareGalleryMediaToInstagram(photo: PhotoItem) {
-    void Haptics.selectionAsync().catch(() => {});
-    if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Instagram sharing is only supported on mobile devices.');
-      return;
-    }
-
-    try {
-      let localUri = photo.uri;
-      if (photo.uri.startsWith('http://') || photo.uri.startsWith('https://')) {
-        const filename = photo.uri.split('/').pop()?.split('?')[0] || 'photo.jpg';
-        const file = new FileSystem.File(FileSystem.Paths.cache, filename);
-        const downloaded = await FileSystem.File.downloadFileAsync(photo.uri, file);
-        localUri = downloaded.uri;
-      }
-      const mimeType = 'image/jpeg';
-
-      const instagramUrl = Platform.OS === 'ios' ? 'instagram-stories://share' : 'instagram://';
-      let opened = false;
-      try {
-        if (await Linking.canOpenURL(instagramUrl)) {
-          await Clipboard.setImageAsync(localUri);
-          await Linking.openURL(instagramUrl);
-          opened = true;
-        }
-      } catch {
-        opened = false;
-      }
-
-      if (!opened) {
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(localUri, {
-            dialogTitle: 'Share to Instagram',
-            mimeType,
-            UTI: 'public.image',
-          });
-        } else {
-          Alert.alert('Instagram not installed', 'Please install Instagram to share directly.');
-        }
-      }
-    } catch (error) {
-      console.error('[gallery] failed to share photo to Instagram', error);
-      Alert.alert('Could not share', 'Failed to share photo to Instagram.');
-    }
+    await sharePhotoToInstagram(photo);
   }
 
   async function renderFilteredSave(item: SavePhotoItem) {
@@ -2688,27 +2647,36 @@ function EventDetailView({
             {/* Hosts get a normal back button. Guests get an explicit "leave"
                 control instead, since their swipe-back gesture is disabled
                 below — this is the only way out of the event without it. */}
-            {isHost ? (
-              <Pressable
-                style={S.navBtn}
-                onPress={() => router.replace('/home')}
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-              >
-                <BackChevron />
-              </Pressable>
-            ) : Platform.OS === 'web' ? (
-              <View style={[S.navBtn, { opacity: 0 }]} pointerEvents="none" />
-            ) : (
-              <Pressable
-                style={S.navBtn}
-                onPress={handleLeaveEvent}
-                accessibilityRole="button"
-                accessibilityLabel="Leave event"
-              >
-                <CloseIcon size={20} color="#FFFFFF" />
-              </Pressable>
-            )}
+            <View style={S.navLeftGroup}>
+              {isHost ? (
+                <Pressable
+                  style={S.navBtn}
+                  onPress={() => router.replace('/home')}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                >
+                  <BackChevron />
+                </Pressable>
+              ) : Platform.OS === 'web' ? (
+                <View style={[S.navBtn, { opacity: 0 }]} pointerEvents="none" />
+              ) : (
+                <Pressable
+                  style={S.navBtn}
+                  onPress={handleLeaveEvent}
+                  accessibilityRole="button"
+                  accessibilityLabel="Leave event"
+                >
+                  <CloseIcon size={20} color="#FFFFFF" />
+                </Pressable>
+              )}
+              <Image
+                source={GALLERY_NAV_MARK}
+                accessibilityRole="image"
+                accessibilityLabel={BRAND_CONFIG.appName}
+                resizeMode="contain"
+                style={S.navBrandMark}
+              />
+            </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable
                 style={S.navBtn}
@@ -3756,6 +3724,18 @@ const S = StyleSheet.create({
     backgroundColor: 'rgba(11,11,12,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  navLeftGroup: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  /** Square, so it keeps the wordmark's height without its width. */
+  navBrandMark: {
+    width: 26,
+    height: 26,
+    opacity: 0.9,
   },
 
   // ── Hero info (overlaid on gradient) ──

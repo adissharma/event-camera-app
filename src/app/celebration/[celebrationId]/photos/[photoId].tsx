@@ -18,9 +18,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import * as Linking from 'expo-linking';
-import * as Clipboard from 'expo-clipboard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
@@ -35,6 +32,7 @@ import {
   fetchCelebrationDetail,
 } from '@/services/celebration-detail';
 import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
+import { sharePhotoToInstagram } from '@/features/sharing/share-to-instagram';
 
 // ── Models ──
 
@@ -403,44 +401,7 @@ export default function PhotoViewerScreen() {
 
   const handleShareStory = async () => {
     if (!activePhoto) return;
-    void Haptics.selectionAsync().catch(() => {});
-
-    if (Platform.OS === 'web') {
-      Alert.alert('Not supported', 'Instagram sharing is only supported on mobile devices.');
-      return;
-    }
-
-    try {
-      const localUri = await getLocalPhotoUri(activePhoto.uri);
-      const mimeType = 'image/jpeg';
-
-      const instagramUrl = Platform.OS === 'ios' ? 'instagram-stories://share' : 'instagram://';
-      let opened = false;
-      try {
-        if (await Linking.canOpenURL(instagramUrl)) {
-          await Clipboard.setImageAsync(localUri);
-          await Linking.openURL(instagramUrl);
-          opened = true;
-        }
-      } catch {
-        opened = false;
-      }
-
-      if (!opened) {
-        if (await Sharing.isAvailableAsync()) {
-          await Sharing.shareAsync(localUri, {
-            dialogTitle: 'Share to Instagram',
-            mimeType,
-            UTI: 'public.image',
-          });
-        } else {
-          Alert.alert('Instagram not installed', 'Please install Instagram to share directly.');
-        }
-      }
-    } catch (error) {
-      console.error('[gallery] failed to share photo to Instagram', error);
-      Alert.alert('Could not share', 'Failed to share photo to Instagram.');
-    }
+    await sharePhotoToInstagram(activePhoto);
   };
 
   const handleShareGeneral = async () => {

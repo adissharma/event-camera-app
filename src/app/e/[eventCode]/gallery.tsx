@@ -21,6 +21,7 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/ui/text';
 import { CameraIcon, ClockIcon, LockIcon, CloseIcon, ShareIcon, PinIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
+import { BRAND_CONFIG } from '@/config/brand';
 import { colours, radii, spacing, layout } from '@/design';
 import {
   fetchGuestGallery,
@@ -33,6 +34,8 @@ import {
 } from '@/services/guest-session';
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
+
+const GALLERY_HEADER_ICON = require('../../../../assets/brand/gallery-icon.png');
 
 export default function GuestGalleryScreen() {
   const { eventCode } = useLocalSearchParams<{ eventCode: string }>();
@@ -331,7 +334,18 @@ export default function GuestGalleryScreen() {
       {/* Header Info */}
       <View style={S.header}>
         <View style={S.headerTitleRow}>
-          <AppText variant="displaySmall" style={S.title}>{celebration.title}</AppText>
+          <View style={S.headerIdentity}>
+            <View style={S.headerLogoSlot}>
+              <Image
+                source={GALLERY_HEADER_ICON}
+                accessibilityRole="image"
+                accessibilityLabel={BRAND_CONFIG.appName}
+                resizeMode="contain"
+                style={S.headerLogo}
+              />
+            </View>
+            <AppText variant="displaySmall" style={S.title}>{celebration.title}</AppText>
+          </View>
           <Pressable
             onPress={() => setShareVisible(true)}
             style={({ pressed }) => [S.sharePill, pressed && { opacity: 0.82 }]}
@@ -527,14 +541,37 @@ const S = StyleSheet.create({
   },
   headerTitleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
+  },
+  headerIdentity: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  /**
+   * Sits where a back button would, at the leading edge of the header row and
+   * opposite the share pill. The 38pt box matches a nav button's footprint so
+   * the mark carries the same padding as the share control on the far side;
+   * the mark itself is 26pt, the height the wordmark used to be.
+   */
+  headerLogoSlot: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerLogo: {
+    width: 26,
+    height: 26,
+    opacity: 0.92,
   },
   title: {
     flex: 1,
     color: colours.textPrimary,
-    marginBottom: spacing.xs,
   },
   sharePill: {
     flexDirection: 'row',
