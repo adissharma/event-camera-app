@@ -2475,10 +2475,11 @@ function EventDetailView({
     const shareLink = `https://event-camera-app-navy.vercel.app/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
 
     try {
-      await Share.share({
-        message: `Check out this photo from ${celebration?.title || 'the event'}! View it here: ${shareLink}`,
-        url: shareLink,
-      });
+      await Share.share(
+        Platform.OS === 'ios'
+          ? { message: `Check out this photo from ${celebration?.title || 'the event'}! View it here: ${shareLink}` }
+          : { message: `Check out this photo from ${celebration?.title || 'the event'}! View it here: ${shareLink}`, url: shareLink }
+      );
     } catch (err: any) {
       console.error('Failed to share photo:', err);
     }
