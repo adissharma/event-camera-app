@@ -41,6 +41,7 @@ type PhotoItem = {
   isPinned?: boolean;
   is_pinned?: boolean;
   pinnedAt?: string | null;
+  caption?: string | null;
 };
 
 // ── SVG Icons ──
@@ -599,6 +600,16 @@ export default function PhotoViewerScreen() {
         </Animated.View>
       </View>
 
+      {Boolean(activePhoto?.caption && activePhoto.caption.trim()) && (
+        <View style={S.photoCaptionBoxWrap} pointerEvents="none">
+          <View style={S.captionBoxInner}>
+            <AppText style={S.captionBoxText}>
+              {activePhoto?.caption?.trim()}
+            </AppText>
+          </View>
+        </View>
+      )}
+
       {/* ── METADATA ROW ── */}
       <View style={[S.metadataRow, { paddingBottom: Math.max(insets.bottom + 12, 24) }]}>
         {/* Left aligned: Photographer Name & Time */}
@@ -831,5 +842,29 @@ const S = StyleSheet.create({
   },
   menuOptionDisabledText: {
     color: 'rgba(255, 255, 255, 0.4)',
+  },
+  photoCaptionBoxWrap: {
+    position: 'absolute',
+    top: '72%',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 35,
+  },
+  captionBoxInner: {
+    backgroundColor: 'rgba(11, 11, 12, 0.78)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  captionBoxText: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

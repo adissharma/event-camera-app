@@ -251,6 +251,7 @@ interface PhotoItem {
   isPinned?: boolean;
   is_pinned?: boolean;
   pinnedAt?: string | null;
+  caption?: string | null;
   mediaType?: 'photo' | 'video';
   durationMs?: number | null;
   mimeType?: string | null;
@@ -1423,6 +1424,9 @@ function EventDetailView({
                 capturedAt: p.capturedAt,
                 id: p.id,
                 isMine: p.isMine === true,
+                isPinned: p.isPinned === true,
+                pinnedAt: p.pinnedAt ?? null,
+                caption: p.caption ?? null,
                 uploadedByUserId: p.uploadedByUserId ?? null,
                 guestSessionId: p.guestSessionId ?? null,
                 takenById: p.guestSessionId ?? p.uploadedByUserId ?? null,
@@ -3070,6 +3074,16 @@ function EventDetailView({
               )}
             </Animated.View>
 
+            {Boolean(activePhoto.caption && activePhoto.caption.trim()) && (
+              <Animated.View style={[S.heroCaptionBoxWrap, { opacity: chromeOpacity }]} pointerEvents="none">
+                <View style={S.captionBoxInner}>
+                  <AppText style={S.captionBoxText}>
+                    {activePhoto?.caption?.trim()}
+                  </AppText>
+                </View>
+              </Animated.View>
+            )}
+
             <Animated.View
               style={[
                 {
@@ -4340,5 +4354,29 @@ const S = StyleSheet.create({
   },
   menuOptionDisabledText: {
     color: 'rgba(255, 255, 255, 0.4)',
+  },
+  heroCaptionBoxWrap: {
+    position: 'absolute',
+    top: '72%',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 35,
+  },
+  captionBoxInner: {
+    backgroundColor: 'rgba(11, 11, 12, 0.78)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  captionBoxText: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
 });

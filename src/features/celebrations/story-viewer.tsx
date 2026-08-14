@@ -567,13 +567,7 @@ export function StoryViewer({
         </View>
 
         {Boolean(activeSubmission?.caption && activeSubmission.caption.trim()) && (
-          <View
-            style={[
-              S.captionBoxWrap,
-              { bottom: cta ? (activeSlideIndex === 0 ? insets.bottom + 84 : insets.bottom + 68) : Math.max(insets.bottom + 24, 32) },
-            ]}
-            pointerEvents="none"
-          >
+          <View style={S.captionBoxWrap} pointerEvents="none">
             <View style={S.captionBoxInner}>
               <AppText style={S.captionBoxText}>
                 {activeSubmission?.caption?.trim()}
@@ -773,10 +767,11 @@ const S = StyleSheet.create({
   },
   captionBoxWrap: {
     position: 'absolute',
+    top: '72%',
     left: 20,
     right: 20,
     alignItems: 'center',
-    zIndex: 25,
+    zIndex: 30,
   },
   captionBoxInner: {
     backgroundColor: 'rgba(11, 11, 12, 0.76)',
