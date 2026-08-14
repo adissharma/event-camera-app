@@ -263,6 +263,7 @@ type PendingChallengePost = {
   localUri?: string | null;
   mediaType?: 'photo' | 'video';
   postedAt?: string | null;
+  caption?: string | null;
   durationMs?: number | null;
   mimeType?: string | null;
 };
@@ -1199,6 +1200,7 @@ function EventDetailView({
           takenBy: guestName ?? firstNameFrom(profile) ?? 'You',
           postedAt: pending.postedAt ?? new Date().toISOString(),
           challengeId: challenge.id,
+          caption: pending.caption ?? null,
           isMine: true,
           mediaType: pending.mediaType ?? 'photo',
           durationMs: pending.durationMs ?? null,
