@@ -350,8 +350,11 @@ export default function GuestbookScreen() {
                     autoPlay
                     onEnded={onEnd}
                     height={170}
-                    // The story header already carries who sent it and when.
+                    // The story header already carries who sent it and when,
+                    // and its tap zones own the whole screen — so the waveform
+                    // is the entire slide, as a video frame would be.
                     showRemaining={false}
+                    showPlayButton={false}
                   />
                 </View>
               );
