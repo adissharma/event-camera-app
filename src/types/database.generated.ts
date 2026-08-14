@@ -609,12 +609,14 @@ export type Database = {
           guest_session_id: string | null
           height: number | null
           id: string
+          is_pinned: boolean
           media_type: Database["public"]["Enums"]["media_type"]
           metadata: Json
           mime_type: string | null
           moderated_at: string | null
           original_filename: string | null
           original_storage_path: string | null
+          pinned_at: string | null
           processing_started_at: string | null
           ready_at: string | null
           source: Database["public"]["Enums"]["media_source"]
@@ -640,12 +642,14 @@ export type Database = {
           guest_session_id?: string | null
           height?: number | null
           id?: string
+          is_pinned?: boolean
           media_type?: Database["public"]["Enums"]["media_type"]
           metadata?: Json
           mime_type?: string | null
           moderated_at?: string | null
           original_filename?: string | null
           original_storage_path?: string | null
+          pinned_at?: string | null
           processing_started_at?: string | null
           ready_at?: string | null
           source?: Database["public"]["Enums"]["media_source"]

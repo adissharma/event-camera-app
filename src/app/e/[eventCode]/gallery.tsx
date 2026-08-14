@@ -19,7 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
-import { CameraIcon, ClockIcon, LockIcon, CloseIcon, ShareIcon } from '@/components/ui/icons';
+import { CameraIcon, ClockIcon, LockIcon, CloseIcon, ShareIcon, PinIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import { colours, radii, spacing, layout } from '@/design';
 import {
@@ -396,6 +396,11 @@ export default function GuestGalleryScreen() {
               style={[S.gridItem, { width: imageSize, height: imageSize }]}
             >
               <Image source={{ uri: item.storage_path }} style={S.gridImage} />
+              {Boolean(item.is_pinned || item.isPinned) && (
+                <View style={S.pinBadge}>
+                  <PinIcon size={12} color="#FFFFFF" />
+                </View>
+              )}
               <View style={S.authorTag}>
                 <AppText variant="caption" style={S.authorText} numberOfLines={1}>
                   {item.display_name}
@@ -653,6 +658,18 @@ const S = StyleSheet.create({
   modalImage: {
     width: '100%',
     height: '70%',
+  },
+  pinBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
   },
   modalInfo: {
     position: 'absolute',

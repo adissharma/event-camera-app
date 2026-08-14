@@ -7,6 +7,17 @@ export interface IconProps {
   color?: string;
 }
 
+export function PinIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M16 4v4l2 3v2h-5v7l-1 1-1-1v-7H6v-2l2-3V4H6V2h12v2h-2z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
 /**
  * Pencil.
  *

@@ -6,6 +6,7 @@ import {
   AppState,
   View,
   Image,
+  TextInput,
   useWindowDimensions,
   Pressable,
   StyleSheet,
@@ -75,6 +76,7 @@ interface PhotoItem {
   postedAt?: string | null;
   submissionId?: string | null;
   challengeId?: string | null;
+  caption?: string | null;
   mediaType?: 'photo' | 'video' | 'audio';
   durationMs?: number | null;
   mimeType?: string | null;
@@ -89,6 +91,7 @@ type VideoPreview = {
   source: MediaSource;
   challengeId?: string | null;
   guestbook?: boolean;
+  caption?: string | null;
   /** Audio takes the same commit path as video, differing only in what the
    *  preview renders and what media type is uploaded. */
   kind?: 'video' | 'audio';
@@ -100,6 +103,7 @@ type PendingChallengePost = {
   localUri: string;
   mediaType: 'photo' | 'video';
   postedAt: string;
+  caption?: string | null;
   durationMs?: number | null;
   mimeType?: string | null;
 };
@@ -395,6 +399,8 @@ export default function CameraScreen() {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [shareVisible, setShareVisible] = useState(false);
   const [challengePreviewUri, setChallengePreviewUri] = useState<string | null>(null);
+  const MAX_CAPTION_LENGTH = 120;
+  const [challengeCaption, setChallengeCaption] = useState('');
   const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_VIDEO_DURATION_MS);
@@ -837,8 +843,9 @@ export default function CameraScreen() {
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
   }
 
-  async function commitVideo(preview: VideoPreview) {
+  async function commitVideo(preview: VideoPreview, captionInput?: string) {
     const mediaKind = preview.kind === 'audio' ? 'audio' : 'video';
+    const trimmedCaption = captionInput?.trim() || undefined;
     setIsUploading(true);
     try {
       let postedMediaItemId: string | null = null;
@@ -853,6 +860,7 @@ export default function CameraScreen() {
           durationMs: preview.durationMs,
           mimeType: preview.mimeType,
           challengeId: preview.challengeId ?? null,
+          caption: trimmedCaption ?? null,
         };
         postedMediaItemId = item.id ?? null;
         const key = preview.challengeId
@@ -887,6 +895,7 @@ export default function CameraScreen() {
             ? {
                 challenge_id: preview.challengeId,
                 submission_kind: 'challenge',
+                ...(trimmedCaption ? { caption: trimmedCaption } : {}),
               }
             : preview.guestbook
               ? { submission_kind: 'guestbook' }
@@ -912,6 +921,7 @@ export default function CameraScreen() {
             ? {
                 challenge_id: preview.challengeId,
                 submission_kind: 'challenge',
+                ...(trimmedCaption ? { caption: trimmedCaption } : {}),
               }
             : preview.guestbook
               ? { submission_kind: 'guestbook' }
@@ -959,6 +969,7 @@ export default function CameraScreen() {
           router.replace(target as never);
         }
         setVideoPreview(null);
+        setChallengeCaption('');
         return;
       }
 
@@ -977,6 +988,7 @@ export default function CameraScreen() {
           router.replace(guestbookTarget as never);
         }
         setVideoPreview(null);
+        setChallengeCaption('');
         deleteLocalVideo(preview.uri, 'posting');
         return;
       }
@@ -1004,11 +1016,12 @@ export default function CameraScreen() {
     }
   }
 
-  async function commitChallengePhoto(uri: string): Promise<string | false> {
+  async function commitChallengePhoto(uri: string, captionInput?: string): Promise<string | false> {
     if (!celebrationId || !challengeId) {
       throw new Error('Missing challenge capture context.');
     }
 
+    const trimmedCaption = captionInput?.trim() || undefined;
     setIsUploading(true);
     try {
       const userName = firstNameFrom(profile) || 'You';
@@ -1018,6 +1031,7 @@ export default function CameraScreen() {
       const metadata = {
         challenge_id: challengeId,
         submission_kind: 'challenge',
+        ...(trimmedCaption ? { caption: trimmedCaption } : {}),
       };
 
       if (!isBackendConfigured) {
@@ -1047,6 +1061,7 @@ export default function CameraScreen() {
             id: postedMediaItemId,
             submissionId: postedMediaItemId,
             challengeId,
+            caption: trimmedCaption ?? null,
             mediaType: 'photo' as const,
           },
           ...submissions,
@@ -1582,9 +1597,10 @@ export default function CameraScreen() {
 
   async function handlePostChallengePreview() {
     if (!challengePreviewUri || isUploading) return;
-    const posted = await commitChallengePhoto(challengePreviewUri);
+    const posted = await commitChallengePhoto(challengePreviewUri, challengeCaption);
     if (posted) {
       setChallengePreviewUri(null);
+      setChallengeCaption('');
     }
   }
 
@@ -1931,8 +1947,27 @@ export default function CameraScreen() {
             </Pressable>
           </View>
           <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+            {Boolean(videoPreview.challengeId) && (
+              <View style={S.captionInputContainer}>
+                <View style={S.captionInputBox}>
+                  <TextInput
+                    style={S.captionTextInput}
+                    value={challengeCaption}
+                    onChangeText={setChallengeCaption}
+                    placeholder="Add an optional caption..."
+                    placeholderTextColor="rgba(255, 255, 255, 0.45)"
+                    maxLength={MAX_CAPTION_LENGTH}
+                    multiline={false}
+                    returnKeyType="done"
+                  />
+                  <AppText style={S.captionCounterText}>
+                    {MAX_CAPTION_LENGTH - challengeCaption.length}
+                  </AppText>
+                </View>
+              </View>
+            )}
             <Pressable
-              onPress={() => void commitVideo(videoPreview)}
+              onPress={() => void commitVideo(videoPreview, challengeCaption)}
               disabled={isUploading}
               style={({ pressed }) => [
                 S.challengePreviewPrimaryBtn,
@@ -1954,7 +1989,10 @@ export default function CameraScreen() {
           <View style={S.challengePreviewScrim} />
           <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
             <Pressable
-              onPress={() => setChallengePreviewUri(null)}
+              onPress={() => {
+                setChallengePreviewUri(null);
+                setChallengeCaption('');
+              }}
               disabled={isUploading}
               style={({ pressed }) => [S.challengePreviewCloseBtn, pressed && { opacity: 0.86 }]}
               accessibilityRole="button"
@@ -1964,6 +2002,23 @@ export default function CameraScreen() {
             </Pressable>
           </View>
           <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+            <View style={S.captionInputContainer}>
+              <View style={S.captionInputBox}>
+                <TextInput
+                  style={S.captionTextInput}
+                  value={challengeCaption}
+                  onChangeText={setChallengeCaption}
+                  placeholder="Add an optional caption..."
+                  placeholderTextColor="rgba(255, 255, 255, 0.45)"
+                  maxLength={MAX_CAPTION_LENGTH}
+                  multiline={false}
+                  returnKeyType="done"
+                />
+                <AppText style={S.captionCounterText}>
+                  {MAX_CAPTION_LENGTH - challengeCaption.length}
+                </AppText>
+              </View>
+            </View>
             <Pressable
               onPress={() => void handlePostChallengePreview()}
               disabled={isUploading}
@@ -2766,5 +2821,33 @@ export default function CameraScreen() {
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  captionInputContainer: {
+    width: '100%',
+    paddingHorizontal: 16,
+    marginBottom: spacing.md,
+  },
+  captionInputBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(11, 11, 12, 0.76)',
+    borderRadius: radii.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+    paddingHorizontal: 16,
+    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+  },
+  captionTextInput: {
+    flex: 1,
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 15,
+    color: '#FFFFFF',
+    padding: 0,
+  },
+  captionCounterText: {
+    fontFamily: 'InstrumentSans_500Medium',
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.5)',
+    marginLeft: 8,
   },
 });

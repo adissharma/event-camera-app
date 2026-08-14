@@ -29,13 +29,18 @@ import {
   celebrationDetailKeys,
   fetchCelebrationDetail,
 } from '@/services/celebration-detail';
+import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
 
 // ── Models ──
 
 type PhotoItem = {
+  id?: string;
   uri: string;
   takenBy: string;
   timestamp?: string;
+  isPinned?: boolean;
+  is_pinned?: boolean;
+  pinnedAt?: string | null;
 };
 
 // ── SVG Icons ──
@@ -354,6 +359,38 @@ export default function PhotoViewerScreen() {
     } catch {}
   };
 
+  const allMediaPhotos = detail?.mediaPhotos ?? [];
+  const pinnedCount = allMediaPhotos.filter((p) => p.isPinned === true).length;
+  const currentMediaItem = allMediaPhotos.find(
+    (p) => p.id === activePhoto?.id || p.storagePath === activePhoto?.uri
+  );
+  const isPinned = currentMediaItem?.isPinned ?? (activePhoto as any)?.isPinned === true;
+
+  const handleTogglePin = async () => {
+    if (!isHost || !activePhoto || !celebrationId) return;
+    setMenuVisible(false);
+    const mediaItemId = currentMediaItem?.id ?? activePhoto.id ?? activePhoto.uri;
+
+    try {
+      if (isPinned) {
+        await unpinHostPhoto({ mediaItemId, celebrationId: String(celebrationId) });
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      } else {
+        if (pinnedCount >= 2) {
+          Alert.alert('Limit reached', 'Maximum of 2 pinned items allowed.');
+          return;
+        }
+        await pinHostPhoto({ mediaItemId, celebrationId: String(celebrationId) });
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+      queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebrationId)),
+      });
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Could not update pin status.');
+    }
+  };
+
   const handleDeleteConfirmed = async () => {
     if (!isHost || !activePhoto) return;
     setMenuVisible(false);
@@ -604,9 +641,27 @@ export default function PhotoViewerScreen() {
             </Pressable>
 
             {isHost && (
-              <Pressable style={[S.menuOption, S.menuOptionBorder]} onPress={handleDeleteConfirmed}>
-                <AppText style={S.menuDeleteText}>Delete Photo</AppText>
-              </Pressable>
+              <>
+                {isPinned ? (
+                  <Pressable style={[S.menuOption, S.menuOptionBorder]} onPress={handleTogglePin}>
+                    <AppText style={S.menuOptionText}>Unpin</AppText>
+                  </Pressable>
+                ) : (
+                  <Pressable
+                    style={[S.menuOption, S.menuOptionBorder, pinnedCount >= 2 && S.menuOptionDisabled]}
+                    onPress={pinnedCount >= 2 ? undefined : handleTogglePin}
+                    disabled={pinnedCount >= 2}
+                  >
+                    <AppText style={[S.menuOptionText, pinnedCount >= 2 && S.menuOptionDisabledText]}>
+                      Pin to top
+                    </AppText>
+                  </Pressable>
+                )}
+
+                <Pressable style={[S.menuOption, S.menuOptionBorder]} onPress={handleDeleteConfirmed}>
+                  <AppText style={S.menuDeleteText}>Delete Photo</AppText>
+                </Pressable>
+              </>
             )}
 
             <Pressable style={[S.menuOption, S.menuCancelOption]} onPress={() => setMenuVisible(false)}>
@@ -770,5 +825,11 @@ const S = StyleSheet.create({
     fontFamily: 'InstrumentSans_600SemiBold',
     fontSize: 16,
     color: 'rgba(255, 255, 255, 0.65)',
+  },
+  menuOptionDisabled: {
+    opacity: 0.4,
+  },
+  menuOptionDisabledText: {
+    color: 'rgba(255, 255, 255, 0.4)',
   },
 });

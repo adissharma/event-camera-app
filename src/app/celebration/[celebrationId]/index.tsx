@@ -50,7 +50,7 @@ import {
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { SegmentedControl } from '@/components/forms/segmented-control';
-import { CloseIcon, LockIcon } from '@/components/ui/icons';
+import { CloseIcon, LockIcon, PinIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import {
   archiveCelebration,
@@ -80,6 +80,7 @@ import {
   formatStoryTimestamp,
   playWithSoundFallback,
 } from '@/features/celebrations/story-viewer';
+import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
 import {
   listChallenges,
   updateChallenge,
@@ -247,6 +248,9 @@ interface PhotoItem {
   capturedAt?: string | null;
   /** True when this visible real media item belongs to the current guest token. */
   isMine?: boolean;
+  isPinned?: boolean;
+  is_pinned?: boolean;
+  pinnedAt?: string | null;
   mediaType?: 'photo' | 'video';
   durationMs?: number | null;
   mimeType?: string | null;
@@ -1122,6 +1126,7 @@ function EventDetailView({
             postedAt: item.capturedAt,
             submissionId: item.id,
             challengeId: item.challengeId,
+            caption: item.caption ?? null,
             isMine: item.isMine === true,
             mediaType: item.mediaType ?? 'photo',
             durationMs: item.durationMs ?? null,
@@ -2799,85 +2804,113 @@ function EventDetailView({
             ))}
           </ScrollView>
 
-          {visiblePhotos.length > 0 ? (
-            <View style={S.gallery}>
-              {Array.from({ length: GALLERY_COLUMNS }, (_, columnIndex) => (
-                <View
-                  key={`gallery-column-${columnIndex}`}
-                  style={[S.galleryCol, columnIndex > 0 && { marginLeft: GRID_GAP }]}
-                >
-                  {visiblePhotos
-                    .filter((_, photoIndex) => photoIndex % GALLERY_COLUMNS === columnIndex)
-                    .map((photo, rowIndex) => {
-                      const originalIndex = rowIndex * GALLERY_COLUMNS + columnIndex;
-                      const locked = Boolean(photo.locked);
-                      return (
-                        <Pressable
-                          key={photo.id ?? `${columnIndex}-${rowIndex}`}
-                          onPress={(e) => handlePhotoPress(originalIndex, e)}
-                          style={({ pressed }) => [
-                            S.galleryCell,
-                            { width: CELL_W, height: CELL_H },
-                            pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
-                          ]}
-                        >
-                          {photo.mediaType === 'video' ? (
-                            <VideoPoster uri={photo.uri} style={S.galleryCellImg} />
-                          ) : (
-                            <TreatedPhoto
-                              source={getPhotoSource(photo.uri)}
-                              style={S.galleryCellImg}
-                              resizeMode="cover"
-                              blurRadius={locked ? 45 : 0}
-                              treatment={primarySession?.photo_treatment}
-                              dateStampEnabled={primarySession?.date_stamp_enabled}
-                              capturedAt={photo.capturedAt}
-                              seedKey={photo.id}
-                            />
-                          )}
-                          {photo.mediaType === 'video' && !locked ? (
-                            <View style={S.videoBadge}>
-                              <AppText style={S.videoBadgeText}>
-                                {formatMediaDuration(photo.durationMs) ?? 'Video'}
-                              </AppText>
-                            </View>
-                          ) : null}
-                          {locked && (
-                            <View style={S.lockOverlay}>
-                              <View style={S.lockCircle}>
-                                <LockIcon size={18} color="#FFFFFF" />
-                              </View>
-                              {revealCountdownWords && (
-                                <AppText style={S.lockCountdownText}>
-                                  Revealed in {revealCountdownWords}
-                                </AppText>
-                              )}
-                            </View>
-                          )}
-                          {!locked && (
-                            <View style={[S.photoNameTag, { maxWidth: Math.max(0, CELL_W - 24) }]}>
-                              <AppText
-                                style={S.photoNameText}
-                                numberOfLines={1}
-                                ellipsizeMode="tail"
-                              >
-                                {photo.takenBy || 'Guest'}
-                              </AppText>
-                            </View>
-                          )}
-                        </Pressable>
-                      );
-                    })}
+          {(() => {
+            const visiblePhotos = photos
+              .filter((p) => {
+                if (isHost) return true;
+                if (p.isMine) return true;
+                return !primarySession?.reveal_at || new Date(primarySession.reveal_at).getTime() <= Date.now();
+              })
+              .sort((a, b) => {
+                const aPin = Boolean(a.isPinned || a.is_pinned);
+                const bPin = Boolean(b.isPinned || b.is_pinned);
+                if (aPin !== bPin) return aPin ? -1 : 1;
+                const aTime = a.pinnedAt ? new Date(a.pinnedAt).getTime() : 0;
+                const bTime = b.pinnedAt ? new Date(b.pinnedAt).getTime() : 0;
+                if (aPin && bPin && aTime !== bTime) return bTime - aTime;
+                return 0;
+              });
+
+            if (visiblePhotos.length === 0) {
+              return (
+                <View style={S.emptyGallery}>
+                  <AppText variant="bodySmall" tone="secondary" align="center">
+                    No moments yet.{'\n'}Be the first to add one.
+                  </AppText>
                 </View>
-              ))}
-            </View>
-          ) : (
-            <View style={S.emptyGallery}>
-              <AppText variant="bodySmall" tone="secondary" align="center">
-                No moments yet.{'\n'}Be the first to add one.
-              </AppText>
-            </View>
-          )}
+              );
+            }
+
+            return (
+              <View style={S.gallery}>
+                {Array.from({ length: GALLERY_COLUMNS }, (_, columnIndex) => (
+                  <View
+                    key={`gallery-column-${columnIndex}`}
+                    style={[S.galleryCol, columnIndex > 0 && { marginLeft: GRID_GAP }]}
+                  >
+                    {visiblePhotos
+                      .filter((_, photoIndex) => photoIndex % GALLERY_COLUMNS === columnIndex)
+                      .map((photo, rowIndex) => {
+                        const originalIndex = rowIndex * GALLERY_COLUMNS + columnIndex;
+                        const locked = Boolean(photo.locked);
+                        const isPinnedItem = Boolean(photo.isPinned || photo.is_pinned);
+                        return (
+                          <Pressable
+                            key={photo.id ?? `${columnIndex}-${rowIndex}`}
+                            onPress={(e) => handlePhotoPress(originalIndex, e)}
+                            style={({ pressed }) => [
+                              S.galleryCell,
+                              { width: CELL_W, height: CELL_H },
+                              pressed && !locked && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                            ]}
+                          >
+                            {photo.mediaType === 'video' ? (
+                              <VideoPoster uri={photo.uri} style={S.galleryCellImg} />
+                            ) : (
+                              <TreatedPhoto
+                                source={getPhotoSource(photo.uri)}
+                                style={S.galleryCellImg}
+                                resizeMode="cover"
+                                blurRadius={locked ? 45 : 0}
+                                treatment={primarySession?.photo_treatment}
+                                dateStampEnabled={primarySession?.date_stamp_enabled}
+                                capturedAt={photo.capturedAt}
+                                seedKey={photo.id}
+                              />
+                            )}
+                            {photo.mediaType === 'video' && !locked ? (
+                              <View style={S.videoBadge}>
+                                <AppText style={S.videoBadgeText}>
+                                  {formatMediaDuration(photo.durationMs) ?? 'Video'}
+                                </AppText>
+                              </View>
+                            ) : null}
+                            {!locked && isPinnedItem && (
+                              <View style={S.pinBadge}>
+                                <PinIcon size={12} color="#FFFFFF" />
+                              </View>
+                            )}
+                            {locked && (
+                              <View style={S.lockOverlay}>
+                                <View style={S.lockCircle}>
+                                  <LockIcon size={18} color="#FFFFFF" />
+                                </View>
+                                {revealCountdownWords && (
+                                  <AppText style={S.lockCountdownText}>
+                                    Revealed in {revealCountdownWords}
+                                  </AppText>
+                                )}
+                              </View>
+                            )}
+                            {!locked && (
+                              <View style={[S.photoNameTag, { maxWidth: Math.max(0, CELL_W - 24) }]}>
+                                <AppText
+                                  style={S.photoNameText}
+                                  numberOfLines={1}
+                                  ellipsizeMode="tail"
+                                >
+                                  {photo.takenBy || 'Guest'}
+                                </AppText>
+                              </View>
+                            )}
+                          </Pressable>
+                        );
+                      })}
+                  </View>
+                ))}
+              </View>
+            );
+          })()}
 
       </Animated.ScrollView>
 
@@ -2889,6 +2922,38 @@ function EventDetailView({
         if (!activePhoto) return null;
         const activeMediaLabel = activePhoto.mediaType === 'video' ? 'video' : 'photo';
         const activeMediaLabelTitle = activePhoto.mediaType === 'video' ? 'Video' : 'Photo';
+
+        const pinnedCount = photos.filter((p) => p.isPinned === true || p.is_pinned === true).length;
+        const isActivePinned = Boolean(activePhoto.isPinned || activePhoto.is_pinned);
+
+        const handleToggleHeroPin = async () => {
+          if (!isHost || !activePhoto || !celebration?.id) return;
+          setHeroMenuVisible(false);
+          const mediaItemId = activePhoto.id;
+          if (!mediaItemId) {
+            Alert.alert('Error', 'Cannot pin this item.');
+            return;
+          }
+
+          try {
+            if (isActivePinned) {
+              await unpinHostPhoto({ mediaItemId, celebrationId: celebration.id });
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            } else {
+              if (pinnedCount >= 2) {
+                Alert.alert('Limit reached', 'Maximum of 2 pinned items allowed.');
+                return;
+              }
+              await pinHostPhoto({ mediaItemId, celebrationId: celebration.id });
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+            }
+            queryClient.invalidateQueries({
+              queryKey: celebrationDetailKeys.detail(celebration.id),
+            });
+          } catch (err: any) {
+            Alert.alert('Error', err?.message || 'Could not update pin status.');
+          }
+        };
         const canDeleteGuestPhoto =
           viewerRole === 'guest' &&
           Boolean(activePhoto.id) &&
@@ -3065,33 +3130,58 @@ function EventDetailView({
                     <AppText style={S.menuOptionText}>Save Original</AppText>
                   </Pressable>
                   {isHost && (
-                    <Pressable
-                      style={[S.menuOption, S.menuOptionBorder]}
-                      onPress={() => {
-                        setHeroMenuVisible(false);
-                        Alert.alert(
-                          `Delete this ${activeMediaLabel}?`,
-                          'This will permanently remove it from the event gallery.',
-                          [
-                            { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: `Delete ${activeMediaLabelTitle}`,
-                              style: 'destructive',
-                              onPress: async () => {
-                                try {
-                                  await deleteHeroGalleryPhoto(activePhoto, heroIndex);
-                                } catch (error) {
-                                  console.error(`[gallery] failed to delete ${activeMediaLabel}`, error);
-                                  Alert.alert('Error', `Could not delete this ${activeMediaLabel}. Please try again.`);
-                                }
+                    <>
+                      {isActivePinned ? (
+                        <Pressable
+                          style={[S.menuOption, S.menuOptionBorder]}
+                          onPress={() => void handleToggleHeroPin()}
+                        >
+                          <AppText style={S.menuOptionText}>Unpin</AppText>
+                        </Pressable>
+                      ) : (
+                        <Pressable
+                          style={[
+                            S.menuOption,
+                            S.menuOptionBorder,
+                            pinnedCount >= 2 && S.menuOptionDisabled,
+                          ]}
+                          onPress={pinnedCount >= 2 ? undefined : () => void handleToggleHeroPin()}
+                          disabled={pinnedCount >= 2}
+                        >
+                          <AppText style={[S.menuOptionText, pinnedCount >= 2 && S.menuOptionDisabledText]}>
+                            Pin to top
+                          </AppText>
+                        </Pressable>
+                      )}
+
+                      <Pressable
+                        style={[S.menuOption, S.menuOptionBorder]}
+                        onPress={() => {
+                          setHeroMenuVisible(false);
+                          Alert.alert(
+                            `Delete this ${activeMediaLabel}?`,
+                            'This will permanently remove it from the event gallery.',
+                            [
+                              { text: 'Cancel', style: 'cancel' },
+                              {
+                                text: `Delete ${activeMediaLabelTitle}`,
+                                style: 'destructive',
+                                onPress: async () => {
+                                  try {
+                                    await deleteHeroGalleryPhoto(activePhoto, heroIndex);
+                                  } catch (error) {
+                                    console.error(`[gallery] failed to delete ${activeMediaLabel}`, error);
+                                    Alert.alert('Error', `Could not delete this ${activeMediaLabel}. Please try again.`);
+                                  }
+                                },
                               },
-                            },
-                          ]
-                        );
-                      }}
-                    >
-                      <AppText style={S.menuDeleteText}>Delete {activeMediaLabelTitle}</AppText>
-                    </Pressable>
+                            ]
+                          );
+                        }}
+                      >
+                        <AppText style={S.menuDeleteText}>Delete {activeMediaLabelTitle}</AppText>
+                      </Pressable>
+                    </>
                   )}
                   {canDeleteGuestPhoto && (
                     <Pressable
@@ -4232,5 +4322,23 @@ const S = StyleSheet.create({
   },
   guestWelcomeName: {
     color: colours.textPrimary,
+  },
+  pinBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    borderRadius: 10,
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 5,
+  },
+  menuOptionDisabled: {
+    opacity: 0.4,
+  },
+  menuOptionDisabledText: {
+    color: 'rgba(255, 255, 255, 0.4)',
   },
 });

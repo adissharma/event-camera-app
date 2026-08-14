@@ -56,10 +56,10 @@ export interface CelebrationDetail {
    * offline-mock array under that name) to avoid colliding with it.
    */
   mediaPhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; isMine?: boolean; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; isMine?: boolean; isPinned?: boolean; pinnedAt?: string | null; caption?: string | null; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
   challengePhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; challengeId: string; isMine?: boolean; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
+    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; challengeId: string; isMine?: boolean; isPinned?: boolean; pinnedAt?: string | null; caption?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
 }
 
@@ -140,10 +140,12 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         ? await (async () => {
             const { data: mediaRows, error: mediaError } = await client
               .from('media_items')
-              .select('id, original_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name), media_type, duration_ms, mime_type, width, height')
+              .select('id, original_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name), media_type, duration_ms, mime_type, width, height, is_pinned, pinned_at')
               .eq('event_session_id', primarySession.id)
               .eq('status', 'ready')
               .is('deleted_at', null)
+              .order('is_pinned', { ascending: false })
+              .order('pinned_at', { ascending: false, nullsFirst: false })
               .order('captured_at', { ascending: false });
 
             if (mediaError) {
@@ -167,6 +169,9 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
                 width: (m as any).width ?? null,
                 height: (m as any).height ?? null,
                 isMine: false,
+                isPinned: (m as any).is_pinned === true,
+                pinnedAt: (m as any).pinned_at ?? null,
+                caption: typeof (m as any).metadata?.caption === 'string' ? (m as any).metadata.caption : null,
                 uploadedByUserId: (m as any).uploaded_by_user_id ?? null,
                 guestSessionId: (m as any).guest_session_id ?? null,
                 challengeId: typeof (m as any).metadata?.challenge_id === 'string'
@@ -471,6 +476,9 @@ async function tryFetchCelebrationDetailAsGuest(
           width: p.width ?? null,
           height: p.height ?? null,
           isMine: p.is_mine === true,
+          isPinned: p.is_pinned === true,
+          pinnedAt: p.pinned_at ?? null,
+          caption: typeof p.caption === 'string' ? p.caption : null,
           uploadedByUserId: p.uploaded_by_user_id ?? null,
           guestSessionId: p.guest_session_id ?? null,
           challengeId: typeof p.challenge_id === 'string' ? p.challenge_id : null,

@@ -262,6 +262,7 @@ export type StorySlideItem = {
   uri: string;
   takenBy?: string | null;
   postedAt?: string | null;
+  caption?: string | null;
   mediaType?: 'photo' | 'video' | 'audio' | null;
 };
 
@@ -565,6 +566,22 @@ export function StoryViewer({
           </View>
         </View>
 
+        {Boolean(activeSubmission?.caption && activeSubmission.caption.trim()) && (
+          <View
+            style={[
+              S.captionBoxWrap,
+              { bottom: cta ? (activeSlideIndex === 0 ? insets.bottom + 84 : insets.bottom + 68) : Math.max(insets.bottom + 24, 32) },
+            ]}
+            pointerEvents="none"
+          >
+            <View style={S.captionBoxInner}>
+              <AppText style={S.captionBoxText}>
+                {activeSubmission?.caption?.trim()}
+              </AppText>
+            </View>
+          </View>
+        )}
+
         {cta ? (
           activeSlideIndex === 0 ? (
             <Animated.View
@@ -752,7 +769,30 @@ const S = StyleSheet.create({
   heroCTAText: {
     fontFamily: 'InstrumentSans_600SemiBold',
     fontSize: 16,
-    color: '#000000',
+    color: '#0B0B0C',
+  },
+  captionBoxWrap: {
+    position: 'absolute',
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 25,
+  },
+  captionBoxInner: {
+    backgroundColor: 'rgba(11, 11, 12, 0.76)',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    maxWidth: '100%',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
+  },
+  captionBoxText: {
+    fontFamily: 'InstrumentSans_400Regular',
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   bottomBar: {
     position: 'absolute',
