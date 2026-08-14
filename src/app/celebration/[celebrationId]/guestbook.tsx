@@ -48,46 +48,9 @@ import {
   formatStoryTimestamp,
   type StorySlideItem,
 } from '@/features/celebrations/story-viewer';
+import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 
-const nativeAudioModule = Platform.OS === 'web' ? null : (() => {
-  try {
-    return require('expo-audio');
-  } catch {
-    return null;
-  }
-})();
-
-function PlayIcon({ size = 26, color = '#0B0B0C' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path d="M8 6.5v11l9-5.5-9-5.5Z" fill={color} />
-    </Svg>
-  );
-}
-
-function PauseIcon({ size = 24, color = '#0B0B0C' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Rect x={7} y={6} width={3.5} height={12} rx={1.2} fill={color} />
-      <Rect x={13.5} y={6} width={3.5} height={12} rx={1.2} fill={color} />
-    </Svg>
-  );
-}
-
-function GuestbookHeroIcon({ size = 32, color = '#FFFFFF' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <Path d="M9 7h6M9 11h6M9 15h4" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-    </Svg>
-  );
-}
+type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
 
 /** Thickness of the gradient frame around the Guestbook. */
 const BORDER_WIDTH = 2;
@@ -128,148 +91,18 @@ function useScreenCornerRadius(): number {
   return 0;
 }
 
-type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
-
-function formatDuration(durationMs: number | null) {
-  const totalSeconds = Math.max(0, Math.round((durationMs ?? 0) / 1000));
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
-}
-
-/**
- * A full-bleed slide for a legacy audio message.
- *
- * Audio is no longer recordable — the Guestbook takes video now — but messages
- * left before that change still have to play, so hosts do not silently lose
- * them. There is nothing to show, so the slide is the black backdrop with a
- * single play control on it.
- */
-function AudioStorySlide({ message, onEnd }: { message: ResolvedMessage; onEnd: () => void }) {
-  const useAudioPlayer = nativeAudioModule?.useAudioPlayer;
-  const useAudioPlayerStatus = nativeAudioModule?.useAudioPlayerStatus;
-
-  if (Platform.OS === 'web' || !useAudioPlayer || !useAudioPlayerStatus) {
-    return <WebAudioStorySlide message={message} onEnd={onEnd} />;
-  }
+function GuestbookHeroIcon({ size = 32, color = '#FFFFFF' }) {
   return (
-    <NativeAudioStorySlide
-      message={message}
-      onEnd={onEnd}
-      useAudioPlayer={useAudioPlayer}
-      useAudioPlayerStatus={useAudioPlayerStatus}
-    />
-  );
-}
-
-function AudioSlideChrome({
-  isPlaying,
-  onToggle,
-  durationLabel,
-}: {
-  isPlaying: boolean;
-  onToggle: () => void;
-  durationLabel: string;
-}) {
-  return (
-    <View style={styles.audioSlide}>
-      <Pressable
-        onPress={onToggle}
-        style={styles.audioPlayBtn}
-        accessibilityRole="button"
-        accessibilityLabel={isPlaying ? 'Pause audio message' : 'Play audio message'}
-      >
-        {isPlaying ? <PauseIcon /> : <PlayIcon />}
-      </Pressable>
-      <AppText style={styles.audioSlideLabel}>Audio message</AppText>
-      <AppText style={styles.audioSlideDuration}>{durationLabel}</AppText>
-    </View>
-  );
-}
-
-function NativeAudioStorySlide({
-  message,
-  onEnd,
-  useAudioPlayer,
-  useAudioPlayerStatus,
-}: {
-  message: ResolvedMessage;
-  onEnd: () => void;
-  useAudioPlayer: any;
-  useAudioPlayerStatus: any;
-}) {
-  const player = useAudioPlayer(message.signedUrl, { updateInterval: 250 });
-  const status = useAudioPlayerStatus(player);
-
-  useEffect(() => {
-    player.play();
-  }, [player]);
-
-  useEffect(() => {
-    if (!status.didJustFinish) return;
-    void player.seekTo(0);
-    player.pause();
-    onEnd();
-  }, [player, status.didJustFinish, onEnd]);
-
-  return (
-    <AudioSlideChrome
-      isPlaying={Boolean(status.playing)}
-      onToggle={() => {
-        if (status.playing) {
-          player.pause();
-          return;
-        }
-        if (status.didJustFinish || status.currentTime >= status.duration) {
-          void player.seekTo(0);
-        }
-        player.play();
-      }}
-      durationLabel={formatDuration(
-        message.durationMs ??
-          (typeof status.duration === 'number' ? status.duration * 1000 : null),
-      )}
-    />
-  );
-}
-
-function WebAudioStorySlide({ message, onEnd }: { message: ResolvedMessage; onEnd: () => void }) {
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [audio, setAudio] = useState<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    if (typeof Audio === 'undefined') return;
-    const element = new Audio(message.signedUrl);
-    setAudio(element);
-    element.onended = () => {
-      setIsPlaying(false);
-      onEnd();
-    };
-    // Browsers block unprompted audio playback; a rejected attempt just leaves
-    // the slide paused with its play button showing, which is the fallback.
-    void element.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
-
-    return () => {
-      element.pause();
-      element.src = '';
-      setAudio(null);
-    };
-  }, [message.signedUrl, onEnd]);
-
-  return (
-    <AudioSlideChrome
-      isPlaying={isPlaying}
-      onToggle={() => {
-        if (!audio) return;
-        if (isPlaying) {
-          audio.pause();
-          setIsPlaying(false);
-          return;
-        }
-        void audio.play().then(() => setIsPlaying(true)).catch(() => {});
-      }}
-      durationLabel={formatDuration(message.durationMs)}
-    />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path d="M9 7h6M9 11h6M9 15h4" stroke={color} strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
   );
 }
 
@@ -503,7 +336,25 @@ export default function GuestbookScreen() {
               if (item.mediaType !== 'audio') return null;
               const message = resolvedMessages.find((entry) => entry.id === item.id);
               if (!message) return null;
-              return <AudioStorySlide key={message.id} message={message} onEnd={onEnd} />;
+              // An audio message has no frame, so the waveform takes the place
+              // the video would occupy — centred, full-bleed, on the Guestbook's
+              // own black. `onEnd` is the viewer's advance, so audio moves the
+              // story on exactly as a finished video does, and holds if it is
+              // the last message.
+              return (
+                <View key={message.id} style={styles.audioSlide}>
+                  <AudioWaveformPlayer
+                    uri={message.signedUrl}
+                    seed={message.id}
+                    durationMs={message.durationMs}
+                    autoPlay
+                    onEnded={onEnd}
+                    height={170}
+                    // The story header already carries who sent it and when.
+                    showRemaining={false}
+                  />
+                </View>
+              );
             }}
           />
         )}
@@ -582,24 +433,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.md,
     backgroundColor: '#0B0B0C',
-  },
-  audioPlayBtn: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  audioSlideLabel: {
-    marginTop: spacing.sm,
-    color: '#FFFFFF',
-    fontFamily: 'InstrumentSans_600SemiBold',
-    fontSize: 16,
-  },
-  audioSlideDuration: {
-    color: 'rgba(255, 255, 255, 0.66)',
-    fontSize: 14,
   },
   captionPrimary: {
     fontFamily: 'InstrumentSans_600SemiBold',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useEvent, useEventListener } from 'expo';
 import {
   Animated,
@@ -59,6 +59,9 @@ import { eventAllowsVideoCapture } from '@/features/media/event-media';
 import { uploadGuestMedia } from '@/services/guest-media-upload';
 import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
+import { AudioWaveform } from '@/features/celebrations/audio-waveform';
+import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
+import { AudioCapture, type AudioCaptureResult } from '@/features/celebrations/audio-capture';
 
 interface PhotoItem {
   uri: string;
@@ -68,7 +71,7 @@ interface PhotoItem {
   postedAt?: string | null;
   submissionId?: string | null;
   challengeId?: string | null;
-  mediaType?: 'photo' | 'video';
+  mediaType?: 'photo' | 'video' | 'audio';
   durationMs?: number | null;
   mimeType?: string | null;
 }
@@ -82,6 +85,9 @@ type VideoPreview = {
   source: MediaSource;
   challengeId?: string | null;
   guestbook?: boolean;
+  /** Audio takes the same commit path as video, differing only in what the
+   *  preview renders and what media type is uploaded. */
+  kind?: 'video' | 'audio';
 };
 
 type PendingChallengePost = {
@@ -94,7 +100,7 @@ type PendingChallengePost = {
   mimeType?: string | null;
 };
 
-function formatUploadFailure(mediaType: 'photo' | 'video', error: unknown) {
+function formatUploadFailure(mediaType: 'photo' | 'video' | 'audio', error: unknown) {
   const fallback = `Your ${mediaType} could not be uploaded. Please try again.`;
   if (!(error instanceof Error) || !error.message) return fallback;
   return `${fallback}\n\n${error.message}`;
@@ -190,6 +196,21 @@ const PILL_INSET = 20;
 const COUNTER_SIZE = 22;
 const COUNTER_LEADING = 28;
 const MAX_VIDEO_DURATION_MS = 30_000;
+/**
+ * Audio runs to a minute where video stops at thirty seconds. A spoken message
+ * to the host wants the room a clip does not, and audio costs an order of
+ * magnitude less per second to upload. The finalize RPCs enforce the same two
+ * ceilings server-side — this constant only drives the countdown.
+ */
+const MAX_AUDIO_DURATION_MS = 60_000;
+
+/** `m:ss`, so the audio countdown can start at 1:00 and video still reads 0:30. */
+function formatCountdown(remainingMs: number): string {
+  const totalSeconds = Math.ceil(Math.max(0, remainingMs) / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 
 /**
  * The widest zoom level, on the normalised 0–1 scale `CameraView.zoom` uses.
@@ -373,9 +394,20 @@ export default function CameraScreen() {
   const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_VIDEO_DURATION_MS);
-  const [captureType, setCaptureType] = useState<'photo' | 'video'>(
+  const [captureType, setCaptureType] = useState<'photo' | 'video' | 'audio'>(
     isGuestbookCapture ? 'video' : 'photo',
   );
+  const isAudioCapture = captureType === 'audio';
+  /** Rolling amplitudes for the live waveform; only the tail is ever drawn. */
+  const [audioLevels, setAudioLevels] = useState<number[]>([]);
+  const pushAudioLevel = useCallback((level: number) => {
+    setAudioLevels((current) => {
+      const next = current.length > 120 ? current.slice(current.length - 120) : current.slice();
+      next.push(level);
+      return next;
+    });
+  }, []);
+  const activeMaxDurationMs = isAudioCapture ? MAX_AUDIO_DURATION_MS : MAX_VIDEO_DURATION_MS;
   const recordingStartRef = useRef<number | null>(null);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordingActiveRef = useRef(false);
@@ -424,8 +456,14 @@ export default function CameraScreen() {
     videoCaptureEnabled && (!isWeb || Boolean(webRecorderMimeType));
 
   useEffect(() => {
+    // The Guestbook offers audio and video; anything else that leaks in (a
+    // stale 'photo' from a previous target) falls back to video.
     if (isGuestbookCapture) {
-      if (captureType !== 'video') setCaptureType('video');
+      if (captureType !== 'video' && captureType !== 'audio') setCaptureType('video');
+      return;
+    }
+    if (captureType === 'audio') {
+      setCaptureType(videoCaptureEnabled ? 'video' : 'photo');
       return;
     }
     if (!videoCaptureEnabled && captureType !== 'photo') {
@@ -603,8 +641,16 @@ export default function CameraScreen() {
     setFacing((prev) => (prev === 'back' ? 'front' : 'back'));
   }
 
-  function setCaptureMode(next: 'photo' | 'video') {
-    if (isGuestbookCapture || !videoCaptureEnabled || isRecording || next === captureType) return;
+  function setCaptureMode(next: 'photo' | 'video' | 'audio') {
+    if (isRecording || next === captureType) return;
+    // The Guestbook is the only surface offering audio, and it offers nothing
+    // else — every other target keeps the photo/video pair it had.
+    if (isGuestbookCapture) {
+      if (next !== 'audio' && next !== 'video') return;
+      setCaptureType(next);
+      return;
+    }
+    if (!videoCaptureEnabled || next === 'audio') return;
     if (isWeb && next === 'video' && !webRecorderMimeType) {
       Alert.alert(
         'Video not supported here',
@@ -783,6 +829,7 @@ export default function CameraScreen() {
   }
 
   async function commitVideo(preview: VideoPreview) {
+    const mediaKind = preview.kind === 'audio' ? 'audio' : 'video';
     setIsUploading(true);
     try {
       let postedMediaItemId: string | null = null;
@@ -793,7 +840,7 @@ export default function CameraScreen() {
           takenBy: firstNameFrom(profile) || 'You',
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           postedAt,
-          mediaType: 'video',
+          mediaType: mediaKind,
           durationMs: preview.durationMs,
           mimeType: preview.mimeType,
           challengeId: preview.challengeId ?? null,
@@ -822,7 +869,7 @@ export default function CameraScreen() {
           guestToken: guestAuth.guestToken,
           localUri: preview.uri,
           source: preview.source,
-          mediaType: 'video',
+          mediaType: mediaKind,
           mimeType: preview.mimeType,
           width: preview.width ?? undefined,
           height: preview.height ?? undefined,
@@ -847,7 +894,7 @@ export default function CameraScreen() {
           celebrationId: String(celebrationId),
           localUri: preview.uri,
           source: preview.source,
-          mediaType: 'video',
+          mediaType: mediaKind,
           mimeType: preview.mimeType,
           width: preview.width ?? undefined,
           height: preview.height ?? undefined,
@@ -942,7 +989,7 @@ export default function CameraScreen() {
       deleteLocalVideo(preview.uri, 'posting');
     } catch (error) {
       console.error('Failed to upload video:', error);
-      Alert.alert('Upload failed', formatUploadFailure('video', error));
+      Alert.alert('Upload failed', formatUploadFailure(mediaKind, error));
     } finally {
       setIsUploading(false);
     }
@@ -1273,10 +1320,72 @@ export default function CameraScreen() {
     cameraRef.current?.stopRecording?.();
   }
 
+  /**
+   * Audio has no camera to drive, so this only runs the clock and the flag —
+   * flipping `isRecording` is what starts the `AudioCapture` below, and
+   * clearing it is what stops it and produces the file.
+   */
+  function startAudioRecording() {
+    if (recordingActiveRef.current) return;
+    recordingActiveRef.current = true;
+    recordingStopRequestedRef.current = false;
+    setAudioLevels([]);
+    setRecordingRemainingMs(MAX_AUDIO_DURATION_MS);
+    setIsRecording(true);
+    recordingStartRef.current = Date.now();
+    clearRecordingTimer();
+    recordingTimerRef.current = setInterval(() => {
+      const startedAt = recordingStartRef.current;
+      if (!startedAt) return;
+      const remainingMs = Math.max(0, MAX_AUDIO_DURATION_MS - (Date.now() - startedAt));
+      setRecordingRemainingMs(remainingMs);
+      // The minute is up — stop for the guest rather than letting the
+      // recording run past what the server will accept.
+      if (remainingMs === 0) stopAudioRecording();
+    }, 100);
+  }
+
+  const handleAudioRecorded = useCallback((result: AudioCaptureResult) => {
+    setVideoPreview({
+      kind: 'audio',
+      uri: result.uri,
+      mimeType: result.mimeType,
+      // `recording` is the only source `create_guest_media_upload_intent`
+      // accepts for audio — there is no library path to a voice message.
+      source: 'recording',
+      durationMs: Math.min(result.durationMs, MAX_AUDIO_DURATION_MS),
+      guestbook: true,
+    });
+  }, []);
+
+  const handleAudioError = useCallback((message: string) => {
+    recordingActiveRef.current = false;
+    setIsRecording(false);
+    clearRecordingTimer();
+    setAudioLevels([]);
+    Alert.alert('Recording failed', message);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function stopAudioRecording() {
+    if (!recordingActiveRef.current) return;
+    recordingActiveRef.current = false;
+    recordingStopRequestedRef.current = true;
+    clearRecordingTimer();
+    recordingStartRef.current = null;
+    // `AudioCapture` sees this go false, stops, and reports the file through
+    // `onComplete` — which is what opens the preview.
+    setIsRecording(false);
+  }
+
   async function retakeVideo() {
     if (!videoPreview || isUploading) return;
     const uri = videoPreview.uri;
     setVideoPreview(null);
+    // `captureType` is untouched, so dropping the preview lands back in
+    // whichever mode produced it — audio retakes return to audio.
+    setAudioLevels([]);
+    setRecordingRemainingMs(activeMaxDurationMs);
     deleteLocalVideo(uri, 'retake');
   }
 
@@ -1316,6 +1425,15 @@ export default function CameraScreen() {
   ).current;
 
   async function handleCapture() {
+    if (isAudioCapture) {
+      if (isRecording) {
+        stopAudioRecording();
+        return;
+      }
+      if (videoPreview) return;
+      startAudioRecording();
+      return;
+    }
     if (captureType === 'video' && supportsVideoRecording) {
       if (isRecording) {
         stopVideoRecording();
@@ -1572,7 +1690,9 @@ export default function CameraScreen() {
             {isGuestbookCapture ? 'Guestbook' : celebration?.title ?? 'Event'}
           </AppText>
           <AppText style={S.headerSubtitle}>
-            {isGuestbookCapture ? 'Video message' : getSubtitle()}
+            {isGuestbookCapture
+              ? (isAudioCapture ? 'Audio message' : 'Video message')
+              : getSubtitle()}
           </AppText>
         </View>
 
@@ -1580,12 +1700,38 @@ export default function CameraScreen() {
         <View style={{ width: 38 }} />
       </View>
 
+      {/* Headless. Mounted only in audio mode so the microphone is never held
+          open while the guest is shooting video. */}
+      {isAudioCapture ? (
+        <AudioCapture
+          recording={isRecording}
+          onLevel={pushAudioLevel}
+          onComplete={handleAudioRecorded}
+          onError={handleAudioError}
+        />
+      ) : null}
+
       {/* 2. Full-Screen Camera View Container */}
       <View
         ref={cameraContainerRef}
         style={[S.viewfinderContainer, { height: viewfinderHeight }]}
         {...viewfinderPanResponder.panHandlers}
       >
+        {isAudioCapture ? (
+          // No camera in audio mode. The waveform takes the viewfinder's whole
+          // area so the screen keeps the same shape as video — same header,
+          // same frame, same shutter — and only the medium changes.
+          <View style={S.audioStage}>
+            <AudioWaveform
+              levels={audioLevels}
+              height={140}
+              activeColor={isRecording ? '#FFFFFF' : 'rgba(255, 255, 255, 0.45)'}
+            />
+            <AppText style={S.audioStageHint}>
+              {isRecording ? 'Listening…' : 'Tap the button to start recording'}
+            </AppText>
+          </View>
+        ) : (
         <CameraView
           // Flipping on web has to tear the old stream down before the new one
           // is requested. The library only ever gives Chrome a SOFT
@@ -1618,6 +1764,7 @@ export default function CameraScreen() {
             isRecoveringFacing.current = false;
           }}
         />
+        )}
 
         {/* Shutter Animation Overlay */}
         <Animated.View 
@@ -1637,9 +1784,7 @@ export default function CameraScreen() {
         {isRecording ? (
           <View style={S.recordingPill}>
             <View style={S.recordingDot} />
-            <AppText style={S.recordingText}>
-              {`00:${Math.ceil(recordingRemainingMs / 1000)}`.padStart(5, '0')}
-            </AppText>
+            <AppText style={S.recordingText}>{formatCountdown(recordingRemainingMs)}</AppText>
           </View>
         ) : null}
 
@@ -1685,7 +1830,11 @@ export default function CameraScreen() {
             zIndex but earlier in this file's paint order. `box-none` makes
             only the pill itself (and its buttons) touchable, not the empty
             width around it. */}
-        <View style={S.zoomContainer} pointerEvents="box-none">
+        {/* Nothing to zoom without a lens. */}
+        <View
+          style={[S.zoomContainer, isAudioCapture && { display: 'none' }]}
+          pointerEvents="box-none"
+        >
           <View style={S.zoomPill}>
             {[
               { label: '0.5', value: MIN_ZOOM },
@@ -1711,15 +1860,29 @@ export default function CameraScreen() {
 
       {videoPreview ? (
         <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
-          <InlineVideoPreview uri={videoPreview.uri} />
-          <View style={S.challengePreviewScrim} pointerEvents="none" />
+          {videoPreview.kind === 'audio' ? (
+            <AudioWaveformPlayer
+              uri={videoPreview.uri}
+              durationMs={videoPreview.durationMs}
+              height={150}
+            />
+          ) : (
+            <>
+              <InlineVideoPreview uri={videoPreview.uri} />
+              <View style={S.challengePreviewScrim} pointerEvents="none" />
+            </>
+          )}
           <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
             <Pressable
               onPress={() => void retakeVideo()}
               disabled={isUploading}
               style={({ pressed }) => [S.challengePreviewCloseBtn, pressed && { opacity: 0.86 }]}
               accessibilityRole="button"
-              accessibilityLabel="Discard video and retake"
+              accessibilityLabel={
+                videoPreview.kind === 'audio'
+                  ? 'Discard recording and retake'
+                  : 'Discard video and retake'
+              }
             >
               <CloseChevron size={18} />
             </Pressable>
@@ -1789,7 +1952,12 @@ export default function CameraScreen() {
               light one that does not exist. Where there is nothing to switch
               on, the control is left out instead of sitting there dead. The
               placeholder keeps the shutter centred in the row. */}
-          {showFlashControl ? (
+          {/* Flash and flip are camera controls with nothing to act on in
+              audio mode. Both leave a same-sized spacer so the shutter stays
+              centred and does not shift as the mode changes. */}
+          {isAudioCapture || !showFlashControl ? (
+            <View style={S.controlBtn} />
+          ) : (
             <Pressable
               onPress={toggleFlash}
               style={S.controlBtn}
@@ -1798,42 +1966,48 @@ export default function CameraScreen() {
             >
               <FlashIcon mode={isWeb ? (torchOn ? 'on' : 'off') : flash} />
             </Pressable>
-          ) : (
-            <View style={S.controlBtn} />
           )}
 
           {/* Flip Camera Button */}
-          <Pressable 
-            onPress={toggleFacing} 
-            style={[S.controlBtn, isRecording && { opacity: 0.35 }]}
-            disabled={isRecording}
-            accessibilityRole="button"
-            accessibilityLabel="Flip camera"
-          >
-            <FlipIcon />
-          </Pressable>
+          {isAudioCapture ? (
+            <View style={S.controlBtn} />
+          ) : (
+            <Pressable
+              onPress={toggleFacing}
+              style={[S.controlBtn, isRecording && { opacity: 0.35 }]}
+              disabled={isRecording}
+              accessibilityRole="button"
+              accessibilityLabel="Flip camera"
+            >
+              <FlipIcon />
+            </Pressable>
+          )}
 
           <Pressable
             onPress={handleCapture}
-            disabled={outOfShots || isUploading}
+            // Guestbook messages do not draw on the guest's photo allowance,
+            // so a guest who has used every shot can still leave one.
+            disabled={(outOfShots && !isGuestbookCapture) || isUploading}
             style={({ pressed }) => [
               S.shutterBtn,
-              captureType === 'video' && S.shutterBtnVideoMode,
+              captureType !== 'photo' && S.shutterBtnVideoMode,
               isRecording && S.shutterBtnRecording,
               pressed && { opacity: 0.8 },
-              (outOfShots || isUploading) && { opacity: 0.4 },
+              ((outOfShots && !isGuestbookCapture) || isUploading) && { opacity: 0.4 },
             ]}
             accessibilityRole="button"
             accessibilityLabel={
-              captureType === 'video'
-                ? (isRecording ? 'Stop video recording' : 'Start video recording')
-                : 'Take photo'
+              captureType === 'photo'
+                ? 'Take photo'
+                : isRecording
+                  ? `Stop ${captureType} recording`
+                  : `Start ${captureType} recording`
             }
           >
             <View
               style={[
                 S.shutterBtnInner,
-                captureType === 'video' && S.shutterBtnInnerVideoMode,
+                captureType !== 'photo' && S.shutterBtnInnerVideoMode,
                 isRecording && S.shutterBtnInnerRecording,
               ]}
             />
@@ -1906,7 +2080,9 @@ export default function CameraScreen() {
           )}
         </View>
 
-        {videoCaptureEnabled && !isGuestbookCapture ? (
+        {/* The Guestbook swaps the left mode for audio; every other target
+            keeps photo/video, and only when the event allows video at all. */}
+        {isGuestbookCapture || videoCaptureEnabled ? (
           <View style={S.captureModeRail}>
             <View style={S.captureModeLabelRow}>
               <Animated.View
@@ -1922,10 +2098,16 @@ export default function CameraScreen() {
                   },
                 ]}
               />
-              {([
-                { key: 'photo', label: 'PHOTO' },
-                { key: 'video', label: 'VIDEO' },
-              ] as const).map((option) => (
+              {(isGuestbookCapture
+                ? ([
+                    { key: 'audio', label: 'AUDIO' },
+                    { key: 'video', label: 'VIDEO' },
+                  ] as const)
+                : ([
+                    { key: 'photo', label: 'PHOTO' },
+                    { key: 'video', label: 'VIDEO' },
+                  ] as const)
+              ).map((option) => (
                 <Pressable
                   key={option.key}
                   onPress={() => setCaptureMode(option.key)}
@@ -2067,6 +2249,23 @@ export default function CameraScreen() {
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#000000',
+  },
+  /** Fills the viewfinder in audio mode, where there is no camera to show. */
+  audioStage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+    gap: spacing.xl,
+  },
+  audioStageHint: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontFamily: 'InstrumentSans_500Medium',
+    fontSize: 14,
   },
   shutterFlash: {
     backgroundColor: '#FFFFFF',
