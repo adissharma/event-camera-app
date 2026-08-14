@@ -55,6 +55,7 @@ import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session'
 import { uploadGuestPhoto } from '@/services/guest-media-upload';
 import { uploadHostPhoto } from '@/services/host-media-upload';
 import { useWebCameraTrack } from '@/features/media/web-camera-track';
+import { useViewfinderPinchZoom } from '@/features/media/use-viewfinder-pinch-zoom';
 import {
   createMirroredVideoTrack,
   type MirroredVideoTrack,
@@ -234,6 +235,35 @@ function formatCountdown(remainingMs: number): string {
  * It is indistinguishable from zero at any real zoom range.
  */
 const MIN_ZOOM = 0.0001;
+const MAX_ZOOM = 1;
+const PINCH_ZOOM_SENSITIVITY = 0.55;
+
+const ZOOM_OPTIONS = [
+  { label: '0.5', value: MIN_ZOOM },
+  { label: '1x', value: 0.15 },
+  { label: '2.5', value: 0.45 },
+];
+
+function clampCameraZoom(value: number): number {
+  if (!Number.isFinite(value)) return MIN_ZOOM;
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+}
+
+function distanceBetweenTouches(touches: ArrayLike<{ pageX: number; pageY: number }>): number | null {
+  if (touches.length < 2) return null;
+  const first = touches[0];
+  const second = touches[1];
+  const dx = first.pageX - second.pageX;
+  const dy = first.pageY - second.pageY;
+  return Math.hypot(dx, dy);
+}
+
+function nearestZoomOptionValue(zoom: number): number {
+  return ZOOM_OPTIONS.reduce((nearest, option) =>
+    Math.abs(option.value - zoom) < Math.abs(nearest - zoom) ? option.value : nearest,
+    ZOOM_OPTIONS[0].value,
+  );
+}
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────────
 
@@ -439,6 +469,8 @@ export default function CameraScreen() {
   const webRecorderMimeType = isWeb ? getPreferredWebRecorderMimeType() : undefined;
   const hasShownFirstLimitNoticeRef = useRef(false);
   const hasShownFiveLeftNoticeRef = useRef(false);
+  const pinchStartDistanceRef = useRef<number | null>(null);
+  const pinchStartZoomRef = useRef(MIN_ZOOM);
   const captureModeAnim = useRef(new Animated.Value(captureType === 'video' ? 1 : 0)).current;
 
   // On web the torch and zoom are driven straight onto the live MediaStream
@@ -1462,27 +1494,76 @@ export default function CameraScreen() {
     }
   }
 
-  const viewfinderPanResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_event, gestureState) =>
+  // Pinch-to-zoom on web. Native is handled by the `PanResponder` below; a
+  // browser needs its own opt-out of the page-level pinch gesture, which is
+  // what this attaches. The callbacks are memoised so the non-passive
+  // listeners stay registered across renders rather than being torn down and
+  // re-added on every zoom change — i.e. continuously, mid-pinch.
+  const applyPinchZoom = useCallback((next: number) => setZoom(next), []);
+  useViewfinderPinchZoom({
+    containerRef: cameraContainerRef,
+    // Audio mode has no camera, and the preview overlay covers the viewfinder.
+    enabled: !isAudioCapture && !videoPreview && !challengePreviewUri,
+    zoom,
+    onZoomChange: applyPinchZoom,
+    clamp: clampCameraZoom,
+    sensitivity: PINCH_ZOOM_SENSITIVITY,
+  });
+
+  const viewfinderPanResponder = PanResponder.create({
+    // `isWeb` guards below: pinch there is owned by
+    // `useViewfinderPinchZoom`, which reads real DOM touches. Letting this
+    // claim two-finger gestures as well would apply each pinch twice.
+    onStartShouldSetPanResponderCapture: (event) =>
+      !isWeb && !isAudioCapture && event.nativeEvent.touches.length >= 2,
+    onMoveShouldSetPanResponder: (event, gestureState) => {
+      if (!isWeb && !isAudioCapture && event.nativeEvent.touches.length >= 2) return true;
+      return (
         !isGuestbookCapture &&
         videoCaptureEnabled &&
         !isRecording &&
         Math.abs(gestureState.dx) > 16 &&
-        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.35,
-      onPanResponderTerminationRequest: () => false,
-      onPanResponderRelease: (_event, gestureState) => {
-        if (isGuestbookCapture || !videoCaptureEnabled || isRecording) return;
-        if (gestureState.dx <= -24) {
-          setCaptureMode('video');
-          return;
-        }
-        if (gestureState.dx >= 24) {
-          setCaptureMode('photo');
-        }
-      },
-    }),
-  ).current;
+        Math.abs(gestureState.dx) > Math.abs(gestureState.dy) * 1.35
+      );
+    },
+    onPanResponderGrant: (event) => {
+      const distance = distanceBetweenTouches(event.nativeEvent.touches);
+      if (distance === null) return;
+      event.preventDefault?.();
+      pinchStartDistanceRef.current = distance;
+      pinchStartZoomRef.current = zoom;
+    },
+    onPanResponderMove: (event) => {
+      const distance = distanceBetweenTouches(event.nativeEvent.touches);
+      const startDistance = pinchStartDistanceRef.current;
+      if (distance === null || !startDistance) return;
+
+      event.preventDefault?.();
+      const scale = distance / startDistance;
+      const nextZoom = pinchStartZoomRef.current + Math.log(scale) * PINCH_ZOOM_SENSITIVITY;
+      setZoom(clampCameraZoom(nextZoom));
+    },
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderRelease: (_event, gestureState) => {
+      const wasPinching = pinchStartDistanceRef.current !== null;
+      pinchStartDistanceRef.current = null;
+      pinchStartZoomRef.current = zoom;
+      if (wasPinching) return;
+
+      if (isGuestbookCapture || !videoCaptureEnabled || isRecording) return;
+      if (gestureState.dx <= -24) {
+        setCaptureMode('video');
+        return;
+      }
+      if (gestureState.dx >= 24) {
+        setCaptureMode('photo');
+      }
+    },
+    onPanResponderTerminate: () => {
+      pinchStartDistanceRef.current = null;
+      pinchStartZoomRef.current = zoom;
+    },
+  });
 
   async function handleCapture() {
     if (isAudioCapture) {
@@ -1749,7 +1830,7 @@ export default function CameraScreen() {
             Camera Access Required
           </AppText>
           <AppText variant="bodyMedium" align="center" tone="secondary" style={{ marginBottom: spacing.xl }}>
-            Candidly needs your camera to capture beautiful memories directly at the event.
+            Stories. needs your camera to capture beautiful memories directly at the event.
           </AppText>
           <Pressable style={S.permissionBtn} onPress={requestPermission}>
             <AppText style={S.permissionBtnText}>Enable Camera</AppText>
@@ -1814,7 +1895,11 @@ export default function CameraScreen() {
       {/* 2. Full-Screen Camera View Container */}
       <View
         ref={cameraContainerRef}
-        style={[S.viewfinderContainer, { height: viewfinderHeight }]}
+        style={[
+          S.viewfinderContainer,
+          isWeb && !isAudioCapture && S.webViewfinderGestureLock,
+          { height: viewfinderHeight },
+        ]}
         {...viewfinderPanResponder.panHandlers}
       >
         {isAudioCapture ? (
@@ -1936,17 +2021,13 @@ export default function CameraScreen() {
           pointerEvents="box-none"
         >
           <View style={S.zoomPill}>
-            {[
-              { label: '0.5', value: MIN_ZOOM },
-              { label: '1x', value: 0.15 },
-              { label: '2.5', value: 0.45 },
-            ].map((opt) => {
-              const active = zoom === opt.value;
+            {ZOOM_OPTIONS.map((opt) => {
+              const active = nearestZoomOptionValue(zoom) === opt.value;
               return (
                 <Pressable
                   key={opt.label}
                   style={[S.zoomOption, active && S.zoomOptionActive]}
-                  onPress={() => setZoom(opt.value)}
+                  onPress={() => setZoom(clampCameraZoom(opt.value))}
                 >
                   <AppText style={[S.zoomOptionText, active && S.zoomOptionTextActive]}>
                     {opt.label}
@@ -2446,6 +2527,10 @@ export default function CameraScreen() {
     position: 'relative',
     backgroundColor: '#000000',
   },
+  webViewfinderGestureLock: {
+    touchAction: 'none',
+    overscrollBehavior: 'contain',
+  } as any,
   /** Fills the viewfinder in audio mode, where there is no camera to show. */
   audioStage: {
     position: 'absolute',
