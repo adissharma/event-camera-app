@@ -1,14 +1,14 @@
 -- Persist the Guestbook identity chosen by the host and expose it through the
 -- same privacy-gated RPCs as the instructions.
 alter table public.event_guestbooks
-  add column if not exists guestbook_icon text not null default U&'\+1F48C';
+  add column if not exists guestbook_icon text not null default U&'\+01F48C';
 
 drop function if exists public.upsert_event_guestbook(uuid, text, text);
 
 create or replace function public.upsert_event_guestbook(
   p_celebration_id uuid,
   p_instructions text,
-  p_icon text default U&'\+1F48C'
+  p_icon text default U&'\+01F48C'
 )
 returns public.event_guestbooks
 language plpgsql
@@ -31,8 +31,8 @@ begin
     p_celebration_id,
     coalesce(nullif(trim(p_instructions), ''), 'Leave a message for the host.'),
     case
-      when p_icon in (U&'\+1F48C', U&'\+1F381', U&'\+1F49B', U&'\+1F31F', U&'\+1F4AB', U&'\+1F338') then p_icon
-      else U&'\+1F48C'
+      when p_icon in (U&'\+01F48C', U&'\+01F381', U&'\+01F49B', U&'\+01F31F', U&'\+01F4AB', U&'\+01F338') then p_icon
+      else U&'\+01F48C'
     end
   )
   on conflict (celebration_id) do update
