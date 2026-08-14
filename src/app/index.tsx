@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { BrandLogo } from '@/components/brand/brand-logo';
-import GrainGradientBackground from '@/components/media/grain-gradient-background';
+import GrainGradientBackground from '../components/media/grain-gradient-background';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { listCelebrations } from '@/services/celebrations';
