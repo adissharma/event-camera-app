@@ -400,6 +400,12 @@ export default function CameraScreen() {
   const [shareVisible, setShareVisible] = useState(false);
   const [challengePreviewUri, setChallengePreviewUri] = useState<string | null>(null);
   const [challengePhotoSource, setChallengePhotoSource] = useState<MediaSource>('camera');
+  const [galleryPreviewUri, setGalleryPreviewUri] = useState<string | null>(null);
+  const [galleryPhotoSource, setGalleryPhotoSource] = useState<MediaSource>('camera');
+  const [galleryPhotoMime, setGalleryPhotoMime] = useState<string>('image/jpeg');
+  const [galleryPhotoWidth, setGalleryPhotoWidth] = useState<number | undefined>(undefined);
+  const [galleryPhotoHeight, setGalleryPhotoHeight] = useState<number | undefined>(undefined);
+  const [galleryCaption, setGalleryCaption] = useState('');
   const MAX_CAPTION_LENGTH = 120;
   const [challengeCaption, setChallengeCaption] = useState('');
   const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null);
@@ -758,6 +764,7 @@ export default function CameraScreen() {
     mimeType?: string,
     width?: number,
     height?: number,
+    captionText?: string,
   ) {
     setFlyingThumbnailUri(uri);
     flyingAnim.setValue({ x: 0, y: 0 });
@@ -786,8 +793,9 @@ export default function CameraScreen() {
 
     setFlyingThumbnailUri(null);
 
+    const trimmedCaption = captionText?.trim() || undefined;
     const userName = firstNameFrom(profile) || 'You';
-    const newPhoto: PhotoItem = { uri, takenBy: userName };
+    const newPhoto: PhotoItem = { uri, takenBy: userName, caption: trimmedCaption ?? null };
     const next = [newPhoto, ...photos];
     setPhotos(next);
 
@@ -805,6 +813,7 @@ export default function CameraScreen() {
             mimeType,
             width,
             height,
+            metadata: trimmedCaption ? { caption: trimmedCaption } : undefined,
           });
           newPhoto.id = uploadResult.mediaItemId;
           maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
@@ -816,6 +825,7 @@ export default function CameraScreen() {
             mimeType,
             width,
             height,
+            metadata: trimmedCaption ? { caption: trimmedCaption } : undefined,
           });
           newPhoto.id = uploadResult.mediaItemId;
         } else {
@@ -1550,7 +1560,12 @@ export default function CameraScreen() {
             setChallengePhotoSource('camera');
             setChallengePreviewUri(photo.uri);
           } else {
-            await commitPhoto(photo.uri, 'camera', mimeType, photo.width, photo.height);
+            setGalleryPhotoSource('camera');
+            setGalleryPhotoMime(mimeType);
+            setGalleryPhotoWidth(photo.width);
+            setGalleryPhotoHeight(photo.height);
+            setGalleryPreviewUri(photo.uri);
+            setGalleryCaption('');
           }
         }
       } catch (e) {
@@ -1594,7 +1609,12 @@ export default function CameraScreen() {
         setChallengePhotoSource('library');
         setChallengePreviewUri(asset.uri);
       } else {
-        await commitPhoto(asset.uri, 'library', asset.mimeType, asset.width, asset.height);
+        setGalleryPhotoSource('library');
+        setGalleryPhotoMime(asset.mimeType || 'image/jpeg');
+        setGalleryPhotoWidth(asset.width);
+        setGalleryPhotoHeight(asset.height);
+        setGalleryPreviewUri(asset.uri);
+        setGalleryCaption('');
       }
     } catch (e) {
       console.error('Failed to pick photo from library:', e);
@@ -1609,6 +1629,20 @@ export default function CameraScreen() {
       setChallengePreviewUri(null);
       setChallengeCaption('');
     }
+  }
+
+  async function handlePostGalleryPreview() {
+    if (!galleryPreviewUri || isUploading) return;
+    await commitPhoto(
+      galleryPreviewUri,
+      galleryPhotoSource,
+      galleryPhotoMime,
+      galleryPhotoWidth,
+      galleryPhotoHeight,
+      galleryCaption,
+    );
+    setGalleryPreviewUri(null);
+    setGalleryCaption('');
   }
 
 
@@ -2028,6 +2062,63 @@ export default function CameraScreen() {
             </View>
             <Pressable
               onPress={() => void handlePostChallengePreview()}
+              disabled={isUploading}
+              style={({ pressed }) => [
+                S.challengePreviewPrimaryBtn,
+                pressed && { opacity: 0.92 },
+                isUploading && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Post photo"
+            >
+              <AppText style={S.challengePreviewPrimaryText}>
+                {isUploading ? 'Posting…' : 'Post'}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : galleryPreviewUri ? (
+        <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
+          <Image source={{ uri: galleryPreviewUri }} style={S.challengePreviewImage} resizeMode="cover" />
+          <View style={S.challengePreviewScrim} />
+          <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
+            <Pressable
+              onPress={() => {
+                const source = galleryPhotoSource;
+                setGalleryPreviewUri(null);
+                setGalleryCaption('');
+                if (source === 'library') {
+                  void handlePickFromLibrary();
+                }
+              }}
+              disabled={isUploading}
+              style={({ pressed }) => [S.challengePreviewCloseBtn, pressed && { opacity: 0.86 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Discard photo and retake"
+            >
+              <CloseChevron size={18} />
+            </Pressable>
+          </View>
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+            <View style={S.captionInputContainer}>
+              <View style={S.captionInputBox}>
+                <TextInput
+                  style={S.captionTextInput}
+                  value={galleryCaption}
+                  onChangeText={setGalleryCaption}
+                  placeholder="Add an optional caption..."
+                  placeholderTextColor="rgba(255, 255, 255, 0.45)"
+                  maxLength={MAX_CAPTION_LENGTH}
+                  multiline={false}
+                  returnKeyType="done"
+                />
+                <AppText style={S.captionCounterText}>
+                  {MAX_CAPTION_LENGTH - galleryCaption.length}
+                </AppText>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => void handlePostGalleryPreview()}
               disabled={isUploading}
               style={({ pressed }) => [
                 S.challengePreviewPrimaryBtn,
