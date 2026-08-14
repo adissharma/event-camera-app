@@ -354,7 +354,7 @@ export default function CameraScreen() {
   // hosts and guests, so the setting controls what actions are available to both.
   const isGuest = detail?.viewerRole === 'guest';
   const captureMode = primarySession?.capture_mode ?? 'camera_and_library';
-  const showCameraRollAction = captureMode !== 'camera_only' && !isChallengeCapture && !isGuestbookCapture;
+  const showCameraRollAction = captureMode !== 'camera_only' && !isGuestbookCapture;
   const [guestAuth, setGuestAuth] = useState<{
     slug: string;
     guestToken: string;
@@ -399,6 +399,7 @@ export default function CameraScreen() {
   const [zoom, setZoom] = useState(MIN_ZOOM);
   const [shareVisible, setShareVisible] = useState(false);
   const [challengePreviewUri, setChallengePreviewUri] = useState<string | null>(null);
+  const [challengePhotoSource, setChallengePhotoSource] = useState<MediaSource>('camera');
   const MAX_CAPTION_LENGTH = 120;
   const [challengeCaption, setChallengeCaption] = useState('');
   const [videoPreview, setVideoPreview] = useState<VideoPreview | null>(null);
@@ -1016,7 +1017,7 @@ export default function CameraScreen() {
     }
   }
 
-  async function commitChallengePhoto(uri: string, captionInput?: string): Promise<string | false> {
+  async function commitChallengePhoto(uri: string, captionInput?: string, photoSource: MediaSource = 'camera'): Promise<string | false> {
     if (!celebrationId || !challengeId) {
       throw new Error('Missing challenge capture context.');
     }
@@ -1072,7 +1073,7 @@ export default function CameraScreen() {
           eventCode: guestAuth.slug,
           guestToken: guestAuth.guestToken,
           localUri: uri,
-          source: 'camera',
+          source: photoSource,
           mimeType: 'image/jpeg',
           metadata,
         });
@@ -1081,7 +1082,7 @@ export default function CameraScreen() {
         const uploadResult = await uploadHostPhoto({
           celebrationId: String(celebrationId),
           localUri: uri,
-          source: 'camera',
+          source: photoSource,
           mimeType: 'image/jpeg',
           metadata,
         });
@@ -1546,6 +1547,7 @@ export default function CameraScreen() {
           // web capture's data: URI (no file extension to read).
           const mimeType = photo.format === 'png' ? 'image/png' : 'image/jpeg';
           if (isChallengeCapture) {
+            setChallengePhotoSource('camera');
             setChallengePreviewUri(photo.uri);
           } else {
             await commitPhoto(photo.uri, 'camera', mimeType, photo.width, photo.height);
@@ -1588,7 +1590,12 @@ export default function CameraScreen() {
       if (result.canceled || !result.assets[0]) return;
 
       const asset = result.assets[0];
-      await commitPhoto(asset.uri, 'library', asset.mimeType, asset.width, asset.height);
+      if (isChallengeCapture) {
+        setChallengePhotoSource('library');
+        setChallengePreviewUri(asset.uri);
+      } else {
+        await commitPhoto(asset.uri, 'library', asset.mimeType, asset.width, asset.height);
+      }
     } catch (e) {
       console.error('Failed to pick photo from library:', e);
       Alert.alert('Error', 'Failed to add photo. Please try again.');
@@ -1597,7 +1604,7 @@ export default function CameraScreen() {
 
   async function handlePostChallengePreview() {
     if (!challengePreviewUri || isUploading) return;
-    const posted = await commitChallengePhoto(challengePreviewUri, challengeCaption);
+    const posted = await commitChallengePhoto(challengePreviewUri, challengeCaption, challengePhotoSource);
     if (posted) {
       setChallengePreviewUri(null);
       setChallengeCaption('');
