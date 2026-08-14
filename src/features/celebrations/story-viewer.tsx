@@ -503,7 +503,7 @@ export function StoryViewer({
             </View>
 
             <AppText style={S.heroDesc}>{description}</AppText>
-            {footnote ? <AppText style={S.heroFootnote}>{footnote}</AppText> : null}
+            {footnote && !cta ? <AppText style={S.heroFootnote}>{footnote}</AppText> : null}
           </Animated.View>
         ) : null}
 
@@ -595,6 +595,9 @@ export function StoryViewer({
                 },
               ]}
             >
+              {footnote ? (
+                <AppText style={S.heroFootnoteAboveCTA}>{footnote}</AppText>
+              ) : null}
               <Pressable
                 onPress={cta.onPress}
                 style={({ pressed }) => [
@@ -816,5 +819,13 @@ const S = StyleSheet.create({
     color: '#000000',
     fontSize: 15,
     fontWeight: '700',
+  },
+  heroFootnoteAboveCTA: {
+    color: 'rgba(255, 255, 255, 0.62)',
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: 320,
+    marginBottom: 16,
   },
 });
