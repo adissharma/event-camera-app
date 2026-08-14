@@ -54,6 +54,10 @@ import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session'
 import { uploadGuestPhoto } from '@/services/guest-media-upload';
 import { uploadHostPhoto } from '@/services/host-media-upload';
 import { useWebCameraTrack } from '@/features/media/web-camera-track';
+import {
+  createMirroredVideoTrack,
+  type MirroredVideoTrack,
+} from '@/features/media/web-mirrored-video-track';
 import type { MediaSource } from '@/types/database';
 import { eventAllowsVideoCapture } from '@/features/media/event-media';
 import { uploadGuestMedia } from '@/services/guest-media-upload';
@@ -416,6 +420,9 @@ export default function CameraScreen() {
   // `expo-camera`'s web camera stream never includes a microphone track (see
   // `stopWebMicStream` below), so recording acquires one independently.
   const webMicStreamRef = useRef<MediaStream | null>(null);
+  // Set only when recording the front camera on web — see
+  // `createMirroredVideoTrack` for why that path needs its own track.
+  const webMirroredVideoTrackRef = useRef<MirroredVideoTrack | null>(null);
   const webRecorderMimeType = isWeb ? getPreferredWebRecorderMimeType() : undefined;
   const hasShownFirstLimitNoticeRef = useRef(false);
   const hasShownFiveLeftNoticeRef = useRef(false);
@@ -486,8 +493,10 @@ export default function CameraScreen() {
         if (Platform.OS === 'web') {
           webRecorderRef.current?.stop();
           // `onstop` may never run once this screen has unmounted, so the
-          // microphone is released synchronously here too.
+          // microphone and any mirrored-track redraw loop are released
+          // synchronously here too.
           stopWebMicStream();
+          stopWebMirroredVideoTrack();
         } else {
           cameraRef.current?.stopRecording?.();
         }
@@ -1128,6 +1137,11 @@ export default function CameraScreen() {
     webMicStreamRef.current = null;
   }
 
+  function stopWebMirroredVideoTrack() {
+    webMirroredVideoTrackRef.current?.stop();
+    webMirroredVideoTrackRef.current = null;
+  }
+
   async function startVideoRecording() {
     if (
       !supportsVideoRecording ||
@@ -1195,7 +1209,24 @@ export default function CameraScreen() {
           console.warn('Microphone unavailable — recording video without audio.', micError);
         }
 
-        const clonedTracks = [videoTrack.clone(), ...(micTrack ? [micTrack] : [])];
+        // The front camera's preview is CSS-mirrored by `expo-camera`'s web
+        // layer, but that is a display-only effect on the `<video>` element —
+        // it never touches the underlying track, so `MediaRecorder` would
+        // otherwise record the raw, un-mirrored feed and produce a video that
+        // no longer matches what the guest watched themselves record. Baking
+        // the same flip into the recorded track keeps the two in agreement,
+        // the same way `mirror` on `CameraView` already keeps native's
+        // preview and capture in agreement for both photo and video.
+        let recordedVideoTrack: MediaStreamTrack;
+        if (facing === 'front') {
+          const mirrored = createMirroredVideoTrack(videoTrack);
+          webMirroredVideoTrackRef.current = mirrored;
+          recordedVideoTrack = mirrored.track;
+        } else {
+          recordedVideoTrack = videoTrack.clone();
+        }
+
+        const clonedTracks = [recordedVideoTrack, ...(micTrack ? [micTrack] : [])];
         const recordingStream = new MediaStream(clonedTracks);
         const recorder = preferredMimeType
           ? new MediaRecorder(recordingStream, { mimeType: preferredMimeType })
@@ -1215,6 +1246,7 @@ export default function CameraScreen() {
           recorder.onerror = () => {
             clonedTracks.forEach((track) => track.stop());
             stopWebMicStream();
+            stopWebMirroredVideoTrack();
             webRecorderRef.current = null;
             reject(new Error('The browser could not finish recording this video.'));
           };
@@ -1223,6 +1255,7 @@ export default function CameraScreen() {
             try {
               clonedTracks.forEach((track) => track.stop());
               stopWebMicStream();
+              stopWebMirroredVideoTrack();
               webRecorderRef.current = null;
 
               const mimeType = normaliseMimeType(
@@ -1297,6 +1330,7 @@ export default function CameraScreen() {
     } catch (error) {
       console.error('Failed to record video:', error);
       stopWebMicStream();
+      stopWebMirroredVideoTrack();
       Alert.alert(
         'Recording failed',
         error instanceof Error ? error.message : 'We could not record that video. Please try again.',
@@ -1464,6 +1498,15 @@ export default function CameraScreen() {
           // ignores `quality` for entirely, so `quality: 0.85` above was a
           // no-op on every web capture even before the upload itself broke.
           imageType: 'jpg',
+          // Also web-only, and for the same reason `imageType` needs stating
+          // explicitly: expo-camera's web preview is always CSS-mirrored for
+          // the front camera, but the canvas snapshot `takePictureAsync` reads
+          // that preview from is not mirrored unless told to be. Left unset,
+          // a selfie is saved flipped relative to what the guest just saw
+          // themselves take. Native needs no such flag — the `mirror` prop on
+          // `CameraView` below already keeps its preview and its capture in
+          // agreement.
+          ...(isWeb ? { isImageMirror: facing === 'front' } : null),
         });
 
         if (photo && photo.uri) {
