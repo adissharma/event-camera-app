@@ -21,6 +21,7 @@ module.exports = (config) => ({
   // Leading dot: appended to the parent app's identifier, giving
   // com.potoevents.eventcamera.Clip. A Clip's id must be a child of its parent.
   bundleIdentifier: '.Clip',
+  icon: './assets/images/icon.png',
   exportJs: true,
   entitlements: {
     // Clip invocation uses the `appclips:` prefix, distinct from the parent

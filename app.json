@@ -8,7 +8,6 @@
     "scheme": "eventcamera",
     "userInterfaceStyle": "dark",
     "ios": {
-      "buildNumber": "2",
       "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.potoevents.eventcamera",
       "appleTeamId": "AL3AF36W3B",
