@@ -12,10 +12,16 @@ import {
   Share,
   useWindowDimensions,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
+import * as Linking from 'expo-linking';
+import * as Clipboard from 'expo-clipboard';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Rect, Circle } from 'react-native-svg';
@@ -42,6 +48,7 @@ type PhotoItem = {
   is_pinned?: boolean;
   pinnedAt?: string | null;
   caption?: string | null;
+  mediaType?: 'photo' | 'video';
 };
 
 // ── SVG Icons ──
@@ -338,26 +345,120 @@ export default function PhotoViewerScreen() {
 
   // ── Actions ──
 
-  const handleSaveOriginal = () => {
+  async function getLocalPhotoUri(uri: string): Promise<string> {
+    if (uri.startsWith('http://') || uri.startsWith('https://')) {
+      const filename = uri.split('/').pop()?.split('?')[0] || 'photo.jpg';
+      const file = new FileSystem.File(FileSystem.Paths.cache, filename);
+      const downloaded = await FileSystem.File.downloadFileAsync(uri, file);
+      return downloaded.uri;
+    }
+    return uri;
+  }
+
+  const handleSaveOriginal = async () => {
     setMenuVisible(false);
-    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    Alert.alert('Saved', 'Photo saved to Camera Roll.');
+    if (!activePhoto) return;
+
+    if (Platform.OS === 'web') {
+      try {
+        const response = await fetch(activePhoto.uri);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `photo-${activePhoto.id || 'download'}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert('Success', 'Photo downloaded successfully.');
+      } catch (err: any) {
+        console.error('Failed to download photo on web:', err);
+        Alert.alert('Download failed', 'Failed to download photo on web: ' + err.message);
+      }
+      return;
+    }
+
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Allow access to your photo library to save photos to your device.'
+        );
+        return;
+      }
+
+      const localPath = await getLocalPhotoUri(activePhoto.uri);
+      await MediaLibrary.saveToLibraryAsync(localPath);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Success', 'Photo downloaded successfully.');
+    } catch (err: any) {
+      console.error('Failed to download photo:', err);
+      Alert.alert('Download failed', 'Could not save photo to your device: ' + (err.message || String(err)));
+    }
   };
 
-  const handleShareStory = () => {
+  const handleShareStory = async () => {
+    if (!activePhoto) return;
     void Haptics.selectionAsync().catch(() => {});
-    Alert.alert('Instagram Story', 'Opening Instagram Story export...');
+
+    if (Platform.OS === 'web') {
+      Alert.alert('Not supported', 'Instagram sharing is only supported on mobile devices.');
+      return;
+    }
+
+    try {
+      const localUri = await getLocalPhotoUri(activePhoto.uri);
+      const mimeType = 'image/jpeg';
+
+      const instagramUrl = Platform.OS === 'ios' ? 'instagram-stories://share' : 'instagram://';
+      let opened = false;
+      try {
+        if (await Linking.canOpenURL(instagramUrl)) {
+          await Clipboard.setImageAsync(localUri);
+          await Linking.openURL(instagramUrl);
+          opened = true;
+        }
+      } catch {
+        opened = false;
+      }
+
+      if (!opened) {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(localUri, {
+            dialogTitle: 'Share to Instagram',
+            mimeType,
+            UTI: 'public.image',
+          });
+        } else {
+          Alert.alert('Instagram not installed', 'Please install Instagram to share directly.');
+        }
+      }
+    } catch (error) {
+      console.error('[gallery] failed to share photo to Instagram', error);
+      Alert.alert('Could not share', 'Failed to share photo to Instagram.');
+    }
   };
 
   const handleShareGeneral = async () => {
+    if (!activePhoto) return;
     void Haptics.selectionAsync().catch(() => {});
+
+    const eventCode = celebration?.public_slug || '';
+    const photoIdVal = activePhoto.id || activePhoto.uri;
+    const shareLink = `https://event-camera-app-navy.vercel.app/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
+
     try {
-      if (activePhoto) {
-        await Share.share({
-          message: `Check out this photo taken by ${activePhoto.takenBy || 'a guest'} at ${celebration?.title || 'the event'}!`,
-        });
-      }
-    } catch {}
+      await Share.share({
+        message: `Check out this photo from ${celebration?.title || 'the event'}! View it here: ${shareLink}`,
+        url: shareLink,
+      });
+    } catch (err: any) {
+      console.error('Failed to share photo:', err);
+    }
   };
 
   const allMediaPhotos = detail?.mediaPhotos ?? [];
@@ -632,9 +733,11 @@ export default function PhotoViewerScreen() {
             <ShareExportIcon />
           </Pressable>
 
-          <Pressable onPress={handleSaveOriginal} style={S.iconBtn}>
-            <DownloadTrayIcon />
-          </Pressable>
+          {activePhoto.mediaType !== 'video' && (
+            <Pressable onPress={handleSaveOriginal} style={S.iconBtn}>
+              <DownloadTrayIcon />
+            </Pressable>
+          )}
         </View>
       </View>
 
@@ -647,9 +750,11 @@ export default function PhotoViewerScreen() {
       >
         <Pressable style={S.modalOverlay} onPress={() => setMenuVisible(false)}>
           <View style={S.menuSheet}>
-            <Pressable style={S.menuOption} onPress={handleSaveOriginal}>
-              <AppText style={S.menuOptionText}>Save Original</AppText>
-            </Pressable>
+            {activePhoto.mediaType !== 'video' && (
+              <Pressable style={S.menuOption} onPress={handleSaveOriginal}>
+                <AppText style={S.menuOptionText}>Save Original</AppText>
+              </Pressable>
+            )}
 
             {isHost && (
               <>

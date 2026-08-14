@@ -73,7 +73,7 @@ const SCRIM_LOCATIONS = [0, 0.42, 0.6, 0.75, 0.88, 1] as readonly [number, numbe
  * `window.location.hash` directly.
  */
 export default function GuestEntryScreen() {
-  const { eventCode, t } = useLocalSearchParams<{ eventCode: string; t?: string }>();
+  const { eventCode, t, photoId } = useLocalSearchParams<{ eventCode: string; t?: string; photoId?: string }>();
   const slug = eventCode;
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -155,9 +155,13 @@ export default function GuestEntryScreen() {
       return;
     }
     if (storedSession) {
-      router.replace(`/celebration/${storedSession.celebrationId}` as never);
+      if (photoId) {
+        router.replace(`/celebration/${storedSession.celebrationId}?openPhotoId=${encodeURIComponent(photoId)}` as never);
+      } else {
+        router.replace(`/celebration/${storedSession.celebrationId}` as never);
+      }
     }
-  }, [eventCode, storedSession, router]);
+  }, [eventCode, storedSession, router, photoId]);
 
   const handleJoin = useCallback(async () => {
     if (isJoining) return; // Guards against a double tap submitting twice.
@@ -186,7 +190,11 @@ export default function GuestEntryScreen() {
       if (IS_APP_CLIP) {
         router.replace(`/e/${eventCode}/gallery` as never);
       } else {
-        router.replace(`/celebration/${joinedSession.celebrationId}` as never);
+        if (photoId) {
+          router.replace(`/celebration/${joinedSession.celebrationId}?openPhotoId=${encodeURIComponent(photoId)}` as never);
+        } else {
+          router.replace(`/celebration/${joinedSession.celebrationId}` as never);
+        }
       }
     } catch (e) {
       // The typed name survives the failure — retyping it is the last thing a
@@ -194,7 +202,7 @@ export default function GuestEntryScreen() {
       setError(e instanceof Error ? e.message : 'Could not join. Please try again.');
       setIsJoining(false);
     }
-  }, [isJoining, isNameValid, slug, accessToken, trimmedName, router]);
+  }, [isJoining, isNameValid, slug, accessToken, trimmedName, router, photoId, handleEnterGallery]);
 
   if (isLoading) {
     return (

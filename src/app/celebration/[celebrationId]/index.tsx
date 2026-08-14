@@ -33,6 +33,9 @@ import { useEventListener } from 'expo';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
+import * as Linking from 'expo-linking';
+import * as Clipboard from 'expo-clipboard';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -2416,51 +2419,114 @@ function EventDetailView({
     return downloaded.uri;
   }
 
-  async function shareGalleryMediaToInstagram(photo: PhotoItem) {
-    void Haptics.selectionAsync().catch(() => {});
-    const isVideo = photo.mediaType === 'video';
-    const mediaLabel = isVideo ? 'video' : 'photo';
+  async function downloadPhoto(photo: PhotoItem) {
+    if (Platform.OS === 'web') {
+      try {
+        const response = await fetch(photo.uri);
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `photo-${photo.id || 'download'}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+        Alert.alert('Success', 'Photo downloaded successfully.');
+      } catch (err: any) {
+        console.error('Failed to download photo on web:', err);
+        Alert.alert('Download failed', 'Failed to download photo on web: ' + err.message);
+      }
+      return;
+    }
 
     try {
-      if (Platform.OS === 'web') {
-        await Share.share({
-          title: `Share ${mediaLabel} to Instagram`,
-          message: photo.uri,
-          url: photo.uri,
-        });
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Required',
+          'Allow access to your photo library to save photos to your device.'
+        );
         return;
       }
 
-      if (!(await Sharing.isAvailableAsync())) {
-        throw new Error('Sharing is not available on this device.');
+      let localPath = photo.uri;
+      if (photo.uri.startsWith('http://') || photo.uri.startsWith('https://')) {
+        const filename = photo.uri.split('/').pop()?.split('?')[0] || 'photo.jpg';
+        const file = new FileSystem.File(FileSystem.Paths.document, filename);
+        const downloaded = await FileSystem.File.downloadFileAsync(photo.uri, file);
+        localPath = downloaded.uri;
       }
 
-      const localUri = await ensureLocalSaveUri({
-        key: photo.id ?? photo.uri,
-        uri: photo.uri,
-        source: isVideo ? null : resolvePhotoSourceForSaving(photo.uri),
-        takenBy: photo.takenBy,
-        isChallenge: Boolean(photo.challengeId),
-        seedKey: photo.id ?? photo.uri,
-        capturedAt: photo.capturedAt,
-        mediaType: photo.mediaType ?? 'photo',
-        durationMs: photo.durationMs,
-      });
-      const mimeType = photo.mimeType ?? inferMimeTypeFromUri(localUri);
+      await MediaLibrary.saveToLibraryAsync(localPath);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      Alert.alert('Success', 'Photo downloaded successfully.');
+    } catch (err: any) {
+      console.error('Failed to download photo:', err);
+      Alert.alert('Download failed', 'Could not save photo to your device: ' + (err.message || String(err)));
+    }
+  }
 
-      await Sharing.shareAsync(localUri, {
-        dialogTitle: `Share ${mediaLabel} to Instagram`,
-        mimeType,
-        UTI: isVideo ? 'public.movie' : 'public.image',
+  async function sharePhoto(photo: PhotoItem) {
+    const eventCode = guestAuth?.slug || celebration?.public_slug || '';
+    const photoIdVal = photo.id || photo.uri;
+    const shareLink = `https://event-camera-app-navy.vercel.app/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
+
+    try {
+      await Share.share({
+        message: `Check out this photo from ${celebration?.title || 'the event'}! View it here: ${shareLink}`,
+        url: shareLink,
       });
+    } catch (err: any) {
+      console.error('Failed to share photo:', err);
+    }
+  }
+
+  async function shareGalleryMediaToInstagram(photo: PhotoItem) {
+    void Haptics.selectionAsync().catch(() => {});
+    if (Platform.OS === 'web') {
+      Alert.alert('Not supported', 'Instagram sharing is only supported on mobile devices.');
+      return;
+    }
+
+    try {
+      let localUri = photo.uri;
+      if (photo.uri.startsWith('http://') || photo.uri.startsWith('https://')) {
+        const filename = photo.uri.split('/').pop()?.split('?')[0] || 'photo.jpg';
+        const file = new FileSystem.File(FileSystem.Paths.cache, filename);
+        const downloaded = await FileSystem.File.downloadFileAsync(photo.uri, file);
+        localUri = downloaded.uri;
+      }
+      const mimeType = 'image/jpeg';
+
+      const instagramUrl = Platform.OS === 'ios' ? 'instagram-stories://share' : 'instagram://';
+      let opened = false;
+      try {
+        if (await Linking.canOpenURL(instagramUrl)) {
+          await Clipboard.setImageAsync(localUri);
+          await Linking.openURL(instagramUrl);
+          opened = true;
+        }
+      } catch {
+        opened = false;
+      }
+
+      if (!opened) {
+        if (await Sharing.isAvailableAsync()) {
+          await Sharing.shareAsync(localUri, {
+            dialogTitle: 'Share to Instagram',
+            mimeType,
+            UTI: 'public.image',
+          });
+        } else {
+          Alert.alert('Instagram not installed', 'Please install Instagram to share directly.');
+        }
+      }
     } catch (error) {
-      console.error(`[gallery] failed to share ${mediaLabel} to Instagram`, error);
-      Alert.alert(
-        'Could not share',
-        error instanceof Error
-          ? error.message
-          : `This ${mediaLabel} could not be shared. Please try again.`,
-      );
+      console.error('[gallery] failed to share photo to Instagram', error);
+      Alert.alert('Could not share', 'Failed to share photo to Instagram.');
     }
   }
 
@@ -3125,12 +3191,22 @@ function EventDetailView({
                 >
                   <InstagramStoryIcon />
                 </Pressable>
-                <Pressable onPress={() => { void Haptics.selectionAsync(); Share.share({ message: `Photo by ${activePhoto.takenBy || 'Guest'}` }); }}>
+                <Pressable
+                  onPress={() => void sharePhoto(activePhoto)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share link to photo"
+                >
                   <ShareExportIcon />
                 </Pressable>
-                <Pressable onPress={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); Alert.alert('Saved', 'Photo saved to Camera Roll.'); }}>
-                  <DownloadTrayIcon />
-                </Pressable>
+                {activePhoto.mediaType !== 'video' && (
+                  <Pressable
+                    onPress={() => void downloadPhoto(activePhoto)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Download photo"
+                  >
+                    <DownloadTrayIcon />
+                  </Pressable>
+                )}
               </View>
             </Animated.View>
 
@@ -3142,9 +3218,17 @@ function EventDetailView({
             >
               <Pressable style={S.modalOverlay} onPress={() => setHeroMenuVisible(false)}>
                 <View style={S.menuSheet}>
-                  <Pressable style={S.menuOption} onPress={() => { setHeroMenuVisible(false); Alert.alert('Saved', 'Photo saved to Camera Roll.'); }}>
-                    <AppText style={S.menuOptionText}>Save Original</AppText>
-                  </Pressable>
+                  {activePhoto.mediaType !== 'video' && (
+                    <Pressable
+                      style={S.menuOption}
+                      onPress={() => {
+                        setHeroMenuVisible(false);
+                        void downloadPhoto(activePhoto);
+                      }}
+                    >
+                      <AppText style={S.menuOptionText}>Save Original</AppText>
+                    </Pressable>
+                  )}
                   {isHost && (
                     <>
                       {isActivePinned ? (
