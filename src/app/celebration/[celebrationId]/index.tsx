@@ -776,7 +776,26 @@ function VideoPoster({
     <View ref={containerRef} style={style}>
       <VideoView
         player={player}
-        style={StyleSheet.absoluteFill}
+        /**
+         * Explicit 100%/100% rather than `absoluteFill`, for the same reason
+         * `background-video.tsx` already does it.
+         *
+         * `absoluteFill` is `position: absolute` plus zeroed insets and no
+         * width or height. A `<div>` stretches to fill under those rules, but
+         * `<video>` is a *replaced* element, and CSS resolves an auto-sized
+         * replaced element to its intrinsic dimensions and then ignores the
+         * over-constrained insets. So on web the element laid itself out at
+         * the video's full pixel size — 1080x1920 for a phone recording —
+         * inside whatever box it was given, and the parent's `overflow:
+         * hidden` cropped that down to the top-left corner. `contentFit` could
+         * not help: `object-fit` only does anything when the element box
+         * differs from the content, and here they were identical.
+         *
+         * Native was never affected — it does not lay out through CSS — and
+         * full-screen looked right because the fullscreen API sizes the
+         * element itself instead of leaving it auto.
+         */
+        style={{ width: '100%', height: '100%' }}
         contentFit={contentFit}
         nativeControls={controls}
       />

@@ -21,12 +21,17 @@ import { File } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
 let CameraView: any = null;
 let useCameraPermissions: any = () => [null, () => {}];
+// Recording video with sound needs its OWN permission on native. Without it
+// iOS records happily and simply omits the audio track — see
+// `ensureMicrophoneAccess`.
+let useMicrophonePermissions: any = () => [null, async () => ({ granted: false })];
 let hasNativeCamera = false;
 
 try {
   const expoCamera = require('expo-camera');
   CameraView = expoCamera.CameraView;
   useCameraPermissions = expoCamera.useCameraPermissions;
+  useMicrophonePermissions = expoCamera.useMicrophonePermissions;
   hasNativeCamera = true;
 } catch (error) {
   console.warn('Native camera module is missing in this build.', error);
@@ -65,6 +70,7 @@ import { eventAllowsVideoCapture } from '@/features/media/event-media';
 import { uploadGuestMedia } from '@/services/guest-media-upload';
 import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
+import { BRAND_CONFIG } from '@/config/brand';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { AudioCapture, type AudioCaptureResult } from '@/features/celebrations/audio-capture';
@@ -413,6 +419,7 @@ export default function CameraScreen() {
   // ── States ──
   const isWeb = Platform.OS === 'web';
   const [permission, requestPermission] = useCameraPermissions();
+  const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [isPhotosLoaded, setIsPhotosLoaded] = useState(false);
   // Guestbook messages are spoken to camera, so they default to the selfie
@@ -1200,6 +1207,51 @@ export default function CameraScreen() {
     webMirroredVideoTrackRef.current = null;
   }
 
+  /**
+   * Makes sure the app actually holds microphone access before recording.
+   *
+   * `CameraView` is given `mute={false}`, but that only expresses intent — on
+   * iOS the recording still needs `NSMicrophoneUsageDescription` permission to
+   * have been *granted*, and `recordAsync` does not request it or complain if
+   * it is missing. It records the video and silently omits the audio track, so
+   * a guest whose device never granted the microphone gets a mute video every
+   * single time, with nothing in the UI to explain why. Only the camera
+   * permission was ever requested here, which is exactly how that happened.
+   *
+   * Requested at record time rather than as another gate on the way in: a
+   * guest who only ever takes photos should not be asked for their microphone.
+   *
+   * A refusal does not block the recording — being unable to film at all at
+   * someone's wedding is worse than filming it silently — but it does say so
+   * plainly, which is the part that was missing.
+   */
+  async function ensureMicrophoneAccess(): Promise<boolean> {
+    if (micPermission?.granted) return true;
+
+    if (micPermission && !micPermission.canAskAgain) {
+      return await confirmSilentRecording();
+    }
+
+    const result = await requestMicPermission();
+    if (result?.granted) return true;
+    return await confirmSilentRecording();
+  }
+
+  /** Lets the guest decide, rather than handing them a mute video unannounced. */
+  function confirmSilentRecording(): Promise<boolean> {
+    return new Promise((resolve) => {
+      Alert.alert(
+        'Microphone is off',
+        `Without microphone access this video will record without sound. You can turn it on for ${BRAND_CONFIG.appName} in Settings.`,
+        [
+          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+          { text: 'Record without sound', onPress: () => resolve(true) },
+        ],
+        { cancelable: false },
+      );
+    });
+  }
+
   async function startVideoRecording() {
     if (
       !supportsVideoRecording ||
@@ -1210,6 +1262,11 @@ export default function CameraScreen() {
     ) {
       return;
     }
+
+    // Asked BEFORE the recording starts, so the OS prompt cannot interrupt one
+    // in progress. Web needs nothing here: its recording path calls
+    // `getUserMedia({ audio: true })` itself, which prompts on its own.
+    if (!isWeb && !(await ensureMicrophoneAccess())) return;
 
     recordingActiveRef.current = true;
     recordingStopRequestedRef.current = false;
