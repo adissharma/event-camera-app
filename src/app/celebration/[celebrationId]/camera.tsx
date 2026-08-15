@@ -66,6 +66,7 @@ import { normaliseMimeType } from '@/features/media/storage-paths';
 import { useCameraAccess } from '@/features/media/camera-status';
 import { useMicrophoneStatus } from '@/features/media/microphone-status';
 import { compressVideoForUpload } from '@/features/media/video-compression';
+import { generateVideoThumbnail } from '@/features/media/video-thumbnail';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { AudioCapture, type AudioCaptureResult } from '@/features/celebrations/audio-capture';
@@ -942,6 +943,18 @@ export default function CameraScreen() {
         };
       }
     }
+    // A grid thumbnail, generated from whichever file is actually about to
+    // be uploaded. Unlike compression this runs on web too — grabbing one
+    // already-decoded frame is cheap there, nothing like a full transcode.
+    // Never blocks the post: a failure just leaves `videoThumbnail` null,
+    // and the upload proceeds exactly as it did before this feature.
+    let videoThumbnail: { uri: string; mimeType: string } | null = null;
+    if (mediaKind === 'video' && isBackendConfigured) {
+      const thumbnail = await generateVideoThumbnail(effectivePreview.uri);
+      if (thumbnail) {
+        videoThumbnail = { uri: thumbnail.uri, mimeType: thumbnail.mimeType };
+      }
+    }
     setPostingStage('uploading');
 
     // Only non-null once compression actually produced a second file — never
@@ -1003,6 +1016,8 @@ export default function CameraScreen() {
             : effectivePreview.guestbook
               ? { submission_kind: 'guestbook' }
               : undefined,
+          thumbnailLocalUri: videoThumbnail?.uri,
+          thumbnailMimeType: videoThumbnail?.mimeType,
         });
         postedMediaItemId = uploadResult.mediaItemId;
         // Guestbook messages are not part of the guest's photo/video shot
@@ -1029,6 +1044,8 @@ export default function CameraScreen() {
             : effectivePreview.guestbook
               ? { submission_kind: 'guestbook' }
               : undefined,
+          thumbnailLocalUri: videoThumbnail?.uri,
+          thumbnailMimeType: videoThumbnail?.mimeType,
         });
         postedMediaItemId = uploadResult.mediaItemId;
       } else {

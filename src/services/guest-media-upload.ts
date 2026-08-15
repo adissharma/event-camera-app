@@ -37,6 +37,14 @@ export interface UploadGuestMediaParams {
   durationMs?: number | null;
   capturedAt?: string;
   metadata?: Record<string, unknown>;
+  /**
+   * A client-generated poster frame for a video (see `video-thumbnail.ts`).
+   * Only uploaded when the create-intent RPC actually reserved a thumbnail
+   * path for this item (video only) — silently ignored otherwise. Never
+   * blocks or fails the media upload itself; see `uploadGuestMedia`.
+   */
+  thumbnailLocalUri?: string;
+  thumbnailMimeType?: string;
 }
 
 export interface UploadGuestMediaResult {
@@ -94,6 +102,7 @@ export async function uploadGuestMedia(
     upload_intent_id: string;
     bucket: string;
     storage_path: string;
+    thumbnail_storage_path: string | null;
   };
 
   const { error: uploadError } = await client.storage
@@ -101,6 +110,28 @@ export async function uploadGuestMedia(
     .upload(intent.storage_path, bytes, { contentType: mimeType, upsert: false });
 
   if (uploadError) throw new Error(`Guest ${mediaLabel} storage upload failed: ${uploadError.message}`);
+
+  // Best-effort and entirely separate from the media upload above: a failed
+  // or skipped thumbnail never blocks or fails the post itself — the grid
+  // just falls back to today's video-as-poster behaviour for this item.
+  let thumbnailUploaded = false;
+  if (params.thumbnailLocalUri && intent.thumbnail_storage_path) {
+    try {
+      const thumbnail = await readLocalMediaBytes(params.thumbnailLocalUri);
+      const { error: thumbnailError } = await client.storage
+        .from(intent.bucket)
+        .upload(intent.thumbnail_storage_path, thumbnail.bytes, {
+          contentType: params.thumbnailMimeType ?? 'image/jpeg',
+          upsert: false,
+        });
+      thumbnailUploaded = !thumbnailError;
+      if (thumbnailError) {
+        console.warn('[guest-media-upload] thumbnail upload failed', thumbnailError);
+      }
+    } catch (error) {
+      console.warn('[guest-media-upload] thumbnail upload failed', error);
+    }
+  }
 
   const { data: finalizeData, error: finalizeError } = await (client as any).rpc(
     'finalize_guest_media_upload',
@@ -112,6 +143,7 @@ export async function uploadGuestMedia(
       p_width: params.width ?? null,
       p_height: params.height ?? null,
       p_duration_ms: params.durationMs ?? null,
+      p_thumbnail_uploaded: thumbnailUploaded,
     },
   );
 

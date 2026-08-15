@@ -441,6 +441,41 @@ export type Database = {
           },
         ]
       }
+      event_guestbooks: {
+        Row: {
+          celebration_id: string
+          created_at: string
+          guestbook_icon: string
+          id: string
+          instructions: string
+          updated_at: string
+        }
+        Insert: {
+          celebration_id: string
+          created_at?: string
+          guestbook_icon?: string
+          id?: string
+          instructions?: string
+          updated_at?: string
+        }
+        Update: {
+          celebration_id?: string
+          created_at?: string
+          guestbook_icon?: string
+          id?: string
+          instructions?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_guestbooks_celebration_id_fkey"
+            columns: ["celebration_id"]
+            isOneToOne: true
+            referencedRelation: "celebrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_sessions: {
         Row: {
           allow_media_from_any_date: boolean
@@ -621,6 +656,7 @@ export type Database = {
           ready_at: string | null
           source: Database["public"]["Enums"]["media_source"]
           status: Database["public"]["Enums"]["media_status"]
+          thumbnail_storage_path: string | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by_user_id: string | null
@@ -654,6 +690,7 @@ export type Database = {
           ready_at?: string | null
           source?: Database["public"]["Enums"]["media_source"]
           status?: Database["public"]["Enums"]["media_status"]
+          thumbnail_storage_path?: string | null
           updated_at?: string
           uploaded_at?: string | null
           uploaded_by_user_id?: string | null
@@ -675,16 +712,19 @@ export type Database = {
           guest_session_id?: string | null
           height?: number | null
           id?: string
+          is_pinned?: boolean
           media_type?: Database["public"]["Enums"]["media_type"]
           metadata?: Json
           mime_type?: string | null
           moderated_at?: string | null
           original_filename?: string | null
           original_storage_path?: string | null
+          pinned_at?: string | null
           processing_started_at?: string | null
           ready_at?: string | null
           source?: Database["public"]["Enums"]["media_source"]
           status?: Database["public"]["Enums"]["media_status"]
+          thumbnail_storage_path?: string | null
           updated_at?: string
           uploaded_at?: string | null
           uploaded_by_user_id?: string | null
@@ -1351,34 +1391,62 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      create_celebration_with_default_session: {
-        Args: {
-          p_allowed_media_types?: Database["public"]["Enums"]["media_type"][]
-          p_camera_roll_upload_limit?: number
-          p_capture_mode?: Database["public"]["Enums"]["capture_mode"]
-          p_celebration_type?: Database["public"]["Enums"]["celebration_type"]
-          p_ends_at?: string
-          p_gallery_visibility?: Database["public"]["Enums"]["gallery_visibility"]
-          p_inspiration_pack?: Database["public"]["Enums"]["inspiration_pack"]
-          p_photo_treatment?: Database["public"]["Enums"]["photo_treatment"]
-          p_reveal_at?: string
-          p_reveal_mode?: Database["public"]["Enums"]["reveal_mode"]
-          p_session_name?: string
-          p_shot_limit_per_guest?: number
-          p_starts_at?: string
-          p_theme_id?: string
-          p_timezone?: string
-          p_title: string
-          p_workspace_id?: string
-        }
-        Returns: Database["public"]["CompositeTypes"]["created_celebration"]
-        SetofOptions: {
-          from: "*"
-          to: "created_celebration"
-          isOneToOne: true
-          isSetofReturn: false
-        }
-      }
+      create_celebration_with_default_session:
+        | {
+            Args: {
+              p_allowed_media_types?: Database["public"]["Enums"]["media_type"][]
+              p_camera_roll_upload_limit?: number
+              p_capture_mode?: Database["public"]["Enums"]["capture_mode"]
+              p_celebration_type?: Database["public"]["Enums"]["celebration_type"]
+              p_ends_at?: string
+              p_gallery_visibility?: Database["public"]["Enums"]["gallery_visibility"]
+              p_inspiration_pack?: Database["public"]["Enums"]["inspiration_pack"]
+              p_photo_treatment?: Database["public"]["Enums"]["photo_treatment"]
+              p_reveal_at?: string
+              p_reveal_mode?: Database["public"]["Enums"]["reveal_mode"]
+              p_session_name?: string
+              p_shot_limit_per_guest?: number
+              p_starts_at?: string
+              p_theme_id?: string
+              p_timezone?: string
+              p_title: string
+              p_workspace_id?: string
+            }
+            Returns: Database["public"]["CompositeTypes"]["created_celebration"]
+            SetofOptions: {
+              from: "*"
+              to: "created_celebration"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_camera_roll_upload_limit?: number
+              p_capture_mode?: Database["public"]["Enums"]["capture_mode"]
+              p_celebration_type?: Database["public"]["Enums"]["celebration_type"]
+              p_ends_at?: string
+              p_gallery_visibility?: Database["public"]["Enums"]["gallery_visibility"]
+              p_inspiration_pack?: Database["public"]["Enums"]["inspiration_pack"]
+              p_photo_treatment?: Database["public"]["Enums"]["photo_treatment"]
+              p_reveal_at?: string
+              p_reveal_mode?: Database["public"]["Enums"]["reveal_mode"]
+              p_session_name?: string
+              p_shot_limit_per_guest?: number
+              p_starts_at?: string
+              p_theme_id?: string
+              p_timezone?: string
+              p_title: string
+              p_workspace_id?: string
+            }
+            Returns: Database["public"]["CompositeTypes"]["created_celebration"]
+            SetofOptions: {
+              from: "*"
+              to: "created_celebration"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
       create_guest_media_upload_intent: {
         Args: {
           p_captured_at?: string
@@ -1459,16 +1527,19 @@ export type Database = {
           guest_session_id: string | null
           height: number | null
           id: string
+          is_pinned: boolean
           media_type: Database["public"]["Enums"]["media_type"]
           metadata: Json
           mime_type: string | null
           moderated_at: string | null
           original_filename: string | null
           original_storage_path: string | null
+          pinned_at: string | null
           processing_started_at: string | null
           ready_at: string | null
           source: Database["public"]["Enums"]["media_source"]
           status: Database["public"]["Enums"]["media_status"]
+          thumbnail_storage_path: string | null
           updated_at: string
           uploaded_at: string | null
           uploaded_by_user_id: string | null
@@ -1482,33 +1553,89 @@ export type Database = {
           isSetofReturn: false
         }
       }
-      finalize_guest_media_upload: {
-        Args: {
-          p_checksum_algorithm?: string
-          p_checksum_value?: string
-          p_duration_ms?: number
-          p_file_size_bytes: number
-          p_guest_token: string
-          p_height?: number
-          p_media_item_id: string
-          p_mime_type?: string
-          p_width?: number
-        }
-        Returns: Json
-      }
-      finalize_host_media_upload: {
-        Args: {
-          p_checksum_algorithm?: string
-          p_checksum_value?: string
-          p_duration_ms?: number
-          p_file_size_bytes: number
-          p_height?: number
-          p_media_item_id: string
-          p_mime_type?: string
-          p_width?: number
-        }
-        Returns: Json
-      }
+      finalize_guest_media_upload:
+        | {
+            Args: {
+              p_checksum_algorithm?: string
+              p_checksum_value?: string
+              p_file_size_bytes: number
+              p_guest_token: string
+              p_height?: number
+              p_media_item_id: string
+              p_mime_type?: string
+              p_width?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_checksum_algorithm?: string
+              p_checksum_value?: string
+              p_duration_ms?: number
+              p_file_size_bytes: number
+              p_guest_token: string
+              p_height?: number
+              p_media_item_id: string
+              p_mime_type?: string
+              p_width?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_checksum_algorithm?: string
+              p_checksum_value?: string
+              p_duration_ms?: number
+              p_file_size_bytes: number
+              p_guest_token: string
+              p_height?: number
+              p_media_item_id: string
+              p_mime_type?: string
+              p_thumbnail_uploaded?: boolean
+              p_width?: number
+            }
+            Returns: Json
+          }
+      finalize_host_media_upload:
+        | {
+            Args: {
+              p_checksum_algorithm?: string
+              p_checksum_value?: string
+              p_file_size_bytes: number
+              p_height?: number
+              p_media_item_id: string
+              p_mime_type?: string
+              p_width?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_checksum_algorithm?: string
+              p_checksum_value?: string
+              p_duration_ms?: number
+              p_file_size_bytes: number
+              p_height?: number
+              p_media_item_id: string
+              p_mime_type?: string
+              p_width?: number
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_checksum_algorithm?: string
+              p_checksum_value?: string
+              p_duration_ms?: number
+              p_file_size_bytes: number
+              p_height?: number
+              p_media_item_id: string
+              p_mime_type?: string
+              p_thumbnail_uploaded?: boolean
+              p_width?: number
+            }
+            Returns: Json
+          }
       get_event_preview_by_code: {
         Args: { p_event_code: string }
         Returns: Database["public"]["CompositeTypes"]["guest_event_preview"]
@@ -1539,10 +1666,24 @@ export type Database = {
         Args: { p_event_code: string; p_guest_token: string }
         Returns: Json
       }
+      get_guest_guestbook: {
+        Args: { p_event_code: string; p_guest_token: string }
+        Returns: Json
+      }
+      get_guest_joined_guests: {
+        Args: { p_celebration_id: string; p_guest_token: string }
+        Returns: {
+          created_at: string
+          display_name: string
+          id: string
+          last_seen_at: string
+        }[]
+      }
       get_host_challenge_photos: {
         Args: { p_celebration_id: string }
         Returns: Json
       }
+      get_host_guestbook: { Args: { p_celebration_id: string }; Returns: Json }
       join_event_by_code: {
         Args: {
           p_device_fingerprint?: string
@@ -1572,6 +1713,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      pin_host_media_item: { Args: { p_media_item_id: string }; Returns: Json }
       publish_celebration: {
         Args: {
           p_add_on_keys?: string[]
@@ -1590,6 +1732,49 @@ export type Database = {
         Args: { p_celebration_id: string; p_challenges: Json }
         Returns: Json
       }
+      unpin_host_media_item: {
+        Args: { p_media_item_id: string }
+        Returns: Json
+      }
+      upsert_event_guestbook:
+        | {
+            Args: { p_celebration_id: string; p_instructions: string }
+            Returns: {
+              celebration_id: string
+              created_at: string
+              guestbook_icon: string
+              id: string
+              instructions: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "event_guestbooks"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
+        | {
+            Args: {
+              p_celebration_id: string
+              p_icon?: string
+              p_instructions: string
+            }
+            Returns: {
+              celebration_id: string
+              created_at: string
+              guestbook_icon: string
+              id: string
+              instructions: string
+              updated_at: string
+            }
+            SetofOptions: {
+              from: "*"
+              to: "event_guestbooks"
+              isOneToOne: true
+              isSetofReturn: false
+            }
+          }
     }
     Enums: {
       access_link_kind: "guest" | "host_preview" | "cohost_invite"
@@ -1706,6 +1891,7 @@ export type Database = {
         shot_limit_per_guest: number | null
         cover_storage_path: string | null
         theme_accent: string | null
+        photo_count: number | null
       }
       joined_guest_session: {
         guest_session_id: string | null

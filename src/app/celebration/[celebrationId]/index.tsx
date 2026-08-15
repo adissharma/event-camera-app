@@ -258,6 +258,15 @@ interface PhotoItem {
   mediaType?: 'photo' | 'video';
   durationMs?: number | null;
   mimeType?: string | null;
+  /**
+   * A small stored poster frame for a video (see `video-thumbnail.ts` /
+   * `20260815120000_video_thumbnails.sql`). Grid cells use this instead of
+   * mounting a real video player. Undefined/null for a photo, or for a
+   * video that has none yet (older items, or a thumbnail that failed to
+   * generate/upload without blocking the post itself) — those fall back to
+   * `VideoPoster`'s existing video-as-poster behaviour.
+   */
+  thumbnailUri?: string | null;
 }
 
 type PendingChallengePost = {
@@ -1422,10 +1431,16 @@ function EventDetailView({
     let cancelled = false;
     (async () => {
       const client = requireSupabase();
+      // Thumbnail paths batched into the same call as the originals — one
+      // round trip either way, and a video with no thumbnail simply
+      // contributes nothing extra to the path list.
+      const thumbnailPaths = mediaPhotos
+        .map((p) => p.thumbnailStoragePath)
+        .filter((path): path is string => Boolean(path));
       const { data, error } = await client.storage
         .from('event-media')
         .createSignedUrls(
-          mediaPhotos.map((p) => p.storagePath),
+          [...mediaPhotos.map((p) => p.storagePath), ...thumbnailPaths],
           3600,
         );
 
@@ -1457,6 +1472,7 @@ function EventDetailView({
                 mediaType: p.mediaType ?? 'photo',
                 durationMs: p.durationMs ?? null,
                 mimeType: p.mimeType ?? null,
+                thumbnailUri: p.thumbnailStoragePath ? (urlByPath.get(p.thumbnailStoragePath) ?? null) : null,
               }
             : null;
         })
@@ -2915,7 +2931,22 @@ function EventDetailView({
                             ]}
                           >
                             {photo.mediaType === 'video' ? (
-                              <VideoPoster uri={photo.uri} style={S.galleryCellImg} />
+                              photo.thumbnailUri ? (
+                                // A real stored poster frame — no video player,
+                                // no network fetch of the full file, just an
+                                // image like any other grid cell.
+                                <Image
+                                  source={{ uri: photo.thumbnailUri }}
+                                  style={S.galleryCellImg}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                // No thumbnail yet (an older item, or one whose
+                                // thumbnail failed to generate/upload without
+                                // blocking the post) — falls back to the video
+                                // itself as its own poster, same as before.
+                                <VideoPoster uri={photo.uri} style={S.galleryCellImg} />
+                              )
                             ) : (
                               <TreatedPhoto
                                 source={getPhotoSource(photo.uri)}

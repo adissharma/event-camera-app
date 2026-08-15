@@ -56,7 +56,7 @@ export interface CelebrationDetail {
    * offline-mock array under that name) to avoid colliding with it.
    */
   mediaPhotos:
-    | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; isMine?: boolean; isPinned?: boolean; pinnedAt?: string | null; caption?: string | null; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
+    | { id: string; storagePath: string; thumbnailStoragePath?: string | null; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; isMine?: boolean; isPinned?: boolean; pinnedAt?: string | null; caption?: string | null; challengeId?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
   challengePhotos:
     | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; challengeId: string; isMine?: boolean; isPinned?: boolean; pinnedAt?: string | null; caption?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
@@ -140,7 +140,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         ? await (async () => {
             const { data: mediaRows, error: mediaError } = await client
               .from('media_items')
-              .select('id, original_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name), media_type, duration_ms, mime_type, width, height, is_pinned, pinned_at')
+              .select('id, original_storage_path, thumbnail_storage_path, captured_at, metadata, guest_session_id, uploaded_by_user_id, guest_sessions(display_name), media_type, duration_ms, mime_type, width, height, is_pinned, pinned_at')
               .eq('event_session_id', primarySession.id)
               .eq('status', 'ready')
               .is('deleted_at', null)
@@ -161,6 +161,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
               .map((m) => ({
                 id: m.id,
                 storagePath: m.original_storage_path,
+                thumbnailStoragePath: (m as any).thumbnail_storage_path ?? null,
                 capturedAt: m.captured_at,
                 displayName: (m.guest_sessions as any)?.display_name ?? 'Host',
                 mediaType: (m as any).media_type ?? 'photo',
@@ -469,6 +470,7 @@ async function tryFetchCelebrationDetailAsGuest(
       ? data.photos.map((p: any) => ({
           id: p.id,
           storagePath: p.storage_path,
+          thumbnailStoragePath: p.thumbnail_storage_path ?? null,
           capturedAt: p.captured_at ?? null,
           displayName: p.display_name ?? 'Guest',
           mediaType: p.media_type ?? 'photo',
