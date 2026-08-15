@@ -21,17 +21,12 @@ import { File } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
 let CameraView: any = null;
 let useCameraPermissions: any = () => [null, () => {}];
-// Recording video with sound needs its OWN permission on native. Without it
-// iOS records happily and simply omits the audio track — see
-// `ensureMicrophoneAccess`.
-let useMicrophonePermissions: any = () => [null, async () => ({ granted: false })];
 let hasNativeCamera = false;
 
 try {
   const expoCamera = require('expo-camera');
   CameraView = expoCamera.CameraView;
   useCameraPermissions = expoCamera.useCameraPermissions;
-  useMicrophonePermissions = expoCamera.useMicrophonePermissions;
   hasNativeCamera = true;
 } catch (error) {
   console.warn('Native camera module is missing in this build.', error);
@@ -70,7 +65,7 @@ import { eventAllowsVideoCapture } from '@/features/media/event-media';
 import { uploadGuestMedia } from '@/services/guest-media-upload';
 import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
-import { BRAND_CONFIG } from '@/config/brand';
+import { useMicrophoneStatus } from '@/features/media/microphone-status';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { AudioCapture, type AudioCaptureResult } from '@/features/celebrations/audio-capture';
@@ -419,7 +414,6 @@ export default function CameraScreen() {
   // ── States ──
   const isWeb = Platform.OS === 'web';
   const [permission, requestPermission] = useCameraPermissions();
-  const [micPermission, requestMicPermission] = useMicrophonePermissions();
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [isPhotosLoaded, setIsPhotosLoaded] = useState(false);
   // Guestbook messages are spoken to camera, so they default to the selfie
@@ -513,6 +507,19 @@ export default function CameraScreen() {
 
   const supportsVideoRecording =
     videoCaptureEnabled && (!isWeb || Boolean(webRecorderMimeType));
+
+  // Same check, same status reporting, on every recording surface — main
+  // gallery video, Challenge video, Guestbook video, Guestbook audio all
+  // land here, since they all share this one screen. "Active" is whichever
+  // mode would actually capture sound, with the viewfinder actually showing
+  // (not a preview) — a guest browsing in photo mode is never asked for a
+  // microphone they'll never use.
+  const micActive =
+    !videoPreview &&
+    !challengePreviewUri &&
+    !galleryPreviewUri &&
+    (isAudioCapture || (captureType === 'video' && supportsVideoRecording));
+  const micStatus = useMicrophoneStatus({ active: micActive });
 
   useEffect(() => {
     // The Guestbook offers audio and video; anything else that leaks in (a
@@ -1207,51 +1214,6 @@ export default function CameraScreen() {
     webMirroredVideoTrackRef.current = null;
   }
 
-  /**
-   * Makes sure the app actually holds microphone access before recording.
-   *
-   * `CameraView` is given `mute={false}`, but that only expresses intent — on
-   * iOS the recording still needs `NSMicrophoneUsageDescription` permission to
-   * have been *granted*, and `recordAsync` does not request it or complain if
-   * it is missing. It records the video and silently omits the audio track, so
-   * a guest whose device never granted the microphone gets a mute video every
-   * single time, with nothing in the UI to explain why. Only the camera
-   * permission was ever requested here, which is exactly how that happened.
-   *
-   * Requested at record time rather than as another gate on the way in: a
-   * guest who only ever takes photos should not be asked for their microphone.
-   *
-   * A refusal does not block the recording — being unable to film at all at
-   * someone's wedding is worse than filming it silently — but it does say so
-   * plainly, which is the part that was missing.
-   */
-  async function ensureMicrophoneAccess(): Promise<boolean> {
-    if (micPermission?.granted) return true;
-
-    if (micPermission && !micPermission.canAskAgain) {
-      return await confirmSilentRecording();
-    }
-
-    const result = await requestMicPermission();
-    if (result?.granted) return true;
-    return await confirmSilentRecording();
-  }
-
-  /** Lets the guest decide, rather than handing them a mute video unannounced. */
-  function confirmSilentRecording(): Promise<boolean> {
-    return new Promise((resolve) => {
-      Alert.alert(
-        'Microphone is off',
-        `Without microphone access this video will record without sound. You can turn it on for ${BRAND_CONFIG.appName} in Settings.`,
-        [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Record without sound', onPress: () => resolve(true) },
-        ],
-        { cancelable: false },
-      );
-    });
-  }
-
   async function startVideoRecording() {
     if (
       !supportsVideoRecording ||
@@ -1263,11 +1225,10 @@ export default function CameraScreen() {
       return;
     }
 
-    // Asked BEFORE the recording starts, so the OS prompt cannot interrupt one
-    // in progress. Web needs nothing here: its recording path calls
-    // `getUserMedia({ audio: true })` itself, which prompts on its own.
-    if (!isWeb && !(await ensureMicrophoneAccess())) return;
-
+    // No permission gate here: `useMicrophoneStatus` above already requested
+    // access as soon as video mode became active, and recording is never
+    // blocked on the answer — a guest who declined still gets their video,
+    // just with the "may not include sound" status visible in the viewfinder.
     recordingActiveRef.current = true;
     recordingStopRequestedRef.current = false;
     setRecordingRemainingMs(MAX_VIDEO_DURATION_MS);
@@ -1796,6 +1757,28 @@ export default function CameraScreen() {
     return `${minutes}m left`;
   }
 
+  /**
+   * Shown before recording starts, while the mode needs audio and we already
+   * know the mic isn't available — `unknown` is deliberately silent here,
+   * since that's just the permission check still in flight, not a problem.
+   */
+  function getMicPreflightWarning(): string | null {
+    if (micStatus.permission === 'denied') {
+      return 'Microphone access isn’t enabled. Your recording may not include sound.';
+    }
+    if (micStatus.permission === 'unavailable') {
+      return 'No microphone detected. Your recording may not include sound.';
+    }
+    return null;
+  }
+
+  /** Compact enough to sit inside the recording pill alongside the countdown. */
+  function getMicLiveLabel(): string | null {
+    if (micStatus.permission === 'denied') return 'No sound';
+    if (micStatus.permission === 'unavailable') return 'No mic';
+    return null;
+  }
+
   // `shot_limit_per_guest` caps guests, by name and by design — server-
   // computed from uploads that actually reached `ready`, so a failed or
   // abandoned upload never costs an allowance. It does not apply to a host
@@ -1970,7 +1953,9 @@ export default function CameraScreen() {
               activeColor={isRecording ? '#FFFFFF' : 'rgba(255, 255, 255, 0.45)'}
             />
             <AppText style={S.audioStageHint}>
-              {isRecording ? 'Listening…' : 'Tap the button to start recording'}
+              {isRecording
+                ? (getMicLiveLabel() ?? 'Listening…')
+                : (getMicPreflightWarning() ?? 'Tap the button to start recording')}
             </AppText>
           </View>
         ) : (
@@ -2027,6 +2012,27 @@ export default function CameraScreen() {
           <View style={S.recordingPill}>
             <View style={S.recordingDot} />
             <AppText style={S.recordingText}>{formatCountdown(recordingRemainingMs)}</AppText>
+            {/* Audio mode already carries this in its own hint + waveform;
+                video has nothing else, so it gets its own small tell here. */}
+            {!isAudioCapture ? (
+              getMicLiveLabel() ? (
+                <AppText style={S.micWarningText}>{getMicLiveLabel()}</AppText>
+              ) : (
+                <View
+                  style={[
+                    S.micLiveDot,
+                    micStatus.isLive && {
+                      opacity: 0.5 + Math.min(1, micStatus.level) * 0.5,
+                      transform: [{ scale: 1 + Math.min(1, micStatus.level) * 0.35 }],
+                    },
+                  ]}
+                />
+              )
+            ) : null}
+          </View>
+        ) : !isAudioCapture && captureType === 'video' && supportsVideoRecording && getMicPreflightWarning() ? (
+          <View style={S.micPreflightPill}>
+            <AppText style={S.micPreflightText}>{getMicPreflightWarning()}</AppText>
           </View>
         ) : null}
 
@@ -2660,6 +2666,40 @@ export default function CameraScreen() {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Mic status, folded into the recording pill rather than a second pill —
+  // one small tell next to the countdown, not a second thing competing for
+  // attention while someone is mid-recording.
+  micLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: '#34C759',
+    marginLeft: 2,
+  },
+  micWarningText: {
+    color: '#FFD60A',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  micPreflightPill: {
+    position: 'absolute',
+    top: PILL_INSET,
+    left: PILL_INSET,
+    right: PILL_INSET,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(11, 11, 12, 0.78)',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    zIndex: 20,
+  },
+  micPreflightText: {
+    color: '#FFD60A',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   inlineVideoPreviewWrap: {
     position: 'absolute',
