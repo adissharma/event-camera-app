@@ -514,7 +514,17 @@ export default function CameraScreen() {
   // mode would actually capture sound, with the viewfinder actually showing
   // (not a preview) — a guest browsing in photo mode is never asked for a
   // microphone they'll never use.
+  //
+  // Gated on camera permission already being granted: Guestbook opens
+  // straight into video mode, so without this the mic probe (a second,
+  // independent `getUserMedia` prompt on web) was firing the moment the
+  // screen mounted — before the guest had even answered the CAMERA prompt.
+  // Two overlapping permission prompts is exactly the kind of thing that
+  // wedges a mobile browser's UI, which is what made "Enable Camera"
+  // apparently do nothing on Android Chrome. The mic check now waits for
+  // the viewfinder to actually be there.
   const micActive =
+    Boolean(permission?.granted) &&
     !videoPreview &&
     !challengePreviewUri &&
     !galleryPreviewUri &&
