@@ -1873,9 +1873,11 @@ export default function CameraScreen() {
   }
 
   if (cameraAccess.status !== 'granted') {
-    // Only shown once a tap has actually gone nowhere — the first time this
-    // screen renders, it looks exactly as it always has.
-    const showRecovery = cameraRequestAttempted;
+    // Normally only shown once a tap has actually gone nowhere, so the first
+    // render looks exactly as it always has. An insecure origin is the
+    // exception: the request cannot succeed there no matter how many times
+    // it is tapped, so it says so straight away.
+    const showRecovery = cameraRequestAttempted || cameraAccess.status === 'insecure';
     return (
       <View style={S.permissionRoot}>
         <View style={S.permissionContent}>
@@ -1894,18 +1896,16 @@ export default function CameraScreen() {
           >
             <AppText style={S.permissionBtnText}>Enable Camera</AppText>
           </Pressable>
-          {showRecovery ? (
+          {/* `detail` comes from the request itself, so this says what
+              actually went wrong rather than guessing at it. */}
+          {showRecovery && cameraAccess.detail ? (
             <AppText
               variant="bodyMedium"
               align="center"
               tone="secondary"
-              style={{ marginTop: spacing.md, maxWidth: 280 }}
+              style={{ marginTop: spacing.md, maxWidth: 300 }}
             >
-              {cameraAccess.status === 'unavailable'
-                ? 'No camera was found on this device.'
-                : isWeb
-                  ? 'Nothing happened? Your browser may be blocking this page from asking. Check the site settings next to the address bar and allow camera access, then try again.'
-                  : 'You can turn this on for Stories. in Settings.'}
+              {cameraAccess.detail}
             </AppText>
           ) : null}
           {showRecovery && !isWeb ? (
