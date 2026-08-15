@@ -65,6 +65,7 @@ import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
 import { useCameraAccess } from '@/features/media/camera-status';
 import { useMicrophoneStatus } from '@/features/media/microphone-status';
+import { compressVideoForUpload } from '@/features/media/video-compression';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { AudioCapture, type AudioCaptureResult } from '@/features/celebrations/audio-capture';
@@ -391,6 +392,8 @@ export default function CameraScreen() {
     guestSessionId: string;
   } | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  /** Drives the Post button's label during a video post — see `commitVideo`. */
+  const [postingStage, setPostingStage] = useState<'idle' | 'preparing' | 'uploading'>('idle');
 
   useEffect(() => {
     if (!isGuest || !celebrationId) return;
@@ -914,25 +917,58 @@ export default function CameraScreen() {
     const mediaKind = preview.kind === 'audio' ? 'audio' : 'video';
     const trimmedCaption = captionInput?.trim() || undefined;
     setIsUploading(true);
+
+    // Compression only applies to a real video upload: audio has nothing to
+    // transcode, the no-backend mock path never leaves the device, and web
+    // has no on-device encoder to call — see `video-compression.ts` — so it
+    // uploads the browser's own recording unchanged, same as before this
+    // feature existed. `effectivePreview` is what actually gets uploaded and
+    // referenced from here on; `preview` is kept only to know whether
+    // compression produced a distinct file worth cleaning up afterwards.
+    let effectivePreview = preview;
+    if (mediaKind === 'video' && isBackendConfigured && !isWeb) {
+      setPostingStage('preparing');
+      const compression = await compressVideoForUpload({
+        uri: preview.uri,
+        expectedDurationMs: preview.durationMs,
+      });
+      if (!compression.skipped) {
+        effectivePreview = {
+          ...preview,
+          uri: compression.uri,
+          mimeType: 'video/mp4',
+          width: compression.width ?? preview.width,
+          height: compression.height ?? preview.height,
+        };
+      }
+    }
+    setPostingStage('uploading');
+
+    // Only non-null once compression actually produced a second file — never
+    // the sole copy of the recording, so it's always safe to delete once the
+    // upload it was replaced by has gone through.
+    const originalUriIfSuperseded =
+      effectivePreview.uri !== preview.uri ? preview.uri : null;
+
     try {
       let postedMediaItemId: string | null = null;
       const postedAt = new Date().toISOString();
       if (!isBackendConfigured) {
         const item: PhotoItem = {
-          uri: preview.uri,
+          uri: effectivePreview.uri,
           takenBy: firstNameFrom(profile) || 'You',
           id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
           postedAt,
           mediaType: mediaKind,
-          durationMs: preview.durationMs,
-          mimeType: preview.mimeType,
-          challengeId: preview.challengeId ?? null,
+          durationMs: effectivePreview.durationMs,
+          mimeType: effectivePreview.mimeType,
+          challengeId: effectivePreview.challengeId ?? null,
           caption: trimmedCaption ?? null,
         };
         postedMediaItemId = item.id ?? null;
-        const key = preview.challengeId
-          ? `__mock_challenge_submissions_${celebrationId}_${preview.challengeId}`
-          : preview.guestbook
+        const key = effectivePreview.challengeId
+          ? `__mock_challenge_submissions_${celebrationId}_${effectivePreview.challengeId}`
+          : effectivePreview.guestbook
             ? `__mock_guestbook_${celebrationId}`
             : `__mock_photos_${celebrationId}`;
         const stored = await AsyncStorage.getItem(key);
@@ -951,46 +987,46 @@ export default function CameraScreen() {
         const uploadResult = await uploadGuestMedia({
           eventCode: guestAuth.slug,
           guestToken: guestAuth.guestToken,
-          localUri: preview.uri,
-          source: preview.source,
+          localUri: effectivePreview.uri,
+          source: effectivePreview.source,
           mediaType: mediaKind,
-          mimeType: preview.mimeType,
-          width: preview.width ?? undefined,
-          height: preview.height ?? undefined,
-          durationMs: preview.durationMs,
-          metadata: preview.challengeId
+          mimeType: effectivePreview.mimeType,
+          width: effectivePreview.width ?? undefined,
+          height: effectivePreview.height ?? undefined,
+          durationMs: effectivePreview.durationMs,
+          metadata: effectivePreview.challengeId
             ? {
-                challenge_id: preview.challengeId,
+                challenge_id: effectivePreview.challengeId,
                 submission_kind: 'challenge',
                 ...(trimmedCaption ? { caption: trimmedCaption } : {}),
               }
-            : preview.guestbook
+            : effectivePreview.guestbook
               ? { submission_kind: 'guestbook' }
               : undefined,
         });
         postedMediaItemId = uploadResult.mediaItemId;
         // Guestbook messages are not part of the guest's photo/video shot
         // allowance, so `shotsUsed` here would be misleading if surfaced.
-        if (!preview.guestbook) {
+        if (!effectivePreview.guestbook) {
           maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
         }
       } else if (!isGuest && celebrationId) {
         const uploadResult = await uploadHostMedia({
           celebrationId: String(celebrationId),
-          localUri: preview.uri,
-          source: preview.source,
+          localUri: effectivePreview.uri,
+          source: effectivePreview.source,
           mediaType: mediaKind,
-          mimeType: preview.mimeType,
-          width: preview.width ?? undefined,
-          height: preview.height ?? undefined,
-          durationMs: preview.durationMs,
-          metadata: preview.challengeId
+          mimeType: effectivePreview.mimeType,
+          width: effectivePreview.width ?? undefined,
+          height: effectivePreview.height ?? undefined,
+          durationMs: effectivePreview.durationMs,
+          metadata: effectivePreview.challengeId
             ? {
-                challenge_id: preview.challengeId,
+                challenge_id: effectivePreview.challengeId,
                 submission_kind: 'challenge',
                 ...(trimmedCaption ? { caption: trimmedCaption } : {}),
               }
-            : preview.guestbook
+            : effectivePreview.guestbook
               ? { submission_kind: 'guestbook' }
               : undefined,
         });
@@ -999,15 +1035,21 @@ export default function CameraScreen() {
         throw new Error('No identity available to upload this video yet.');
       }
 
-      if (preview.challengeId) {
+      // The upload succeeded off the compressed file — the raw recording
+      // behind it, if a distinct file was produced, is dead weight now.
+      if (originalUriIfSuperseded) {
+        deleteLocalVideo(originalUriIfSuperseded, 'posting');
+      }
+
+      if (effectivePreview.challengeId) {
         const pending: PendingChallengePost = {
-          challengeId: String(preview.challengeId),
+          challengeId: String(effectivePreview.challengeId),
           mediaItemId: postedMediaItemId ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-          localUri: preview.uri,
+          localUri: effectivePreview.uri,
           mediaType: 'video',
           postedAt,
-          durationMs: preview.durationMs,
-          mimeType: preview.mimeType,
+          durationMs: effectivePreview.durationMs,
+          mimeType: effectivePreview.mimeType,
         };
         await AsyncStorage.setItem(
           `__mock_pending_challenge_refresh_${celebrationId}`,
@@ -1020,12 +1062,12 @@ export default function CameraScreen() {
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
 
-      if (preview.challengeId) {
+      if (effectivePreview.challengeId) {
         const target = {
           pathname: '/celebration/[celebrationId]',
           params: {
             celebrationId: String(celebrationId),
-            openChallengeId: String(preview.challengeId),
+            openChallengeId: String(effectivePreview.challengeId),
             ...(postedMediaItemId ? { openChallengeMediaId: postedMediaItemId } : {}),
             challengePostedAt: String(Date.now()),
           },
@@ -1040,7 +1082,7 @@ export default function CameraScreen() {
         return;
       }
 
-      if (preview.guestbook) {
+      if (effectivePreview.guestbook) {
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ['guestbook', 'guest', String(celebrationId)] }),
           queryClient.invalidateQueries({ queryKey: ['guestbook', 'host', String(celebrationId)] }),
@@ -1056,7 +1098,7 @@ export default function CameraScreen() {
         }
         setVideoPreview(null);
         setChallengeCaption('');
-        deleteLocalVideo(preview.uri, 'posting');
+        deleteLocalVideo(effectivePreview.uri, 'posting');
         return;
       }
 
@@ -1074,12 +1116,17 @@ export default function CameraScreen() {
         router.replace(galleryTarget as never);
       }
 
-      deleteLocalVideo(preview.uri, 'posting');
+      deleteLocalVideo(effectivePreview.uri, 'posting');
     } catch (error) {
       console.error('Failed to upload video:', error);
+      // Neither file is touched on failure — `preview.uri` (and
+      // `effectivePreview.uri`, if compression produced a second file) both
+      // still exist on disk, so Retake still has something to discard and
+      // the recording is never silently lost.
       Alert.alert('Upload failed', formatUploadFailure(mediaKind, error));
     } finally {
       setIsUploading(false);
+      setPostingStage('idle');
     }
   }
 
@@ -2215,7 +2262,7 @@ export default function CameraScreen() {
               accessibilityLabel="Post video"
             >
               <AppText style={S.challengePreviewPrimaryText}>
-                {isUploading ? 'Posting…' : 'Post'}
+                {postingStage === 'preparing' ? 'Preparing video…' : isUploading ? 'Posting…' : 'Post'}
               </AppText>
             </Pressable>
           </View>
