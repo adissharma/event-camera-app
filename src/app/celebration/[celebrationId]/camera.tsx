@@ -20,13 +20,11 @@ import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
 let CameraView: any = null;
-let useCameraPermissions: any = () => [null, () => {}];
 let hasNativeCamera = false;
 
 try {
   const expoCamera = require('expo-camera');
   CameraView = expoCamera.CameraView;
-  useCameraPermissions = expoCamera.useCameraPermissions;
   hasNativeCamera = true;
 } catch (error) {
   console.warn('Native camera module is missing in this build.', error);
@@ -65,6 +63,7 @@ import { eventAllowsVideoCapture } from '@/features/media/event-media';
 import { uploadGuestMedia } from '@/services/guest-media-upload';
 import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
+import { useCameraAccess } from '@/features/media/camera-status';
 import { useMicrophoneStatus } from '@/features/media/microphone-status';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
@@ -413,7 +412,8 @@ export default function CameraScreen() {
 
   // ── States ──
   const isWeb = Platform.OS === 'web';
-  const [permission, requestPermission] = useCameraPermissions();
+  const cameraAccess = useCameraAccess();
+  const [cameraRequestAttempted, setCameraRequestAttempted] = useState(false);
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
   const [isPhotosLoaded, setIsPhotosLoaded] = useState(false);
   // Guestbook messages are spoken to camera, so they default to the selfie
@@ -524,7 +524,7 @@ export default function CameraScreen() {
   // apparently do nothing on Android Chrome. The mic check now waits for
   // the viewfinder to actually be there.
   const micActive =
-    Boolean(permission?.granted) &&
+    cameraAccess.status === 'granted' &&
     !videoPreview &&
     !challengePreviewUri &&
     !galleryPreviewUri &&
@@ -1864,7 +1864,7 @@ export default function CameraScreen() {
     );
   }
 
-  if (!permission) {
+  if (cameraAccess.status === 'checking') {
     return (
       <View style={S.loadingRoot}>
         <ActivityIndicator color={colours.textSecondary} />
@@ -1872,7 +1872,10 @@ export default function CameraScreen() {
     );
   }
 
-  if (!permission.granted) {
+  if (cameraAccess.status !== 'granted') {
+    // Only shown once a tap has actually gone nowhere — the first time this
+    // screen renders, it looks exactly as it always has.
+    const showRecovery = cameraRequestAttempted;
     return (
       <View style={S.permissionRoot}>
         <View style={S.permissionContent}>
@@ -1882,9 +1885,34 @@ export default function CameraScreen() {
           <AppText variant="bodyMedium" align="center" tone="secondary" style={{ marginBottom: spacing.xl }}>
             Stories. needs your camera to capture beautiful memories directly at the event.
           </AppText>
-          <Pressable style={S.permissionBtn} onPress={requestPermission}>
+          <Pressable
+            style={S.permissionBtn}
+            onPress={() => {
+              setCameraRequestAttempted(true);
+              cameraAccess.requestAccess();
+            }}
+          >
             <AppText style={S.permissionBtnText}>Enable Camera</AppText>
           </Pressable>
+          {showRecovery ? (
+            <AppText
+              variant="bodyMedium"
+              align="center"
+              tone="secondary"
+              style={{ marginTop: spacing.md, maxWidth: 280 }}
+            >
+              {cameraAccess.status === 'unavailable'
+                ? 'No camera was found on this device.'
+                : isWeb
+                  ? 'Nothing happened? Your browser may be blocking this page from asking. Check the site settings next to the address bar and allow camera access, then try again.'
+                  : 'You can turn this on for Stories. in Settings.'}
+            </AppText>
+          ) : null}
+          {showRecovery && !isWeb ? (
+            <Pressable style={{ marginTop: spacing.md }} onPress={cameraAccess.openSettings}>
+              <AppText tone="secondary" style={{ textDecorationLine: 'underline' }}>Open Settings</AppText>
+            </Pressable>
+          ) : null}
           <Pressable style={{ marginTop: spacing.lg }} onPress={() => router.back()}>
             <AppText tone="secondary" style={{ textDecorationLine: 'underline' }}>Go Back</AppText>
           </Pressable>
