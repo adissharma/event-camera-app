@@ -4,7 +4,7 @@
  * audio) so they all check and report microphone state the same way instead
  * of drifting into slightly different behaviour per screen.
  *
- * Two concerns, kept distinct on purpose:
+ * Three concerns, kept distinct on purpose:
  *  - `permission`: can this device record audio at all right now. Checked
  *    (and requested, if never asked) as soon as a recording surface that
  *    needs audio becomes active — never on entry to the app, so a guest who
@@ -19,12 +19,20 @@
  *    corrupted recordings — the thing this whole feature exists to prevent.
  *    `isLive` being false there is deliberate, not a bug: the UI shows a
  *    plain "microphone on" confirmation instead of a fake animated one.
+ *  - `openSettings`: once a guest has actively said no, the OS will not
+ *    re-prompt them — the only way back in is the device's own settings.
+ *    Native has a real place to send them (`Linking.openSettings()`, the
+ *    same call already used for the photo-library permission elsewhere in
+ *    this app). The web has no equivalent API — a page cannot open the
+ *    browser's own site-permission UI — so this instead retries the mic
+ *    tap, which is enough to recover a merely-dismissed prompt and is the
+ *    most useful thing available for a hard block too.
  */
 
-import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, Linking, Platform } from 'react-native';
 
-let useNativeMicPermissions: any = () => [null, async () => ({ granted: false })];
+let useNativeMicPermissions: any = () => [null, async () => ({ granted: false }), async () => ({ granted: false })];
 try {
   useNativeMicPermissions = require('expo-camera').useMicrophonePermissions;
 } catch {
@@ -39,6 +47,8 @@ export type MicrophoneStatus = {
   level: number;
   /** True when `level` reflects a real, currently-open microphone tap. */
   isLive: boolean;
+  /** Sends the guest to fix this themselves — see the module doc above. */
+  openSettings: () => void;
 };
 
 export type UseMicrophoneStatusOptions = {
@@ -47,7 +57,7 @@ export type UseMicrophoneStatusOptions = {
 };
 
 function useNativeMicrophoneStatus({ active }: UseMicrophoneStatusOptions): MicrophoneStatus {
-  const [permission, requestPermission] = useNativeMicPermissions();
+  const [permission, requestPermission, getPermission] = useNativeMicPermissions();
   const requestedRef = useRef(false);
 
   useEffect(() => {
@@ -57,13 +67,29 @@ function useNativeMicrophoneStatus({ active }: UseMicrophoneStatusOptions): Micr
     void requestPermission();
   }, [active, permission, requestPermission]);
 
+  // A guest who leaves for Settings and comes back needs the answer
+  // refreshed without touching the record button again — `permission`
+  // itself only updates on mount or after `requestPermission`, neither of
+  // which fires just from returning to the app.
+  useEffect(() => {
+    if (!active) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void getPermission();
+    });
+    return () => subscription.remove();
+  }, [active, getPermission]);
+
   const status: MicrophonePermissionStatus = !permission
     ? 'unknown'
     : permission.granted
       ? 'granted'
       : 'denied';
 
-  return { permission: status, level: 0, isLive: false };
+  const openSettings = useCallback(() => {
+    void Linking.openSettings();
+  }, []);
+
+  return { permission: status, level: 0, isLive: false, openSettings };
 }
 
 function useWebMicrophoneStatus({ active }: UseMicrophoneStatusOptions): MicrophoneStatus {
@@ -87,6 +113,48 @@ function useWebMicrophoneStatus({ active }: UseMicrophoneStatusOptions): Microph
     analyserRef.current = null;
   }
 
+  // Matches `AudioCapture`'s own web level tick: a full-screen re-render on
+  // every animation frame (60Hz) is the exact perf regression the waveform
+  // work in an earlier pass had to fix, and this badge doesn't need more
+  // resolution than that meter did.
+  function tick() {
+    const analyser = analyserRef.current;
+    if (!analyser) return;
+    const buffer = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(buffer);
+    let sum = 0;
+    for (let i = 0; i < buffer.length; i += 1) {
+      const deviation = (buffer[i] - 128) / 128;
+      sum += deviation * deviation;
+    }
+    const rms = Math.sqrt(sum / buffer.length);
+    setLevel(Math.max(0, Math.min(1, rms * 3)));
+  }
+
+  const acquire = useCallback(async () => {
+    releaseTap();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      setPermission('granted');
+
+      const AudioContextCtor = window.AudioContext ?? (window as any).webkitAudioContext;
+      if (AudioContextCtor) {
+        const context = new AudioContextCtor();
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 1024;
+        context.createMediaStreamSource(stream).connect(analyser);
+        contextRef.current = context;
+        analyserRef.current = analyser;
+        setIsLive(true);
+        tickIntervalRef.current = setInterval(tick, 90);
+      }
+    } catch (error) {
+      const name = error instanceof Error ? error.name : '';
+      setPermission(name === 'NotFoundError' || name === 'DevicesNotFoundError' ? 'unavailable' : 'denied');
+    }
+  }, []);
+
   useEffect(() => {
     if (!active) {
       releaseTap();
@@ -94,63 +162,21 @@ function useWebMicrophoneStatus({ active }: UseMicrophoneStatusOptions): Microph
       setLevel(0);
       return;
     }
-
-    let cancelled = false;
-
-    // Matches `AudioCapture`'s own web level tick: a full-screen re-render on
-    // every animation frame (60Hz) is the exact perf regression the waveform
-    // work in an earlier pass had to fix, and this badge doesn't need more
-    // resolution than that meter did.
-    function tick() {
-      const analyser = analyserRef.current;
-      if (!analyser) return;
-      const buffer = new Uint8Array(analyser.fftSize);
-      analyser.getByteTimeDomainData(buffer);
-      let sum = 0;
-      for (let i = 0; i < buffer.length; i += 1) {
-        const deviation = (buffer[i] - 128) / 128;
-        sum += deviation * deviation;
-      }
-      const rms = Math.sqrt(sum / buffer.length);
-      setLevel(Math.max(0, Math.min(1, rms * 3)));
-    }
-
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        streamRef.current = stream;
-        setPermission('granted');
-
-        const AudioContextCtor = window.AudioContext ?? (window as any).webkitAudioContext;
-        if (AudioContextCtor) {
-          const context = new AudioContextCtor();
-          const analyser = context.createAnalyser();
-          analyser.fftSize = 1024;
-          context.createMediaStreamSource(stream).connect(analyser);
-          contextRef.current = context;
-          analyserRef.current = analyser;
-          setIsLive(true);
-          tickIntervalRef.current = setInterval(tick, 90);
-        }
-      } catch (error) {
-        if (cancelled) return;
-        const name = error instanceof Error ? error.name : '';
-        setPermission(name === 'NotFoundError' || name === 'DevicesNotFoundError' ? 'unavailable' : 'denied');
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [active]);
+    void acquire();
+    return () => releaseTap();
+  }, [active, acquire]);
 
   useEffect(() => () => releaseTap(), []);
 
-  return { permission, level, isLive };
+  // A previously-denied `getUserMedia` won't re-prompt on its own — trying
+  // again is a genuine retry (recovers a merely-dismissed prompt, and picks
+  // up a permission the guest just changed in the browser's own site
+  // settings), not a formality.
+  const openSettings = useCallback(() => {
+    void acquire();
+  }, [acquire]);
+
+  return { permission, level, isLive, openSettings };
 }
 
 const useMicrophoneStatusImpl =

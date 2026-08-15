@@ -1967,6 +1967,13 @@ export default function CameraScreen() {
                 ? (getMicLiveLabel() ?? 'Listening…')
                 : (getMicPreflightWarning() ?? 'Tap the button to start recording')}
             </AppText>
+            {!isRecording && micStatus.permission === 'denied' ? (
+              <Pressable onPress={micStatus.openSettings} hitSlop={8}>
+                <AppText style={S.micSettingsLink}>
+                  {isWeb ? 'Click to try again' : 'Click here to enable microphone'}
+                </AppText>
+              </Pressable>
+            ) : null}
           </View>
         ) : (
         <CameraView
@@ -2043,6 +2050,13 @@ export default function CameraScreen() {
         ) : !isAudioCapture && captureType === 'video' && supportsVideoRecording && getMicPreflightWarning() ? (
           <View style={S.micPreflightPill}>
             <AppText style={S.micPreflightText}>{getMicPreflightWarning()}</AppText>
+            {micStatus.permission === 'denied' ? (
+              <Pressable onPress={micStatus.openSettings} hitSlop={8}>
+                <AppText style={S.micSettingsLink}>
+                  {isWeb ? 'Click to try again' : 'Click here to enable microphone'}
+                </AppText>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
 
@@ -2710,6 +2724,14 @@ export default function CameraScreen() {
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
+  },
+  micSettingsLink: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    textDecorationLine: 'underline',
+    marginTop: 2,
   },
   inlineVideoPreviewWrap: {
     position: 'absolute',
