@@ -55,6 +55,7 @@ import {
   archiveCelebration,
   celebrationDetailKeys,
   fetchCelebrationDetail,
+  requestEventRecap,
   type CelebrationDetail,
 } from '@/services/celebration-detail';
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
@@ -89,7 +90,11 @@ import {
 } from '@/services/challenges';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { createUniqueChannel } from '@/lib/supabase/realtime';
-import { sharePhotoToInstagram } from '@/features/sharing/share-to-instagram';
+import {
+  shareMediaFile,
+  shareMediaToInstagram,
+  sharePhotoToInstagram,
+} from '@/features/sharing/share-to-instagram';
 
 // ─── Layout constants ─────────────────────────────────────────────────────────
 
@@ -98,6 +103,9 @@ const GALLERY_EDGE_INSET = 0;
 const GRID_GAP = 4;
 const ROW_GAP = 4;
 const GALLERY_COLUMNS = 3;
+const RECAP_MIN_ITEMS = 3;
+const RECAP_MAX_ITEMS = 120;
+const RECAP_MAX_VIDEOS = 20;
 
 /** Challenge chips */
 const CHIP_D = 68;  // outer circle diameter
@@ -305,6 +313,25 @@ type SavePhotoItem = {
   mediaType?: 'photo' | 'video';
   durationMs?: number | null;
 };
+
+type RecapSelectionItem = SavePhotoItem & {
+  mediaId: string;
+  challengeId?: string | null;
+};
+
+function getLimitedRecapSelectionKeys(items: RecapSelectionItem[]) {
+  const keys: string[] = [];
+  let videoCount = 0;
+  for (const item of items) {
+    if (keys.length >= RECAP_MAX_ITEMS) break;
+    if (item.mediaType === 'video') {
+      if (videoCount >= RECAP_MAX_VIDEOS) continue;
+      videoCount += 1;
+    }
+    keys.push(item.key);
+  }
+  return keys;
+}
 
 type FilteredCaptureState = {
   item: SavePhotoItem;
@@ -812,6 +839,110 @@ function VideoPoster({
   );
 }
 
+function RecapVideoModal({
+  visible,
+  uri,
+  celebrationTitle,
+  onClose,
+}: {
+  visible: boolean;
+  uri: string;
+  celebrationTitle?: string | null;
+  onClose: () => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const title = celebrationTitle ? `${celebrationTitle} recap` : 'Event recap';
+  const shareInput = {
+    uri,
+    id: 'event-recap',
+    mediaType: 'video' as const,
+    filename: 'event-recap.mp4',
+    title,
+  };
+
+  return (
+    <Modal visible={visible} animationType="fade" presentationStyle="fullScreen" onRequestClose={onClose}>
+      {/*
+        A plain flex column — header, stage, actions — rather than a stage with
+        hardcoded padding and absolutely-positioned chrome on top of it. The
+        previous version reserved 132pt at the bottom for an action block that
+        actually stood 166pt tall once the home-indicator inset was added, and
+        forced the video to a 9/16 box taller than the space left for it, so the
+        buttons and the video overlapped on every standard iPhone. Sizing the
+        stage with `flex: 1` between two natural-height siblings means the
+        overlap cannot come back on a screen size nobody tested.
+      */}
+      <View style={S.recapViewerRoot}>
+        <View style={[S.recapViewerHeader, { paddingTop: insets.top + spacing.md }]}>
+          <View style={S.recapViewerHeaderText}>
+            <AppText variant="eyebrow" tone="secondary">Recap</AppText>
+            <AppText variant="titleLarge" numberOfLines={1}>
+              {celebrationTitle ?? 'Event story'}
+            </AppText>
+          </View>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close recap"
+            style={({ pressed }) => [S.recapViewerCloseButton, pressed && { opacity: 0.7 }]}
+          >
+            <CloseXIcon size={20} color={colours.textPrimary} />
+          </Pressable>
+        </View>
+
+        <View style={S.recapViewerStage}>
+          {/*
+            Fills the stage and lets `contentFit="contain"` letterbox inside it.
+            The recap is always rendered 1080x1920 (see `api/recap-worker.ts`),
+            but pinning the container to that ratio is what made it overflow —
+            containing it inside whatever space is actually free is correct for
+            any output ratio the worker might produce later.
+          */}
+          <VideoPoster
+            uri={uri}
+            style={S.recapViewerVideo}
+            controls
+            autoPlay
+            muted={false}
+            contentFit="contain"
+          />
+        </View>
+
+        <View style={[S.recapViewerActions, { paddingBottom: insets.bottom + spacing.lg }]}>
+          <Pressable
+            style={({ pressed }) => [
+              S.recapViewerActionButton,
+              S.recapViewerPrimaryButton,
+              pressed && { backgroundColor: colours.brandPressed },
+            ]}
+            onPress={() => void shareMediaToInstagram(shareInput)}
+            accessibilityRole="button"
+            accessibilityLabel="Share recap to Instagram"
+          >
+            {/* Ink on ivory. This was white-on-ivory — about 1.1:1 — which is
+                why the primary button read as blank. */}
+            <InstagramStoryIcon size={20} color={colours.textOnBrand} />
+            <AppText variant="labelLarge" tone="onBrand">Share to Instagram</AppText>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [
+              S.recapViewerActionButton,
+              S.recapViewerSecondaryButton,
+              pressed && { backgroundColor: colours.surfaceRaised },
+            ]}
+            onPress={() => void shareMediaFile(shareInput)}
+            accessibilityRole="button"
+            accessibilityLabel="Share recap"
+          >
+            <ShareExportIcon size={20} color={colours.textPrimary} />
+            <AppText variant="labelLarge">Share</AppText>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 
 // ─── Route entry ──────────────────────────────────────────────────────────────
 
@@ -892,7 +1023,7 @@ function EventDetailView({
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { celebration, primarySession, metrics, viewerRole, mediaPhotos } = detail;
+  const { celebration, primarySession, metrics, viewerRole, mediaPhotos, recap } = detail;
 
   // The one cover for this event, shared with the dashboard card and the guest
   // invitation. Re-signs automatically when the host replaces it, because a
@@ -911,6 +1042,7 @@ function EventDetailView({
   const [devRole, setDevRole] = useState<string | null>(null);
   const [guestName, setGuestName] = useState<string | null>(null);
   const [videoPostedToastVisible, setVideoPostedToastVisible] = useState(false);
+  const [recapVisible, setRecapVisible] = useState(false);
   const lastVideoPostedToastRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -1036,7 +1168,11 @@ function EventDetailView({
   const [saveMode, setSaveMode] = useState<'original' | 'filtered'>('original');
   const [saveItems, setSaveItems] = useState<SavePhotoItem[]>([]);
   const [selectedSaveKeys, setSelectedSaveKeys] = useState<string[]>([]);
-  const [saveVideosSelected, setSaveVideosSelected] = useState(true);
+  const [recapSelectionVisible, setRecapSelectionVisible] = useState(false);
+  const [recapCreating, setRecapCreating] = useState(false);
+  const [recapMode, setRecapMode] = useState<'original' | 'filtered'>('original');
+  const [recapItems, setRecapItems] = useState<RecapSelectionItem[]>([]);
+  const [selectedRecapKeys, setSelectedRecapKeys] = useState<string[]>([]);
   const [selectedChallenge, setSelectedChallenge] = useState<Challenge | null>(null);
   const [challengeMenuVisible, setChallengeMenuVisible] = useState(false);
   const [challengeDeleteConfirmVisible, setChallengeDeleteConfirmVisible] = useState(false);
@@ -1523,6 +1659,20 @@ function EventDetailView({
             queryKey: celebrationDetailKeys.joinedGuests(String(primarySession.id)),
           });
           void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'event_recaps',
+          filter: `event_session_id=eq.${primarySession.id}`,
+        },
+        () => {
+          void queryClient.invalidateQueries({
+            queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+          });
         },
       )
       .subscribe();
@@ -2301,18 +2451,24 @@ function EventDetailView({
       setSaveMode('original');
       setSaveItems([]);
       setSelectedSaveKeys([]);
-      setSaveVideosSelected(true);
 
       const itemsByUri = new Map<string, SavePhotoItem>();
       const challengeById = new Map(challenges.map((challenge) => [challenge.id, challenge]));
+      const challengeIdByMediaId = new Map(
+        (detail.challengePhotos ?? []).map((item) => [item.id, item.challengeId]),
+      );
 
       photos.forEach((photo) => {
+        const challengeId = photo.challengeId ?? challengeIdByMediaId.get(photo.id ?? '') ?? null;
         mergeSaveItem(itemsByUri, {
           key: photo.id ?? photo.uri,
           uri: photo.uri,
           source: photo.mediaType === 'video' ? null : resolvePhotoSourceForSaving(photo.uri),
           takenBy: photo.takenBy || 'Guest',
-          isChallenge: false,
+          isChallenge: Boolean(challengeId),
+          challengeLabel: challengeId
+            ? challengeById.get(challengeId)?.label ?? 'Challenge photo'
+            : undefined,
           seedKey: photo.id ?? photo.uri,
           capturedAt: photo.capturedAt ?? null,
           mediaType: photo.mediaType ?? 'photo',
@@ -2425,6 +2581,192 @@ function EventDetailView({
       }
       return current.filter((key) => !challengeKeys.includes(key));
     });
+  }
+
+  function setSaveVideoSelections(shouldSelect: boolean) {
+    const videoKeys = saveItems.filter((item) => item.mediaType === 'video').map((item) => item.key);
+    setSelectedSaveKeys((current) => {
+      const currentSet = new Set(current);
+      if (shouldSelect) {
+        videoKeys.forEach((key) => currentSet.add(key));
+        return Array.from(currentSet);
+      }
+      return current.filter((key) => !videoKeys.includes(key));
+    });
+  }
+
+  function openRecapSelection() {
+    if (!eventHasEnded) {
+      Alert.alert('Recap unavailable', 'Recaps can be created after the event ends.');
+      return;
+    }
+    if (!isHost) {
+      Alert.alert('Host only', 'Only the host can choose media for the recap.');
+      return;
+    }
+    if (!primarySession?.id) {
+      Alert.alert('Recap unavailable', 'This event session is not ready yet.');
+      return;
+    }
+
+    const challengeIdByMediaId = new Map(
+      (detail.challengePhotos ?? []).map((item) => [item.id, item.challengeId]),
+    );
+
+    const items = photos
+      .filter((photo): photo is PhotoItem & { id: string } =>
+        Boolean(photo.id) && !photo.locked,
+      )
+      .map((photo) => {
+        const challengeId = photo.challengeId ?? challengeIdByMediaId.get(photo.id) ?? null;
+        return {
+          key: photo.id,
+          mediaId: photo.id,
+          uri: photo.thumbnailUri ?? photo.uri,
+          source: getPhotoSource(photo.thumbnailUri ?? photo.uri),
+          takenBy: photo.takenBy,
+          isChallenge: Boolean(challengeId),
+          challengeId,
+          challengeLabel: challengeId
+            ? challenges.find((challenge) => challenge.id === challengeId)?.label
+            : undefined,
+          seedKey: photo.id,
+          capturedAt: photo.capturedAt,
+          mediaType: photo.mediaType ?? 'photo',
+          durationMs: photo.durationMs ?? null,
+        };
+      });
+
+    if (items.length === 0) {
+      Alert.alert('No media yet', 'There are no photos or videos available for a recap.');
+      return;
+    }
+
+    setRecapItems(items);
+    setSelectedRecapKeys(items.map((item) => item.key));
+    setRecapSelectionVisible(true);
+  }
+
+  function setAllRecapSelections(nextSelected: boolean) {
+    if (!nextSelected) {
+      setSelectedRecapKeys([]);
+      return;
+    }
+
+    const nextKeys = getLimitedRecapSelectionKeys(recapItems);
+    setSelectedRecapKeys(nextKeys);
+    if (nextKeys.length < recapItems.length) {
+      Alert.alert(
+        'Recap limit reached',
+        `A recap can include up to ${RECAP_MAX_ITEMS} items total and ${RECAP_MAX_VIDEOS} videos.`,
+      );
+    }
+  }
+
+  function toggleRecapSelection(key: string) {
+    const item = recapItems.find((recapItem) => recapItem.key === key);
+    setSelectedRecapKeys((current) => {
+      if (current.includes(key)) return current.filter((itemKey) => itemKey !== key);
+      if (current.length >= RECAP_MAX_ITEMS) {
+        Alert.alert('Recap limit reached', `Choose up to ${RECAP_MAX_ITEMS} items for one recap.`);
+        return current;
+      }
+      if (
+        item?.mediaType === 'video' &&
+        recapItems.filter((recapItem) => recapItem.mediaType === 'video' && current.includes(recapItem.key)).length >= RECAP_MAX_VIDEOS
+      ) {
+        Alert.alert('Video limit reached', `Choose up to ${RECAP_MAX_VIDEOS} videos for one recap.`);
+        return current;
+      }
+      return [...current, key];
+    });
+  }
+
+  function selectRecapChallengePhotos(shouldSelect: boolean) {
+    const challengeKeys = recapItems.filter((item) => item.isChallenge).map((item) => item.key);
+    setSelectedRecapKeys((current) => {
+      const currentSet = new Set(current);
+      if (shouldSelect) {
+        let videoCount = recapItems.filter((item) => item.mediaType === 'video' && currentSet.has(item.key)).length;
+        for (const key of challengeKeys) {
+          if (currentSet.has(key)) continue;
+          const item = recapItems.find((recapItem) => recapItem.key === key);
+          if (currentSet.size >= RECAP_MAX_ITEMS) break;
+          if (item?.mediaType === 'video') {
+            if (videoCount >= RECAP_MAX_VIDEOS) continue;
+            videoCount += 1;
+          }
+          currentSet.add(key);
+        }
+        return Array.from(currentSet);
+      }
+      return current.filter((key) => !challengeKeys.includes(key));
+    });
+  }
+
+  function setRecapVideoSelections(shouldSelect: boolean) {
+    const videoKeys = recapItems.filter((item) => item.mediaType === 'video').map((item) => item.key);
+    setSelectedRecapKeys((current) => {
+      const currentSet = new Set(current);
+      if (shouldSelect) {
+        for (const key of videoKeys) {
+          if (currentSet.has(key)) continue;
+          if (currentSet.size >= RECAP_MAX_ITEMS) break;
+          if (recapItems.filter((item) => item.mediaType === 'video' && currentSet.has(item.key)).length >= RECAP_MAX_VIDEOS) break;
+          currentSet.add(key);
+        }
+        return Array.from(currentSet);
+      }
+      return current.filter((key) => !videoKeys.includes(key));
+    });
+  }
+
+  async function createSelectedRecap() {
+    if (!primarySession?.id) {
+      Alert.alert('Recap unavailable', 'This event session is not ready yet.');
+      return;
+    }
+    if (selectedRecapKeys.length < RECAP_MIN_ITEMS) {
+      Alert.alert('Add more moments', `Choose at least ${RECAP_MIN_ITEMS} photos or videos for the recap.`);
+      return;
+    }
+    if (selectedRecapKeys.length > RECAP_MAX_ITEMS) {
+      Alert.alert('Too many moments', `Choose up to ${RECAP_MAX_ITEMS} items for one recap.`);
+      return;
+    }
+
+    const selectedItems = selectedRecapKeys
+      .map((key) => recapItems.find((item) => item.key === key))
+      .filter((item): item is RecapSelectionItem => Boolean(item));
+    const selectedVideoCount = selectedItems.filter((item) => item.mediaType === 'video').length;
+    if (selectedVideoCount > RECAP_MAX_VIDEOS) {
+      Alert.alert('Too many videos', `Choose up to ${RECAP_MAX_VIDEOS} videos for one recap.`);
+      return;
+    }
+
+    const selectedIds = selectedItems
+      .map((item) => item.mediaId)
+      .filter((id): id is string => Boolean(id));
+
+    if (selectedIds.length < RECAP_MIN_ITEMS) {
+      Alert.alert('Add more moments', `Choose at least ${RECAP_MIN_ITEMS} photos or videos for the recap.`);
+      return;
+    }
+
+    try {
+      setRecapCreating(true);
+      await requestEventRecap(primarySession.id, selectedIds, { renderMode: recapMode });
+      setRecapSelectionVisible(false);
+      Alert.alert('Recap started', 'Your recap is being created now.');
+      void queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+      });
+      void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+    } catch (error: any) {
+      Alert.alert('Could not create recap', error?.message ?? 'Please try again.');
+    } finally {
+      setRecapCreating(false);
+    }
   }
 
   async function ensureLocalSaveUri(item: SavePhotoItem) {
@@ -2596,9 +2938,7 @@ function EventDetailView({
         return;
       }
 
-      const selectedItems = saveItems.filter((item) =>
-        selectedSaveKeys.includes(item.key) && (saveVideosSelected || item.mediaType !== 'video'),
-      );
+      const selectedItems = saveItems.filter((item) => selectedSaveKeys.includes(item.key));
       let savedCount = 0;
 
       for (const item of selectedItems) {
@@ -2626,6 +2966,55 @@ function EventDetailView({
   // ── Derived ──
   const eventHasEnded = countdown.isCompleted;
   const timeLeftValue = buildTimeLeftValue();
+  const showRecapBanner = eventHasEnded && (isHost || Boolean(recap && recap.status !== 'not_available'));
+  const recapNeedsRetry = recap?.status === 'failed' || Boolean(recap?.lastErrorCode && recap.status !== 'ready');
+  const recapPlaybackUri = recap?.playbackUrl
+    ? `${recap.playbackUrl}${recap.playbackUrl.includes('?') ? '&' : '?'}v=${encodeURIComponent(recap.completedAt ?? '')}`
+    : null;
+  const selectedSaveCount = selectedSaveKeys.length;
+  const allSaveChallengesSelected =
+    saveItems.some((item) => item.isChallenge) &&
+    saveItems.filter((item) => item.isChallenge).every((item) => selectedSaveKeys.includes(item.key));
+  const allSaveVideosSelected =
+    saveItems.some((item) => item.mediaType === 'video') &&
+    saveItems.filter((item) => item.mediaType === 'video').every((item) => selectedSaveKeys.includes(item.key));
+  const selectedRecapCount = selectedRecapKeys.length;
+  const selectedRecapVideoCount = recapItems.filter((item) =>
+    item.mediaType === 'video' && selectedRecapKeys.includes(item.key)
+  ).length;
+  const selectableRecapKeys = getLimitedRecapSelectionKeys(recapItems);
+  const allSelectableRecapItemsSelected =
+    selectableRecapKeys.length > 0 &&
+    selectableRecapKeys.every((key) => selectedRecapKeys.includes(key)) &&
+    selectedRecapKeys.every((key) => selectableRecapKeys.includes(key));
+  const allRecapChallengesSelected =
+    recapItems.some((item) => item.isChallenge) &&
+    recapItems.filter((item) => item.isChallenge).every((item) => selectedRecapKeys.includes(item.key));
+  const selectableRecapVideoCount = Math.min(
+    recapItems.filter((item) => item.mediaType === 'video').length,
+    RECAP_MAX_VIDEOS,
+  );
+  const allSelectableRecapVideosSelected =
+    selectableRecapVideoCount > 0 && selectedRecapVideoCount === selectableRecapVideoCount;
+  const recapSelectionError =
+    selectedRecapCount === 0
+      ? null
+      : selectedRecapCount < RECAP_MIN_ITEMS
+        ? `Choose at least ${RECAP_MIN_ITEMS} items.`
+        : selectedRecapCount > RECAP_MAX_ITEMS
+          ? `Choose up to ${RECAP_MAX_ITEMS} items.`
+          : selectedRecapVideoCount > RECAP_MAX_VIDEOS
+            ? `Choose up to ${RECAP_MAX_VIDEOS} videos.`
+            : null;
+  const recapCreateDisabled = recapCreating || selectedRecapCount < RECAP_MIN_ITEMS || Boolean(recapSelectionError);
+  const recapStatusText =
+    recap?.status === 'ready'
+      ? 'Your event story is ready to watch.'
+      : recapNeedsRetry
+        ? 'Choose the photos and videos again to retry.'
+        : recap?.status === 'queued' || recap?.status === 'processing'
+          ? 'Creating your recap...'
+          : 'Choose the photos and videos you want included.';
 
   return (
     <View style={S.root}>
@@ -2751,6 +3140,52 @@ function EventDetailView({
             </AppText>
           </View>
         </View>
+
+        {showRecapBanner ? (
+          <View style={S.recapBanner}>
+            <View style={{ flex: 1, gap: 3 }}>
+              <AppText variant="titleMedium">Event recap</AppText>
+              <AppText variant="bodySmall" tone="secondary">
+                {recapStatusText}
+              </AppText>
+            </View>
+            {recap?.status === 'ready' && recapPlaybackUri ? (
+              <View style={S.recapActionRow}>
+                {isHost ? (
+                  <Pressable
+                    style={S.recapButtonSecondary}
+                    onPress={openRecapSelection}
+                    accessibilityRole="button"
+                    accessibilityLabel="Change recap media"
+                  >
+                    <AppText style={S.recapButtonSecondaryText}>Change</AppText>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={S.recapButton}
+                  onPress={() => setRecapVisible(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Watch recap"
+                >
+                  <AppText style={S.recapButtonText}>Watch</AppText>
+                </Pressable>
+              </View>
+            ) : !recapNeedsRetry && (recap?.status === 'queued' || recap?.status === 'processing') ? (
+              <ActivityIndicator color={colours.textSecondary} />
+            ) : isHost ? (
+              <Pressable
+                style={S.recapButton}
+                onPress={openRecapSelection}
+                accessibilityRole="button"
+                accessibilityLabel={recapNeedsRetry ? 'Try recap again' : 'Create recap'}
+              >
+                <AppText style={S.recapButtonText}>
+                  {recapNeedsRetry ? 'Try again' : 'Create'}
+                </AppText>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
         {!isHost && guestName && (
           <View style={S.guestWelcome}>
@@ -3543,32 +3978,32 @@ function EventDetailView({
                   </Pressable>
                   <Pressable
                     style={S.saveCheckboxAction}
-                    onPress={() => selectChallengePhotos(!saveItems.some((item) => item.isChallenge && selectedSaveKeys.includes(item.key)))}
+                    onPress={() => selectChallengePhotos(!allSaveChallengesSelected)}
                   >
                     <View
                       style={[
                         S.saveCheckboxBox,
-                        saveItems.some((item) => item.isChallenge && selectedSaveKeys.includes(item.key)) && S.saveCheckboxBoxSelected,
+                        allSaveChallengesSelected && S.saveCheckboxBoxSelected,
                       ]}
                     >
-                      {saveItems.some((item) => item.isChallenge && selectedSaveKeys.includes(item.key)) ? (
+                      {allSaveChallengesSelected ? (
                         <CheckIcon size={12} color="#000000" />
                       ) : null}
                     </View>
-                    <AppText style={S.saveCheckboxLabel}>Select Challenges</AppText>
+                    <AppText style={S.saveCheckboxLabel}>Challenges</AppText>
                   </Pressable>
                   {saveItems.some((item) => item.mediaType === 'video') ? (
                     <Pressable
                       style={S.saveCheckboxAction}
-                      onPress={() => setSaveVideosSelected((current) => !current)}
+                      onPress={() => setSaveVideoSelections(!allSaveVideosSelected)}
                     >
                       <View
                         style={[
                           S.saveCheckboxBox,
-                          saveVideosSelected && S.saveCheckboxBoxSelected,
+                          allSaveVideosSelected && S.saveCheckboxBoxSelected,
                         ]}
                       >
-                        {saveVideosSelected ? <CheckIcon size={12} color="#000000" /> : null}
+                        {allSaveVideosSelected ? <CheckIcon size={12} color="#000000" /> : null}
                       </View>
                       <AppText style={S.saveCheckboxLabel}>Videos</AppText>
                     </Pressable>
@@ -3631,13 +4066,16 @@ function EventDetailView({
                 <Pressable
                   style={[
                     S.sheetBtnPrimary,
-                    { backgroundColor: colours.brandPrimary, opacity: saveSaving ? 0.65 : 1 },
+                    {
+                      backgroundColor: colours.brandPrimary,
+                      opacity: saveSaving || selectedSaveCount === 0 ? 0.65 : 1,
+                    },
                   ]}
-                  disabled={saveSaving}
+                  disabled={saveSaving || selectedSaveCount === 0}
                   onPress={() => void saveSelectedPhotos()}
                 >
                   <AppText style={{ color: colours.textOnBrand, fontWeight: '700', fontSize: 15 }}>
-                    {saveSaving ? 'Saving…' : 'Save Photos'}
+                    {saveSaving ? 'Saving...' : `Save Photos (${selectedSaveCount})`}
                   </AppText>
                 </Pressable>
               </>
@@ -3671,6 +4109,178 @@ function EventDetailView({
         </View>
       </Modal>
 
+      <Modal
+        visible={recapSelectionVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => {
+          if (!recapCreating) setRecapSelectionVisible(false);
+        }}
+      >
+        <View style={S.saveOverlay}>
+          <Pressable
+            style={S.saveBackdrop}
+            onPress={() => {
+              if (!recapCreating) setRecapSelectionVisible(false);
+            }}
+          />
+
+          <View style={[S.saveSheet, { paddingBottom: insets.bottom + spacing.xl }]}>
+            <View style={S.sheetHandle} />
+
+            <View style={S.saveHeaderRow}>
+              <View style={{ flex: 1, gap: 4 }}>
+                <AppText variant="titleLarge">Create recap</AppText>
+                <AppText variant="bodySmall" tone="secondary">
+                  Pick {RECAP_MIN_ITEMS}-{RECAP_MAX_ITEMS} moments, including up to {RECAP_MAX_VIDEOS} videos.
+                </AppText>
+              </View>
+              <Pressable
+                onPress={() => {
+                  if (!recapCreating) setRecapSelectionVisible(false);
+                }}
+                style={S.saveCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close recap selector"
+              >
+                <CloseIcon size={18} color={colours.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={{ gap: spacing.sm }}>
+              <AppText variant="bodyLarge">Use original or filter?</AppText>
+              <SegmentedControl
+                accessibilityLabel="Use original or filter?"
+                value={recapMode}
+                onChange={(value) => setRecapMode(value)}
+                options={[
+                  { value: 'original', label: 'Original' },
+                  { value: 'filtered', label: 'Filter' },
+                ]}
+              />
+            </View>
+
+            <View style={S.saveSelectionRow}>
+              <Pressable
+                style={S.saveCheckboxAction}
+                onPress={() => setAllRecapSelections(!allSelectableRecapItemsSelected)}
+              >
+                <View style={[S.saveCheckboxBox, allSelectableRecapItemsSelected && S.saveCheckboxBoxSelected]}>
+                  {allSelectableRecapItemsSelected ? <CheckIcon size={12} color="#000000" /> : null}
+                </View>
+                <AppText style={S.saveCheckboxLabel}>Select All</AppText>
+              </Pressable>
+              <Pressable
+                style={S.saveCheckboxAction}
+                onPress={() => selectRecapChallengePhotos(!allRecapChallengesSelected)}
+              >
+                <View
+                  style={[
+                    S.saveCheckboxBox,
+                    allRecapChallengesSelected && S.saveCheckboxBoxSelected,
+                  ]}
+                >
+                  {allRecapChallengesSelected ? (
+                    <CheckIcon size={12} color="#000000" />
+                  ) : null}
+                </View>
+                <AppText style={S.saveCheckboxLabel}>Challenges</AppText>
+              </Pressable>
+              {recapItems.some((item) => item.mediaType === 'video') ? (
+                <Pressable
+                  style={S.saveCheckboxAction}
+                  onPress={() => setRecapVideoSelections(!allSelectableRecapVideosSelected)}
+                >
+                  <View
+                    style={[
+                      S.saveCheckboxBox,
+                      allSelectableRecapVideosSelected && S.saveCheckboxBoxSelected,
+                    ]}
+                  >
+                    {allSelectableRecapVideosSelected ? <CheckIcon size={12} color="#000000" /> : null}
+                  </View>
+                  <AppText style={S.saveCheckboxLabel}>Videos</AppText>
+                </Pressable>
+              ) : null}
+            </View>
+            {recapSelectionError ? (
+              <AppText variant="bodySmall" tone="secondary">
+                {recapSelectionError}
+              </AppText>
+            ) : null}
+
+            <FlatList
+              data={recapItems}
+              keyExtractor={(item) => item.key}
+              numColumns={3}
+              columnWrapperStyle={S.saveGridRow}
+              contentContainerStyle={S.saveGrid}
+              renderItem={({ item }) => {
+                const isSelected = selectedRecapKeys.includes(item.key);
+                return (
+                  <Pressable
+                    onPress={() => toggleRecapSelection(item.key)}
+                    style={({ pressed }) => [
+                      S.saveGridItem,
+                      isSelected && S.saveGridItemSelected,
+                      pressed && { opacity: 0.92 },
+                    ]}
+                  >
+                    {item.mediaType === 'video' ? (
+                      <VideoPoster uri={item.uri} style={S.saveGridImage} />
+                    ) : (
+                      <TreatedPhoto
+                        source={item.source as ImageSourcePropType}
+                        style={S.saveGridImage}
+                        resizeMode="cover"
+                        treatment={recapMode === 'filtered' ? primarySession?.photo_treatment : 'original'}
+                        dateStampEnabled={recapMode === 'filtered' ? primarySession?.date_stamp_enabled : false}
+                        capturedAt={item.capturedAt}
+                        seedKey={item.seedKey}
+                        compact
+                      />
+                    )}
+                    <View style={[S.saveCheckBadge, isSelected && S.saveCheckBadgeSelected]}>
+                      {isSelected ? <CheckIcon size={14} color="#000000" /> : null}
+                    </View>
+                    {item.mediaType === 'video' ? (
+                      <View style={S.saveVideoBadge}>
+                        <AppText style={S.saveVideoBadgeText}>
+                          {formatMediaDuration(item.durationMs) ?? 'Video'}
+                        </AppText>
+                      </View>
+                    ) : null}
+                    {item.isChallenge ? (
+                      <View style={S.saveChallengeBadge}>
+                        <AppText style={S.saveChallengeBadgeText} numberOfLines={1}>
+                          {item.challengeLabel ?? 'Challenge'}
+                        </AppText>
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              }}
+            />
+
+            <Pressable
+              style={[
+                S.sheetBtnPrimary,
+                {
+                  backgroundColor: colours.brandPrimary,
+                  opacity: recapCreateDisabled ? 0.65 : 1,
+                },
+              ]}
+              disabled={recapCreateDisabled}
+              onPress={() => void createSelectedRecap()}
+            >
+              <AppText style={{ color: colours.textOnBrand, fontWeight: '700', fontSize: 15 }}>
+                {recapCreating ? 'Creating...' : `Create Recap (${selectedRecapCount})`}
+              </AppText>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <EventRevealModal
         visible={reveal.visible}
         state={reveal.state}
@@ -3684,6 +4294,15 @@ function EventDetailView({
           reveal.dismiss();
         }}
       />
+
+      {recap?.status === 'ready' && recapPlaybackUri ? (
+        <RecapVideoModal
+          visible={recapVisible}
+          uri={recapPlaybackUri}
+          celebrationTitle={celebration.title}
+          onClose={() => setRecapVisible(false)}
+        />
+      ) : null}
 
       {videoPostedToastVisible ? (
         <View
@@ -4445,6 +5064,110 @@ const S = StyleSheet.create({
     paddingHorizontal: layout.gutter,
     paddingVertical: spacing.lg,
     gap: spacing.xs,
+  },
+  recapBanner: {
+    marginHorizontal: layout.gutter,
+    marginTop: spacing.lg,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colours.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colours.borderSubtle,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  recapButton: {
+    backgroundColor: colours.brandPrimary,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  recapActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  recapButtonSecondary: {
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colours.borderSubtle,
+  },
+  recapButtonSecondaryText: {
+    color: colours.textPrimary,
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 13,
+  },
+  recapButtonText: {
+    color: colours.textOnBrand,
+    fontFamily: 'InstrumentSans_600SemiBold',
+    fontSize: 13,
+  },
+  // Semantic tokens throughout: the canvas is the app's near-black, not pure
+  // `#000`, and type is the warm off-white, not `#FFF` — see the "nothing is
+  // pure" note in `src/design/colours.ts`.
+  recapViewerRoot: {
+    flex: 1,
+    backgroundColor: colours.background,
+  },
+  recapViewerHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    paddingHorizontal: layout.gutter,
+    paddingBottom: spacing.md,
+  },
+  recapViewerHeaderText: {
+    flex: 1,
+    gap: spacing.xxs,
+  },
+  recapViewerCloseButton: {
+    width: layout.minTouchTarget,
+    height: layout.minTouchTarget,
+    borderRadius: radii.pill,
+    backgroundColor: colours.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recapViewerStage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: layout.gutter,
+  },
+  recapViewerVideo: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: radii.lg,
+    overflow: 'hidden',
+    backgroundColor: colours.surfaceMuted,
+  },
+  recapViewerActions: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  recapViewerActionButton: {
+    minHeight: 52,
+    borderRadius: radii.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  // Ivory fill, ink label — the same primary treatment as the recap banner
+  // this viewer opens from, and the pairing the palette mandates.
+  recapViewerPrimaryButton: {
+    backgroundColor: colours.brandPrimary,
+    borderColor: colours.brandPrimary,
+  },
+  recapViewerSecondaryButton: {
+    backgroundColor: 'transparent',
+    borderColor: colours.borderStrong,
   },
   guestWelcomeEyebrow: {
     color: colours.textSecondary,

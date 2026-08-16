@@ -138,11 +138,16 @@ function unchangedResult(
   width?: number,
   height?: number,
 ): VideoCompressionResult {
+  const sizeBytes = knownSizeBytes && knownSizeBytes > 0 ? knownSizeBytes : readLocalFileSizeBytes(uri);
+  // The only place every skip path funnels through — without this, "did
+  // compression even run" was unanswerable from the console, which is
+  // exactly the question a real-device test needs answered.
+  console.log(`[video-compression] skipped (${reason}) — uploading original, ${(sizeBytes / 1024 / 1024).toFixed(2)} MB`);
   return {
     uri,
     width: width ?? null,
     height: height ?? null,
-    sizeBytes: knownSizeBytes && knownSizeBytes > 0 ? knownSizeBytes : readLocalFileSizeBytes(uri),
+    sizeBytes,
     skipped: true,
     skipReason: reason,
   };
@@ -158,7 +163,10 @@ export async function compressVideoForUpload(
   options: CompressVideoOptions,
 ): Promise<VideoCompressionResult> {
   if (Platform.OS === 'web' || !Compressor) {
-    return unchangedResult(options.uri, 'not supported on this platform');
+    return unchangedResult(
+      options.uri,
+      Platform.OS === 'web' ? 'not supported on this platform' : 'react-native-compressor native module not linked in this build',
+    );
   }
 
   let originalSizeBytes = 0;
@@ -176,6 +184,11 @@ export async function compressVideoForUpload(
         ? Math.round((originalSizeBytes * 8) / sourceDurationSec)
         : 0;
 
+    console.log(
+      `[video-compression] source: ${sourceWidth}x${sourceHeight}, ${(originalSizeBytes / 1024 / 1024).toFixed(2)} MB, ` +
+        `${sourceDurationSec.toFixed(1)}s, ~${(sourceBitrateBps / 1_000_000).toFixed(1)} Mbps`,
+    );
+
     if (!sourceWidth || !sourceHeight) {
       return unchangedResult(options.uri, 'could not read source video dimensions', originalSizeBytes);
     }
@@ -186,6 +199,10 @@ export async function compressVideoForUpload(
       MAX_DELIVERY_LONG_SIDE,
     );
     const targetBitrate = estimateTargetBitrate(targetWidth, targetHeight, sourceBitrateBps);
+
+    console.log(
+      `[video-compression] targeting: ${targetWidth}x${targetHeight}, ~${(targetBitrate / 1_000_000).toFixed(1)} Mbps`,
+    );
 
     const compressedUri: string = await Compressor.compress(
       options.uri,
@@ -236,6 +253,12 @@ export async function compressVideoForUpload(
         return unchangedResult(options.uri, 'compressed duration did not match the recording', originalSizeBytes, sourceWidth, sourceHeight);
       }
     }
+
+    const reductionPct = originalSizeBytes > 0 ? 100 * (1 - outputSizeBytes / originalSizeBytes) : 0;
+    console.log(
+      `[video-compression] done: ${outputWidth}x${outputHeight}, ${(outputSizeBytes / 1024 / 1024).toFixed(2)} MB ` +
+        `(${reductionPct.toFixed(0)}% smaller than the ${(originalSizeBytes / 1024 / 1024).toFixed(2)} MB original)`,
+    );
 
     return {
       uri: compressedUri,

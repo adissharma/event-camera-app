@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
+import { BRAND_CONFIG } from '@/config/brand';
 import { loadStoredGuestSessionByCelebrationId, clearStoredGuestSession } from '@/services/guest-session';
 import type {
   CaptureMode,
@@ -61,6 +62,15 @@ export interface CelebrationDetail {
   challengePhotos:
     | { id: string; storagePath: string; capturedAt: string | null; displayName: string; mediaType?: 'photo' | 'video'; durationMs?: number | null; mimeType?: string | null; width?: number | null; height?: number | null; challengeId: string; isMine?: boolean; isPinned?: boolean; pinnedAt?: string | null; caption?: string | null; uploadedByUserId?: string | null; guestSessionId?: string | null }[]
     | null;
+  recap: {
+    status: 'not_available' | 'queued' | 'processing' | 'ready' | 'failed';
+    playbackUrl: string | null;
+    durationMs: number | null;
+    mediaCount: number;
+    lastErrorCode?: string | null;
+    lastErrorMessage?: string | null;
+    completedAt?: string | null;
+  } | null;
 }
 
 export const celebrationDetailKeys = {
@@ -68,11 +78,89 @@ export const celebrationDetailKeys = {
   joinedGuests: (eventSessionId: string) => ['celebrations', 'joined-guests', eventSessionId] as const,
 };
 
+const RECAP_MIN_ITEMS = 3;
+const RECAP_MAX_ITEMS = 120;
+
+function getAppOrigin() {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    const origin = window.location.origin;
+    if (!/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(?::|$)/i.test(origin)) {
+      return origin;
+    }
+  }
+  return BRAND_CONFIG.guestDomain;
+}
+
 export interface JoinedGuest {
   id: string;
   displayName: string;
   createdAt: string;
   lastSeenAt: string;
+}
+
+export async function requestEventRecap(
+  eventSessionId: string,
+  mediaIds: string[],
+  options: { renderMode?: 'original' | 'filtered' } = {},
+) {
+  if (!isBackendConfigured) {
+    throw new Error('Recap generation needs the backend to be configured.');
+  }
+
+  const client = requireSupabase();
+  const cleanedMediaIds = mediaIds.filter((id, index) => id && mediaIds.indexOf(id) === index);
+  if (cleanedMediaIds.length < RECAP_MIN_ITEMS) {
+    throw new Error(`Choose at least ${RECAP_MIN_ITEMS} photos or videos for the recap.`);
+  }
+  if (cleanedMediaIds.length > RECAP_MAX_ITEMS) {
+    throw new Error(`Choose up to ${RECAP_MAX_ITEMS} items for one recap.`);
+  }
+
+  const { data, error } = await (client as any).rpc('request_event_recap', {
+    p_event_session_id: eventSessionId,
+    p_selected_media_ids: cleanedMediaIds,
+    p_render_mode: options.renderMode ?? 'original',
+  });
+  if (error) throw error;
+
+  const { data: sessionData } = await client.auth.getSession();
+  const accessToken = sessionData.session?.access_token;
+  if (!accessToken) {
+    throw new Error('Please sign in again to start recap generation.');
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(`${getAppOrigin()}/api/recap-worker`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+  } catch (error: any) {
+    const message = error?.message ?? 'Could not start recap generation.';
+    await (client as any).rpc('mark_event_recap_start_failed', {
+      p_event_session_id: eventSessionId,
+      p_error_message: message,
+    }).catch(() => undefined);
+    throw new Error(message);
+  }
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const message = body?.error ?? 'Could not start recap generation.';
+    await (client as any).rpc('mark_event_recap_start_failed', {
+      p_event_session_id: eventSessionId,
+      p_error_message: message,
+    }).catch(() => undefined);
+    throw new Error(message);
+  }
+
+  return data as {
+    id: string;
+    status: 'queued' | 'processing' | 'ready' | 'failed';
+    playback_url: string | null;
+    duration_ms: number | null;
+    media_count: number;
+  };
 }
 
 /**
@@ -130,6 +218,11 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         .eq('entitlement_key', 'audio_guestbook');
 
       const hasAudioGuestbook = (entitlements ?? []).length > 0;
+      const { data: recapRow } = await (client as any)
+        .from('event_recaps')
+        .select('status, playback_url, duration_ms, media_count, last_error_code, last_error_message, completed_at')
+        .eq('event_session_id', primarySession?.id ?? '')
+        .maybeSingle();
 
       // A host reads their own event's media directly — RLS already permits
       // it ("media_items: viewers read on accessible session"), no token or
@@ -233,6 +326,15 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
         guestShotsUsed: null,
         mediaPhotos,
         challengePhotos,
+        recap: recapRow ? {
+          status: recapRow.status,
+          playbackUrl: recapRow.playback_url ?? null,
+          durationMs: recapRow.duration_ms ?? null,
+          mediaCount: recapRow.media_count ?? 0,
+          lastErrorCode: recapRow.last_error_code ?? null,
+          lastErrorMessage: recapRow.last_error_message ?? null,
+          completedAt: recapRow.completed_at ?? null,
+        } : null,
       };
     }
 
@@ -316,6 +418,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
           guestShotsUsed: null,
           mediaPhotos: null,
           challengePhotos: null,
+          recap: null,
         };
       }
     } catch (parseError) {
@@ -385,6 +488,26 @@ async function tryFetchCelebrationDetailAsGuest(
 
   const c = data?.celebration ?? {};
   const s = data?.session ?? {};
+  let recap: CelebrationDetail['recap'] = null;
+  try {
+    const { data: recapData, error: recapError } = await (client as any).rpc('get_guest_recap', {
+      p_event_code: found.slug,
+      p_guest_token: found.session.guestToken,
+    });
+    if (!recapError && recapData) {
+      recap = {
+        status: recapData.status,
+        playbackUrl: recapData.playback_url ?? null,
+        durationMs: recapData.duration_ms ?? null,
+        mediaCount: recapData.media_count ?? 0,
+        lastErrorCode: recapData.last_error_code ?? null,
+        lastErrorMessage: recapData.last_error_message ?? null,
+        completedAt: recapData.completed_at ?? null,
+      };
+    }
+  } catch (e) {
+    console.warn('[celebration-detail] failed to load recap state', e);
+  }
 
   // Fetch challenge photos separately since get_guest_gallery doesn't include them
   let guestChallengePhotos: any[] = [];
@@ -505,6 +628,7 @@ async function tryFetchCelebrationDetailAsGuest(
           guestSessionId: p.guest_session_id ?? null,
         }))
       : null,
+    recap,
   };
 }
 

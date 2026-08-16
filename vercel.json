@@ -1,6 +1,9 @@
 {
   "buildCommand": "expo export --platform web",
   "outputDirectory": "dist",
+  "functions": {
+    "api/recap-worker.ts": { "maxDuration": 300 }
+  },
   "rewrites": [
     { "source": "/j/:slug", "destination": "/j/%5Bslug%5D.html" },
     { "source": "/e/:eventCode", "destination": "/e/%5BeventCode%5D.html" },
