@@ -333,10 +333,47 @@ export async function shareMediaToInstagram(input: MediaShareInput): Promise<voi
       return;
     }
 
-    const asset = await MediaLibrary.createAssetAsync(localUri);
-    const target = `${INSTAGRAM_IOS_LIBRARY_SCHEME}${asset.id}`;
+    let asset: { id: string };
+    try {
+      // `Asset.create` is the SDK 57 class-based API. The old
+      // `createAssetAsync` is not merely deprecated here — it throws at
+      // runtime (see `legacyWarnings.ts`), which is what made every attempt
+      // fail before Instagram was ever reached. `asset.id` is still the iOS
+      // `localIdentifier` (`MediaLibraryUtilities.swift` maps it directly).
+      asset = await MediaLibrary.Asset.create(localUri);
+    } catch (assetError) {
+      // Saving to Photos is the one step here with no user-visible symptom of
+      // its own, so a failure was previously indistinguishable from Instagram
+      // simply refusing to open.
+      throw new Error(
+        `could not save to Photos — ${assetError instanceof Error ? assetError.message : String(assetError)}`,
+      );
+    }
 
-    if (!(await Linking.canOpenURL(target))) {
+    // `localIdentifier` looks like `<uuid>/L0/001`. Those slashes must be
+    // percent-encoded — interpolated raw they terminate the query value early
+    // and Instagram receives an identifier that matches no asset.
+    const target = `${INSTAGRAM_IOS_LIBRARY_SCHEME}${encodeURIComponent(asset.id)}`;
+
+    const canOpen = await Linking.canOpenURL(target).catch(() => false);
+    const openedInstagram = canOpen
+      ? await Linking.openURL(target).then(() => true).catch(() => false)
+      : false;
+
+    if (openedInstagram) return;
+
+    console.warn(
+      `[sharing] instagram://library did not open (canOpenURL=${canOpen}) — falling back to the share sheet`,
+    );
+
+    // `instagram://library` is undocumented and newer Instagram builds do not
+    // reliably register it, so this cannot be treated as a guaranteed route.
+    // Falling through to the share sheet keeps the guest moving — Instagram's
+    // own extension still offers Story / Reel / Feed from there — instead of
+    // stranding them at a dialog whose only real option is "cancel", which is
+    // what the previous version of this branch did.
+    const openedSheet = await shareMediaFileFallback(localUri, mimeType, mediaType);
+    if (!openedSheet) {
       offerShareSheetAfterInstagramFailure(
         'Could not open Instagram',
         'The recap has been saved to your photos — you can post it from Instagram.',
@@ -344,17 +381,17 @@ export async function shareMediaToInstagram(input: MediaShareInput): Promise<voi
         mimeType,
         mediaType,
       );
-      return;
     }
-
-    await Linking.openURL(target);
   } catch (error) {
     if (isUserCancel(error)) return;
 
     console.error('[sharing] Instagram share failed', error);
+    // The reason is shown, not just logged. A device-only failure that says
+    // nothing about itself is unactionable for the person hitting it and
+    // undiagnosable for anyone reading a bug report about it.
     offerShareSheetAfterInstagramFailure(
       'Could not open Instagram',
-      'Instagram could not open this recap.',
+      `Instagram could not open this recap: ${error instanceof Error ? error.message : String(error)}`,
       localUri,
       mimeType,
       mediaType,
