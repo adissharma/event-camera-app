@@ -909,33 +909,56 @@ function RecapVideoModal({
         </View>
 
         <View style={[S.recapViewerActions, { paddingBottom: insets.bottom + spacing.lg }]}>
+          {/*
+            Native only. Instagram has no web share target and no way to accept
+            a file from a browser, so on web this button ran exactly the same
+            code as "Share" below — the Web Share API, then a download — and
+            differed only in its wording. Offering it there promises a direct
+            hand-off to Instagram that cannot exist, and reproduces the very
+            "two buttons, one behaviour" problem this screen was fixed for.
+            Mobile web still reaches Instagram if the guest picks it out of the
+            OS share sheet, which is what "Share" already opens.
+          */}
+          {Platform.OS !== 'web' ? (
+            <Pressable
+              style={({ pressed }) => [
+                S.recapViewerActionButton,
+                S.recapViewerPrimaryButton,
+                pressed && { backgroundColor: colours.brandPressed },
+              ]}
+              onPress={() => void shareMediaToInstagram(shareInput)}
+              accessibilityRole="button"
+              accessibilityLabel="Share recap to Instagram"
+            >
+              {/* Ink on ivory. This was white-on-ivory — about 1.1:1 — which is
+                  why the primary button read as blank. */}
+              <InstagramStoryIcon size={20} color={colours.textOnBrand} />
+              <AppText variant="labelLarge" tone="onBrand">Share to Instagram</AppText>
+            </Pressable>
+          ) : null}
           <Pressable
             style={({ pressed }) => [
               S.recapViewerActionButton,
-              S.recapViewerPrimaryButton,
-              pressed && { backgroundColor: colours.brandPressed },
-            ]}
-            onPress={() => void shareMediaToInstagram(shareInput)}
-            accessibilityRole="button"
-            accessibilityLabel="Share recap to Instagram"
-          >
-            {/* Ink on ivory. This was white-on-ivory — about 1.1:1 — which is
-                why the primary button read as blank. */}
-            <InstagramStoryIcon size={20} color={colours.textOnBrand} />
-            <AppText variant="labelLarge" tone="onBrand">Share to Instagram</AppText>
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [
-              S.recapViewerActionButton,
-              S.recapViewerSecondaryButton,
-              pressed && { backgroundColor: colours.surfaceRaised },
+              // With no Instagram button above it on web, Share is the only
+              // action left, so it takes the primary treatment rather than
+              // sitting there as a lone outlined secondary.
+              Platform.OS === 'web' ? S.recapViewerPrimaryButton : S.recapViewerSecondaryButton,
+              pressed && {
+                backgroundColor:
+                  Platform.OS === 'web' ? colours.brandPressed : colours.surfaceRaised,
+              },
             ]}
             onPress={() => void shareMediaFile(shareInput)}
             accessibilityRole="button"
             accessibilityLabel="Share recap"
           >
-            <ShareExportIcon size={20} color={colours.textPrimary} />
-            <AppText variant="labelLarge">Share</AppText>
+            <ShareExportIcon
+              size={20}
+              color={Platform.OS === 'web' ? colours.textOnBrand : colours.textPrimary}
+            />
+            <AppText variant="labelLarge" tone={Platform.OS === 'web' ? 'onBrand' : 'primary'}>
+              Share
+            </AppText>
           </Pressable>
         </View>
       </View>
