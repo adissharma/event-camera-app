@@ -548,6 +548,18 @@ async function tryFetchCelebrationDetailAsGuest(
     status: 'published',
     cover_storage_path: c.cover_storage_path ?? null,
     public_slug: c.public_slug ?? found.slug,
+    // `get_guest_gallery` never returns this column at all (see its
+    // `jsonb_build_object` in the migration — only `public_slug` is
+    // projected), so `celebration.event_code` read `undefined` for every
+    // guest, on every platform. That is what `InviteShareSheet` builds its
+    // QR code and invite link from (`buildInvitationUrl`), and what its
+    // Share button silently no-ops without (`if (!invitationUrl) return;`)
+    // — the exact "no QR code, Share does nothing" reported for guest web.
+    // The host path never had this gap: it reads the raw table row
+    // (`select('*')`), which genuinely has this column. `found.slug` is
+    // already this guest's own verified event code — it is what was just
+    // used to call this very RPC — so no server change is needed to supply it.
+    event_code: c.event_code ?? found.slug,
     starts_at: null,
     ends_at: c.ends_at ?? null,
     timezone: c.timezone ?? 'Europe/London',

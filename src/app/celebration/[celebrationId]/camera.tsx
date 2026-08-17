@@ -945,8 +945,14 @@ export default function CameraScreen() {
     const next = [newPhoto, ...photos];
     setPhotos(next);
 
+    // Only navigates away on an actual success — same rule `commitVideo`
+    // follows. A failed upload leaves the guest exactly where they were,
+    // with the preview and caption still in hand to retry.
+    let posted = false;
+
     if (!isBackendConfigured) {
       await AsyncStorage.setItem(`__mock_photos_${celebrationId}`, JSON.stringify(next));
+      posted = true;
     } else {
       setIsUploading(true);
       try {
@@ -985,6 +991,7 @@ export default function CameraScreen() {
           queryKey: celebrationDetailKeys.detail(String(celebrationId)),
         });
         setPhotos([newPhoto, ...photos]);
+        posted = true;
       } catch (e) {
         console.error(`Failed to upload ${source} photo:`, e);
         Alert.alert('Upload failed', formatUploadFailure('photo', e));
@@ -998,6 +1005,27 @@ export default function CameraScreen() {
 
     // Invalidate query to trigger global Live Activity sync manager instantly
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+
+    if (!posted) return;
+
+    // Matches `commitVideo`'s plain-gallery success path exactly — same
+    // target route, same `dismissTo`-with-`replace`-fallback shape, same
+    // "no id to open, just a toast" behaviour — rather than inventing a
+    // second way to land back on the gallery. A photo used to stay on the
+    // viewfinder after posting while every other capture (video, challenge,
+    // guestbook) navigated away; this was the one flow left behind.
+    const galleryTarget = {
+      pathname: '/celebration/[celebrationId]',
+      params: {
+        celebrationId: String(celebrationId),
+        photoPostedAt: String(Date.now()),
+      },
+    };
+    if (router.canDismiss()) {
+      router.dismissTo(galleryTarget as never);
+    } else {
+      router.replace(galleryTarget as never);
+    }
   }
 
   async function commitVideo(preview: VideoPreview, captionInput?: string) {
@@ -3439,7 +3467,21 @@ export default function CameraScreen() {
   captionTextInput: {
     flex: 1,
     fontFamily: 'InstrumentSans_400Regular',
-    fontSize: 15,
+    // 16 is not a stylistic choice — it is the exact threshold under which
+    // iOS Safari auto-zooms the page on focus to make small text legible.
+    // Below it, focusing this input pinch-zoomed the whole page (WebKit's
+    // `visualViewport.scale` leaves 1), which is what the reported
+    // distortion actually was: `fullScreenPreviewStyle`'s width/height come
+    // from `useWindowDimensions`, and react-native-web's own Dimensions
+    // module deliberately multiplies by `visualViewport.scale` to track the
+    // zoomed-in view (`node_modules/react-native-web/.../Dimensions/index.js`)
+    // — so the full-screen overlay was correctly following the zoom, and the
+    // zoom itself was the bug. It also explains why it "stuck" after
+    // dismissing the keyboard (iOS does not reliably restore `scale` to 1 on
+    // blur inside a `position: fixed` layout) and why leaving the screen
+    // fixed it (a full navigation is a fresh render at scale 1). Removing
+    // the trigger fixes all of it at once, with nothing left to reset.
+    fontSize: 16,
     color: '#FFFFFF',
     padding: 0,
   },

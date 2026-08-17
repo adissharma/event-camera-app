@@ -1036,9 +1036,10 @@ function EventDetailView({
   archiving: boolean;
 }) {
   const router = useRouter();
-  const { openPhotoId, videoPostedAt, openChallengeId, openChallengeMediaId, challengePostedAt } = useLocalSearchParams<{
+  const { openPhotoId, videoPostedAt, photoPostedAt, openChallengeId, openChallengeMediaId, challengePostedAt } = useLocalSearchParams<{
     openPhotoId?: string;
     videoPostedAt?: string;
+    photoPostedAt?: string;
     openChallengeId?: string;
     openChallengeMediaId?: string;
     challengePostedAt?: string;
@@ -1065,8 +1066,10 @@ function EventDetailView({
   const [devRole, setDevRole] = useState<string | null>(null);
   const [guestName, setGuestName] = useState<string | null>(null);
   const [videoPostedToastVisible, setVideoPostedToastVisible] = useState(false);
+  const [photoPostedToastVisible, setPhotoPostedToastVisible] = useState(false);
   const [recapVisible, setRecapVisible] = useState(false);
   const lastVideoPostedToastRef = useRef<string | null>(null);
+  const lastPhotoPostedToastRef = useRef<string | null>(null);
 
   useEffect(() => {
     AsyncStorage.getItem('__dev_role').then(setDevRole);
@@ -2147,6 +2150,26 @@ function EventDetailView({
 
     return () => clearTimeout(timer);
   }, [videoPostedAt]);
+
+  // Same mechanism as the video toast above, kept as its own param/state/ref
+  // rather than folded into one generic "media posted" version — matches how
+  // this screen already keeps photo and video handling as parallel, not
+  // shared, code (see `challengeCaption`/`galleryCaption` in camera.tsx).
+  useEffect(() => {
+    if (!photoPostedAt || lastPhotoPostedToastRef.current === photoPostedAt) {
+      return;
+    }
+
+    lastPhotoPostedToastRef.current = photoPostedAt;
+    setPhotoPostedToastVisible(true);
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+    const timer = setTimeout(() => {
+      setPhotoPostedToastVisible(false);
+    }, 2600);
+
+    return () => clearTimeout(timer);
+  }, [photoPostedAt]);
 
   async function runGuestDelete(photo: PhotoItem, index: number) {
     if (!photo.id || !guestAuth) return;
@@ -4336,6 +4359,18 @@ function EventDetailView({
           ]}
         >
           <AppText style={S.videoPostedToastText}>Video posted to the gallery</AppText>
+        </View>
+      ) : null}
+
+      {photoPostedToastVisible ? (
+        <View
+          pointerEvents="none"
+          style={[
+            S.videoPostedToast,
+            { top: Math.max(insets.top + spacing.base, spacing.xl) },
+          ]}
+        >
+          <AppText style={S.videoPostedToastText}>Photo posted to the gallery</AppText>
         </View>
       ) : null}
     </View>
