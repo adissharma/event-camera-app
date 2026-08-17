@@ -6,6 +6,7 @@ import {
   AppState,
   View,
   Image,
+  Modal,
   TextInput,
   useWindowDimensions,
   Pressable,
@@ -39,6 +40,8 @@ import Svg, { Path, Circle } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
 import { AppText } from '@/components/ui/text';
+import { Button } from '@/components/ui/button';
+import { BRAND_CONFIG } from '@/config/brand';
 import { QrCodeIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import {
@@ -214,6 +217,20 @@ const MAX_VIDEO_DURATION_MS = 30_000;
  * ceilings server-side — this constant only drives the countdown.
  */
 const MAX_AUDIO_DURATION_MS = 60_000;
+
+/**
+ * Disabled for now — needs a real App Store / Play Store link before it can
+ * ship (see the comment above the "Got it" button), and web recording is
+ * still wanted for testing until the Android app is ready.
+ *
+ * Flip to `true` to require the app for web video again: forces Guestbook to
+ * open into audio instead of video on web, blocks the VIDEO toggle and
+ * swipe gesture behind the "Get the app" modal, and stops the mode-
+ * normalising effect from ever leaving a web session on video. All of that
+ * logic is intact below, gated on this single flag — nothing needs to be
+ * un-commented.
+ */
+const REQUIRE_APP_FOR_WEB_VIDEO = false;
 
 /** `m:ss`, so the audio countdown can start at 1:00 and video still reads 0:30. */
 function formatCountdown(remainingMs: number): string {
@@ -447,8 +464,18 @@ export default function CameraScreen() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingRemainingMs, setRecordingRemainingMs] = useState(MAX_VIDEO_DURATION_MS);
   const [captureType, setCaptureType] = useState<'photo' | 'video' | 'audio'>(
-    isGuestbookCapture ? 'video' : 'photo',
+    // The Guestbook normally opens straight into video, which on web would
+    // land the guest in a mode they are not allowed to record in without ever
+    // touching the toggle. Audio is the Guestbook's other first-class mode and
+    // works fully in a browser, so web starts there instead.
+    isGuestbookCapture
+      ? REQUIRE_APP_FOR_WEB_VIDEO && Platform.OS === 'web'
+        ? 'audio'
+        : 'video'
+      : 'photo',
   );
+  /** Set when web asks for video — see `setCaptureMode`. */
+  const [showGetTheAppForVideo, setShowGetTheAppForVideo] = useState(false);
   const isAudioCapture = captureType === 'audio';
   /** Rolling amplitudes for the live waveform; only the tail is ever drawn. */
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
@@ -537,9 +564,20 @@ export default function CameraScreen() {
 
   useEffect(() => {
     // The Guestbook offers audio and video; anything else that leaks in (a
-    // stale 'photo' from a previous target) falls back to video.
+    // stale 'photo' from a previous target) falls back to video — or to audio
+    // on web, where video is app-only and this would otherwise put the guest
+    // straight back into a mode they cannot record in.
+    const blockWebVideo = REQUIRE_APP_FOR_WEB_VIDEO && isWeb;
     if (isGuestbookCapture) {
-      if (captureType !== 'video' && captureType !== 'audio') setCaptureType('video');
+      if (captureType !== 'video' && captureType !== 'audio') {
+        setCaptureType(blockWebVideo ? 'audio' : 'video');
+      } else if (blockWebVideo && captureType === 'video') {
+        setCaptureType('audio');
+      }
+      return;
+    }
+    if (blockWebVideo && captureType === 'video') {
+      setCaptureType('photo');
       return;
     }
     if (captureType === 'audio') {
@@ -549,7 +587,7 @@ export default function CameraScreen() {
     if (!videoCaptureEnabled && captureType !== 'photo') {
       setCaptureType('photo');
     }
-  }, [videoCaptureEnabled, captureType, isGuestbookCapture]);
+  }, [videoCaptureEnabled, captureType, isGuestbookCapture, isWeb]);
 
   useEffect(() => {
     Animated.timing(captureModeAnim, {
@@ -725,6 +763,20 @@ export default function CameraScreen() {
 
   function setCaptureMode(next: 'photo' | 'video' | 'audio') {
     if (isRecording || next === captureType) return;
+
+    // Video recording is app-only. Asking for it in a browser opens the
+    // get-the-app prompt and leaves the current mode alone, rather than
+    // switching into a mode the guest cannot record in.
+    //
+    // This replaces an `Alert.alert` that could never have been seen:
+    // react-native-web ships `Alert` as `static alert() {}` — a literal no-op
+    // — so the old "Video not supported here" message rendered nothing at all
+    // and the VIDEO toggle simply appeared dead on web.
+    if (REQUIRE_APP_FOR_WEB_VIDEO && isWeb && next === 'video') {
+      setShowGetTheAppForVideo(true);
+      return;
+    }
+
     // The Guestbook is the only surface offering audio, and it offers nothing
     // else — every other target keeps the photo/video pair it had.
     if (isGuestbookCapture) {
@@ -733,13 +785,6 @@ export default function CameraScreen() {
       return;
     }
     if (!videoCaptureEnabled || next === 'audio') return;
-    if (isWeb && next === 'video' && !webRecorderMimeType) {
-      Alert.alert(
-        'Video not supported here',
-        'This browser can record video, but not yet in a format that plays reliably in the iPhone app. Please use the iOS app for video on this event for now.',
-      );
-      return;
-    }
     setCaptureType(next);
   }
 
@@ -2484,9 +2529,15 @@ export default function CameraScreen() {
             </Pressable>
           )}
 
-          {/* Photos Button — hidden for the Guestbook; it has no event
-              gallery preview of its own. */}
-          {isGuestbookCapture ? (
+          {/* Photos Button — hidden for the Guestbook, which has no event
+              gallery preview of its own, and hidden while a video is actively
+              recording, since this is the one control that exits the
+              viewfinder (it navigates to the gallery) and tapping it mid-take
+              would silently abandon the recording. `controlBtnSpacer` is the
+              same 44x44 footprint as the button itself, so the shutter stays
+              exactly centred while this is hidden — nothing else in the row
+              moves. */}
+          {isGuestbookCapture || (isRecording && captureType === 'video') ? (
             <View style={S.controlBtnSpacer} />
           ) : (
           <Pressable
@@ -2620,6 +2671,39 @@ export default function CameraScreen() {
           onClose={() => setShareVisible(false)}
         />
       )}
+
+      {/* 6. Get-the-app prompt — video recording is app-only. */}
+      <Modal
+        visible={showGetTheAppForVideo}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowGetTheAppForVideo(false)}
+      >
+        <View style={S.getAppBackdrop}>
+          <View style={[S.getAppCard, { marginBottom: insets.bottom + spacing.lg }]}>
+            <AppText variant="titleMedium" align="center" style={S.getAppTitle}>
+              Video needs the app
+            </AppText>
+            <AppText variant="bodyMedium" align="center" tone="secondary" style={S.getAppBody}>
+              Recording video is only available in the {BRAND_CONFIG.appName} app. Download it
+              to capture and share video at this event.
+            </AppText>
+            {/*
+              No real store URL exists anywhere in this codebase yet
+              (BRAND_CONFIG.websiteUrl is still the example.com placeholder) —
+              a button that opened it would be its own dead-button bug. Wire a
+              platform-detected App Store / Play Store link here once one
+              exists, in place of the dismiss-only button below.
+            */}
+            <Button
+              label="Got it"
+              variant="primary"
+              onPress={() => setShowGetTheAppForVideo(false)}
+              style={S.getAppButton}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -2656,6 +2740,31 @@ export default function CameraScreen() {
     color: '#0B0B0C',
     fontWeight: '700',
     fontSize: 15,
+  },
+
+  // ── Get-the-app prompt ──
+  getAppBackdrop: {
+    flex: 1,
+    backgroundColor: colours.scrim,
+    justifyContent: 'flex-end',
+  },
+  getAppCard: {
+    marginHorizontal: layout.gutter,
+    backgroundColor: colours.surfaceRaised,
+    borderRadius: radii.xl,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colours.borderSubtle,
+    padding: spacing.xl,
+    gap: spacing.sm,
+  },
+  getAppTitle: {
+    marginBottom: spacing.xxs,
+  },
+  getAppBody: {
+    marginBottom: spacing.md,
+  },
+  getAppButton: {
+    width: '100%',
   },
 
   // ── Header ──
