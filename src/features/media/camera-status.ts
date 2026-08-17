@@ -94,6 +94,45 @@ function describeGetUserMediaError(error: unknown): { status: CameraAccessStatus
   }
 }
 
+/**
+ * Detects an already-granted permission without ever showing a dialog —
+ * Safari's substitute for a working `navigator.permissions.query('camera')`.
+ * This is what makes access persist across reloads there instead of forcing
+ * the Enable button every single time: a stream request with no user
+ * gesture behind it resolves instantly and silently when permission was
+ * already granted in an earlier visit, and WebKit's own anti-abuse policy
+ * is what does the rest — with no gesture AND no prior grant, it declines
+ * the request quietly rather than prompting, so a first-time guest never
+ * sees a dialog they didn't ask for.
+ *
+ * A rejection here is therefore genuinely ambiguous — "never asked" and
+ * "explicitly denied" look identical from this call alone — so it is never
+ * treated as a failure worth explaining. It just falls back to the ordinary
+ * Enable button, where a real, gesture-backed request (and a real
+ * explanation if THAT one fails) belongs.
+ */
+async function probeSilently(
+  isStale: () => boolean,
+  setStatus: (status: CameraAccessStatus) => void,
+  setDetail: (detail: string | null) => void,
+): Promise<void> {
+  if (mediaDevicesMissing()) {
+    if (isStale()) return;
+    setStatus('insecure');
+    setDetail(describeMissingMediaDevices());
+    return;
+  }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    stream.getTracks().forEach((track) => track.stop());
+    if (isStale()) return;
+    setStatus('granted');
+  } catch {
+    if (isStale()) return;
+    setStatus('denied');
+  }
+}
+
 function useNativeCameraAccess(): CameraAccess {
   const [permission, requestPermission] = useNativeCameraPermissions();
 
@@ -139,21 +178,33 @@ function useWebCameraAccess(): CameraAccess {
       }
 
       if (!navigator.permissions?.query) {
-        // Safari has historically not supported querying 'camera' at all —
-        // there is no way to know without prompting, so go straight to the
-        // Enable button rather than spinning forever.
-        if (!cancelled) setStatus('denied');
+        // Safari does not support querying 'camera' via the Permissions API
+        // at all — this branch is why the gate screen was reappearing on
+        // every reload there, even for a guest who had already granted
+        // access: with no way to ask, this used to assume 'denied'
+        // unconditionally and show the Enable button regardless of the
+        // real state.
+        if (!cancelled) await probeSilently(() => cancelled, setStatus, setDetail);
         return;
       }
       try {
         const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
         if (cancelled) return;
+        if (result.state === 'prompt') {
+          // A genuinely undecided permission on a browser that CAN report it
+          // accurately — no need to probe, and no gesture exists yet to
+          // probe with productively.
+          setStatus('denied');
+        } else {
+          setStatus(result.state === 'granted' ? 'granted' : 'denied');
+        }
         permissionHandleRef.current = result;
-        const apply = () => setStatus(result.state === 'granted' ? 'granted' : 'denied');
-        apply();
-        result.onchange = apply;
+        result.onchange = () => setStatus(result.state === 'granted' ? 'granted' : 'denied');
       } catch {
-        if (!cancelled) setStatus('denied');
+        // Safari's `navigator.permissions.query` exists but throws on the
+        // 'camera' name specifically rather than being absent outright —
+        // same gap as the branch above, same fix.
+        if (!cancelled) await probeSilently(() => cancelled, setStatus, setDetail);
       }
     }
 
