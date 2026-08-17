@@ -126,9 +126,11 @@ async function probeSilently(
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     stream.getTracks().forEach((track) => track.stop());
     if (isStale()) return;
+    console.log('[camera-status] silent probe resolved — access already granted');
     setStatus('granted');
-  } catch {
+  } catch (probeError) {
     if (isStale()) return;
+    console.log('[camera-status] silent probe declined — treating as not yet granted', probeError);
     setStatus('denied');
   }
 }
@@ -178,32 +180,47 @@ function useWebCameraAccess(): CameraAccess {
       }
 
       if (!navigator.permissions?.query) {
-        // Safari does not support querying 'camera' via the Permissions API
-        // at all — this branch is why the gate screen was reappearing on
-        // every reload there, even for a guest who had already granted
-        // access: with no way to ask, this used to assume 'denied'
-        // unconditionally and show the Enable button regardless of the
-        // real state.
+        // No Permissions API at all — there is no way to ask, so verify
+        // directly instead of assuming.
+        console.log('[camera-status] permissions.query unavailable — probing silently');
         if (!cancelled) await probeSilently(() => cancelled, setStatus, setDetail);
         return;
       }
       try {
         const result = await navigator.permissions.query({ name: 'camera' as PermissionName });
         if (cancelled) return;
-        if (result.state === 'prompt') {
-          // A genuinely undecided permission on a browser that CAN report it
-          // accurately — no need to probe, and no gesture exists yet to
-          // probe with productively.
-          setStatus('denied');
-        } else {
-          setStatus(result.state === 'granted' ? 'granted' : 'denied');
-        }
         permissionHandleRef.current = result;
         result.onchange = () => setStatus(result.state === 'granted' ? 'granted' : 'denied');
-      } catch {
-        // Safari's `navigator.permissions.query` exists but throws on the
-        // 'camera' name specifically rather than being absent outright —
-        // same gap as the branch above, same fix.
+
+        console.log(`[camera-status] permissions.query reported '${result.state}'`);
+
+        if (result.state === 'granted') {
+          setStatus('granted');
+          return;
+        }
+        if (result.state === 'denied') {
+          setStatus('denied');
+          return;
+        }
+        // 'prompt' is trustworthy on desktop Chrome, but WebKit's support for
+        // querying 'camera' this way is known to be unreliable — both iOS
+        // Safari and iOS Chrome (which is WebKit under the hood; Apple
+        // requires every iOS browser to use it) can report 'prompt' here
+        // even when the guest already granted access in an earlier visit.
+        // That mismatch is exactly why the Enable Camera screen kept
+        // reappearing after a reload there, on both browsers, even though
+        // this query technically succeeded rather than throwing — the
+        // earlier fix only distrusted a query that failed outright, not one
+        // that quietly returned the wrong answer. A silent probe costs
+        // nothing extra: on a browser where 'prompt' is already accurate, it
+        // simply confirms the same 'denied' outcome with no visible dialog.
+        console.log("[camera-status] 'prompt' is not trusted at face value — verifying with a silent probe");
+        await probeSilently(() => cancelled, setStatus, setDetail);
+      } catch (queryError) {
+        // Some WebKit versions throw on the 'camera' name specifically
+        // rather than being absent outright — same gap as the branch above,
+        // same fix.
+        console.log('[camera-status] permissions.query threw — probing silently', queryError);
         if (!cancelled) await probeSilently(() => cancelled, setStatus, setDetail);
       }
     }
