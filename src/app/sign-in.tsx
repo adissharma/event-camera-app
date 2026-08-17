@@ -1,27 +1,25 @@
 import { useState } from 'react';
-import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, StyleSheet } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Screen } from '@/components/layout/screen';
 import { TextField } from '@/components/forms/text-field';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { useAuth } from '@/features/auth/context';
-import { colours, layout, spacing } from '@/design';
+import { colours, layout, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
 
-/** Permissive on purpose — the authoritative check is whether the code arrives. */
 const EMAIL_PATTERN = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 export default function SignInScreen() {
   const router = useRouter();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const { requestCode, isBackendConfigured } = useAuth();
 
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string | undefined>();
   const [isSending, setIsSending] = useState(false);
-  // Validation only after a real attempt — never while someone is still typing
-  // their first character.
   const [hasAttempted, setHasAttempted] = useState(false);
 
   const trimmed = email.trim();
@@ -37,15 +35,23 @@ export default function SignInScreen() {
 
     setError(undefined);
     setIsSending(true);
-    const result = await requestCode(trimmed);
-    setIsSending(false);
+    try {
+      const result = await requestCode(trimmed);
+      if (!result.ok) {
+        setError(result.error.message);
+        return;
+      }
 
-    if (!result.ok) {
-      setError(result.error.message);
-      return;
+      router.push({
+        pathname: '/verify',
+        params: {
+          email: trimmed,
+          ...(redirect ? { redirect } : {}),
+        },
+      });
+    } finally {
+      setIsSending(false);
     }
-
-    router.push({ pathname: '/verify', params: { email: trimmed } });
   }
 
   return (
@@ -55,25 +61,35 @@ export default function SignInScreen() {
           <Button
             label={copy.auth.sendCode}
             loading={isSending}
-            disabled={!isBackendConfigured}
+            disabled={!trimmed || !isBackendConfigured}
             disabledReason={
-              isBackendConfigured ? undefined : 'The app is not connected to a backend yet.'
+              !isBackendConfigured
+                ? 'The app is not connected to a backend yet.'
+                : undefined
             }
             haptic
             onPress={handleSubmit}
           />
         }
       >
-        <View style={{ gap: spacing.xl, maxWidth: layout.maxReadableWidth }}>
-          <View style={{ gap: spacing.md }}>
+        <View style={S.container}>
+          <View style={S.headerGroup}>
             <AppText variant="eyebrow" tone="secondary">
               {copy.welcome.eyebrow}
             </AppText>
-            <AppText variant="displayLarge">{copy.auth.title}</AppText>
+            <AppText variant="displayLarge">Enter your email</AppText>
             <AppText variant="bodyLarge" tone="secondary">
               We will email you a six-digit code. No password to remember.
             </AppText>
           </View>
+
+          {error ? (
+            <View style={S.errorBanner}>
+              <AppText variant="bodySmall" style={S.errorText}>
+                {error}
+              </AppText>
+            </View>
+          ) : null}
 
           <TextField
             label={copy.auth.emailLabel}
@@ -83,7 +99,7 @@ export default function SignInScreen() {
               setEmail(next);
               if (hasAttempted) setError(undefined);
             }}
-            error={hasAttempted ? error : undefined}
+            error={hasAttempted ? (isValid ? undefined : error) : undefined}
             keyboardType="email-address"
             autoCapitalize="none"
             autoComplete="email"
@@ -95,15 +111,7 @@ export default function SignInScreen() {
           />
 
           {!isBackendConfigured ? (
-            <View
-              style={{
-                padding: spacing.base,
-                borderRadius: 12,
-                borderWidth: layout.hairline,
-                borderColor: colours.borderStrong,
-                gap: spacing.xs,
-              }}
-            >
+            <View style={S.backendWarningCard}>
               <AppText variant="labelLarge" tone="warning">
                 Backend not configured
               </AppText>
@@ -118,3 +126,30 @@ export default function SignInScreen() {
     </View>
   );
 }
+
+const S = StyleSheet.create({
+  container: {
+    gap: spacing.xl,
+    maxWidth: layout.maxReadableWidth,
+  },
+  headerGroup: {
+    gap: spacing.xs,
+  },
+  errorBanner: {
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: layout.hairline,
+  },
+  errorText: {
+    color: '#F87171',
+  },
+  backendWarningCard: {
+    padding: spacing.base,
+    borderRadius: radii.md,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
+    gap: spacing.xs,
+  },
+});

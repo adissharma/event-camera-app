@@ -118,14 +118,19 @@ export async function listChallenges(
     const local = alreadyMigrated ? [] : await readLegacyLocal(celebrationId);
     const seed = local.length > 0 ? local : defaults;
 
-    if (seed.length > 0) {
-      try {
-        const seeded = await seedChallenges(celebrationId, seed);
-        await AsyncStorage.setItem(migratedKey(celebrationId), '1');
-        return seeded;
-      } catch {
-        // Not a manager of this event. Fall through and read as a guest.
-      }
+    // Always attempt this, even with an empty `seed` — the RPC's manager
+    // check is the only reliable way to tell "a host whose event genuinely
+    // has zero challenges" from "a guest with no read access at all", and an
+    // empty `p_challenges` array is a safe no-op insert. Without this, a host
+    // on a brand-new event fell through to the guest branch below and came
+    // back `null`, which sent every screen back to its old local/defaults
+    // fallback instead of a real empty list.
+    try {
+      const seeded = await seedChallenges(celebrationId, seed);
+      if (seed.length > 0) await AsyncStorage.setItem(migratedKey(celebrationId), '1');
+      return seeded;
+    } catch {
+      // Not a manager of this event. Fall through and read as a guest.
     }
   }
 

@@ -15,6 +15,7 @@ import {
   replaceChallenges,
   legacyChallengesKey,
 } from '@/services/challenges';
+import { ChallengesEmptyState } from '@/features/celebrations/challenges-empty-state';
 import { colours, layout, radii, spacing } from '@/design';
 import Svg, { Path } from 'react-native-svg';
 
@@ -30,22 +31,6 @@ type Challenge = {
   instructions?: string;
   photo?: string | null;
 };
-
-const DEFAULT_CHALLENGES: Challenge[] = [
-  { id: 'c1', label: 'First Dance',      icon: 'firstDance' },
-  { id: 'c2', label: 'Wedding Rings',    icon: 'rings' },
-  { id: 'c3', label: 'Best Group Photo', icon: 'group' },
-  { id: 'c4', label: 'Decor Details',    icon: 'decor' },
-  { id: 'c5', label: 'Candlelight',      icon: 'candle' },
-];
-
-const EXTRA_CHALLENGES = [
-  { label: 'Champagne Toast', icon: 'champagne' },
-  { label: 'Wedding Cake',    icon: 'cake' },
-  { label: 'Bridal Party',    icon: 'bouquet' },
-  { label: 'Gifts & Cards',   icon: 'gift' },
-  { label: 'Confetti',        icon: 'confetti' },
-];
 
 function TrashIcon({ size = 18, color = '#EF4444' }) {
   return (
@@ -79,7 +64,7 @@ export default function ChallengesStep() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
-  const [challenges, setChallenges] = useState<Challenge[]>(DEFAULT_CHALLENGES);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -117,38 +102,14 @@ export default function ChallengesStep() {
   }, [draft.editCelebrationId]);
 
   function handleDelete(id: string) {
-    if (challenges.length <= 1) {
-      Alert.alert('Cannot delete', 'An event must have at least one active challenge.');
-      return;
-    }
     setChallenges((prev) => prev.filter((c) => c.id !== id));
   }
 
+  // This screen is only ever reached from an editing/settings context, so it
+  // mirrors Settings → Challenges: straight to the packs browser, no intro.
   function handleAddChallenge() {
-    const existing = new Set(challenges.map((c) => c.label));
-    const options = EXTRA_CHALLENGES.filter((c) => !existing.has(c.label));
-
-    if (options.length === 0) {
-      Alert.alert('No options left', 'You have already added all available challenges.');
-      return;
-    }
-
-    Alert.alert(
-      'Add Challenge',
-      'Choose an additional photography prompt for your guests.',
-      [
-        ...options.slice(0, 5).map((opt) => ({
-          text: opt.label,
-          onPress: () => {
-            setChallenges((prev) => [
-              ...prev,
-              { id: `c${Date.now()}`, label: opt.label, icon: opt.icon },
-            ]);
-          },
-        })),
-        { text: 'Cancel', style: 'cancel' },
-      ]
-    );
+    if (!draft.editCelebrationId) return;
+    router.push(`/celebration/${draft.editCelebrationId}/challenges/packs` as never);
   }
 
   async function handleSave() {
@@ -219,37 +180,41 @@ export default function ChallengesStep() {
           </AppText>
         </View>
 
-        <View style={styles.card}>
-          <Pressable onPress={handleAddChallenge} style={styles.row}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-              <View style={styles.plusCircle}>
-                <PlusIcon size={16} color="#0B0B0C" />
-              </View>
-              <AppText variant="labelLarge" style={styles.addText}>Add new challenge...</AppText>
-            </View>
-          </Pressable>
-
-          {challenges.map((c, idx) => (
-            <View key={c.id}>
-              <View style={styles.separator} />
-              <View style={styles.row}>
-                <View style={styles.rowLabelContainer}>
-                  <AppText variant="labelLarge" style={styles.rowLabel}>{c.label}</AppText>
-                  {c.photo ? (
-                    <AppText variant="bodySmall" style={[styles.rowValue, { color: colours.brandPrimary }]}>
-                      Completed
-                    </AppText>
-                  ) : (
-                    <AppText variant="bodySmall" style={styles.rowValue}>Not captured yet</AppText>
-                  )}
+        {challenges.length === 0 ? (
+          <ChallengesEmptyState onPress={handleAddChallenge} />
+        ) : (
+          <View style={styles.card}>
+            <Pressable onPress={handleAddChallenge} style={styles.row}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <View style={styles.plusCircle}>
+                  <PlusIcon size={16} color="#0B0B0C" />
                 </View>
-                <Pressable onPress={() => handleDelete(c.id)} style={styles.deleteButton}>
-                  <TrashIcon />
-                </Pressable>
+                <AppText variant="labelLarge" style={styles.addText}>Add new challenge...</AppText>
               </View>
-            </View>
-          ))}
-        </View>
+            </Pressable>
+
+            {challenges.map((c, idx) => (
+              <View key={c.id}>
+                <View style={styles.separator} />
+                <View style={styles.row}>
+                  <View style={styles.rowLabelContainer}>
+                    <AppText variant="labelLarge" style={styles.rowLabel}>{c.label}</AppText>
+                    {c.photo ? (
+                      <AppText variant="bodySmall" style={[styles.rowValue, { color: colours.brandPrimary }]}>
+                        Completed
+                      </AppText>
+                    ) : (
+                      <AppText variant="bodySmall" style={styles.rowValue}>Not captured yet</AppText>
+                    )}
+                  </View>
+                  <Pressable onPress={() => handleDelete(c.id)} style={styles.deleteButton}>
+                    <TrashIcon />
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </Screen>
   );

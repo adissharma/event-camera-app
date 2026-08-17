@@ -88,6 +88,12 @@ import {
   legacyChallengesKey,
   type EventChallenge,
 } from '@/services/challenges';
+import {
+  ChallengePacksIntroModal,
+  hasSeenChallengePacksIntro,
+  markChallengePacksIntroSeen,
+} from '@/features/celebrations/challenge-packs-intro-modal';
+import { ChallengesEmptyCard } from '@/features/celebrations/challenges-empty-card';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { createUniqueChannel } from '@/lib/supabase/realtime';
 import {
@@ -342,21 +348,6 @@ type FilteredCaptureState = {
   onError: (error: unknown) => void;
 } | null;
 
-const DEFAULT_CHALLENGES: Challenge[] = [
-  { id: 'c1', label: 'First Dance',      icon: 'firstDance' },
-  { id: 'c2', label: 'Wedding Rings',    icon: 'rings' },
-  { id: 'c3', label: 'Best Group Photo', icon: 'group' },
-  { id: 'c4', label: 'Decor Details',    icon: 'decor' },
-  { id: 'c5', label: 'Candlelight',      icon: 'candle' },
-];
-
-const EXTRA_CHALLENGES: Array<{ label: string; icon: string }> = [
-  { label: 'Champagne Toast', icon: 'champagne' },
-  { label: 'Wedding Cake',    icon: 'cake' },
-  { label: 'Bridal Party',    icon: 'bouquet' },
-  { label: 'Gifts & Cards',   icon: 'gift' },
-  { label: 'Confetti',        icon: 'confetti' },
-];
 // Stock briefs live in `@/features/celebrations/challenge-icons` and are read
 // through `resolveChallengeBrief`, which also normalises legacy icon names and
 // OpenMoji hexcodes. A second copy used to sit here and had drifted to a subset
@@ -1186,7 +1177,8 @@ function EventDetailView({
 
   // ── State ──
   const [photos, setPhotos] = useState<PhotoItem[]>([]);
-  const [challenges, setChallenges] = useState<Challenge[]>(DEFAULT_CHALLENGES);
+  const [challenges, setChallenges] = useState<Challenge[]>([]);
+  const [challengePacksIntroVisible, setChallengePacksIntroVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [saveVisible, setSaveVisible] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
@@ -1717,10 +1709,7 @@ function EventDetailView({
     // the guest RPC rather than inventing DEFAULT_CHALLENGES locally, which is
     // what used to hide the host's instructions from the people they were for.
     try {
-      const remote = await listChallenges(
-        celebration.id,
-        DEFAULT_CHALLENGES.map((item) => ({ label: item.label, icon: item.icon })),
-      );
+      const remote = await listChallenges(celebration.id);
       if (remote) {
         setChallenges(remote.map(toScreenChallenge));
         return;
@@ -1737,7 +1726,7 @@ function EventDetailView({
         return;
       } catch {}
     }
-    setChallenges([...DEFAULT_CHALLENGES]);
+    setChallenges([]);
   }, [celebration.id]);
 
   useFocusEffect(
@@ -1811,13 +1800,7 @@ function EventDetailView({
   // ── Helpers ──
 
   function getCoverSource() {
-    // The host's own cover wins. Only an event that has never had one falls
-    // through to the demo artwork — previously *every* event did, because this
-    // consulted a theme-slug map that a real bucket path never matches.
-    if (coverSource !== FALLBACK_COVER) return coverSource;
-    if (celebration.cover_storage_path) return coverSource;
-    const sum = celebration.id.split('').reduce((s, c) => s + c.charCodeAt(0), 0);
-    return GALLERY_PRESETS[sum % GALLERY_PRESETS.length].source;
+    return coverSource ?? FALLBACK_COVER;
   }
 
   function getPhotoSource(photo: string) {
@@ -2486,8 +2469,22 @@ function EventDetailView({
     }
   }
 
-  function handleAddChallenge() {
-    router.push(`/celebration/${celebration.id}/challenges/new` as never);
+  async function goToChallengePacks() {
+    setChallengePacksIntroVisible(false);
+    router.push(`/celebration/${celebration.id}/challenges/packs` as never);
+  }
+
+  async function handleAddChallenge() {
+    if (await hasSeenChallengePacksIntro()) {
+      void goToChallengePacks();
+      return;
+    }
+    setChallengePacksIntroVisible(true);
+  }
+
+  async function handleChallengePacksGetStarted() {
+    await markChallengePacksIntroSeen();
+    void goToChallengePacks();
   }
 
   async function openSavePhotos() {
@@ -3287,27 +3284,23 @@ function EventDetailView({
           </View>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={S.chipsContent}
-          style={S.chipsScroll}
-        >
-          {isHost && (
-            <Pressable
-              style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
+        {isHost && challenges.length === 0 && !showGuestbook ? (
+          <View style={S.challengesEmptyBannerWrap}>
+            <ChallengesEmptyCard
               onPress={handleAddChallenge}
-              accessibilityRole="button"
-              accessibilityLabel="Add new challenge"
-              hitSlop={10}
-            >
-              <View style={S.chipAddOuter}>
-                <AppText style={S.chipAddPlus}>+</AppText>
-              </View>
-              <AppText style={S.chipLabel} numberOfLines={2}>Add new{'\n'}challenge</AppText>
-            </Pressable>
-          )}
-
+              hasSiblingChip={false}
+            />
+          </View>
+        ) : (showGuestbook || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[
+              S.chipsContent,
+              isHost && challenges.length === 0 && { gap: GALLERY_PADDING },
+            ]}
+            style={S.chipsScroll}
+          >
             {showGuestbook && (
               <Pressable
                 style={({ pressed }) => [S.chipWrap, pressed && { opacity: 0.75 }]}
@@ -3329,6 +3322,13 @@ function EventDetailView({
                 </LinearGradient>
                 <AppText style={S.chipLabel} numberOfLines={2}>Guestbook</AppText>
               </Pressable>
+            )}
+
+            {isHost && challenges.length === 0 && (
+              <ChallengesEmptyCard
+                onPress={handleAddChallenge}
+                hasSiblingChip={showGuestbook}
+              />
             )}
 
             {challenges.map((challenge) => (
@@ -3360,6 +3360,7 @@ function EventDetailView({
               </Pressable>
             ))}
           </ScrollView>
+        ) : null}
 
           {(() => {
             const visiblePhotos = photos
@@ -4327,6 +4328,11 @@ function EventDetailView({
         </View>
       </Modal>
 
+      <ChallengePacksIntroModal
+        visible={challengePacksIntroVisible}
+        onGetStarted={() => void handleChallengePacksGetStarted()}
+      />
+
       <EventRevealModal
         visible={reveal.visible}
         state={reveal.state}
@@ -4483,6 +4489,11 @@ const S = StyleSheet.create({
   chipsScroll: {
     marginTop: 16,
   },
+  challengesEmptyBannerWrap: {
+    paddingHorizontal: GALLERY_PADDING,
+    marginTop: 16,
+    paddingBottom: spacing.xs,
+  },
   chipsContent: {
     paddingLeft: GALLERY_PADDING,     // Aligns first circle perfectly with left edge of gallery below
     paddingRight: GALLERY_PADDING,
@@ -4491,7 +4502,7 @@ const S = StyleSheet.create({
   },
   chipWrap: {
     alignItems: 'center',
-    width: CHIP_D + 6,
+    width: CHIP_D,
     gap: 8,
   },
 

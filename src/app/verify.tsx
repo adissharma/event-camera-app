@@ -16,7 +16,7 @@ const RESEND_COOLDOWN_SECONDS = 30;
 
 export default function VerifyScreen() {
   const router = useRouter();
-  const { email } = useLocalSearchParams<{ email: string }>();
+  const { email, redirect } = useLocalSearchParams<{ email: string; redirect?: string }>();
   const { verifyCode, requestCode } = useAuth();
   const inputRef = useRef<TextInput>(null);
 
@@ -25,9 +25,6 @@ export default function VerifyScreen() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(RESEND_COOLDOWN_SECONDS);
 
-  // A cooldown rather than an always-available resend: the provider rate-limits
-  // sends, and a user tapping twice would burn their remaining allowance and
-  // then be told to wait far longer.
   useEffect(() => {
     if (cooldown <= 0) return;
     const timer = setTimeout(() => setCooldown((value) => value - 1), 1000);
@@ -44,21 +41,24 @@ export default function VerifyScreen() {
 
     if (!result.ok) {
       setError(result.error.message);
-      // Clear on failure so the next attempt starts clean rather than requiring
-      // the user to delete six characters first.
       setCode('');
       inputRef.current?.focus();
       return;
     }
 
-    // Ask for a first name once, and only if we do not already have one. It
-    // powers the event-name suggestions; a returning host is never asked again.
+    // Check if user has a first name
     try {
       const profile = await fetchMyProfile();
-      router.replace(firstNameFrom(profile) ? '/home' : '/your-name');
+      if (firstNameFrom(profile)) {
+        router.replace((redirect as never) || '/home');
+      } else {
+        router.replace({
+          pathname: '/your-name',
+          params: redirect ? { redirect } : undefined,
+        });
+      }
     } catch {
-      // Never block sign-in on this — the name is a nicety, not a requirement.
-      router.replace('/home');
+      router.replace((redirect as never) || '/home');
     }
   }
 
@@ -102,8 +102,6 @@ export default function VerifyScreen() {
             const digits = next.replace(/\D/g, '').slice(0, CODE_LENGTH);
             setCode(digits);
             if (error) setError(undefined);
-            // Auto-submit on the last digit. Saves a tap on the single most
-            // repeated action in the app.
             if (digits.length === CODE_LENGTH) void submit(digits);
           }}
           error={error}
@@ -113,7 +111,6 @@ export default function VerifyScreen() {
           maxLength={CODE_LENGTH}
           editorial
           autoFocus
-          // Wide tracking makes six digits scannable as a group.
           inputStyle={{ letterSpacing: 8 }}
         />
 

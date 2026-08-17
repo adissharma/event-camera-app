@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
@@ -11,24 +11,23 @@ import { profileKeys, updateDisplayName } from '@/services/profile';
 import { layout, spacing } from '@/design';
 
 /**
- * Asked once, immediately after the code is verified.
+ * Asked once, immediately after authentication if display name is missing.
  *
- * The only reason this exists is to personalise the event-name suggestions —
- * "Priya's birthday" rather than a generic list. That is a real payoff for one
- * short question, and it is the last thing standing between sign-in and the
- * app, so it must be skippable: a host who taps past it loses suggestions, not
- * access.
+ * Used to personalise event names. Skippable so a host is never blocked.
  */
 export default function YourNameScreen() {
   const router = useRouter();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
+
+  const targetPath = (redirect as never) || '/home';
 
   const save = useMutation({
     mutationFn: () => updateDisplayName(name),
     onSettled: async () => {
       await queryClient.invalidateQueries({ queryKey: profileKeys.me() });
-      router.replace('/home');
+      router.replace(targetPath);
     },
   });
 
@@ -46,7 +45,7 @@ export default function YourNameScreen() {
             haptic
             onPress={() => save.mutate()}
           />
-          <Button label="Skip" variant="quiet" onPress={() => router.replace('/home')} />
+          <Button label="Skip" variant="quiet" onPress={() => router.replace(targetPath)} />
         </View>
       }
     >

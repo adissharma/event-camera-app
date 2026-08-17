@@ -33,6 +33,7 @@ import {
   CHALLENGE_BRIEFS as SHARED_CHALLENGE_BRIEFS,
   ChallengeIconSVG as SharedChallengeIconSVG,
 } from '@/features/celebrations/challenge-icons';
+import { ChallengesEmptyState } from '@/features/celebrations/challenges-empty-state';
 
 // ── Models & Presets ──
 
@@ -56,19 +57,6 @@ const DRAG_SPRING_CONFIG = {
   tension: 140,
   friction: 16,
 } as const;
-
-const DEFAULT_CHALLENGES: Challenge[] = [
-  { id: 'c1', label: 'First Dance',      icon: 'firstDance' },
-  { id: 'c2', label: 'Wedding Rings',    icon: 'rings' },
-  { id: 'c3', label: 'Best Group Photo', icon: 'group' },
-  { id: 'c4', label: 'Decor Details',    icon: 'decor' },
-  { id: 'c5', label: 'Candlelight',      icon: 'candle' },
-  { id: 'c6', label: 'Cake Moment',      icon: 'cake' },
-  { id: 'c7', label: 'Bouquet Toss',     icon: 'bouquet' },
-  { id: 'c8', label: 'Toasts & Cheers',  icon: 'champagne' },
-  { id: 'c9', label: 'Gift Moment',      icon: 'gift' },
-  { id: 'c10', label: 'Confetti Exit',   icon: 'confetti' },
-];
 
 function DragHandleIcon({ size = 20, color = 'rgba(255, 255, 255, 0.4)' }) {
   return (
@@ -201,10 +189,7 @@ export default function ViewChallengesScreen() {
   const loadChallenges = useCallback(async () => {
     try {
       if (isBackendConfigured) {
-        const remote = await listChallenges(
-          String(celebrationId),
-          DEFAULT_CHALLENGES.map((item) => ({ label: item.label, icon: item.icon })),
-        );
+        const remote = await listChallenges(String(celebrationId));
         if (remote) {
           applyChallenges(
             remote.map((item) => ({
@@ -220,9 +205,9 @@ export default function ViewChallengesScreen() {
       }
 
       const stored = await AsyncStorage.getItem(legacyChallengesKey(String(celebrationId)));
-      applyChallenges(stored ? (JSON.parse(stored) as Challenge[]) : [...DEFAULT_CHALLENGES]);
+      applyChallenges(stored ? (JSON.parse(stored) as Challenge[]) : []);
     } catch {
-      applyChallenges([...DEFAULT_CHALLENGES]);
+      applyChallenges([]);
     } finally {
       setLoading(false);
     }
@@ -333,6 +318,14 @@ export default function ViewChallengesScreen() {
     finishDrag(id);
   }, [finishDrag]);
 
+  // Settings → Challenges is the permanent, always-available path back into
+  // Challenge Packs — the one-time intro is specific to the event page's
+  // first-run empty state and never resurfaces here, so this jumps straight
+  // to the packs browser every time.
+  function handleAddChallenges() {
+    router.push(`/celebration/${celebrationId}/challenges/packs` as never);
+  }
+
   if (loading) {
     return (
       <Screen scrollable={false}>
@@ -365,33 +358,42 @@ export default function ViewChallengesScreen() {
         <View style={{ width: 44 }} />
       </View>
 
-      {/* Recommended progress card */}
-      <View style={S.progressWrapper}>
-        <View style={S.progressCard}>
-          <View style={{ gap: spacing.xxs }}>
-            <AppText variant="titleMedium" style={S.progressTitle}>Make it more fun</AppText>
-            <AppText variant="bodySmall" tone="secondary">
-              Add at least 5 challenges to give your guests plenty to capture.
+      {challenges.length === 0 ? (
+        <View style={S.emptyWrapper}>
+          <ChallengesEmptyState onPress={handleAddChallenges} />
+        </View>
+      ) : (
+        <>
+          {/* Recommended progress card */}
+          <View style={S.progressWrapper}>
+            <View style={S.progressCard}>
+              <View style={{ gap: spacing.xxs }}>
+                <AppText variant="titleMedium" style={S.progressTitle}>Make it more fun</AppText>
+                <AppText variant="bodySmall" tone="secondary">
+                  Add at least 5 challenges to give your guests plenty to capture.
+                </AppText>
+              </View>
+
+              <View style={S.progressBarContainer}>
+                <View style={[S.progressBar, { width: `${progressRatio * 100}%` }]} />
+              </View>
+
+              <AppText variant="caption" tone="secondary" style={S.progressLabel}>
+                {recommendedCount} of 5 recommended challenges added
+              </AppText>
+            </View>
+          </View>
+
+          <View style={S.challengeCountWrap}>
+            <AppText variant="titleSmall" style={S.challengeCountTitle}>
+              {challenges.length} challenge{challenges.length === 1 ? '' : 's'} created
             </AppText>
           </View>
-          
-          <View style={S.progressBarContainer}>
-            <View style={[S.progressBar, { width: `${progressRatio * 100}%` }]} />
-          </View>
-
-          <AppText variant="caption" tone="secondary" style={S.progressLabel}>
-            {recommendedCount} of 5 recommended challenges added
-          </AppText>
-        </View>
-      </View>
-
-      <View style={S.challengeCountWrap}>
-        <AppText variant="titleSmall" style={S.challengeCountTitle}>
-          {challenges.length} challenge{challenges.length === 1 ? '' : 's'} created
-        </AppText>
-      </View>
+        </>
+      )}
 
       {/* Challenges list */}
+      {challenges.length > 0 && (
       <ScrollView
         scrollEnabled={activeDragId === null}
         contentContainerStyle={S.listContainer}
@@ -447,8 +449,10 @@ export default function ViewChallengesScreen() {
           })}
         </View>
       </ScrollView>
+      )}
 
       {/* Sticky Bottom button */}
+      {challenges.length > 0 && (
       <View style={S.footer}>
         {limitReached ? (
           <AppText variant="caption" tone="warning" style={S.footerNote}>
@@ -456,10 +460,10 @@ export default function ViewChallengesScreen() {
           </AppText>
         ) : null}
         <Button
-          label="Add New Challenge"
+          label="Add Challenge"
           onPress={() => {
             if (limitReached) return;
-            router.push(`/celebration/${celebrationId}/challenges/new`);
+            handleAddChallenges();
           }}
           haptic
           fullWidth
@@ -467,6 +471,7 @@ export default function ViewChallengesScreen() {
           disabledReason="You can't add more than 10 challenges."
         />
       </View>
+      )}
     </Screen>
   );
 }
@@ -499,6 +504,10 @@ const S = StyleSheet.create({
   headerTitle: {
     color: '#FFFFFF',
     fontFamily: 'InstrumentSans_600SemiBold',
+  },
+  emptyWrapper: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.xl,
   },
   progressWrapper: {
     paddingHorizontal: spacing.md,

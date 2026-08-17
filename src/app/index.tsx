@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -8,39 +8,39 @@ import { BrandLogo } from '@/components/brand/brand-logo';
 import GrainGradientBackground from '../components/media/grain-gradient-background';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
+import { AppText } from '@/components/ui/text';
+import {
+  AppleSignInButton,
+  GoogleSignInButton,
+  EmailSignInButton,
+} from '@/components/auth/auth-buttons';
+import { useAuth } from '@/features/auth/context';
 import { listCelebrations } from '@/services/celebrations';
-import { colours, layout, spacing, useMotion } from '@/design';
+import { fetchMyProfile, firstNameFrom } from '@/services/profile';
+import { colours, layout, radii, spacing, useMotion } from '@/design';
 import { copy } from '@/i18n';
 
 /**
  * Welcome — the first screen on a cold start.
- *
- * Composition notes, because this screen sets the tone for everything else:
- *
- * - **The shader is the screen.** No panel, no card, no stacked layout. The
- *   background runs edge to edge and the only things on top of it are the mark
- *   and the two actions. Restraint is what reads as expensive here; a headline
- *   and a paragraph would compete with the motion behind them and win, and the
- *   product would look like a brochure rather than a door.
- * - **Centred, not ranged left.** With the type gone there is nothing to hang a
- *   left margin off, and a lone mark ranged left reads as unfinished rather
- *   than deliberate. Dead-centre against a moving field is the composition that
- *   holds still.
- * - **The mark sits in the optical centre of the free space**, above the
- *   actions rather than the geometric middle of the screen — the actions carry
- *   real visual weight at the bottom, so a true centre would look low.
- * - **The scrim only works the bottom third.** It exists to keep the actions
- *   legible, not to darken the artwork, so the ramp starts well below the mark
- *   and the shader stays fully visible above it.
- * - The primary action is ivory, not a colour.
  */
 export default function WelcomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const motion = useMotion();
+  const { isSignedIn, isRestoring, signInWithApple, signInWithGoogle, isBackendConfigured } = useAuth();
+
+  const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
     let active = true;
+
+    if (!isRestoring && isSignedIn && active) {
+      router.replace('/home');
+      return;
+    }
+
     async function checkExistingEvents() {
       try {
         const list = await listCelebrations();
@@ -51,19 +51,69 @@ export default function WelcomeScreen() {
         console.warn('Failed to check existing celebrations in welcome screen:', e);
       }
     }
-    void checkExistingEvents();
+
+    if (!isRestoring) {
+      void checkExistingEvents();
+    }
+
     return () => {
       active = false;
     };
-  }, [router]);
+  }, [router, isSignedIn, isRestoring]);
+
+  async function handlePostSignIn() {
+    try {
+      const profile = await fetchMyProfile();
+      if (firstNameFrom(profile)) {
+        router.replace('/home');
+      } else {
+        router.replace('/your-name');
+      }
+    } catch {
+      router.replace('/home');
+    }
+  }
+
+  async function handleAppleSignIn() {
+    setError(undefined);
+    setIsAppleLoading(true);
+    try {
+      const result = await signInWithApple();
+      if (!result.ok) {
+        if (result.error.code !== 'cancelled') {
+          setError(result.error.message);
+        }
+        return;
+      }
+      await handlePostSignIn();
+    } catch (e) {
+      setError('Could not complete Apple sign in. Please try again.');
+    } finally {
+      setIsAppleLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setError(undefined);
+    setIsGoogleLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (!result.ok) {
+        if (result.error.code !== 'cancelled') {
+          setError(result.error.message);
+        }
+        return;
+      }
+      await handlePostSignIn();
+    } catch (e) {
+      setError('Could not complete Google sign in. Please try again.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: colours.background }}>
-      {/* Wallpaper. The shader runs inside a webview, which is a real native
-          view and would otherwise swallow the taps meant for the buttons
-          layered above it — hence `pointerEvents="none"` on the wrapper rather
-          than relying on z-order alone. Hidden from assistive tech for the same
-          reason the video was: the meaning on this screen lives in the text. */}
       <View
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
@@ -71,9 +121,6 @@ export default function WelcomeScreen() {
         importantForAccessibility="no-hide-descendants"
       >
         <GrainGradientBackground
-          // A background that moves indefinitely is exactly what WCAG 2.2.2
-          // covers. Freezing the shader holds the composition rather than
-          // swapping reduce-motion users onto a visibly poorer screen.
           speed={motion.reduceMotion ? 0 : 1}
           dom={{
             scrollEnabled: false,
@@ -81,12 +128,10 @@ export default function WelcomeScreen() {
           }}
         />
       </View>
-      {/* Legibility scrim for the actions only. The ramp is pushed down the
-          screen (vs. the old 0/0.45/0.82 tuned for video) so the mark and the
-          shader above it stay untouched. */}
+
       <LinearGradient
         colors={colours.imageScrim}
-        locations={[0.42, 0.74, 1]}
+        locations={[0.25, 0.65, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
@@ -95,35 +140,69 @@ export default function WelcomeScreen() {
         style={{
           flex: 1,
           paddingTop: insets.top,
-          paddingBottom: insets.bottom + spacing.xl,
+          paddingBottom: insets.bottom + spacing.base,
           paddingHorizontal: layout.gutter,
           justifyContent: 'space-between',
         }}
       >
-        {/* The mark sits higher on the screen now, with a little more presence. */}
         <View style={{ alignItems: 'center', justifyContent: 'flex-start', paddingTop: spacing.md }}>
           <Reveal index={0} step={70}>
             <BrandLogo height={52} variant="light" />
           </Reveal>
         </View>
 
-        <View style={{ gap: spacing.xs, paddingBottom: spacing.sm }}>
+        <View style={{ gap: spacing.sm }}>
+          {error ? (
+            <View style={S.errorBanner}>
+              <AppText variant="bodySmall" style={S.errorText}>
+                {error}
+              </AppText>
+            </View>
+          ) : null}
+
           <Reveal index={1} step={70} style={{ gap: spacing.xs }}>
-            <Button
-              label={copy.welcome.joinEvent}
-              haptic
-              labelStyle={{ fontSize: 20, lineHeight: 25 }}
-              onPress={() => router.push('/j')}
+            <AppleSignInButton
+              onPress={handleAppleSignIn}
+              loading={isAppleLoading}
+              disabled={isGoogleLoading || !isBackendConfigured}
             />
-          <Button
-            label={copy.welcome.signUp}
-            variant="quiet"
-            labelStyle={{ fontSize: 17, lineHeight: 21 }}
-            onPress={() => router.push('/sign-in')}
-          />
+
+            <GoogleSignInButton
+              onPress={handleGoogleSignIn}
+              loading={isGoogleLoading}
+              disabled={isAppleLoading || !isBackendConfigured}
+            />
+
+            <EmailSignInButton
+              onPress={() => router.push('/sign-in')}
+              disabled={isAppleLoading || isGoogleLoading}
+            />
+
+            <View style={{ paddingTop: spacing.xs }}>
+              <Button
+                label={copy.welcome.joinEvent}
+                variant="quiet"
+                labelStyle={{ fontSize: 16, lineHeight: 20 }}
+                onPress={() => router.push('/j')}
+              />
+            </View>
           </Reveal>
         </View>
       </View>
     </View>
   );
 }
+
+const S = StyleSheet.create({
+  errorBanner: {
+    padding: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderWidth: layout.hairline,
+    marginBottom: spacing.xs,
+  },
+  errorText: {
+    color: '#F87171',
+  },
+});

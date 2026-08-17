@@ -197,23 +197,8 @@ function EventCardTile({
     }).start();
   }, [fadeAnim, index]);
 
-  // The host's own cover, resolved the same way every other surface resolves
-  // it. This used to call `getPublicUrl` against `celebration-covers`, which
-  // is a private bucket — the URL it produced could never load, so a real
-  // uploaded cover rendered as a broken image behind the card's gradient.
-  const resolvedCover = useCoverSource(celebration.coverStoragePath);
-
-  // Fallbacks assigned by list index for visual diversity.
-  let coverSource = PLACEHOLDERS[index % PLACEHOLDERS.length];
-  if (celebration.coverStoragePath && resolvedCover !== FALLBACK_COVER) {
-    coverSource = resolvedCover as typeof coverSource;
-  } else if (!celebration.coverStoragePath) {
-    // Custom overrides based on event title text for rich wedding layout previews
-    const titleLower = celebration.title.toLowerCase();
-    if (titleLower.includes('wedding') || titleLower.includes('marriage')) {
-      coverSource = PLACEHOLDERS[1]; // hindu_wedding or christian_wedding
-    }
-  }
+  // The host's own cover, resolved via useCoverSource (falls back to FALLBACK_COVER)
+  const coverSource = useCoverSource(celebration.coverStoragePath);
 
   // Resolve theme design tokens
   const theme = (themes ?? []).find(
@@ -288,12 +273,19 @@ export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
-  const { session, signOut, isBackendConfigured } = useAuth();
+  const { session, signOut, isSignedIn, isRestoring, isBackendConfigured } = useAuth();
   
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [profileModalVisible, setProfileModalVisible] = useState(false);
   const [scannerModalVisible, setScannerModalVisible] = useState(false);
   const [manualCode, setManualCode] = useState('');
+
+  // Redirect to sign-in if not authenticated
+  useEffect(() => {
+    if (isBackendConfigured && !isRestoring && !isSignedIn) {
+      router.replace('/sign-in');
+    }
+  }, [isBackendConfigured, isRestoring, isSignedIn, router]);
 
   // Scanning laser animation
   const scanLineAnim = useState(() => new Animated.Value(0))[0];

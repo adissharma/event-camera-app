@@ -10,16 +10,20 @@ import {
 
 import { isBackendConfigured } from '@/lib/supabase/client';
 import { supabaseAuthProvider } from './supabase-provider';
-import type { AuthProvider, AuthResult, AuthSession } from './types';
+import type { AuthProvider, AuthResult, AuthSession, AuthUser } from './types';
 
 interface AuthContextValue {
   session: AuthSession | null;
+  user: AuthUser | null;
   /** True until the persisted session has been checked on cold start. */
   isRestoring: boolean;
   isSignedIn: boolean;
   isBackendConfigured: boolean;
+  isAppleAuthAvailable: boolean;
   requestCode: (email: string) => Promise<AuthResult<void>>;
   verifyCode: (email: string, code: string) => Promise<AuthResult<AuthSession>>;
+  signInWithApple: () => Promise<AuthResult<AuthSession>>;
+  signInWithGoogle: () => Promise<AuthResult<AuthSession>>;
   signOut: () => Promise<void>;
 }
 
@@ -37,9 +41,15 @@ export function AuthContextProvider({
 }: AuthContextProviderProps) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [isAppleAuthAvailable, setIsAppleAuthAvailable] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
+
+    // Check Apple Auth availability
+    provider.isAppleAuthAvailable().then((avail) => {
+      if (!cancelled) setIsAppleAuthAvailable(avail);
+    });
 
     // Restore before rendering any protected route, so a signed-in user does
     // not see the welcome screen flash past on every cold start.
@@ -49,16 +59,13 @@ export function AuthContextProvider({
         if (!cancelled) setSession(restored);
       })
       .catch(() => {
-        // A failed restore is treated as signed out. Better to ask someone to
-        // sign in again than to leave them in a broken half-authenticated state.
         if (!cancelled) setSession(null);
       })
       .finally(() => {
         if (!cancelled) setIsRestoring(false);
       });
 
-    // Also covers token refresh and server-side expiry, so a session that dies
-    // while the app is open redirects rather than failing every request.
+    // Covers token refresh and server-side expiry
     const unsubscribe = provider.onSessionChange((next) => {
       if (!cancelled) setSession(next);
     });
@@ -83,6 +90,18 @@ export function AuthContextProvider({
     [provider],
   );
 
+  const signInWithApple = useCallback(async () => {
+    const result = await provider.signInWithApple();
+    if (result.ok) setSession(result.value);
+    return result;
+  }, [provider]);
+
+  const signInWithGoogle = useCallback(async () => {
+    const result = await provider.signInWithGoogle();
+    if (result.ok) setSession(result.value);
+    return result;
+  }, [provider]);
+
   const signOut = useCallback(async () => {
     await provider.signOut();
     setSession(null);
@@ -91,14 +110,27 @@ export function AuthContextProvider({
   const value = useMemo<AuthContextValue>(
     () => ({
       session,
+      user: session?.user ?? null,
       isRestoring,
       isSignedIn: session !== null,
       isBackendConfigured,
+      isAppleAuthAvailable,
       requestCode,
       verifyCode,
+      signInWithApple,
+      signInWithGoogle,
       signOut,
     }),
-    [session, isRestoring, requestCode, verifyCode, signOut],
+    [
+      session,
+      isRestoring,
+      isAppleAuthAvailable,
+      requestCode,
+      verifyCode,
+      signInWithApple,
+      signInWithGoogle,
+      signOut,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
