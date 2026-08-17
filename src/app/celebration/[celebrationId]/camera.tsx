@@ -68,6 +68,7 @@ import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
 import { useCameraAccess } from '@/features/media/camera-status';
 import { useMicrophoneStatus } from '@/features/media/microphone-status';
+import { useVisualViewportOffset } from '@/features/media/use-visual-viewport-offset';
 import { compressVideoForUpload } from '@/features/media/video-compression';
 import { generateVideoThumbnail } from '@/features/media/video-thumbnail';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
@@ -762,9 +763,30 @@ export default function CameraScreen() {
    * React Native's own `position` type; the runtime forwards it straight
    * through to CSS on web, verified directly against the rendered DOM node
    * before this was applied here.
+   *
+   * `top`/`left` come from `useVisualViewportOffset` rather than a plain
+   * `0`, to cover the one thing `useWindowDimensions` cannot: while the
+   * caption input is focused, iOS Safari pans the visual viewport up to
+   * keep it clear of the keyboard WITHOUT necessarily changing its width or
+   * height, which `useWindowDimensions` never observes at all (see that
+   * hook's own doc comment for why). Without tracking the pan too, this
+   * `fixed` element stayed anchored to where the layout viewport begins —
+   * now hidden behind the keyboard — while the actually-visible area slid
+   * up over it, which is what read as the preview "shifting" and leaving
+   * blank space during focus. Offsetting by the same amount keeps it
+   * pinned to the real visible area throughout, and both values return to
+   * `0` on their own the moment the keyboard closes, so there is nothing
+   * left to explicitly restore.
    */
+  const previewViewportOffset = useVisualViewportOffset();
   const fullScreenPreviewStyle = isWeb
-    ? ({ position: 'fixed', top: 0, left: 0, width: screenWidth, height: screenHeight } as any)
+    ? ({
+        position: 'fixed',
+        top: previewViewportOffset.top,
+        left: previewViewportOffset.left,
+        width: screenWidth,
+        height: screenHeight,
+      } as any)
     : StyleSheet.absoluteFill;
 
   // ── Handlers ──
