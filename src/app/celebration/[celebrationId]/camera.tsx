@@ -149,11 +149,23 @@ function getPreferredWebRecorderMimeType(): string | undefined {
 function InlineVideoPreview({ uri, autoPlay = false }: { uri: string; autoPlay?: boolean }) {
   const player = useVideoPlayer({ uri }, (instance) => {
     instance.loop = false;
-    instance.muted = false;
     if (autoPlay) {
+      // Mobile browsers routinely block a non-muted, programmatic play()
+      // call unless it runs synchronously inside a direct user gesture —
+      // and mounting this preview after a recording stops never qualifies,
+      // even though a real gesture (tapping stop) triggered it moments
+      // earlier. Starting muted is the standard, reliable way around that:
+      // the browser always permits a muted autoplay. Unmuting immediately
+      // after succeeds on most engines, since the video is already playing
+      // on a screen the guest is actively interacting with; on the few
+      // engines that still hold it muted, it simply stays muted with the
+      // native controls' own volume button right there to unmute manually.
+      instance.muted = true;
       instance.play();
+      instance.muted = false;
       return;
     }
+    instance.muted = false;
     instance.pause();
   });
 
@@ -726,6 +738,35 @@ export default function CameraScreen() {
   const deltaX = targetCenterX - startCenterX;
   const deltaY = targetCenterY - startCenterY;
 
+  /**
+   * The photo/video preview overlay's outer container, on web only.
+   *
+   * `StyleSheet.absoluteFill` is `position: absolute`, which fills the
+   * nearest positioned ancestor — not the viewport. On native that ancestor
+   * is this screen's own root, which is always exactly the device screen, so
+   * it works. On web this screen is presented via expo-router's
+   * `transparentModal`, and that ancestor chain does not reliably resolve to
+   * the CURRENT viewport on a mobile browser as the URL bar shows and hides,
+   * which is what left a visible gap at the bottom instead of true
+   * full-screen coverage.
+   *
+   * `position: 'fixed'` sized from `useWindowDimensions` (already used for
+   * the live viewfinder just above, and reactive to the same resize/
+   * `visualViewport` events) is the fix — and is not a new technique for
+   * this app: it is exactly what `react-native-web`'s own `<Modal>` uses
+   * internally for this exact reason (`ModalContent.js`), which is why
+   * screens rendered inside a real `<Modal>` elsewhere in this app (the
+   * Recap viewer, `InviteShareSheet`) never had this problem — this
+   * overlay is a plain `View` in the normal render tree, not a `Modal`, so
+   * it never got that for free. `as any` only because `'fixed'` is outside
+   * React Native's own `position` type; the runtime forwards it straight
+   * through to CSS on web, verified directly against the rendered DOM node
+   * before this was applied here.
+   */
+  const fullScreenPreviewStyle = isWeb
+    ? ({ position: 'fixed', top: 0, left: 0, width: screenWidth, height: screenHeight } as any)
+    : StyleSheet.absoluteFill;
+
   // ── Handlers ──
 
   /**
@@ -1052,6 +1093,11 @@ export default function CameraScreen() {
           width: effectivePreview.width ?? undefined,
           height: effectivePreview.height ?? undefined,
           durationMs: effectivePreview.durationMs,
+          // A plain gallery video reached `undefined` here even when a
+          // caption was typed — `commitPhoto` already sends a bare
+          // `{ caption }` for an ordinary photo with no `submission_kind`
+          // at all, so the backend accepts that shape; video just never
+          // took the same branch.
           metadata: effectivePreview.challengeId
             ? {
                 challenge_id: effectivePreview.challengeId,
@@ -1060,7 +1106,9 @@ export default function CameraScreen() {
               }
             : effectivePreview.guestbook
               ? { submission_kind: 'guestbook' }
-              : undefined,
+              : trimmedCaption
+                ? { caption: trimmedCaption }
+                : undefined,
           thumbnailLocalUri: videoThumbnail?.uri,
           thumbnailMimeType: videoThumbnail?.mimeType,
         });
@@ -1080,6 +1128,11 @@ export default function CameraScreen() {
           width: effectivePreview.width ?? undefined,
           height: effectivePreview.height ?? undefined,
           durationMs: effectivePreview.durationMs,
+          // A plain gallery video reached `undefined` here even when a
+          // caption was typed — `commitPhoto` already sends a bare
+          // `{ caption }` for an ordinary photo with no `submission_kind`
+          // at all, so the backend accepts that shape; video just never
+          // took the same branch.
           metadata: effectivePreview.challengeId
             ? {
                 challenge_id: effectivePreview.challengeId,
@@ -1088,7 +1141,9 @@ export default function CameraScreen() {
               }
             : effectivePreview.guestbook
               ? { submission_kind: 'guestbook' }
-              : undefined,
+              : trimmedCaption
+                ? { caption: trimmedCaption }
+                : undefined,
           thumbnailLocalUri: videoThumbnail?.uri,
           thumbnailMimeType: videoThumbnail?.mimeType,
         });
@@ -1178,6 +1233,8 @@ export default function CameraScreen() {
         router.replace(galleryTarget as never);
       }
 
+      setVideoPreview(null);
+      setGalleryCaption('');
       deleteLocalVideo(effectivePreview.uri, 'posting');
     } catch (error) {
       console.error('Failed to upload video:', error);
@@ -2044,14 +2101,22 @@ export default function CameraScreen() {
           },
         ]}
       >
-        <Pressable 
-          onPress={() => router.back()} 
-          style={S.headerBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <CloseChevron />
-        </Pressable>
+        {/* Hidden while a video is actively recording, same as the Photos
+            button below — this is the header's exit control, and with it
+            gone the shutter is the only way to stop a take. A same-sized
+            spacer keeps the centred title from shifting. */}
+        {isRecording && captureType === 'video' ? (
+          <View style={S.headerBtn} />
+        ) : (
+          <Pressable
+            onPress={() => router.back()}
+            style={S.headerBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+          >
+            <CloseChevron />
+          </Pressable>
+        )}
 
         <View style={S.headerTitleGroup}>
           <AppText style={S.headerTitle} numberOfLines={1}>
@@ -2264,7 +2329,7 @@ export default function CameraScreen() {
       </View>
 
       {videoPreview ? (
-        <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
+        <View style={[fullScreenPreviewStyle, S.challengePreviewOverlay]}>
           {videoPreview.kind === 'audio' ? (
             <AudioWaveformPlayer
               uri={videoPreview.uri}
@@ -2273,7 +2338,10 @@ export default function CameraScreen() {
             />
           ) : (
             <>
-              <InlineVideoPreview uri={videoPreview.uri} />
+              {/* `autoPlay` is web-only by explicit instruction — native's
+                  call site is untouched here, so its behaviour cannot
+                  change. */}
+              <InlineVideoPreview uri={videoPreview.uri} autoPlay={isWeb} />
               <View style={S.challengePreviewScrim} pointerEvents="none" />
             </>
           )}
@@ -2293,13 +2361,25 @@ export default function CameraScreen() {
             </Pressable>
           </View>
           <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
-            {Boolean(videoPreview.challengeId) && (
+            {/*
+              Extends the challenge-only caption input to a plain gallery
+              video too — the one video kind that never got one. Guestbook
+              messages and audio stay excluded, same as before: a Guestbook
+              entry has no caption field anywhere else in the product, and
+              there is nothing to caption on an audio waveform.
+
+              Challenge and gallery keep their own caption state rather than
+              sharing one, matching how `challengeCaption`/`galleryCaption`
+              already work for photos — switching preview screens (e.g. via
+              Retake) never leaks one caption into the other's input.
+            */}
+            {videoPreview.kind !== 'audio' && !videoPreview.guestbook && (
               <View style={S.captionInputContainer}>
                 <View style={S.captionInputBox}>
                   <TextInput
                     style={S.captionTextInput}
-                    value={challengeCaption}
-                    onChangeText={setChallengeCaption}
+                    value={videoPreview.challengeId ? challengeCaption : galleryCaption}
+                    onChangeText={videoPreview.challengeId ? setChallengeCaption : setGalleryCaption}
                     placeholder="Add an optional caption..."
                     placeholderTextColor="rgba(255, 255, 255, 0.45)"
                     maxLength={MAX_CAPTION_LENGTH}
@@ -2307,13 +2387,19 @@ export default function CameraScreen() {
                     returnKeyType="done"
                   />
                   <AppText style={S.captionCounterText}>
-                    {MAX_CAPTION_LENGTH - challengeCaption.length}
+                    {MAX_CAPTION_LENGTH -
+                      (videoPreview.challengeId ? challengeCaption : galleryCaption).length}
                   </AppText>
                 </View>
               </View>
             )}
             <Pressable
-              onPress={() => void commitVideo(videoPreview, challengeCaption)}
+              onPress={() =>
+                void commitVideo(
+                  videoPreview,
+                  videoPreview.challengeId ? challengeCaption : galleryCaption,
+                )
+              }
               disabled={isUploading}
               style={({ pressed }) => [
                 S.challengePreviewPrimaryBtn,
@@ -2330,7 +2416,7 @@ export default function CameraScreen() {
           </View>
         </View>
       ) : isChallengeCapture && challengePreviewUri ? (
-        <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
+        <View style={[fullScreenPreviewStyle, S.challengePreviewOverlay]}>
           <Image source={{ uri: challengePreviewUri }} style={S.challengePreviewImage} resizeMode="cover" />
           <View style={S.challengePreviewScrim} />
           <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
@@ -2383,7 +2469,7 @@ export default function CameraScreen() {
           </View>
         </View>
       ) : galleryPreviewUri ? (
-        <View style={[StyleSheet.absoluteFill, S.challengePreviewOverlay]}>
+        <View style={[fullScreenPreviewStyle, S.challengePreviewOverlay]}>
           <Image source={{ uri: galleryPreviewUri }} style={S.challengePreviewImage} resizeMode="cover" />
           <View style={S.challengePreviewScrim} />
           <View style={[S.challengePreviewTopActions, { top: insets.top + spacing.sm }]}>
