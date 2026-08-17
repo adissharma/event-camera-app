@@ -19,13 +19,17 @@
         "ITSAppUsesNonExemptEncryption": false,
         "NSSupportsLiveActivities": true,
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photo library so photos can be shared to Instagram.",
-        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos so they can be shared to Instagram."
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos so they can be shared to Instagram.",
+        "LSApplicationQueriesSchemes": [
+          "instagram",
+          "instagram-stories"
+        ]
       },
       "runtimeVersion": {
         "policy": "appVersion"
       }
     },
-      "android": {
+    "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -53,7 +57,10 @@
       ],
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ]
     },
     "web": {
@@ -114,6 +121,9 @@
     },
     "updates": {
       "url": "https://u.expo.dev/dd58ddcc-e04f-4ae4-a667-05bc4cd64a85"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
     }
   }
 }
