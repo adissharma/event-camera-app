@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import { isBackendConfigured } from '@/lib/supabase/client';
+import { queryClient } from '@/lib/query-client';
 import { supabaseAuthProvider } from './supabase-provider';
 import type { AuthProvider, AuthResult, AuthSession, AuthUser } from './types';
 
@@ -103,8 +104,12 @@ export function AuthContextProvider({
   }, [provider]);
 
   const signOut = useCallback(async () => {
-    await provider.signOut();
-    setSession(null);
+    try {
+      await provider.signOut();
+    } finally {
+      setSession(null);
+      queryClient.clear();
+    }
   }, [provider]);
 
   const value = useMemo<AuthContextValue>(

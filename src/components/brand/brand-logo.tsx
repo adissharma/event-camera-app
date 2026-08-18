@@ -6,7 +6,7 @@ import { BRAND_ASSETS, BRAND_CONFIG } from '@/config/brand';
 import { colours, layout, radii, spacing } from '@/design';
 import type { MediaBoxStyle } from '@/types/style';
 
-const STORIES_LOGO_ASPECT_RATIO = 1254 / 350;
+const STORIES_LOGO_ASPECT_RATIO = 1024 / 409;
 
 export interface BrandLogoProps {
   /** `primary` on light surfaces, `light` on imagery, `mark` where space is tight. */

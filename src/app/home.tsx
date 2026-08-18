@@ -280,10 +280,10 @@ export default function HomeScreen() {
   const [scannerModalVisible, setScannerModalVisible] = useState(false);
   const [manualCode, setManualCode] = useState('');
 
-  // Redirect to sign-in if not authenticated
+  // Redirect to welcome screen if not authenticated
   useEffect(() => {
     if (isBackendConfigured && !isRestoring && !isSignedIn) {
-      router.replace('/sign-in');
+      router.replace('/');
     }
   }, [isBackendConfigured, isRestoring, isSignedIn, router]);
 

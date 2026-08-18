@@ -34,7 +34,7 @@ export default function CreateLayout() {
   // redirecting during that window would kick out an already-signed-in host.
   useEffect(() => {
     if (isBackendConfigured && !isRestoring && !isSignedIn) {
-      router.replace('/sign-in' as never);
+      router.replace('/' as never);
     }
   }, [isBackendConfigured, isRestoring, isSignedIn, router]);
 

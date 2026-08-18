@@ -34,31 +34,9 @@ export default function WelcomeScreen() {
   const [error, setError] = useState<string | undefined>();
 
   useEffect(() => {
-    let active = true;
-
-    if (!isRestoring && isSignedIn && active) {
+    if (!isRestoring && isSignedIn) {
       router.replace('/home');
-      return;
     }
-
-    async function checkExistingEvents() {
-      try {
-        const list = await listCelebrations();
-        if (list.length > 0 && active) {
-          router.replace('/home');
-        }
-      } catch (e) {
-        console.warn('Failed to check existing celebrations in welcome screen:', e);
-      }
-    }
-
-    if (!isRestoring) {
-      void checkExistingEvents();
-    }
-
-    return () => {
-      active = false;
-    };
   }, [router, isSignedIn, isRestoring]);
 
   async function handlePostSignIn() {
@@ -160,7 +138,7 @@ export default function WelcomeScreen() {
             </View>
           ) : null}
 
-          <Reveal index={1} step={70} style={{ gap: spacing.xs }}>
+          <Reveal index={1} step={70} style={{ gap: spacing.md }}>
             <AppleSignInButton
               onPress={handleAppleSignIn}
               loading={isAppleLoading}

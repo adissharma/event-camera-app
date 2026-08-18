@@ -81,8 +81,16 @@ function classify(error: unknown): { code: AuthErrorCode; message: string } {
   if (raw.includes('email') && raw.includes('invalid')) {
     return { code: 'invalid_email', message: 'That email address does not look right.' };
   }
-  if (raw.includes('network') || raw.includes('fetch') || raw.includes('connection')) {
-    return { code: 'network', message: 'No connection. Check your network and try again.' };
+  if (
+    raw.includes('unsupported provider') ||
+    raw.includes('provider is not enabled') ||
+    raw.includes('unable to detect issuer') ||
+    (err.status === 400 && raw.includes('provider'))
+  ) {
+    return {
+      code: 'provider_error',
+      message: 'This sign-in provider is not enabled in your Supabase dashboard yet. Enable it under Authentication → Providers.',
+    };
   }
   if (raw.includes('provider') || raw.includes('oauth')) {
     return { code: 'provider_error', message: 'Could not connect with authentication provider.' };
