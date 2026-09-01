@@ -11,6 +11,7 @@ import type {
   PhotoTreatment,
   RevealMode,
 } from '@/types/database';
+import { resolveThemeId } from '@/services/themes';
 
 export interface EventMetrics {
   /** Guests who have joined. Not page views — a joined guest session. */
@@ -725,6 +726,8 @@ export interface EventSettingsPatch {
   photoTreatment?: PhotoTreatment;
   dateStampEnabled?: boolean;
   coverStoragePath?: string | null;
+  /** Theme slug or database id selected by the host. */
+  themeSlug?: string | null;
   captureMode?: CaptureMode;
 }
 
@@ -778,6 +781,9 @@ export async function updateEventSettings(
         if (patch.coverStoragePath !== undefined) {
           item.coverStoragePath = patch.coverStoragePath;
         }
+        if (patch.themeSlug !== undefined) {
+          item.defaultThemeId = patch.themeSlug;
+        }
         list[idx] = item;
         await AsyncStorage.setItem('__mock_celebrations', JSON.stringify(list));
       }
@@ -799,6 +805,15 @@ export async function updateEventSettings(
     const { error } = await client
       .from('celebrations')
       .update({ cover_storage_path: patch.coverStoragePath })
+      .eq('id', celebrationId);
+    if (error) throw error;
+  }
+
+  if (patch.themeSlug !== undefined) {
+    const themeId = await resolveThemeId(patch.themeSlug);
+    const { error } = await client
+      .from('celebrations')
+      .update({ default_theme_id: themeId })
       .eq('id', celebrationId);
     if (error) throw error;
   }

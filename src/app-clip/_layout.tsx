@@ -6,9 +6,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
-  InstrumentSerif_400Regular,
-  InstrumentSerif_400Regular_Italic,
-} from '@expo-google-fonts/instrument-serif';
+  Newsreader_400Regular,
+  Newsreader_400Regular_Italic,
+} from '@expo-google-fonts/newsreader';
 import {
   InstrumentSans_400Regular,
   InstrumentSans_500Medium,
@@ -42,8 +42,8 @@ import { AuthContextProvider } from '@/features/auth/context';
  */
 export default function AppClipLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    InstrumentSerif_400Regular,
-    InstrumentSerif_400Regular_Italic,
+    Newsreader_400Regular,
+    Newsreader_400Regular_Italic,
     InstrumentSans_400Regular,
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,

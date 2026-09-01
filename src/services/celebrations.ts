@@ -27,9 +27,15 @@ export interface CelebrationSummary {
   > | null;
 }
 
+export interface TrashedCelebrationSummary extends CelebrationSummary {
+  trashedAt: string;
+  deleteAfter: string;
+}
+
 export const celebrationKeys = {
   all: ['celebrations'] as const,
   list: () => [...celebrationKeys.all, 'list'] as const,
+  trash: () => [...celebrationKeys.all, 'trash'] as const,
   detail: (id: string) => [...celebrationKeys.all, 'detail', id] as const,
 };
 
@@ -96,4 +102,71 @@ export async function listCelebrations(): Promise<CelebrationSummary[]> {
     }
     return [];
   }
+}
+
+type TrashedCelebrationRpcRow = {
+  id: string;
+  title: string;
+  status: CelebrationRow['status'];
+  cover_storage_path: string | null;
+  public_slug: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  timezone: string;
+  default_theme_id: string | null;
+  deleted_at: string;
+  delete_after: string;
+  primary_session: Pick<
+    EventSessionRow,
+    'id' | 'name' | 'status' | 'ends_at' | 'reveal_at' | 'reveal_mode' | 'shot_limit_per_guest'
+  > | null;
+};
+
+export async function listTrashedCelebrations(): Promise<TrashedCelebrationSummary[]> {
+  if (!isBackendConfigured) {
+    return [];
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await (client.rpc as any)('list_trashed_celebrations');
+  if (error) throw error;
+
+  return ((data ?? []) as TrashedCelebrationRpcRow[]).map((row) => ({
+    id: row.id,
+    title: row.title,
+    status: row.status,
+    coverStoragePath: row.cover_storage_path,
+    publicSlug: row.public_slug,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    timezone: row.timezone,
+    defaultThemeId: row.default_theme_id,
+    primarySession: row.primary_session,
+    trashedAt: row.deleted_at,
+    deleteAfter: row.delete_after,
+  }));
+}
+
+export async function moveCelebrationToTrash(celebrationId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await (client.rpc as any)('move_celebration_to_trash', {
+    p_celebration_id: celebrationId,
+  });
+  if (error) throw error;
+}
+
+export async function restoreCelebrationFromTrash(celebrationId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await (client.rpc as any)('restore_celebration_from_trash', {
+    p_celebration_id: celebrationId,
+  });
+  if (error) throw error;
+}
+
+export async function permanentlyDeleteCelebration(celebrationId: string): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await (client.rpc as any)('permanently_delete_celebration', {
+    p_celebration_id: celebrationId,
+  });
+  if (error) throw error;
 }

@@ -1,19 +1,37 @@
+import { useState } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
 import { ExpandingSection } from '@/components/feedback/expanding-section';
 import { AppText } from '@/components/ui/text';
-import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, layout, radii, spacing } from '@/design';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
+import { CaptureLimitPreview } from '@/features/celebrations/creation/capture-limit-preview';
+import { useCoverSource } from '@/features/celebrations/cover-source';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { copy } from '@/i18n';
+import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
+import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
+import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 
 const LIMITED_COUNT_OPTIONS = [5, 10, 16, 24, 36] as const;
 const DEFAULT_LIMITED_COUNT = 16;
 
 export default function PhotoLimitStep() {
   const { draft, update } = useCreationDraft();
+  const coverSource = useCoverSource(draft.coverLocalUri ?? draft.coverStoragePath);
+
+  /*
+   * Present only when this step was opened from Manage Event, i.e. the event
+   * is already published and already on a package. During creation there is
+   * no id and no gate — the host chooses, and the paywall at the end prices
+   * what they chose.
+   */
+  const { celebrationId } = useLocalSearchParams<{ celebrationId?: string }>();
+  const entitlements = useEventEntitlements(celebrationId ?? null);
+  const unlimitedGated = Boolean(celebrationId) && !entitlements.has('unlimitedPhotos');
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const storedCount = draft.shotLimitPerGuest;
   const hasLimitedSelection = typeof storedCount === 'number' && Number.isFinite(storedCount);
@@ -28,6 +46,14 @@ export default function PhotoLimitStep() {
   }
 
   function selectUnlimited() {
+    // Intercepted before the write, never after. Applying it and rolling back
+    // on a cancelled purchase would briefly grant an allowance the event has
+    // not paid for, and this draft is saved as the host moves through it.
+    if (unlimitedGated) {
+      void Haptics.selectionAsync().catch(() => {});
+      setUpgradeOpen(true);
+      return;
+    }
     void Haptics.selectionAsync().catch(() => {});
     update({ shotLimitPerGuest: null });
   }
@@ -38,41 +64,65 @@ export default function PhotoLimitStep() {
       heading={copy.create.photoLimitHeading}
       scrollable={false}
     >
-      <View style={{ flex: 1, justifyContent: 'flex-end', gap: spacing.base }}>
-        <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
-          <CaptureModeCard
-            title={copy.create.photoLimitLimited}
-            description={copy.create.photoLimitLimitedDescription}
-            selected={selectedCaptureMode === 'limited'}
-            onPress={() => selectLimited()}
-            style={{ flex: 1 }}
-          />
-
-          <CaptureModeCard
-            title={copy.create.photoLimitUnlimited}
-            description={copy.create.photoLimitUnlimitedDescription}
-            supporting={copy.create.photoLimitUnlimitedSupporting.replace('{price}', UNLIMITED_PRICE)}
-            selected={selectedCaptureMode === 'unlimited'}
-            onPress={selectUnlimited}
-            style={{ flex: 1 }}
-          />
+      <View style={{ flex: 1, gap: spacing.base }}>
+        <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' }}>
+          <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
         </View>
 
-        <ExpandingSection expanded={selectedCaptureMode === 'limited'}>
-          <View style={{ gap: spacing.sm, paddingTop: spacing.xs }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-              {LIMITED_COUNT_OPTIONS.map((option) => (
-                <CountChoiceChip
-                  key={option}
-                  label={String(option)}
-                  selected={storedCount === option}
-                  onPress={() => selectLimited(option)}
-                />
-              ))}
-            </View>
+        <View style={{ gap: spacing.base }}>
+          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
+            <CaptureModeCard
+              title={copy.create.photoLimitLimited}
+              description={copy.create.photoLimitLimitedDescription}
+              selected={selectedCaptureMode === 'limited'}
+              onPress={() => selectLimited()}
+              style={{ flex: 1 }}
+            />
+
+            <CaptureModeCard
+              title={copy.create.photoLimitUnlimited}
+              description={copy.create.photoLimitUnlimitedDescription}
+              selected={selectedCaptureMode === 'unlimited'}
+              onPress={selectUnlimited}
+              // Visible and tappable, just not yet applicable — the host is
+              // the one who can change that, so the card's job is to be found.
+              style={{ flex: 1, opacity: unlimitedGated ? 0.55 : 1 }}
+            />
           </View>
-        </ExpandingSection>
+
+          <ExpandingSection expanded={selectedCaptureMode === 'limited'}>
+            <View style={{ gap: spacing.sm, paddingTop: spacing.xs }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+                {LIMITED_COUNT_OPTIONS.map((option) => (
+                  <CountChoiceChip
+                    key={option}
+                    label={String(option)}
+                    selected={storedCount === option}
+                    onPress={() => selectLimited(option)}
+                  />
+                ))}
+              </View>
+            </View>
+          </ExpandingSection>
+        </View>
       </View>
+
+      {/* The same upgrade surface every other locked feature opens. On
+          success the choice the host was making is applied for them. */}
+      {upgradeOpen && celebrationId ? (
+        <UpgradeSheet
+          visible
+          celebrationId={String(celebrationId)}
+          currentPlan={entitlements.plan}
+          options={upgradesForFeature(entitlements.plan, 'unlimitedPhotos')}
+          title="Unlock unlimited photos"
+          onClose={() => setUpgradeOpen(false)}
+          onUpgraded={() => {
+            setUpgradeOpen(false);
+            update({ shotLimitPerGuest: null });
+          }}
+        />
+      ) : null}
     </CreationStepScreen>
   );
 }
@@ -80,14 +130,12 @@ export default function PhotoLimitStep() {
 function CaptureModeCard({
   title,
   description,
-  supporting,
   selected,
   onPress,
   style,
 }: {
   title: string;
   description: string;
-  supporting?: string;
   selected: boolean;
   onPress: () => void;
   style?: ViewStyle;
@@ -119,15 +167,6 @@ function CaptureModeCard({
           <AppText variant="bodySmall" tone="secondary">
             {description}
           </AppText>
-          {supporting ? (
-            <AppText
-              variant="bodySmall"
-              tone="secondary"
-              style={{ fontFamily: 'InstrumentSerif_400Regular_Italic' }}
-            >
-              {supporting}
-            </AppText>
-          ) : null}
         </View>
 
         <View
@@ -198,6 +237,3 @@ function inferLimitedChoice(value: number | null | undefined) {
     ? (value as (typeof LIMITED_COUNT_OPTIONS)[number])
     : DEFAULT_LIMITED_COUNT;
 }
-
-const UNLIMITED_PRICE_BY_CURRENCY: Record<string, string> = { GBP: '+£4.99', USD: '+$7.99' };
-const UNLIMITED_PRICE = UNLIMITED_PRICE_BY_CURRENCY[LOCALE_CONFIG.currency] ?? '+£4.99';

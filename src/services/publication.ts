@@ -7,6 +7,8 @@ import { buildCoverPath, normaliseExtension, inferMimeTypeFromUri } from '@/feat
 import { readLocalImageBytes } from '@/features/media/read-local-image';
 import { resolveDraftAllowedMediaTypes } from '@/features/media/event-media';
 import { getPaymentProvider } from '@/features/payments';
+import type { PaymentProvider } from '@/features/payments/types';
+import { isFreePlanKey } from '@/features/payments/plan-catalogue';
 import { resolveReveal, type CreationDraft } from '@/features/celebrations/draft/types';
 import { assertCreatedCelebration } from '@/types/database';
 
@@ -29,6 +31,13 @@ export interface PublishedEvent {
   timezone: string;
   /** The host's chosen cover, so the success screen opens on their photograph. */
   coverStoragePath: string | null;
+  /**
+   * The selected cover template's theme slug, snapshotted for the same reason
+   * as the cover path: the success screen clears the draft on mount, so it
+   * cannot read the choice back from it. Without this the confirmation
+   * rendered the default template no matter what the host had picked.
+   */
+  themeSlug: string | null;
 }
 
 export class PublicationError extends Error {
@@ -54,6 +63,43 @@ export class PublicationError extends Error {
  */
 export function buildGuestUrl(eventCode: string, token: string): string {
   return `${BRAND_CONFIG.guestDomain}/j/${eventCode}#t=${token}`;
+}
+
+/**
+ * Buys one product, or refuses to continue.
+ *
+ * The `getProducts` miss is deliberately an ERROR rather than a skip. It used
+ * to be a skip — `if (product) { ...purchase... }` — which meant that any
+ * condition stopping the store from returning a product published the paid
+ * event anyway, for free, with no error shown and no trace left behind. A
+ * placeholder RevenueCat key does that. So does an App Store product that is
+ * still in "Prepare for Submission", an inactive Paid Applications Agreement,
+ * a sandbox blip, or a store outage. None of those are reasons to give the
+ * tier away, and all of them are invisible to the host and to us.
+ *
+ * Failing closed also keeps this path honest under test: a purchase that
+ * cannot happen now reports that it cannot happen, instead of looking exactly
+ * like a purchase that succeeded.
+ *
+ * Exported for testing — the fail-open shape is easy to reintroduce by
+ * accident, so it is pinned directly.
+ */
+export async function purchaseOrThrow(provider: PaymentProvider, productKey: string): Promise<void> {
+  const [product] = await provider.getProducts([productKey]);
+  if (!product) {
+    throw new PublicationError(
+      'This package is not available to purchase right now. Please try again shortly.',
+      'purchase',
+    );
+  }
+
+  const outcome = await provider.purchase(product);
+  if (outcome.status === 'cancelled') {
+    throw new PublicationError('Purchase cancelled', 'purchase');
+  }
+  if (outcome.status === 'failed') {
+    throw new PublicationError(outcome.message, 'purchase');
+  }
 }
 
 async function resolveThemeId(themeKey: string | null | undefined): Promise<string | undefined> {
@@ -105,6 +151,7 @@ export async function publishDraft(
     let eventSessionId: string | undefined;
     let publicSlug: string | undefined;
     let guestToken: string | undefined;
+    let publishedCoverPath = draft.coverStoragePath;
 
     // 1. Server-side draft.
     if (!celebrationId) {
@@ -138,46 +185,27 @@ export async function publishDraft(
       guestToken = created.guestAccessToken;
     }
 
-    // 2. Cover upload. Non-fatal: an event without a cover still works, and
-    // failing the whole publication over an image would be disproportionate.
+    // 2. Cover upload. This must complete before purchase/publication: a host's
+    // selected image is part of the event, not an optional decoration.
     if (draft.coverLocalUri && celebrationId) {
-      try {
-        await uploadCover(draft.coverLocalUri, celebrationId);
-      } catch (error) {
-        // Still non-fatal — an event without a cover works, and failing a
-        // whole publication over an image would be disproportionate. Logged
-        // rather than silently dropped, though: swallowing this without a
-        // trace is what let a cover upload that never worked on web look
-        // like a host had simply not chosen one.
-        console.error('[publication] cover upload failed', error);
-      }
+      publishedCoverPath = await uploadCover(draft.coverLocalUri, celebrationId);
     }
 
     // 3. Purchase.
+    //
+    // The free tier skips this stage entirely rather than transacting for
+    // nothing. Asked of the plan definition (`isFreePlanKey`) rather than
+    // inferred from a zero price: a paid tier discounted to nothing for a
+    // promotion must still go through the store, because the store is what
+    // records the entitlement. The publish call below is unchanged either
+    // way — a free event is published against its plan key exactly like a
+    // paid one, so entitlements resolve through the same path.
     const provider = getPaymentProvider();
-    if (draft.planKey) {
-      const [product] = await provider.getProducts([draft.planKey]);
-      if (product) {
-        const outcome = await provider.purchase(product);
-        if (outcome.status === 'cancelled') {
-          throw new PublicationError('Purchase cancelled', 'purchase');
-        }
-        if (outcome.status === 'failed') {
-          throw new PublicationError(outcome.message, 'purchase');
-        }
-      }
+    if (draft.planKey && !isFreePlanKey(draft.planKey)) {
+      await purchaseOrThrow(provider, draft.planKey);
     }
     for (const addOnKey of draft.addOnKeys) {
-      const [product] = await provider.getProducts([addOnKey]);
-      if (product) {
-        const outcome = await provider.purchase(product);
-        if (outcome.status === 'cancelled') {
-          throw new PublicationError('Purchase cancelled', 'purchase');
-        }
-        if (outcome.status === 'failed') {
-          throw new PublicationError(outcome.message, 'purchase');
-        }
-      }
+      await purchaseOrThrow(provider, addOnKey);
     }
 
     // 4. Publish. Idempotent server-side, so a retry here is safe.
@@ -208,7 +236,8 @@ export async function publishDraft(
       supportingLine: draft.supportingLine.trim() || null,
       endsAt: draft.endsAt,
       timezone: draft.timezone,
-      coverStoragePath: draft.coverLocalUri ?? null,
+      coverStoragePath: publishedCoverPath ?? null,
+      themeSlug: draft.themeSlug ?? null,
     };
   } catch (e) {
     // Only the typed development fallback (no real backend at all) should
@@ -237,6 +266,7 @@ export async function publishDraft(
       title: draft.title.trim(),
       status: 'live',
       coverStoragePath: draft.coverLocalUri, // Use local cover URI as fallback path
+      themeSlug: draft.themeSlug ?? null,
       publicSlug: mockSlug,
       startsAt: new Date().toISOString(),
       endsAt: draft.endsAt,
@@ -275,6 +305,7 @@ export async function publishDraft(
       endsAt: draft.endsAt,
       timezone: draft.timezone,
       coverStoragePath: draft.coverLocalUri ?? null,
+      themeSlug: draft.themeSlug ?? null,
     };
   }
 }
@@ -313,10 +344,11 @@ export async function uploadCover(localUri: string, celebrationId: string): Prom
 
   if (uploadError) throw new PublicationError(uploadError.message, 'cover');
 
-  await client
+  const { error: updateError } = await client
     .from('celebrations')
     .update({ cover_storage_path: path })
     .eq('id', celebrationId);
+  if (updateError) throw new PublicationError(updateError.message, 'cover');
 
   // Best-effort tidy-up of the object this one replaces. Deliberately after
   // the row points at the new path, and deliberately non-fatal: a leftover

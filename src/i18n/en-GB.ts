@@ -130,7 +130,7 @@ export const enGB = {
     treatmentSupporting: 'You can change or remove this later. Your originals are always kept.',
     treatmentOriginal: 'Original',
     treatmentDisposable: 'Disposable',
-    treatmentBlackAndWhite: 'Black and white',
+    treatmentBlackAndWhite: 'Monochrome',
     dateStamp: 'Add a date stamp',
 
     // Step 10

@@ -39,7 +39,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
 import { CloseIcon } from '@/components/ui/icons';
-import { radii, spacing } from '@/design';
+import { fontFamilies, radii, spacing } from '@/design';
 
 const ABSOLUTE_FILL = {
   position: 'absolute',
@@ -711,7 +711,7 @@ const S = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   heroTitle: {
-    fontFamily: 'InstrumentSerif_400Regular',
+    fontFamily: fontFamilies.display,
     fontSize: 40,
     lineHeight: 46,
     color: '#FFFFFF',

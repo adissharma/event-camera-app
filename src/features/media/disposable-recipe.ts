@@ -1,85 +1,100 @@
+import {
+  DISPOSABLE_PRESET,
+  type DisposablePreset,
+  type Varied,
+} from './disposable-preset';
+
 /**
- * The disposable-camera look, as plain data.
+ * One photo's Disposable recipe: the preset, resolved.
  *
- * Every photo gets its own *recipe* — a set of effect values derived
- * deterministically from that photo's identity, so two photos in the same
- * gallery differ from each other while any one photo looks identical on
- * every re-render, scroll back, and app relaunch. That is the whole point:
- * a filter that applies byte-identical numbers to every frame reads as a
- * digital preset, and a filter that re-randomises on each render flickers.
+ * Every value is derived deterministically from that photo's identity, so two
+ * photos in the same gallery differ from each other while any one photo looks
+ * identical on every re-render, scroll back, and app relaunch. That is the
+ * whole point: a filter that applies byte-identical numbers to every frame
+ * reads as a digital preset, and one that re-randomises per render flickers.
  *
- * No React and no Skia imports here on purpose. `DisposablePhoto`
- * (src/components/media/disposable-photo.tsx) renders a recipe to screen
- * today; a future bulk-export step can hand the same recipe to an offscreen
- * Skia surface and get a matching file out, without re-deriving the look.
+ * No React and no Skia imports here on purpose. This module is pure data and
+ * arithmetic, which is what lets the on-screen preview
+ * (`components/media/disposable-photo.tsx`) and the full-resolution export
+ * (`disposable-render.ts`) share one description of the look rather than
+ * drifting apart.
+ *
+ * Everything here is resolution-independent. Turning a recipe into pixels —
+ * grain cell size, softening radius, the clamps that keep both sane at a given
+ * output size — is `disposable-paint.ts`'s job.
  */
 
 /** A 4x5 row-major colour matrix. Offsets (column 5) are in 0..1, as Skia expects. */
 export type ColorMatrix4x5 = number[];
 
-export interface DisposableVignette {
-  /** 0..1 alpha at the darkest point. */
-  opacity: number;
-  /** Fraction of the half-diagonal at which darkening starts. */
-  innerStop: number;
-  /** Edge tint in `r, g, b` form. */
-  colour: string;
-}
-
-export interface DisposableLightLeak {
-  /** Which edge the leak enters from. */
-  corner: 0 | 1 | 2 | 3;
-  /** 0..1 alpha of the leak. */
-  strength: number;
-  /** Warm leak colour, `r, g, b` for interpolation into an rgba() string. */
-  colour: string;
-}
-
-export interface DisposableEdgeBurn {
-  /** Which side the burn enters from. */
-  side: 'left' | 'right';
-  /** 0..1 alpha of the burn. */
-  opacity: number;
-  /** Fraction of the frame width it occupies before fading to zero. */
-  width: number;
-  /** Edge tint in `r, g, b` form. */
-  colour: string;
-}
-
-export interface DisposableHalation {
-  /** 0..1 opacity of the highlight bloom. */
-  opacity: number;
-  /** Blur radius in points. */
-  blurRadius: number;
-}
-
 export interface DisposableRecipe {
+  /** The linear part of the colour treatment: white balance, mixer, saturation. */
   colorMatrix: ColorMatrix4x5;
-  /** Blue/cyan introduced into darker tones. */
-  shadowCool: number;
-  /** Amber warmth introduced into brighter tones. */
-  highlightWarmth: number;
-  /** Lift applied to the very darkest tones. */
-  fade: number;
-  /** Fine control beyond the static matrix. */
-  saturation: number;
-  /** Fine control beyond the static matrix. */
-  contrast: number;
-  /** 0..1 opacity of the procedural grain layer. */
-  grainIntensity: number;
-  /** Shader seed, so two photos get different noise fields. */
-  grainSeed: number;
-  /** Grain frequency, in device pixels. */
-  grainScale: number;
-  /** Blur sigma in points. Deliberately tiny — softening, not defocus. */
-  blurRadius: number;
-  halation: DisposableHalation;
-  vignette: DisposableVignette;
-  edgeBurn: DisposableEdgeBurn | null;
-  /** Null on roughly half of photos: leaks are "occasional", not a fixture. */
-  lightLeak: DisposableLightLeak | null;
-  dust: { variant: 0 | 1; opacity: number } | null;
-  scratches: { variant: 0 | 1; opacity: number } | null;
+
+  tone: {
+    exposure: number;
+    contrast: number;
+    highlights: number;
+    shadows: number;
+    blacks: number;
+    whites: number;
+  };
+
+  /** The selective part of the colour treatment, applied in the shader. */
+  colour: {
+    warmHighlights: number;
+    coolShadows: number;
+    blueDensity: number;
+    greenControl: number;
+  };
+
+  grain: {
+    intensity: number;
+    /** Grain cells across the frame's long edge — frame-relative, not pixels. */
+    cells: number;
+    contrast: number;
+    shadowBias: number;
+    seed: number;
+  };
+
+  softness: {
+    /** Radius in pixels *at* `referenceLongEdge`; scaled to the real output. */
+    blurPx: number;
+    referenceLongEdge: number;
+  };
+
+  vignette: {
+    strength: number;
+    radius: number;
+    softness: number;
+  };
+
+  /** Null on the minority of photos that get no dust at all. */
+  dust: {
+    opacity: number;
+    density: number;
+    size: number;
+    darkRatio: number;
+    seed: number;
+  } | null;
+
+  /** Null on nearly every photo. A scratch is an exception, not a texture. */
+  scratches: {
+    opacity: number;
+    width: number;
+    seed: number;
+  } | null;
+
+  /** Null on roughly three photos in four: leaks are occasional, not a fixture. */
+  lightLeak: {
+    opacity: number;
+    spread: number;
+    colour: [number, number, number];
+    origin: [number, number];
+    direction: [number, number];
+    /** Which edge was picked. Carried for debugging and tests, not rendering. */
+    edge: string;
+  } | null;
 }
 
 // ── Seeded randomness ────────────────────────────────────────────────
@@ -104,6 +119,11 @@ function createRandom(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** Resolves a `Varied` into a concrete value, `base ± base * vary`. */
+export function resolveVaried(random: () => number, value: Varied): number {
+  return value.base * (1 + (random() * 2 - 1) * value.vary);
 }
 
 // ── Colour matrix maths ──────────────────────────────────────────────
@@ -155,85 +175,65 @@ export function saturation(amount: number): ColorMatrix4x5 {
   ];
 }
 
-/** Scales around mid-grey so contrast doesn't also shift exposure. */
-export function contrast(amount: number): ColorMatrix4x5 {
-  const offset = (1 - amount) * 0.5;
+/**
+ * Warmer white balance: red up, blue down, green nearly still.
+ *
+ * The channel-level version of a colour-temperature shift rather than an
+ * orange wash laid over everything — which is the difference between "shot in
+ * afternoon light" and the sepia the brief rules out.
+ */
+export function temperature(amount: number): ColorMatrix4x5 {
   return [
-    amount, 0, 0, 0, offset,
-    0, amount, 0, 0, offset,
-    0, 0, amount, 0, offset,
+    1 + amount * 0.9, 0, 0, 0, 0,
+    0, 1 + amount * 0.15, 0, 0, 0,
+    0, 0, 1 - amount * 0.9, 0, 0,
     0, 0, 0, 1, 0,
   ];
 }
 
-export function exposure(amount: number): ColorMatrix4x5 {
+/** Positive is magenta, negative green. Kept tiny — a corrector, not a look. */
+export function tint(amount: number): ColorMatrix4x5 {
   return [
-    amount, 0, 0, 0, 0,
-    0, amount, 0, 0, 0,
-    0, 0, amount, 0, 0,
+    1 + amount * 0.5, 0, 0, 0, 0,
+    0, 1 - amount, 0, 0, 0,
+    0, 0, 1 + amount * 0.5, 0, 0,
     0, 0, 0, 1, 0,
   ];
 }
 
 /**
- * Pushes red up and blue down by `amount`, leaving green alone — the
- * channel-level version of a warmer white balance, rather than laying an
- * orange wash over everything.
+ * Grey-preserving channel mixer.
+ *
+ * `b += kb * (b - (r + g) / 2)` and the same shape on green. Because the
+ * correction is exactly zero when the three channels agree, this enriches a
+ * blue sky and restrains a fluorescent green without shifting neutrals — which
+ * a plain per-channel gain cannot do, since that tints the entire frame
+ * including the greys.
  */
-export function warmth(amount: number): ColorMatrix4x5 {
+export function channelMixer(blueRichness: number, greenRestraint: number): ColorMatrix4x5 {
+  const kb = blueRichness;
+  const kg = greenRestraint;
   return [
-    1 + amount, 0, 0, 0, 0,
-    0, 1 + amount * 0.25, 0, 0, 0,
-    0, 0, 1 - amount, 0, 0,
-    0, 0, 0, 1, 0,
-  ];
-}
-
-/**
- * Lifts the shadows toward warm grey instead of true black, the way a print
- * that has aged loses its deepest blacks. A small positive offset on all
- * three channels, biased warm.
- */
-export function liftShadows(amount: number): ColorMatrix4x5 {
-  return [
-    1 - amount, 0, 0, 0, amount * 1.15,
-    0, 1 - amount, 0, 0, amount * 0.95,
-    0, 0, 1 - amount, 0, amount * 0.8,
-    0, 0, 0, 1, 0,
-  ];
-}
-
-/**
- * A soft threshold approximation: values below `cutoff` are pushed toward
- * zero, values above it are stretched upward. Useful for carving a highlight
- * mask out of the same image before blurring it into halation.
- */
-export function threshold(cutoff: number): ColorMatrix4x5 {
-  const scale = 1 / Math.max(0.001, 1 - cutoff);
-  const offset = -cutoff * scale;
-  return [
-    scale, 0, 0, 0, offset,
-    0, scale, 0, 0, offset,
-    0, 0, scale, 0, offset,
+    1, 0, 0, 0, 0,
+    -kg / 2, 1 + kg, -kg / 2, 0, 0,
+    -kb / 2, -kb / 2, 1 + kb, 0, 0,
     0, 0, 0, 1, 0,
   ];
 }
 
 // ── Recipe ───────────────────────────────────────────────────────────
 
-/** Picks a float in [min, max). */
-function range(random: () => number, min: number, max: number): number {
-  return min + random() * (max - min);
+/** Picks one of `edges` in proportion to its weight. */
+function pickEdge(random: () => number, preset: DisposablePreset) {
+  const edges = preset.lightLeak.edges;
+  const total = edges.reduce((sum, edge) => sum + edge.weight, 0);
+  let roll = random() * total;
+  for (const edge of edges) {
+    roll -= edge.weight;
+    if (roll <= 0) return edge;
+  }
+  return edges[edges.length - 1];
 }
-
-/**
- * Warm leak colours — a narrow set, all in the amber/rose family that real
- * light leaks produce. Picking from a list rather than randomising hue keeps
- * a stray green or purple leak off a wedding photo.
- */
-const LEAK_COLOURS = ['255, 176, 92', '255, 138, 76', '255, 202, 138', '250, 150, 120'];
-const VIGNETTE_COLOURS = ['14, 16, 24', '22, 18, 14', '18, 18, 20'];
-const EDGE_BURN_COLOURS = ['176, 128, 72', '152, 108, 58', '64, 92, 148'];
 
 /**
  * Builds the recipe for one photo.
@@ -241,71 +241,100 @@ const EDGE_BURN_COLOURS = ['176, 128, 72', '152, 108, 58', '64, 92, 148'];
  * `seedKey` must be stable for a given photo and different between photos —
  * the media item's id is ideal. It is hashed, never parsed, so any stable
  * string works.
+ *
+ * The draw order below is load-bearing: adding a `random()` call in the middle
+ * reshuffles every value after it, so every photo in every gallery would get a
+ * different look. Append new draws at the end.
  */
-export function buildDisposableRecipe(seedKey: string): DisposableRecipe {
+export function buildDisposableRecipe(
+  seedKey: string,
+  preset: DisposablePreset = DISPOSABLE_PRESET,
+): DisposableRecipe {
   const random = createRandom(hashString(seedKey));
 
-  // Colour: cooler shadows, warmer highlights, richer contrast, and a slight
-  // print-like fade in the blacks. The static matrix handles the broad
-  // tonal shape; finer split-toning happens in the runtime shader.
+  // The linear half of the colour treatment. Order matters: white balance
+  // first (it is a correction), then the mixer that enriches what is already
+  // there, then saturation last so it amplifies the enriched result.
   const colorMatrix = [
-    warmth(range(random, 0.02, 0.05)),
-    liftShadows(range(random, 0.045, 0.085)),
-    saturation(range(random, 0.94, 1.08)),
-    contrast(range(random, 1.06, 1.18)),
-    exposure(range(random, 0.96, 1.04)),
+    temperature(preset.colour.temperature),
+    tint(preset.colour.tint),
+    channelMixer(preset.colour.blueRichness, preset.colour.greenRestraint),
+    saturation(1 + preset.colour.saturation),
   ].reduce(compose, IDENTITY);
 
-  // Loud artifacts should be occasional, not the defining trait of every frame.
-  const hasLeak = random() < 0.18;
-  const hasEdgeBurn = random() < 0.65;
-  const lightLeak: DisposableLightLeak | null = hasLeak
-    ? {
-        corner: Math.floor(random() * 4) as 0 | 1 | 2 | 3,
-        strength: range(random, 0.05, 0.12),
-        colour: LEAK_COLOURS[Math.floor(random() * LEAK_COLOURS.length)],
-      }
-    : null;
+  const hasDust = random() < preset.dust.probability;
+  const hasScratch = random() < preset.scratches.probability;
+  const hasLeak = random() < preset.lightLeak.probability;
 
-  const edgeBurn: DisposableEdgeBurn | null = hasEdgeBurn
-    ? {
-        side: random() < 0.5 ? 'left' : 'right',
-        opacity: range(random, 0.05, 0.12),
-        width: range(random, 0.2, 0.34),
-        colour: EDGE_BURN_COLOURS[Math.floor(random() * EDGE_BURN_COLOURS.length)],
-      }
-    : null;
-
-  const hasDust = random() < 0.88;
-  const hasScratches = random() < 0.32;
+  const leakEdge = pickEdge(random, preset);
+  const leakColour =
+    preset.lightLeak.colours[Math.floor(random() * preset.lightLeak.colours.length)];
+  // Slides the leak along its edge so two photos with the same edge still
+  // differ. Perpendicular to the travel direction, so it never walks the
+  // origin off the frame.
+  const slide = (random() - 0.5) * 0.5;
+  const perpendicular: [number, number] = [-leakEdge.direction[1], leakEdge.direction[0]];
 
   return {
     colorMatrix,
-    shadowCool: range(random, 0.035, 0.08),
-    highlightWarmth: range(random, 0.03, 0.075),
-    fade: range(random, 0.018, 0.05),
-    saturation: range(random, 0.98, 1.08),
-    contrast: range(random, 1.03, 1.11),
-    grainIntensity: range(random, 0.075, 0.14),
-    grainSeed: Math.floor(random() * 10000),
-    grainScale: range(random, 0.85, 1.35),
-    blurRadius: range(random, 0.45, 0.95),
-    halation: {
-      opacity: range(random, 0.08, 0.18),
-      blurRadius: range(random, 1.2, 2.4),
+
+    tone: { ...preset.tone },
+
+    colour: {
+      warmHighlights: preset.colour.warmHighlights,
+      coolShadows: preset.colour.coolShadows,
+      blueDensity: preset.colour.blueDensity,
+      greenControl: preset.colour.greenControl,
     },
+
+    grain: {
+      intensity: resolveVaried(random, preset.grain.intensity),
+      cells: preset.grain.cells,
+      contrast: preset.grain.contrast,
+      shadowBias: preset.grain.shadowBias,
+      seed: Math.floor(random() * 10_000),
+    },
+
+    softness: { ...preset.softness },
+
     vignette: {
-      opacity: range(random, 0.2, 0.38),
-      innerStop: range(random, 0.52, 0.7),
-      colour: VIGNETTE_COLOURS[Math.floor(random() * VIGNETTE_COLOURS.length)],
+      strength: resolveVaried(random, preset.vignette.strength),
+      radius: resolveVaried(random, preset.vignette.radius),
+      softness: preset.vignette.softness,
     },
-    edgeBurn,
-    lightLeak,
+
     dust: hasDust
-      ? { variant: (random() < 0.5 ? 0 : 1) as 0 | 1, opacity: range(random, 0.03, 0.08) }
+      ? {
+          opacity: resolveVaried(random, preset.dust.opacity),
+          density: resolveVaried(random, preset.dust.density),
+          size: resolveVaried(random, preset.dust.size),
+          darkRatio: preset.dust.darkRatio,
+          // The variant only shifts the noise field. There is no bitmap to
+          // recognise, so no two photos share a speck position.
+          seed: Math.floor(random() * preset.dust.variants) * 137.13 + random() * 4.7,
+        }
       : null,
-    scratches: hasScratches
-      ? { variant: (random() < 0.5 ? 0 : 1) as 0 | 1, opacity: range(random, 0.025, 0.055) }
+
+    scratches: hasScratch
+      ? {
+          opacity: resolveVaried(random, preset.scratches.opacity),
+          width: resolveVaried(random, preset.scratches.width),
+          seed: random() * 100,
+        }
+      : null,
+
+    lightLeak: hasLeak
+      ? {
+          opacity: resolveVaried(random, preset.lightLeak.opacity),
+          spread: resolveVaried(random, preset.lightLeak.spread),
+          colour: leakColour,
+          origin: [
+            leakEdge.origin[0] + perpendicular[0] * slide,
+            leakEdge.origin[1] + perpendicular[1] * slide,
+          ],
+          direction: leakEdge.direction,
+          edge: leakEdge.name,
+        }
       : null,
   };
 }

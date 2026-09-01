@@ -14,8 +14,8 @@ import { AppText } from '@/components/ui/text';
 import { ShaderCardBackground } from '@/components/ui/shader-card-background';
 import { colours, radii, spacing } from '@/design';
 
-/** Height of the guestbook icon circle (CHIP_D) */
-const GUESTBOOK_CIRCLE_HEIGHT = 68;
+/** Height of the guestbook selector tile (CHIP_D) */
+const GUESTBOOK_TILE_HEIGHT = 60;
 
 function PlusIcon({ size = 11, color = colours.textOnBrand }) {
   return (
@@ -34,20 +34,23 @@ export interface ChallengesEmptyCardProps {
   onPress: () => void;
   /** Whether the card is rendered alongside the guestbook chip */
   hasSiblingChip?: boolean;
+  /** Match the responsive selector tile size used by the gallery row. */
+  tileSize?: number;
   style?: StyleProp<ViewStyle>;
 }
 
 export const ChallengesEmptyCard = memo(function ChallengesEmptyCard({
   onPress,
   hasSiblingChip = false,
+  tileSize = GUESTBOOK_TILE_HEIGHT,
   style,
 }: ChallengesEmptyCardProps) {
   const { width: windowWidth } = useWindowDimensions();
 
   // Size to span the remaining width with identical 16px padding on all sides
-  // Left padding (16) + Guestbook (68) + Middle gap (16) + Card + Right padding (16) = windowWidth
+  // Left padding (16) + Guestbook tile + Middle gap (16) + Card + Right padding (16) = windowWidth
   const cardWidth = hasSiblingChip
-    ? windowWidth - (16 * 3) - GUESTBOOK_CIRCLE_HEIGHT
+    ? windowWidth - (16 * 2) - 14 - tileSize
     : undefined;
 
   function handlePress() {
@@ -62,12 +65,13 @@ export const ChallengesEmptyCard = memo(function ChallengesEmptyCard({
       accessibilityLabel="Add photo challenges"
       style={({ pressed }) => [
         S.wrapper,
+        { height: tileSize },
         cardWidth ? { width: cardWidth } : { flex: 1, width: '100%' },
         pressed && S.pressed,
         style,
       ]}
     >
-      <ShaderCardBackground style={S.cardBackground} borderRadius={radii.lg}>
+      <ShaderCardBackground style={[S.cardBackground, { height: tileSize }]} borderRadius={radii.lg}>
         <View style={S.row}>
           {/* Clean Text */}
           <View style={S.textContainer}>
@@ -94,7 +98,7 @@ export const ChallengesEmptyCard = memo(function ChallengesEmptyCard({
 
 const S = StyleSheet.create({
   wrapper: {
-    height: GUESTBOOK_CIRCLE_HEIGHT,
+    height: GUESTBOOK_TILE_HEIGHT,
     justifyContent: 'center',
     borderRadius: radii.lg,
   },
@@ -103,7 +107,7 @@ const S = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
   cardBackground: {
-    height: GUESTBOOK_CIRCLE_HEIGHT,
+    height: GUESTBOOK_TILE_HEIGHT,
     justifyContent: 'center',
   },
   row: {

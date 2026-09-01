@@ -15,6 +15,8 @@ import {
   upsertGuestbookInstructions,
 } from '@/services/guestbook';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
+import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { useIsEventHost } from '@/features/entitlements/use-event-role';
 
 function BackChevron({ size = 20, color = '#FFFFFF' }) {
   return (
@@ -33,7 +35,7 @@ function BackChevron({ size = 20, color = '#FFFFFF' }) {
 const MAX_INSTRUCTIONS = 180;
 const GUESTBOOK_ICONS = ['💌', '🎁', '💛', '🌟', '💫', '🌸'] as const;
 
-export default function GuestbookSettingsScreen() {
+function GuestbookSettingsScreenContent() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -231,3 +233,24 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
 });
+
+/**
+ * Guestbook is a Stories+ feature, so the screen checks before it
+ * renders rather than trusting whatever opened it. A host without the package
+ * is offered the upgrade; a guest is sent back without ever seeing it.
+ */
+export default function GuestbookSettingsScreen() {
+  const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
+  const { isHost } = useIsEventHost(String(celebrationId));
+
+  return (
+    <FeatureGate
+      celebrationId={String(celebrationId)}
+      feature="guestbook"
+      title="Unlock Guestbook"
+      isHost={isHost}
+    >
+      <GuestbookSettingsScreenContent />
+    </FeatureGate>
+  );
+}

@@ -25,10 +25,12 @@ export async function updateDisplayName(displayName: string): Promise<void> {
   const { data: auth } = await client.auth.getUser();
   if (!auth.user) throw new Error('Not signed in');
 
-  const { error } = await client
-    .from('profiles')
-    .update({ display_name: displayName.trim() })
-    .eq('id', auth.user.id);
+  const firstName = displayName.trim().split(/\s+/, 1)[0] ?? '';
+  if (!firstName) throw new Error('Enter your first name.');
+
+  const { error } = await (client as any).rpc('complete_my_profile', {
+    p_display_name: firstName,
+  });
 
   if (error) throw error;
 }
@@ -50,4 +52,11 @@ export function firstNameFrom(profile: ProfileRow | null | undefined): string | 
   if (!full) return null;
   const first = full.split(/\s+/)[0];
   return first && first.length > 0 ? first : null;
+}
+
+/** Provider and profile values are presented as a first name throughout the app. */
+export function firstNameFromValue(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.split(/\s+/, 1)[0] || null;
 }

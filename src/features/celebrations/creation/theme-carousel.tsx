@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   View,
@@ -9,16 +11,20 @@ import {
   type NativeSyntheticEvent,
 } from 'react-native';
 import Animated, {
+  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withSpring,
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
+import { useFocusEffect } from 'expo-router';
+import { PanGestureHandler } from 'react-native-gesture-handler';
 
-import { AppText } from '@/components/ui/text';
 import { DeviceFrame } from '@/components/media/device-frame';
+import { CloseIcon } from '@/components/ui/icons';
 import { GuestCoverPreview, parseCoverTheme } from './guest-cover-preview';
 import { colours, easing, spacing, useMotion } from '@/design';
 import type { CreationDraft } from '../draft/types';
@@ -29,7 +35,6 @@ export interface ThemeCarouselProps {
   themes: ThemeRow[];
   selectedSlug: string | null;
   onSelect: (slug: string) => void;
-  onEditCover: () => void;
 }
 
 /**
@@ -45,7 +50,6 @@ export function ThemeCarousel({
   themes,
   selectedSlug,
   onSelect,
-  onEditCover,
 }: ThemeCarouselProps) {
   const { width } = useWindowDimensions();
   const motion = useMotion();
@@ -54,9 +58,9 @@ export function ThemeCarousel({
     themes.findIndex((theme) => theme.slug === selectedSlug),
   );
   const scrollRef = useRef<ScrollView>(null);
-  const hasNudged = useRef(false);
   const activeIndexRef = useRef(selectedIndex);
   const selectedSlugRef = useRef<string | null>(selectedSlug);
+  const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
   /**
    * Measured height of the carousel row.
@@ -73,7 +77,13 @@ export function ThemeCarousel({
 
   // Fit to height first, then cap the width so a short, wide screen still
   // leaves the next card peeking rather than filling the viewport.
-  const heightDerivedWidth = rowHeight > 0 ? Math.floor(rowHeight / DEVICE_RATIO) : 0;
+  //
+  // Backed off a further 8% from that fit — a subtle reduction, not a
+  // redesign — so the row leaves a bit more breathing room around the dots,
+  // the CTAs and the rest of the screen instead of using every available
+  // pixel of height.
+  const PHONE_SHRINK = 0.92;
+  const heightDerivedWidth = rowHeight > 0 ? Math.floor((rowHeight / DEVICE_RATIO) * PHONE_SHRINK) : 0;
   const cardWidth = Math.max(140, Math.min(heightDerivedWidth || 200, Math.round(width * 0.62)));
   // The dots below already signal that more themes exist, so the next card only
   // needs a gentle peek. A small offset keeps the phone optically centred
@@ -94,8 +104,10 @@ export function ThemeCarousel({
   useEffect(() => {
     if (selectedIndex !== activeIndexRef.current) {
       setActiveIndex(selectedIndex);
+      activeIndexRef.current = selectedIndex;
+      scrollRef.current?.scrollTo({ x: selectedIndex * snapInterval, animated: false });
     }
-  }, [selectedIndex]);
+  }, [selectedIndex, snapInterval]);
 
   useEffect(() => {
     activeIndexRef.current = activeIndex;
@@ -108,7 +120,7 @@ export function ThemeCarousel({
   const nudge = useSharedValue(0);
 
   /**
-   * A single nudge on arrival, never a loop.
+   * A single nudge on every arrival, never a loop.
    *
    * A permanently bouncing card reads as broken within about ten seconds, and
    * the motion system forbids looping decoration outright. Two gentle cycles
@@ -116,19 +128,31 @@ export function ThemeCarousel({
    * where a repeating horizontal translation is exactly the pattern that
    * triggers people.
    */
-  useEffect(() => {
-    if (hasNudged.current || motion.reduceMotion || themes.length < 2) return;
-    hasNudged.current = true;
+  useFocusEffect(
+    useCallback(() => {
+      nudge.value = 0;
+      if (motion.reduceMotion || themes.length < 2) return;
 
-    const travel = -14;
-    const step = (to: number, duration: number) =>
-      withTiming(to, { duration, easing: easing.inOut });
+      const travel = -14;
+      const step = (to: number, duration: number) =>
+        withTiming(to, { duration, easing: easing.inOut });
 
-    nudge.value = withDelay(
-      600,
-      withSequence(step(travel, 260), step(0, 260), step(travel * 0.6, 200), step(0, 220)),
-    );
-  }, [nudge, motion.reduceMotion, themes.length]);
+      nudge.value = withDelay(
+        600,
+        withSequence(step(travel, 260), step(0, 260), step(travel * 0.6, 200), step(0, 220)),
+      );
+
+      const settle = setTimeout(() => {
+        nudge.value = 0;
+      }, 600 + 260 + 260 + 200 + 220 + 250);
+
+      return () => {
+        clearTimeout(settle);
+        cancelAnimation(nudge);
+        nudge.value = 0;
+      };
+    }, [motion.reduceMotion, nudge, themes.length]),
+  );
 
   const nudgeStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: nudge.value }],
@@ -175,7 +199,7 @@ export function ThemeCarousel({
   }
 
   return (
-    <View style={{ flex: 1, gap: spacing.base }}>
+    <View style={{ flex: 1, gap: spacing.sm }}>
       <Animated.View style={[{ flex: 1 }, nudgeStyle]} onLayout={handleRowLayout}>
         <ScrollView
           ref={scrollRef}
@@ -205,46 +229,35 @@ export function ThemeCarousel({
               <DeviceFrame width={cardWidth}>
                 <GuestCoverPreview
                   draft={draft}
-                  theme={parseCoverTheme(theme.design_tokens)}
+                  theme={parseCoverTheme(theme.design_tokens, theme.slug)}
                   compact={false}
-                  // Only the focused card shows the edit affordance. A pencil
-                  // on a half-visible neighbour would invite a tap that scrolls
-                  // it into view instead of editing it.
+                  // Only the focused card is interactive — a tap anywhere on
+                  // it opens the full-screen preview (see `GuestCoverPreview`).
+                  // A half-visible neighbour instead scrolls into view, via
+                  // the wrapper below.
                   editable={isActive}
-                  onEditCover={onEditCover}
+                  onPreview={() => setIsPreviewVisible(true)}
                 />
               </DeviceFrame>
             );
 
-            if (isActive) {
-              // The whole card opens the editor, not just its pencil badge —
-              // a host looking at the cover shouldn't have to find a small
-              // target to change it. Rendered in-flow with the rest of the
-              // card content, this scrolls with it rather than sitting at a
-              // fixed screen position while the theme underneath it changes.
-              return (
-                <Pressable
-                  key={theme.slug}
-                  accessibilityRole="button"
-                  accessibilityLabel="Edit cover"
-                  onPress={onEditCover}
-                  style={{ width: cardWidth }}
-                >
-                  {card}
-                </Pressable>
-              );
-            }
-
+            // Always the same element type at this position, active or not —
+            // only `disabled`/`style` change. Branching between a `View` and
+            // a `Pressable` here used to force React to unmount and remount
+            // this whole subtree the instant a swipe settled and `isActive`
+            // flipped, which is what showed up as a flash right as the new
+            // card was selected.
             return (
               <Pressable
                 key={theme.slug}
+                disabled={isActive}
                 accessibilityRole="button"
-                accessibilityState={{ selected: false }}
-                accessibilityLabel={`${theme.name} theme`}
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={isActive ? undefined : `${theme.name} theme`}
                 onPress={() => {
                   scrollRef.current?.scrollTo({ x: index * snapInterval, animated: true });
                 }}
-                style={{ width: cardWidth, opacity: 0.55 }}
+                style={{ width: cardWidth, opacity: isActive ? 1 : 0.55 }}
               >
                 {card}
               </Pressable>
@@ -253,34 +266,186 @@ export function ThemeCarousel({
         </ScrollView>
       </Animated.View>
 
-      <ThemeIndicator themes={themes} activeIndex={activeIndex} />
+      <PaginationDots themes={themes} activeIndex={activeIndex} />
+      <FullScreenCoverPreviewPager
+        visible={isPreviewVisible}
+        draft={draft}
+        themes={themes}
+        initialIndex={activeIndex}
+        onSelect={selectIndex}
+        onClose={() => setIsPreviewVisible(false)}
+      />
     </View>
   );
 }
 
-function ThemeIndicator({ themes, activeIndex }: { themes: ThemeRow[]; activeIndex: number }) {
-  const active = themes[activeIndex];
+function FullScreenCoverPreviewPager({
+  visible,
+  draft,
+  themes,
+  initialIndex,
+  onSelect,
+  onClose,
+}: {
+  visible: boolean;
+  draft: CreationDraft;
+  themes: ThemeRow[];
+  initialIndex: number;
+  onSelect: (index: number) => void;
+  onClose: () => void;
+}) {
+  const { height, width } = useWindowDimensions();
+  const scrollRef = useRef<ScrollView>(null);
+  const translateY = useSharedValue(0);
+  const initialIndexRef = useRef(initialIndex);
+  const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (dismissTimerRef.current !== null) clearTimeout(dismissTimerRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    initialIndexRef.current = initialIndex;
+    if (visible) {
+      translateY.value = 0;
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({ x: initialIndex * width, animated: false });
+      });
+    }
+  }, [initialIndex, translateY, visible, width]);
+
+  function handlePanEvent(event: { nativeEvent: { translationY?: number } }) {
+    const translationY = event.nativeEvent.translationY ?? 0;
+    if (translationY > 0) translateY.value = translationY;
+  }
+
+  function handlePanStateChange(event: {
+    nativeEvent: { state: number; translationY?: number; velocityY?: number };
+  }) {
+    // Gesture-handler state 5 is END; 3 is FAILED.
+    if (event.nativeEvent.state === 5) {
+      const translationY = event.nativeEvent.translationY ?? 0;
+      const velocityY = event.nativeEvent.velocityY ?? 0;
+      if (translationY > 120 || velocityY > 0.5) {
+        translateY.value = withTiming(height, { duration: 200 });
+        dismissTimerRef.current = setTimeout(() => {
+          onClose();
+          translateY.value = 0;
+        }, 220);
+      } else {
+        translateY.value = withSpring(0, { damping: 12, stiffness: 120 });
+      }
+    } else if (event.nativeEvent.state === 3) {
+      translateY.value = withSpring(0);
+    }
+  }
+
+  const translateStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  function handlePreviewScrollEnd(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (width <= 0) return;
+    const index = Math.max(
+      0,
+      Math.min(themes.length - 1, Math.round(event.nativeEvent.contentOffset.x / width)),
+    );
+    onSelect(index);
+  }
 
   return (
-    <View style={{ alignItems: 'center', gap: spacing.sm }}>
-      <AppText variant="labelLarge" accessibilityLiveRegion="polite">
-        {active?.name ?? ''}
-      </AppText>
-
-      <View style={{ flexDirection: 'row', gap: 6 }}>
-        {themes.map((theme, index) => (
-          <View
-            key={theme.slug}
+    <Modal
+      visible={visible}
+      animationType="none"
+      transparent={false}
+      presentationStyle="fullScreen"
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      <View style={{ flex: 1, backgroundColor: '#000', overflow: 'hidden' }}>
+        <PanGestureHandler
+          onGestureEvent={handlePanEvent}
+          onHandlerStateChange={handlePanStateChange}
+          activeOffsetY={[-12, 12]}
+          failOffsetX={[-24, 24]}
+        >
+          <Animated.View style={[{ flex: 1, backgroundColor: '#000' }, translateStyle]}>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            removeClippedSubviews={false}
+            style={{ flex: 1, backgroundColor: '#000' }}
+            contentOffset={{ x: initialIndexRef.current * width, y: 0 }}
+            onMomentumScrollEnd={handlePreviewScrollEnd}
+            onScrollEndDrag={handlePreviewScrollEnd}
+            scrollEventThrottle={16}
+          >
+            {themes.map((theme) => (
+              <View
+                key={theme.slug}
+                style={{ width, height, backgroundColor: colours.background }}
+              >
+                <GuestCoverPreview
+                  draft={draft}
+                  theme={parseCoverTheme(theme.design_tokens, theme.slug)}
+                  compact={false}
+                  editable={false}
+                  isFullScreen
+                />
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close preview"
+            onPress={onClose}
             style={{
-              width: index === activeIndex ? 16 : 6,
-              height: 6,
-              borderRadius: 3,
-              backgroundColor:
-                index === activeIndex ? colours.brandPrimary : colours.borderStrong,
+              position: 'absolute',
+              top: Platform.OS === 'ios' ? 60 : 30,
+              right: spacing.md,
+              width: 36,
+              height: 36,
+              borderRadius: 18,
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 9999,
             }}
-          />
-        ))}
+          >
+            <CloseIcon size={18} color="#fff" />
+          </Pressable>
+          </Animated.View>
+        </PanGestureHandler>
       </View>
+    </Modal>
+  );
+}
+
+/**
+ * Just the dots. With only three themes on offer and no name label above them
+ * any more, the row needs no accessible live-region text of its own — each
+ * card already announces `"${theme.name} theme"` when it takes focus.
+ */
+function PaginationDots({ themes, activeIndex }: { themes: ThemeRow[]; activeIndex: number }) {
+  return (
+    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
+      {themes.map((theme, index) => (
+        <View
+          key={theme.slug}
+          style={{
+            width: index === activeIndex ? 16 : 6,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor:
+              index === activeIndex ? colours.brandPrimary : colours.borderStrong,
+          }}
+        />
+      ))}
     </View>
   );
 }

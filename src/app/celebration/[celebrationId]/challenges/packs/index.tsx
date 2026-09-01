@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Svg, { Path } from 'react-native-svg';
@@ -5,7 +6,12 @@ import Svg, { Path } from 'react-native-svg';
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
-import { CHALLENGE_PACKS, type ChallengePack } from '@/features/celebrations/challenge-packs';
+import {
+  CHALLENGE_PACKS,
+  CHALLENGE_PACK_CATEGORIES,
+  type ChallengePack,
+  type ChallengePackCategory,
+} from '@/features/celebrations/challenge-packs';
 
 function BackChevron({ size = 18, color = colours.textSecondary }) {
   return (
@@ -26,6 +32,12 @@ function ChevronRight({ size = 18, color = colours.textSecondary }) {
 export default function ChallengePacksScreen() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
+  const [category, setCategory] = useState<ChallengePackCategory>('weddings');
+
+  const visiblePacks = useMemo(
+    () => CHALLENGE_PACKS.filter((pack) => pack.category === category),
+    [category],
+  );
 
   function openPack(pack: ChallengePack) {
     router.push(`/celebration/${celebrationId}/challenges/packs/${pack.id}` as never);
@@ -38,7 +50,7 @@ export default function ChallengePacksScreen() {
   return (
     <Screen edgeToEdge={false} scrollable={false}>
       <FlatList
-        data={CHALLENGE_PACKS}
+        data={visiblePacks}
         keyExtractor={(pack) => pack.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ gap: spacing.md, paddingBottom: spacing.xl }}
@@ -60,8 +72,7 @@ export default function ChallengePacksScreen() {
               <AppText variant="eyebrow" tone="secondary">Guest Prompts</AppText>
               <AppText variant="displayLarge">Challenge Packs</AppText>
               <AppText variant="bodyLarge" tone="secondary">
-                A fast starting point — pick a pack that fits your event, then edit, add or
-                remove challenges however you like.
+                Pick a set of prompts to help guests notice the moments worth capturing.
               </AppText>
             </View>
 
@@ -76,6 +87,26 @@ export default function ChallengePacksScreen() {
               </View>
               <ChevronRight />
             </Pressable>
+
+            <View style={S.tabs} accessibilityRole="tablist">
+              {CHALLENGE_PACK_CATEGORIES.map((option) => {
+                const selected = option.id === category;
+                return (
+                  <Pressable
+                    key={option.id}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected }}
+                    accessibilityLabel={option.label}
+                    onPress={() => setCategory(option.id)}
+                    style={[S.tab, selected && S.tabSelected]}
+                  >
+                    <AppText variant="label" tone={selected ? 'onBrand' : 'secondary'} numberOfLines={1}>
+                      {option.label}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         }
         renderItem={({ item }) => (
@@ -131,6 +162,26 @@ const S = StyleSheet.create({
     borderWidth: layout.hairline,
     borderColor: colours.borderStrong,
     padding: spacing.base,
+  },
+  tabs: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+    padding: 4,
+    borderRadius: radii.pill,
+    backgroundColor: colours.surfaceMuted,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderSubtle,
+  },
+  tab: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+  },
+  tabSelected: {
+    backgroundColor: colours.brandPrimary,
   },
   packCard: {
     flexDirection: 'row',

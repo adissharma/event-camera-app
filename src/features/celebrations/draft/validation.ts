@@ -71,20 +71,8 @@ export const revealSchema = z
     (val) => val.guestRevealChoice !== 'custom' || val.guestCustomRevealAt !== null,
     { message: 'Choose a day and time for the guest custom reveal', path: ['guestCustomRevealAt'] }
   )
-  .refine(
-    (val) =>
-      val.hostRevealChoice !== 'custom' ||
-      !val.hostCustomRevealAt ||
-      new Date(val.hostCustomRevealAt).getTime() > Date.now(),
-    { message: 'Choose a reveal time in the future for yourself', path: ['hostCustomRevealAt'] }
-  )
-  .refine(
-    (val) =>
-      val.guestRevealChoice !== 'custom' ||
-      !val.guestCustomRevealAt ||
-      new Date(val.guestCustomRevealAt).getTime() > Date.now(),
-    { message: 'Choose a reveal time in the future for guests', path: ['guestCustomRevealAt'] }
-  )
+
+
   .refine(
     (val) => {
       if (val.guestRevealChoice === 'never') {
@@ -130,6 +118,17 @@ export const revealSchema = z
     { message: 'Guests cannot view photos before you do', path: ['guestCustomRevealAt'] }
   );
 
+/**
+ * Host reveal.
+ *
+ * Deliberately does NOT re-check that a custom reveal time is still in the
+ * future. The picker refuses a past selection at the moment the host makes it
+ * (see `reveal.tsx`, bounded to now -> event end + 7 days); re-asserting it
+ * here punished hosts for nothing more than taking a while over the remaining
+ * steps, blocking publication on a choice that was valid when it was made.
+ * A reveal time that has since elapsed is not an error — `resolveReveal`
+ * turns it into an immediate reveal.
+ */
 export const hostRevealSchema = z
   .object({
     hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
@@ -138,15 +137,19 @@ export const hostRevealSchema = z
   .refine(
     (val) => val.hostRevealChoice !== 'custom' || val.hostCustomRevealAt !== null,
     { message: 'Choose a day and time for your custom reveal', path: ['hostCustomRevealAt'] }
-  )
-  .refine(
-    (val) =>
-      val.hostRevealChoice !== 'custom' ||
-      !val.hostCustomRevealAt ||
-      new Date(val.hostCustomRevealAt).getTime() > Date.now(),
-    { message: 'Choose a reveal time in the future for yourself', path: ['hostCustomRevealAt'] }
   );
 
+/**
+ * Guest reveal.
+ *
+ * Carries no "must be in the future" check either, and for a stronger reason:
+ * the guest time is always derived from the host's ("1 hour after me", "12
+ * hours after me"), so it is a relative offset rather than an independent
+ * choice. Validating a derived value against the wall clock produced "Choose
+ * a reveal time in the future for guests" on combinations the host could not
+ * fix without changing the host reveal — the offset itself was never wrong.
+ * An elapsed guest reveal simply means the photos are already visible.
+ */
 export const guestRevealSchema = z
   .object({
     hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
@@ -159,13 +162,7 @@ export const guestRevealSchema = z
     (val) => val.guestRevealChoice !== 'custom' || val.guestCustomRevealAt !== null,
     { message: 'Choose a day and time for the guest custom reveal', path: ['guestCustomRevealAt'] }
   )
-  .refine(
-    (val) =>
-      val.guestRevealChoice !== 'custom' ||
-      !val.guestCustomRevealAt ||
-      new Date(val.guestCustomRevealAt).getTime() > Date.now(),
-    { message: 'Choose a reveal time in the future for guests', path: ['guestCustomRevealAt'] }
-  )
+
   .refine(
     (val) => {
       if (val.guestRevealChoice === 'never') {
@@ -236,13 +233,6 @@ const STEP_VALIDATORS: Record<CreationStep, (draft: CreationDraft) => string | n
   'photo-limit': (d) =>
     firstError(photoLimitSchema.safeParse({ shotLimitPerGuest: d.shotLimitPerGuest })),
   reveal: (d) =>
-    firstError(
-      hostRevealSchema.safeParse({
-        hostRevealChoice: d.hostRevealChoice,
-        hostCustomRevealAt: d.hostCustomRevealAt,
-      }),
-    ),
-  'guest-reveal': (d) =>
     firstError(
       guestRevealSchema.safeParse({
         hostRevealChoice: d.hostRevealChoice,

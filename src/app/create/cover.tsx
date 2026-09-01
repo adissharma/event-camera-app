@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
@@ -11,7 +11,7 @@ import { TextField } from '@/components/forms/text-field';
 import { ThemeCarousel } from '@/features/celebrations/creation/theme-carousel';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
-import { listThemes, themeKeys } from '@/services/themes';
+import { listCoverTemplateThemes, themeKeys } from '@/services/themes';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { colours, spacing } from '@/design';
 import { copy } from '@/i18n';
@@ -23,11 +23,11 @@ import { isBackendConfigured } from '@/lib/supabase/client';
 /**
  * The cover step.
  *
- * Deliberately almost nothing but the preview. Every control that used to sit
- * below it — choose a photo, take a photo, a theme chip row — has moved into a
- * single cover editor opened from the preview itself. The host is looking at
- * what a guest will see, and editing it in place, rather than filling in a
- * form that describes it.
+ * Deliberately almost nothing but the preview: a swipeable carousel of the
+ * three cover templates, each rendered as a live, to-scale miniature of the
+ * guest join screen. Choosing a cover photo is a separate flow reached via
+ * "+ Add cover photo" below the carousel; the event name is not editable from
+ * here at all — that belongs to the name step, not the cover step.
  */
 export default function CoverStep() {
   const { draft, update } = useCreationDraft();
@@ -37,26 +37,32 @@ export default function CoverStep() {
   async function handleSave() {
     if (!draft.editCelebrationId || !draft.editSessionId) return;
 
+    // Only ever writes what the draft actually holds. It used to null the
+    // path whenever `coverLocalUri` was empty, which inferred "the host
+    // removed their photo" from "there is no local file in the draft" — two
+    // very different things. Saving this step before the draft had finished
+    // seeding from the server, or after any change that cleared the local
+    // URI, therefore wiped a perfectly good cover and dropped the event back
+    // to the default image. Removal is now explicit: the Remove button below
+    // clears `coverStoragePath` itself, and that null is what gets saved.
     let path = draft.coverStoragePath;
     if (draft.coverLocalUri && isLocalImageUri(draft.coverLocalUri)) {
-      if (isBackendConfigured) {
-        path = await uploadCover(draft.coverLocalUri, draft.editCelebrationId);
-      } else {
-        path = draft.coverLocalUri;
-      }
-    } else if (!draft.coverLocalUri) {
-      path = null;
+      path = isBackendConfigured
+        ? await uploadCover(draft.coverLocalUri, draft.editCelebrationId)
+        : draft.coverLocalUri;
     }
 
     await updateEventSettings(draft.editCelebrationId, draft.editSessionId, {
       title: draft.title,
       coverStoragePath: path,
+      themeSlug: draft.themeSlug,
     });
+    update({ coverStoragePath: path, coverLocalUri: path });
   }
 
   const { data: themes = [], isLoading, isError, refetch } = useQuery({
-    queryKey: themeKeys.list(),
-    queryFn: listThemes,
+    queryKey: themeKeys.curated(),
+    queryFn: listCoverTemplateThemes,
   });
 
   async function pickImage(source: 'library' | 'camera') {
@@ -107,46 +113,62 @@ export default function CoverStep() {
     <CreationStepScreen
       step="cover"
       heading={copy.create.coverHeading}
-      supporting={copy.create.coverSupporting}
       // The carousel scrolls horizontally and fills the remaining height.
       scrollable={false}
       onSave={handleSave}
     >
-      <View style={{ flex: 1 }}>
-        {isLoading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator color={colours.textSecondary} />
-          </View>
-        ) : isError || themes.length === 0 ? (
-          <View
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: spacing.base,
-              padding: spacing.lg,
-            }}
-          >
-            <AppText variant="body" tone="error" style={{ textAlign: 'center' }}>
-              Failed to load themes. Please check your network connection and try again.
-            </AppText>
-            <Button label="Retry" onPress={() => void refetch()} />
-          </View>
-        ) : (
-          <ThemeCarousel
-            draft={draft}
-            themes={themes}
-            selectedSlug={draft.themeSlug ?? themes[0]?.slug ?? null}
-            onSelect={(themeSlug) => update({ themeSlug })}
-            onEditCover={() => setEditing(true)}
-          />
-        )}
+      {/* Pulled up slightly now that there's no supporting line beneath the
+          heading, so the carousel gets more of the screen rather than the gap
+          growing to fill the space on its own. */}
+      <View style={{ flex: 1, marginTop: -spacing.lg, gap: spacing.base }}>
+        <View style={{ flex: 1 }}>
+          {isLoading ? (
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator color={colours.textSecondary} />
+            </View>
+          ) : isError || themes.length === 0 ? (
+            <View
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: spacing.base,
+                padding: spacing.lg,
+              }}
+            >
+              <AppText variant="body" tone="error" style={{ textAlign: 'center' }}>
+                Failed to load themes. Please check your network connection and try again.
+              </AppText>
+              <Button label="Retry" onPress={() => void refetch()} />
+            </View>
+          ) : (
+            <ThemeCarousel
+              draft={draft}
+              themes={themes}
+              selectedSlug={
+                themes.find((theme) => theme.slug === draft.themeSlug || theme.id === draft.themeSlug)?.slug ??
+                themes[0]?.slug ??
+                null
+              }
+              onSelect={(themeSlug) => update({ themeSlug })}
+            />
+          )}
+        </View>
+
+        {/* Secondary — sits well below the primary Next action in the sticky
+            footer, so it never competes with it. */}
+        <Button
+          label="+ Add cover photo"
+          variant="secondary"
+          size="medium"
+          onPress={() => setEditing(true)}
+        />
       </View>
 
       <BottomSheet
         visible={editing}
         onClose={() => setEditing(false)}
-        title="Edit cover"
+        title="Cover photo"
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -173,7 +195,10 @@ export default function CoverStep() {
                     variant="quiet"
                     size="medium"
                     onPress={() => {
-                      update({ coverLocalUri: null });
+                      // Clears both halves: this is the one place a cover is
+                      // deliberately removed, so it is the one place allowed
+                      // to produce a null path for `handleSave` to persist.
+                      update({ coverLocalUri: null, coverStoragePath: null });
                     }}
                   />
                 </View>
@@ -187,15 +212,6 @@ export default function CoverStep() {
             onChangeText={(text) => update({ coverDateLabel: text.length > 0 ? text : null })}
             placeholder={formattedClosingDate}
             maxLength={60}
-            returnKeyType="next"
-          />
-
-          <TextField
-            label={copy.create.nameLabel}
-            value={draft.title}
-            onChangeText={(title) => update({ title })}
-            placeholder={copy.create.namePlaceholder}
-            maxLength={200}
             returnKeyType="done"
             onSubmitEditing={() => setEditing(false)}
           />

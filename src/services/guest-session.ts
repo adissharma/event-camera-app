@@ -3,6 +3,9 @@ import { Platform } from 'react-native';
 
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import { listThemes } from '@/services/themes';
+import type { Database } from '@/types/database';
+
+type GuestPreviewRpc = Database['public']['CompositeTypes']['guest_event_preview'];
 
 /**
  * A guest's identity for one event, on one device.
@@ -36,6 +39,8 @@ export interface GuestEventPreview {
   shotsUsed: number;
   coverStoragePath: string | null;
   themeAccent: string | null;
+  /** Selects the invite layout. See `resolveCoverTemplate`. */
+  themeSlug: string | null;
   /** Set when this device has already joined — the form is then skipped. */
   existingDisplayName: string | null;
 }
@@ -128,6 +133,17 @@ async function readMockGalleryVisibility(celebrationId: string): Promise<string 
     const list = JSON.parse(raw) as { id?: string; primarySession?: { gallery_visibility?: string } }[];
     const match = list.find((item) => item.id === celebrationId);
     return match?.primarySession?.gallery_visibility ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveThemeSlug(themeKey: string | null | undefined): Promise<string | null> {
+  if (!themeKey) return null;
+  try {
+    const themes = await listThemes();
+    const match = themes.find((theme) => theme.id === themeKey || theme.slug === themeKey);
+    return match?.slug ?? null;
   } catch {
     return null;
   }
@@ -304,21 +320,12 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       throw error;
     }
 
-    const preview = data as unknown as {
-      celebration_id: string;
-      title: string;
-      ends_at: string | null;
-      shot_limit_per_guest: number | null;
-      photo_count?: number | null;
-      cover_storage_path: string | null;
-      theme_accent?: string | null;
-      default_theme_id?: string | null;
-    } | null;
+    const preview = data as GuestPreviewRpc | null;
 
     // A code that matches nothing returns null, not an error. Say so plainly
     // rather than reading through it and throwing a TypeError that the catch
     // below would then disguise as a backend outage.
-    if (!preview) {
+    if (!preview?.celebration_id || !preview.title) {
       throw new Error(`No event found for code "${slug}".`);
     }
 
@@ -330,10 +337,10 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       photoCount: preview.photo_count ?? 0,
       shotsUsed: stored?.shotsUsed ?? 0,
       coverStoragePath: preview.cover_storage_path,
-      themeAccent:
-        preview.theme_accent ??
-        (await resolveThemeAccent(preview.default_theme_id ?? null)) ??
-        null,
+      themeAccent: preview.theme_accent,
+      // This is the slug joined from the event's saved `default_theme_id` by
+      // the public RPC. `/j` passes it straight to the shared renderer.
+      themeSlug: preview.theme_slug,
       existingDisplayName: stored?.displayName ?? null,
     };
   } catch (err) {
@@ -364,6 +371,7 @@ export async function fetchGuestEventPreview(slug: string): Promise<GuestEventPr
       shotsUsed: stored?.shotsUsed ?? 0,
       coverStoragePath: found.coverStoragePath ?? null,
       themeAccent: (await resolveThemeAccent(found.defaultThemeId ?? null)) ?? null,
+      themeSlug: await resolveThemeSlug(found.defaultThemeId ?? null),
       existingDisplayName: stored?.displayName ?? null,
     };
   }

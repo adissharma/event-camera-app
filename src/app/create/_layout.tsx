@@ -6,6 +6,7 @@ import { CreationDraftProvider } from '@/features/celebrations/draft/store';
 import { colours } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { useAuth } from '@/features/auth/context';
+import { resetToUnauthenticatedRoot } from '@/lib/navigation/session-root';
 
 /**
  * The draft provider wraps the whole flow rather than each screen, so moving
@@ -34,7 +35,7 @@ export default function CreateLayout() {
   // redirecting during that window would kick out an already-signed-in host.
   useEffect(() => {
     if (isBackendConfigured && !isRestoring && !isSignedIn) {
-      router.replace('/' as never);
+      resetToUnauthenticatedRoot(router);
     }
   }, [isBackendConfigured, isRestoring, isSignedIn, router]);
 

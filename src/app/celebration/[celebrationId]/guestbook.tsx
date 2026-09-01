@@ -49,6 +49,8 @@ import {
   type StorySlideItem,
 } from '@/features/celebrations/story-viewer';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
+import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { useIsEventHost } from '@/features/entitlements/use-event-role';
 
 type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
 
@@ -106,7 +108,7 @@ function GuestbookHeroIcon({ size = 32, color = '#FFFFFF' }) {
   );
 }
 
-export default function GuestbookScreen() {
+function GuestbookScreenContent() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -484,3 +486,24 @@ const styles = StyleSheet.create({
     color: colours.textSecondary,
   },
 });
+
+/**
+ * Guestbook is a Stories+ feature, so the screen checks before it
+ * renders rather than trusting whatever opened it. A host without the package
+ * is offered the upgrade; a guest is sent back without ever seeing it.
+ */
+export default function GuestbookScreen() {
+  const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
+  const { isHost } = useIsEventHost(String(celebrationId));
+
+  return (
+    <FeatureGate
+      celebrationId={String(celebrationId)}
+      feature="guestbook"
+      title="Unlock Guestbook"
+      isHost={isHost}
+    >
+      <GuestbookScreenContent />
+    </FeatureGate>
+  );
+}

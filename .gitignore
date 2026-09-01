@@ -50,3 +50,15 @@ example
 supabase/.temp/
 .vercel
 .env*
+
+# Filter lab renders — regenerate with `node tools/filter-lab/lab.cjs`
+tools/filter-lab/out/
+
+# Photos dropped into the tuner for testing — yours, not the repo's
+tools/filter-lab/images/*
+!tools/filter-lab/images/.gitkeep
+
+# Xcode DerivedData from local archive/export runs — 3.7GB of machine-specific
+# build output. `build/ExportOptions.plist` beside it is real configuration and
+# stays tracked, so this ignores the derived tree rather than all of `build/`.
+build/derived/

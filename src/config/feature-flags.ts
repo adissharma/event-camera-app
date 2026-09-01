@@ -9,6 +9,8 @@
  * later. It must never render a control that looks available and then fails.
  */
 
+import { REVENUECAT_CONFIG } from './app-config';
+
 export const FEATURE_FLAGS = {
   /** Multiple functions (Mehndi, Sangeet, Reception…) per celebration. */
   multiEventCreation: false,
@@ -28,7 +30,7 @@ export const FEATURE_FLAGS = {
   moderationQueue: true,
   /** Real in-app purchases. When false, the purchase abstraction runs in
    *  development mode and never contacts a billing service. */
-  realPurchases: false,
+  realPurchases: REVENUECAT_CONFIG.purchasesEnabled,
 } as const;
 
 export type FeatureFlag = keyof typeof FEATURE_FLAGS;

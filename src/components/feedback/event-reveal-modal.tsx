@@ -16,7 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/ui/text';
 import { CelebrationIcon, ClockIcon, ImageIcon } from '@/components/ui/icons';
 import { useMotion } from '@/design/use-motion';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, fontFamilies, layout, radii, spacing } from '@/design';
 
 export interface EventRevealModalProps {
   visible: boolean;
@@ -520,7 +520,7 @@ const S = StyleSheet.create({
 
   // The one number on the screen, and the reason the screen exists.
   count: {
-    fontFamily: 'InstrumentSerif_400Regular',
+    fontFamily: fontFamilies.display,
     fontSize: 108,
     lineHeight: 118,
     color: colours.accentWarm,

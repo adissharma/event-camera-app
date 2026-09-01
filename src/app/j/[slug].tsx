@@ -1,26 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
   Platform,
-  Pressable,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
-import { CameraIcon, CameraSparkleIcon, ClockIcon, PersonIcon } from '@/components/ui/icons';
-import { CoverScrim } from '@/components/media/cover-scrim';
 import { useCoverSource } from '@/features/celebrations/cover-source';
+import { resolveCoverTemplate } from '@/features/celebrations/cover-templates';
+import { GuestJoinScreen } from '@/features/celebrations/join/guest-join-screen';
 import { colours, layout, radii, spacing } from '@/design';
 import {
   fetchGuestEventPreview,
@@ -29,13 +22,7 @@ import {
   loadStoredGuestSession,
 } from '@/services/guest-session';
 
-const NAME_MAX_LENGTH = 50;
 
-/**
- * The cover runs to roughly two thirds of the viewport, so the photograph is
- * the screen and the form sits under it rather than beside it.
- */
-const COVER_HEIGHT_RATIO = 0.66;
 
 /**
  * The first screen a guest sees, from a QR code or an invitation link.
@@ -48,11 +35,6 @@ const COVER_HEIGHT_RATIO = 0.66;
 export default function GuestEntryScreen() {
   const { slug, t } = useLocalSearchParams<{ slug: string; t?: string }>();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
-  // The live viewport, not a fixed device height: mobile browser chrome grows
-  // and shrinks as the page scrolls, and a static height leaves the CTA under
-  // the toolbar on exactly the phones that can least afford it.
-  const { height: viewportHeight } = useWindowDimensions();
 
   const inputRef = useRef<TextInput>(null);
   const [name, setName] = useState('');
@@ -140,170 +122,31 @@ export default function GuestEntryScreen() {
     );
   }
 
-  const coverHeight = Math.round(viewportHeight * COVER_HEIGHT_RATIO);
   const shotsLeft =
     preview.shotLimit === null ? null : Math.max(0, preview.shotLimit - preview.shotsUsed);
   const accent = preview.themeAccent ?? colours.accentWarm;
 
   return (
-    <View style={S.root}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, spacing.lg) }}
-          keyboardShouldPersistTaps="handled"
-          // Scrolls only as far as the focused field needs, so the CTA below
-          // it stays on screen rather than being pushed out of reach.
-          keyboardDismissMode="interactive"
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-        >
-          {/* ── Cover ─────────────────────────────────────────────── */}
-          <View style={[S.cover, { height: coverHeight }]}>
-            <Image
-              source={coverSource}
-              style={S.coverImage}
-              resizeMode="cover"
-              accessibilityLabel={`Cover photograph for ${preview.title}`}
-            />
-
-            <CoverScrim />
-
-            {/* Event identity sits in the dark end of the ramp, so it reads as
-                emerging from the photograph rather than floating on it. */}
-            <View style={S.identity}>
-              <AppText variant="eyebrow" style={[S.eyebrow, { color: accent }]}>
-                You&rsquo;re invited
-              </AppText>
-
-              <AppText
-                variant="displayLarge"
-                align="center"
-                numberOfLines={2}
-                // Shrinks a long event name rather than cutting it off.
-                adjustsFontSizeToFit
-                minimumFontScale={0.7}
-                style={S.title}
-              >
-                {preview.title}
-              </AppText>
-
-              <View style={S.detailRow}>
-                <Detail
-                  icon={<ClockIcon size={18} color={accent} />}
-                  value={countdown}
-                  label="Time left"
-                />
-                <View style={S.detailDivider} />
-                <Detail
-                  icon={<CameraIcon size={18} color={accent} />}
-                  value={shotsLeft === null ? '∞' : String(shotsLeft)}
-                  label="Shots left"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* ── Form ──────────────────────────────────────────────── */}
-          <View style={S.form}>
-            <View
-              style={[
-                S.field,
-                showValidation && !isNameValid && S.fieldInvalid,
-              ]}
-            >
-              <PersonIcon size={20} color={colours.textSecondary} />
-              <TextInput
-                ref={inputRef}
-                value={name}
-                onChangeText={(next) => {
-                  setName(next);
-                  if (next.trim()) setShowValidation(false);
-                  if (error) setError(null);
-                }}
-                placeholder="Enter your name"
-                placeholderTextColor={colours.textSecondary}
-                  selectionColor={accent}
-                  style={S.fieldInput}
-                maxLength={NAME_MAX_LENGTH}
-                autoCapitalize="words"
-                autoComplete="name"
-                textContentType="name"
-                returnKeyType="go"
-                onSubmitEditing={() => void handleJoin()}
-                accessibilityLabel="Your name"
-                editable={!isJoining}
-              />
-            </View>
-
-            {showValidation && !isNameValid ? (
-              <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">
-                Enter your name to join.
-              </AppText>
-            ) : null}
-
-            {error ? (
-              <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">
-                {error}
-              </AppText>
-            ) : null}
-
-            <Pressable
-              onPress={() => void handleJoin()}
-              disabled={!isNameValid || isJoining}
-              accessibilityRole="button"
-              accessibilityLabel="Join the event"
-              accessibilityState={{ disabled: !isNameValid || isJoining }}
-              style={({ pressed }) => [
-                S.cta,
-                { backgroundColor: accent },
-                (!isNameValid || isJoining) && S.ctaDisabled,
-                pressed && S.ctaPressed,
-              ]}
-            >
-              {isJoining ? (
-                <ActivityIndicator color={colours.textOnBrand} />
-              ) : (
-                <>
-                  <CameraSparkleIcon size={22} color={colours.textOnBrand} />
-                  <AppText variant="labelLarge" style={S.ctaLabel}>
-                    Join the event
-                  </AppText>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </View>
-  );
-}
-
-/** One of the two compact facts under the title. */
-function Detail({
-  icon,
-  value,
-  label,
-}: {
-  icon: React.ReactNode;
-  value: string;
-  label: string;
-}) {
-  return (
-    <View style={S.detail}>
-      {icon}
-      <View>
-        <AppText variant="labelLarge" style={S.detailValue}>
-          {value}
-        </AppText>
-        <AppText variant="caption" style={S.detailLabel}>
-          {label.toUpperCase()}
-        </AppText>
-      </View>
-    </View>
+    <GuestJoinScreen
+      template={resolveCoverTemplate(preview.themeSlug)}
+      coverSource={coverSource}
+      title={preview.title}
+      countdownLabel={countdown}
+      shotsLeftLabel={shotsLeft === null ? '∞' : String(shotsLeft)}
+      accent={accent}
+      name={name}
+      onNameChange={(next) => {
+        setName(next);
+        if (next.trim()) setShowValidation(false);
+        if (error) setError(null);
+      }}
+      nameInputRef={inputRef}
+      error={error}
+      showValidation={showValidation}
+      isNameValid={isNameValid}
+      isJoining={isJoining}
+      onJoin={() => void handleJoin()}
+    />
   );
 }
 

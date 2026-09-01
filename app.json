@@ -74,7 +74,15 @@
       "@bacons/apple-targets",
       "./plugins/with-live-activity-module",
       "expo-router",
-      "expo-build-properties",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "buildReactNativeFromSource": true,
+            "usePrecompiledModules": false
+          }
+        }
+      ],
       [
         "react-native-share",
         {
@@ -97,6 +105,7 @@
       ],
       "expo-secure-store",
       "expo-sharing",
+      "expo-image",
       "@react-native-community/datetimepicker",
       "expo-video",
       "expo-audio",

@@ -476,6 +476,96 @@ export type Database = {
           },
         ]
       }
+      event_recaps: {
+        Row: {
+          attempt_count: number
+          available_at: string | null
+          celebration_id: string
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          event_session_id: string
+          failed_at: string | null
+          id: string
+          last_error_code: string | null
+          last_error_message: string | null
+          lease_expires_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          media_count: number
+          metadata: Json
+          playback_url: string | null
+          selected_media_ids: string[]
+          started_at: string | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          available_at?: string | null
+          celebration_id: string
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          event_session_id: string
+          failed_at?: string | null
+          id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          lease_expires_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          media_count?: number
+          metadata?: Json
+          playback_url?: string | null
+          selected_media_ids?: string[]
+          started_at?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          available_at?: string | null
+          celebration_id?: string
+          completed_at?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          event_session_id?: string
+          failed_at?: string | null
+          id?: string
+          last_error_code?: string | null
+          last_error_message?: string | null
+          lease_expires_at?: string | null
+          locked_by?: string | null
+          max_attempts?: number
+          media_count?: number
+          metadata?: Json
+          playback_url?: string | null
+          selected_media_ids?: string[]
+          started_at?: string | null
+          status?: string
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_recaps_celebration_id_fkey"
+            columns: ["celebration_id"]
+            isOneToOne: false
+            referencedRelation: "celebrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_recaps_event_session_id_fkey"
+            columns: ["event_session_id"]
+            isOneToOne: true
+            referencedRelation: "event_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_sessions: {
         Row: {
           allow_media_from_any_date: boolean
@@ -1391,6 +1481,52 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_event_recap_job: {
+        Args: { p_lease_seconds?: number; p_worker_id: string }
+        Returns: {
+          attempt_count: number
+          available_at: string | null
+          celebration_id: string
+          completed_at: string | null
+          created_at: string
+          duration_ms: number | null
+          event_session_id: string
+          failed_at: string | null
+          id: string
+          last_error_code: string | null
+          last_error_message: string | null
+          lease_expires_at: string | null
+          locked_by: string | null
+          max_attempts: number
+          media_count: number
+          metadata: Json
+          playback_url: string | null
+          selected_media_ids: string[]
+          started_at: string | null
+          status: string
+          storage_path: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "event_recaps"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      complete_event_recap_job: {
+        Args: {
+          p_duration_ms: number
+          p_media_count: number
+          p_metadata?: Json
+          p_playback_url: string
+          p_recap_id: string
+          p_selected_media_ids: string[]
+          p_storage_path: string
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       create_celebration_with_default_session:
         | {
             Args: {
@@ -1502,7 +1638,17 @@ export type Database = {
         Args: { p_media_item_id: string }
         Returns: Json
       }
+      enqueue_due_event_recaps: { Args: { p_now?: string }; Returns: number }
       ensure_personal_workspace: { Args: never; Returns: string }
+      fail_event_recap_job: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_recap_id: string
+          p_worker_id: string
+        }
+        Returns: boolean
+      }
       finalise_media_upload: {
         Args: {
           p_actual_size_bytes?: number
@@ -1679,6 +1825,10 @@ export type Database = {
           last_seen_at: string
         }[]
       }
+      get_guest_recap: {
+        Args: { p_event_code: string; p_guest_token: string }
+        Returns: Json
+      }
       get_host_challenge_photos: {
         Args: { p_celebration_id: string }
         Returns: Json
@@ -1713,6 +1863,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      mark_event_recap_start_failed: {
+        Args: { p_error_message: string; p_event_session_id: string }
+        Returns: boolean
+      }
       pin_host_media_item: { Args: { p_media_item_id: string }; Returns: Json }
       publish_celebration: {
         Args: {
@@ -1728,6 +1882,19 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      request_event_recap:
+        | {
+            Args: { p_event_session_id: string; p_selected_media_ids: string[] }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_event_session_id: string
+              p_render_mode?: string
+              p_selected_media_ids: string[]
+            }
+            Returns: Json
+          }
       seed_event_challenges_if_empty: {
         Args: { p_celebration_id: string; p_challenges: Json }
         Returns: Json
@@ -1892,6 +2059,7 @@ export type Database = {
         cover_storage_path: string | null
         theme_accent: string | null
         photo_count: number | null
+        theme_slug: string | null
       }
       joined_guest_session: {
         guest_session_id: string | null

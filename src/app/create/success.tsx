@@ -1,29 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Animated,
-  Easing,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { Animated, Easing, Pressable, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
 import {
-  CalendarIcon,
   CameraSparkleIcon,
   CelebrationIcon,
   LinkIcon,
 } from '@/components/ui/icons';
-import { CoverScrim, SCRIM_LOCATIONS_SUCCESS } from '@/components/media/cover-scrim';
 import { useCoverSource } from '@/features/celebrations/cover-source';
+import { resolveCoverTemplate } from '@/features/celebrations/cover-templates';
+import { GuestJoinScreen } from '@/features/celebrations/join/guest-join-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   clearPublicationResult,
@@ -32,22 +22,18 @@ import {
 import { celebrationKeys } from '@/services/celebrations';
 import { colours, layout, radii, spacing } from '@/design';
 
-/**
- * The cover runs to roughly two thirds of the viewport, leaving the bottom
- * third for content. This makes the photograph the visual lead.
- */
-const COVER_HEIGHT_RATIO = 0.67;
-
 /** How long "Copied" stays before the button reverts. */
 const COPIED_RESET_MS = 1600;
 
 /**
  * What the host sees the moment their event exists.
  *
- * Deliberately the guest invitation with different words: same cover ramp, same
- * type hierarchy, same pill. A host who has just spent six steps looking at a
- * preview of the invitation should land somewhere that is recognisably it,
- * rather than on a receipt.
+ * Deliberately the guest invitation with different words. Not a lookalike of
+ * it — literally `GuestJoinScreen`, rendered with the template the host chose
+ * and its `footer` slot carrying the link and CTA in place of the join form.
+ * A host who has just spent six steps looking at a preview of their invitation
+ * lands on that exact invitation, rather than on a receipt or on a hand-rolled
+ * copy of the default cover that ignores their choice.
  *
  * The one flourish is the popper, which plays once. Everything after it simply
  * arrives, staggered, inside a second.
@@ -56,8 +42,6 @@ export default function SuccessScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { reset } = useCreationDraft();
-  const insets = useSafeAreaInsets();
-  const { height: viewportHeight } = useWindowDimensions();
 
   const [copied, setCopied] = useState(false);
 
@@ -96,7 +80,6 @@ export default function SuccessScreen() {
     );
   }
 
-  const coverHeight = Math.round(viewportHeight * COVER_HEIGHT_RATIO);
 
   async function handleCopy() {
     await Clipboard.setStringAsync(result!.guestUrl);
@@ -106,70 +89,56 @@ export default function SuccessScreen() {
     copyTimer.current = setTimeout(() => setCopied(false), COPIED_RESET_MS);
   }
 
+  const template = resolveCoverTemplate(result.themeSlug);
+  /**
+   * The confirmation chrome sits inside the template, so it has to answer to
+   * the template's own ground. On the light cover the shared dark-surface
+   * tokens would put champagne text on cream — around 1.6:1, unreadable —
+   * so the light template gets ink-on-cream equivalents instead.
+   */
+  const onLight = template === 'lightArch';
+  const footerInk = onLight ? '#302E2C' : colours.accentWarm;
+  const footerSurface = onLight ? '#FFFFFF' : colours.surfaceMuted;
+  const footerBorder = onLight ? '#D9D2C9' : colours.borderSubtle;
+  const footerText = onLight ? '#302E2C' : colours.textPrimary;
+
   return (
-    <View style={S.root}>
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, spacing.lg) }}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        {/* ── Cover ─────────────────────────────────────────────── */}
-        <View style={[S.cover, { height: coverHeight }]}>
-          <Image
-            source={coverSource}
-            style={S.coverImage}
-            resizeMode="cover"
-            accessibilityLabel={`Cover photograph for ${result.eventName}`}
-          />
-          <CoverScrim locations={SCRIM_LOCATIONS_SUCCESS} />
-        </View>
-
-        {/* ── Identity ──────────────────────────────────────────── */}
-        <View style={S.identity}>
-          <Popper play={entrance.playPopper} />
-
+    <GuestJoinScreen
+      // The template the host actually selected, snapshotted at publication
+      // alongside the cover path. `resolveCoverTemplate` falls back to the
+      // default only when the event genuinely carries no selection.
+      template={template}
+      coverSource={coverSource}
+      title={result.eventName}
+      countdownLabel={daysLeft ?? '—'}
+      shotsLeftLabel="∞"
+      // Nothing here is a live join form; the template renders the footer
+      // below in its place, so none of the guest controls are reachable.
+      interactive={false}
+      footer={
+        <View style={{ gap: spacing.sm }}>
           <Animated.View style={entrance.item(0)}>
-            <AppText variant="eyebrow" align="center" style={S.eyebrow}>
-              Congratulations!
-            </AppText>
-          </Animated.View>
-
-          <Animated.View style={entrance.item(1)}>
-            <AppText
-              variant="displayLarge"
-              align="center"
-              numberOfLines={2}
-              adjustsFontSizeToFit
-              minimumFontScale={0.7}
-              style={S.title}
-            >
-              {result.eventName}
-            </AppText>
-          </Animated.View>
-
-          {daysLeft ? (
-            <Animated.View style={[S.daysRow, entrance.item(2)]}>
-              <View style={S.rule} />
-              <CalendarIcon size={16} color={colours.accentWarm} />
-              <AppText variant="caption" style={S.daysLabel}>
-                {daysLeft}
+            <View style={S.congrats}>
+              <Popper play={entrance.playPopper} tint={footerInk} />
+              <AppText variant="eyebrow" align="center" style={{ color: footerInk }}>
+                Congratulations!
               </AppText>
-              <View style={S.rule} />
-            </Animated.View>
-          ) : null}
-        </View>
+            </View>
+          </Animated.View>
 
-        {/* ── Share ─────────────────────────────────────────────── */}
-        <View style={S.share}>
           <Animated.View style={entrance.item(3)}>
-            <View style={S.field}>
-              <LinkIcon size={20} color={colours.textSecondary} />
+            <View
+              style={[
+                S.field,
+                { backgroundColor: footerSurface, borderColor: footerBorder },
+              ]}
+            >
+              <LinkIcon size={20} color={onLight ? '#94887B' : colours.textSecondary} />
 
               <AppText
                 variant="bodySmall"
                 numberOfLines={1}
-                style={S.fieldValue}
+                style={[S.fieldValue, { color: footerText }]}
                 accessibilityLabel={`Guest link, ${displayUrl(result.guestUrl)}`}
               >
                 {displayUrl(result.guestUrl)}
@@ -180,9 +149,9 @@ export default function SuccessScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={copied ? 'Link copied' : 'Copy guest link'}
                 hitSlop={8}
-                style={({ pressed }) => [S.copy, pressed && S.pressed]}
+                style={({ pressed }) => [S.copy, { borderColor: footerBorder }, pressed && S.pressed]}
               >
-                <AppText variant="labelSmall" style={S.copyLabel}>
+                <AppText variant="labelSmall" style={{ color: footerInk }}>
                   {copied ? 'Copied' : 'Copy'}
                 </AppText>
               </Pressable>
@@ -203,8 +172,8 @@ export default function SuccessScreen() {
             </Pressable>
           </Animated.View>
         </View>
-      </ScrollView>
-    </View>
+      }
+    />
   );
 }
 
@@ -273,7 +242,7 @@ const PARTICLES = [
  * Scales from 0.85 with an overshoot and unwinds a small rotation, while three
  * particles drift off and fade. Plays once, on appearance.
  */
-function Popper({ play }: { play: boolean }) {
+function Popper({ play, tint }: { play: boolean; tint: string }) {
   const pop = useRef(new Animated.Value(0)).current;
   const drift = useRef(new Animated.Value(0)).current;
 
@@ -354,7 +323,7 @@ function Popper({ play }: { play: boolean }) {
           ],
         }}
       >
-        <CelebrationIcon size={34} color={colours.accentWarm} />
+        <CelebrationIcon size={34} color={tint} />
       </Animated.View>
     </View>
   );
@@ -380,7 +349,9 @@ function formatDaysLeft(endsAt: string | null): string | null {
 
   const days = Math.floor(remaining / 86_400_000);
   if (days === 0) return 'Last day';
-  return `${days} ${days === 1 ? 'day' : 'days'} left`;
+  // No trailing "left": every template pairs this value with its own
+  // "TIME LEFT" / "LEFT" label, so including it here read as "4 days left LEFT".
+  return `${days} ${days === 1 ? 'day' : 'days'}`;
 }
 
 /**
@@ -399,47 +370,17 @@ const S = StyleSheet.create({
   centred: { alignItems: 'center', justifyContent: 'center' },
 
   // ── Cover ──
-  cover: { width: '100%', backgroundColor: colours.background },
-  coverImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
+
+  congrats: { alignItems: 'center', gap: spacing.xxs, paddingBottom: spacing.xs },
 
   // ── Identity ──
   // Pulled up into the ramp, so the popper sits in the dark end of the
   // photograph rather than below a seam.
-  identity: {
-    marginTop: -spacing.xl,
-    paddingHorizontal: layout.gutter,
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   popper: { alignItems: 'center', justifyContent: 'center', marginBottom: spacing.xxs },
   particle: { position: 'absolute', borderRadius: 2 },
 
   eyebrow: { color: colours.accentWarm },
-  title: { color: colours.textPrimary },
 
-  daysRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.xxs,
-    alignSelf: 'stretch',
-  },
-  daysLabel: {
-    color: colours.textSecondary,
-    letterSpacing: 1.2,
-    fontSize: 10,
-    textTransform: 'uppercase',
-  },
-  rule: { flex: 1, maxWidth: 48, height: layout.hairline, backgroundColor: colours.borderSubtle },
 
   // ── Share ──
   share: {

@@ -7,7 +7,8 @@ import { TextField } from '@/components/forms/text-field';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { useAuth } from '@/features/auth/context';
-import { fetchMyProfile, firstNameFrom } from '@/services/profile';
+import { fetchMyProfile } from '@/services/profile';
+import { resetToAuthenticatedRoot } from '@/lib/navigation/session-root';
 import { layout, spacing } from '@/design';
 import { copy, t } from '@/i18n';
 
@@ -46,11 +47,12 @@ export default function VerifyScreen() {
       return;
     }
 
-    // Check if user has a first name
+    // Onboarding is explicit. A social/email profile may have a suggested name
+    // before the user has accepted or edited it on the name screen.
     try {
       const profile = await fetchMyProfile();
-      if (firstNameFrom(profile)) {
-        router.replace((redirect as never) || '/home');
+      if (profile?.onboarding_completed_at) {
+        resetToAuthenticatedRoot(router, (redirect as never) || '/home');
       } else {
         router.replace({
           pathname: '/your-name',
@@ -58,7 +60,10 @@ export default function VerifyScreen() {
         });
       }
     } catch {
-      router.replace((redirect as never) || '/home');
+      router.replace({
+        pathname: '/your-name',
+        params: redirect ? { redirect } : undefined,
+      });
     }
   }
 

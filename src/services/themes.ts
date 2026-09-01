@@ -1,9 +1,11 @@
 import { requireSupabase } from '@/lib/supabase/client';
 import type { ThemeRow } from '@/types/database';
+import { curateThemes } from '@/features/celebrations/cover-templates';
 
 export const themeKeys = {
   all: ['themes'] as const,
   list: () => [...themeKeys.all, 'list'] as const,
+  curated: () => [...themeKeys.all, 'curated'] as const,
 };
 
 /**
@@ -96,12 +98,12 @@ export async function listThemes(): Promise<ThemeRow[]> {
       },
       {
         slug: 'black_tie',
-        name: 'Black Tie',
-        description: 'Formal, monochrome, minimal.',
+        name: 'Light Arch',
+        description: 'An ivory invitation with an arched photograph and restrained taupe details.',
         inspiration_pack: 'black_tie',
         preview_asset_key: 'theme_editorial',
         sort_order: 70,
-        design_tokens: { cover: { align: 'centre', overlay: 'scrim_full' }, accent: '#F5F2ED' },
+        design_tokens: { cover: { align: 'centre', overlay: 'scrim_full' }, accent: '#8C8175' },
         is_active: true,
         created_at: new Date().toISOString(),
       },
@@ -118,4 +120,22 @@ export async function listThemes(): Promise<ThemeRow[]> {
       },
     ] as any[];
   }
+}
+
+/**
+ * The templates a host may choose from, in display order.
+ *
+ * Deliberately separate from `listThemes`: that must keep returning every row,
+ * because an event published against a since-retired theme still has to
+ * resolve its accent and cover treatment. Only the picker is narrowed.
+ */
+export async function listCoverTemplateThemes(): Promise<ThemeRow[]> {
+  return curateThemes(await listThemes());
+}
+
+/** Resolves either the stable theme slug used by the draft or a theme id. */
+export async function resolveThemeId(themeKey: string | null | undefined): Promise<string | null> {
+  if (!themeKey) return null;
+  const match = (await listThemes()).find((theme) => theme.slug === themeKey || theme.id === themeKey);
+  return match?.id ?? null;
 }

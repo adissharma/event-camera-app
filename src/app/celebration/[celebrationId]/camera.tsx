@@ -14,22 +14,13 @@ import {
   Alert,
   Linking,
   Platform,
+  Keyboard,
+  KeyboardAvoidingView,
   PanResponder,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import { VideoView, useVideoPlayer } from 'expo-video';
-let CameraView: any = null;
-let hasNativeCamera = false;
-
-try {
-  const expoCamera = require('expo-camera');
-  CameraView = expoCamera.CameraView;
-  hasNativeCamera = true;
-} catch (error) {
-  console.warn('Native camera module is missing in this build.', error);
-}
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient } from '@/lib/query-client';
@@ -41,20 +32,24 @@ import Svg, { Path, Circle } from 'react-native-svg';
 import { useAuth } from '@/features/auth/context';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
+import {
+  UploadStatus,
+  type UploadMediaType,
+  type UploadPhase,
+} from '@/components/feedback/upload-status';
 import { BRAND_CONFIG } from '@/config/brand';
-import { QrCodeIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import {
   fetchCelebrationDetail,
   type CelebrationDetail,
   celebrationDetailKeys,
 } from '@/services/celebration-detail';
-import { colours, radii, spacing, layout } from '@/design';
+import { colours, fontFamilies, radii, spacing, layout } from '@/design';
 import { fetchMyProfile, firstNameFrom, profileKeys } from '@/services/profile';
 import { isBackendConfigured } from '@/lib/supabase/client';
 import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
-import { uploadGuestPhoto } from '@/services/guest-media-upload';
-import { uploadHostPhoto } from '@/services/host-media-upload';
+import { uploadGuestPhoto , uploadGuestMedia } from '@/services/guest-media-upload';
+import { uploadHostPhoto , uploadHostMedia } from '@/services/host-media-upload';
 import { useWebCameraTrack } from '@/features/media/web-camera-track';
 import { useViewfinderPinchZoom } from '@/features/media/use-viewfinder-pinch-zoom';
 import {
@@ -63,17 +58,39 @@ import {
 } from '@/features/media/web-mirrored-video-track';
 import type { MediaSource } from '@/types/database';
 import { eventAllowsVideoCapture } from '@/features/media/event-media';
-import { uploadGuestMedia } from '@/services/guest-media-upload';
-import { uploadHostMedia } from '@/services/host-media-upload';
 import { normaliseMimeType } from '@/features/media/storage-paths';
 import { useCameraAccess } from '@/features/media/camera-status';
+import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
+import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
+import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 import { useMicrophoneStatus } from '@/features/media/microphone-status';
 import { useVisualViewportOffset } from '@/features/media/use-visual-viewport-offset';
+import {
+  ViewfinderBottomControls,
+  ViewfinderCameraRollPlusIcon,
+  ViewfinderZoomPill,
+} from '@/features/media/viewfinder-chrome';
+import {
+  ViewfinderShotCounter,
+  VIEWFINDER_PILL_HEIGHT as PILL_HEIGHT,
+  VIEWFINDER_PILL_INSET as PILL_INSET,
+  VIEWFINDER_PILL_RADIUS as PILL_RADIUS,
+} from '@/features/media/viewfinder-shot-counter';
 import { compressVideoForUpload } from '@/features/media/video-compression';
 import { generateVideoThumbnail } from '@/features/media/video-thumbnail';
 import { AudioWaveform } from '@/features/celebrations/audio-waveform';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { AudioCapture, type AudioCaptureResult } from '@/features/celebrations/audio-capture';
+let CameraView: any = null;
+let hasNativeCamera = false;
+
+try {
+  const expoCamera = require('expo-camera');
+  CameraView = expoCamera.CameraView;
+  hasNativeCamera = true;
+} catch (error) {
+  console.warn('Native camera module is missing in this build.', error);
+}
 
 interface PhotoItem {
   uri: string;
@@ -211,17 +228,6 @@ const HEADER_TOP_GAP = 24;
  * selector — are both built from these, so they cannot drift apart in height,
  * corner radius, or internal padding.
  */
-const PILL_HEIGHT = 36;
-const PILL_RADIUS = PILL_HEIGHT / 2;
-const PILL_PADDING = 3;
-/** Inner control height, so the pill's own padding is the only thing added. */
-const PILL_INNER_HEIGHT = PILL_HEIGHT - PILL_PADDING * 2;
-/** Distance from the viewfinder edge. Shared, so both sit on one baseline. */
-const PILL_INSET = 20;
-
-/** Counter type, sized to sit inside PILL_HEIGHT without clipping. */
-const COUNTER_SIZE = 22;
-const COUNTER_LEADING = 28;
 const MAX_VIDEO_DURATION_MS = 30_000;
 /**
  * Audio runs to a minute where video stops at thirty seconds. A spoken message
@@ -323,54 +329,6 @@ function DotsIcon({ size = 22, color = '#FFFFFF' }) {
   );
 }
 
-function FlashIcon({ mode, size = 22, color = '#FFFFFF' }: { mode: 'off' | 'on' | 'auto'; size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill={mode === 'on' ? color : 'none'}
-      />
-      {mode === 'auto' && (
-        <View style={S.flashAutoBadge}>
-          <AppText style={S.flashAutoText}>A</AppText>
-        </View>
-      )}
-    </Svg>
-  );
-}
-
-function FlipIcon({ size = 22, color = '#FFFFFF' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l.73-.73"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
-function CameraRollPlusIcon({ size = 22, color = '#FFFFFF' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M12 5v14M5 12h14"
-        stroke={color}
-        strokeWidth={2.2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
-
 // ─── Camera / Viewfinder Screen ────────────────────────────────────────────────
 
 export default function CameraScreen() {
@@ -409,12 +367,28 @@ export default function CameraScreen() {
   // silently break Guestbook video messages, so this bypasses that gate.
   const videoCaptureEnabled = isGuestbookCapture || eventAllowsVideoCapture(primarySession);
 
+
   // ── Upload pipeline ──
   //
   // `capture_mode` is the source of truth for whether the camera-roll action
   // shows at all — no separate toggle, no client-side flag. It applies to both
   // hosts and guests, so the setting controls what actions are available to both.
   const isGuest = detail?.viewerRole === 'guest';
+
+  /*
+   * Video is a Stories+ capability, and the two audiences differ.
+   *
+   * A host testing their own event still sees the PHOTO / VIDEO rail even
+   * without the package — tapping VIDEO opens the upgrade instead of switching
+   * mode, so the capability is discoverable by the one person who can buy it.
+   * A guest simply never sees VIDEO: they cannot buy anything, so offering a
+   * mode that refuses to work would be a dead control and an unnecessary
+   * glimpse of what their host did not pay for.
+   */
+  const entitlements = useEventEntitlements(celebrationId);
+  const videoUnlocked = entitlements.has('video');
+  const showVideoOption = videoCaptureEnabled && (videoUnlocked || !isGuest);
+  const [videoUpgradeOpen, setVideoUpgradeOpen] = useState(false);
   const captureMode = primarySession?.capture_mode ?? 'camera_and_library';
   const showCameraRollAction = captureMode !== 'camera_only' && !isGuestbookCapture;
   const [guestAuth, setGuestAuth] = useState<{
@@ -425,6 +399,17 @@ export default function CameraScreen() {
   const [isUploading, setIsUploading] = useState(false);
   /** Drives the Post button's label during a video post — see `commitVideo`. */
   const [postingStage, setPostingStage] = useState<'idle' | 'preparing' | 'uploading'>('idle');
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase | null>(null);
+  const [completedUpload, setCompletedUpload] = useState<UploadMediaType | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  async function confirmUploadComplete(mediaType: UploadMediaType) {
+    setUploadPhase('complete');
+    setCompletedUpload(mediaType);
+    await new Promise<void>((resolve) => setTimeout(resolve, 850));
+    setCompletedUpload(null);
+    setUploadPhase(null);
+  }
 
   useEffect(() => {
     if (!isGuest || !celebrationId) return;
@@ -663,10 +648,6 @@ export default function CameraScreen() {
     isCompleted: false, isOngoing: false,
   });
 
-  // ── Drum Roll Counter Animation ──
-  const [displayedCount, setDisplayedCount] = useState<number | null>(null);
-  const hasAnimatedCounter = useRef(false);
-
   useEffect(() => {
     if (!celebration) return;
     const compute = () => {
@@ -779,6 +760,22 @@ export default function CameraScreen() {
    * left to explicitly restore.
    */
   const previewViewportOffset = useVisualViewportOffset();
+
+  // Listen for keyboard show/hide to adjust spacing on iOS.
+  useEffect(() => {
+    if (isWeb) return undefined;
+    const showListener = Keyboard.addListener('keyboardWillShow', (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const hideListener = Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      showListener.remove();
+      hideListener.remove();
+    };
+  }, [isWeb]);
+
   const fullScreenPreviewStyle = isWeb
     ? ({
         position: 'fixed',
@@ -848,6 +845,14 @@ export default function CameraScreen() {
       return;
     }
     if (!videoCaptureEnabled || next === 'audio') return;
+
+    // The host may look, but not yet record. Intercepted here rather than by
+    // disabling the control, so the tap does something — it opens the way to
+    // having it — instead of nothing.
+    if (next === 'video' && !videoUnlocked) {
+      setVideoUpgradeOpen(true);
+      return;
+    }
     setCaptureType(next);
   }
 
@@ -934,6 +939,7 @@ export default function CameraScreen() {
     height?: number,
     captionText?: string,
   ) {
+    setUploadPhase('processing');
     setFlyingThumbnailUri(uri);
     flyingAnim.setValue({ x: 0, y: 0 });
     flyingScale.setValue(1);
@@ -973,10 +979,12 @@ export default function CameraScreen() {
     let posted = false;
 
     if (!isBackendConfigured) {
+      setUploadPhase('uploading');
       await AsyncStorage.setItem(`__mock_photos_${celebrationId}`, JSON.stringify(next));
       posted = true;
     } else {
       setIsUploading(true);
+      setUploadPhase('uploading');
       try {
         if (isGuest && guestAuth) {
           const uploadResult = await uploadGuestPhoto({
@@ -1016,6 +1024,7 @@ export default function CameraScreen() {
         posted = true;
       } catch (e) {
         console.error(`Failed to upload ${source} photo:`, e);
+        setUploadPhase(null);
         Alert.alert('Upload failed', formatUploadFailure('photo', e));
         // The server never received it — only the local, session-only
         // thumbnail needs undoing.
@@ -1029,6 +1038,8 @@ export default function CameraScreen() {
     void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
 
     if (!posted) return;
+
+    await confirmUploadComplete('photo');
 
     // Matches `commitVideo`'s plain-gallery success path exactly — same
     // target route, same `dismissTo`-with-`replace`-fallback shape, same
@@ -1054,6 +1065,7 @@ export default function CameraScreen() {
     const mediaKind = preview.kind === 'audio' ? 'audio' : 'video';
     const trimmedCaption = captionInput?.trim() || undefined;
     setIsUploading(true);
+    setUploadPhase('processing');
 
     // Compression only applies to a real video upload: audio has nothing to
     // transcode, the no-backend mock path never leaves the device, and web
@@ -1092,6 +1104,7 @@ export default function CameraScreen() {
       }
     }
     setPostingStage('uploading');
+    setUploadPhase('uploading');
 
     // Only non-null once compression actually produced a second file — never
     // the sole copy of the recording, so it's always safe to delete once the
@@ -1229,6 +1242,8 @@ export default function CameraScreen() {
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
 
+      await confirmUploadComplete(mediaKind);
+
       if (effectivePreview.challengeId) {
         const target = {
           pathname: '/celebration/[celebrationId]',
@@ -1288,6 +1303,7 @@ export default function CameraScreen() {
       deleteLocalVideo(effectivePreview.uri, 'posting');
     } catch (error) {
       console.error('Failed to upload video:', error);
+      setUploadPhase(null);
       // Neither file is touched on failure — `preview.uri` (and
       // `effectivePreview.uri`, if compression produced a second file) both
       // still exist on disk, so Retake still has something to discard and
@@ -1306,6 +1322,7 @@ export default function CameraScreen() {
 
     const trimmedCaption = captionInput?.trim() || undefined;
     setIsUploading(true);
+    setUploadPhase('uploading');
     try {
       const userName = firstNameFrom(profile) || 'You';
       const userId = profile?.id ?? session?.user.id ?? guestAuth?.guestSessionId ?? null;
@@ -1390,6 +1407,7 @@ export default function CameraScreen() {
         queryKey: celebrationDetailKeys.detail(String(celebrationId)),
       });
       void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+      await confirmUploadComplete('photo');
       const target = {
         pathname: '/celebration/[celebrationId]',
         params: {
@@ -1407,6 +1425,7 @@ export default function CameraScreen() {
       return postedMediaItemId ?? pending.mediaItemId;
     } catch (error) {
       console.error('Failed to post challenge photo:', error);
+      setUploadPhase(null);
       Alert.alert('Upload failed', formatUploadFailure('photo', error));
       return false;
     } finally {
@@ -1700,7 +1719,7 @@ export default function CameraScreen() {
     clearRecordingTimer();
     setAudioLevels([]);
     Alert.alert('Recording failed', message);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
   function stopAudioRecording() {
@@ -2019,45 +2038,6 @@ export default function CameraScreen() {
 
 
 
-  // ── Drum Roll Counter Animation Effect ──
-  useEffect(() => {
-    if (remainingPhotos !== null) {
-      if (!hasAnimatedCounter.current) {
-        hasAnimatedCounter.current = true;
-        
-        // Roll up from 0 to remainingPhotos
-        const startValue = 0;
-        setDisplayedCount(startValue);
-
-        let current = startValue;
-        const steps = remainingPhotos > 0 ? remainingPhotos : 1;
-        const intervalTime = Math.max(20, Math.min(60, Math.floor(700 / steps))); // dynamic speed up to ~700ms total
-
-        const runTick = () => {
-          if (current < remainingPhotos) {
-            current += 1;
-            setDisplayedCount(current);
-            
-            if (current === remainingPhotos) {
-              // Landed on final count: Medium impact haptic
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-            } else {
-              // Ticking up: Light selection/impact tick
-              void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              setTimeout(runTick, intervalTime);
-            }
-          }
-        };
-
-        // Delay starting the spin briefly so visual transitions look smooth
-        setTimeout(runTick, 300);
-      } else {
-        // Direct value sync (e.g. after taking a photo)
-        setDisplayedCount(remainingPhotos);
-      }
-    }
-  }, [remainingPhotos]);
-
   // ── Render Helpers ──
 
   if (!hasNativeCamera || !CameraView) {
@@ -2139,6 +2119,14 @@ export default function CameraScreen() {
 
   return (
     <View style={S.root}>
+      {uploadPhase || completedUpload ? (
+        <UploadStatus
+          phase={uploadPhase ?? 'complete'}
+          mediaType={completedUpload ?? (postingStage === 'idle' ? 'photo' : videoPreview?.kind ?? 'video')}
+          mode="overlay"
+        />
+      ) : null}
+
       {/* 1. Header Bar */}
       <View
         style={[
@@ -2270,11 +2258,7 @@ export default function CameraScreen() {
 
         {/* Remaining Photos Limit Tag */}
         {!isGuestbookCapture && remainingPhotos !== null && (
-          <View style={S.photosLeftTag}>
-            <AppText style={S.photosLeftCount}>
-              {displayedCount !== null ? displayedCount : remainingPhotos}
-            </AppText>
-          </View>
+          <ViewfinderShotCounter value={remainingPhotos} />
         )}
 
         {isRecording ? (
@@ -2341,7 +2325,7 @@ export default function CameraScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add photo from camera roll"
             >
-              <CameraRollPlusIcon size={20} />
+              <ViewfinderCameraRollPlusIcon size={20} />
             </Pressable>
           </Animated.View>
         )}
@@ -2359,22 +2343,14 @@ export default function CameraScreen() {
           style={[S.zoomContainer, isAudioCapture && { display: 'none' }]}
           pointerEvents="box-none"
         >
-          <View style={S.zoomPill}>
-            {ZOOM_OPTIONS.map((opt) => {
-              const active = nearestZoomOptionValue(zoom) === opt.value;
-              return (
-                <Pressable
-                  key={opt.label}
-                  style={[S.zoomOption, active && S.zoomOptionActive]}
-                  onPress={() => setZoom(clampCameraZoom(opt.value))}
-                >
-                  <AppText style={[S.zoomOptionText, active && S.zoomOptionTextActive]}>
-                    {opt.label}
-                  </AppText>
-                </Pressable>
-              );
-            })}
-          </View>
+          <ViewfinderZoomPill
+            options={ZOOM_OPTIONS}
+            activeLabel={
+              ZOOM_OPTIONS.find((option) => option.value === nearestZoomOptionValue(zoom))?.label
+              ?? ZOOM_OPTIONS[0].label
+            }
+            onSelect={(value) => setZoom(clampCameraZoom(value))}
+          />
         </View>
       </View>
 
@@ -2410,7 +2386,7 @@ export default function CameraScreen() {
               <CloseChevron size={18} />
             </Pressable>
           </View>
-          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md + keyboardHeight }]}>
             {/*
               Extends the challenge-only caption input to a plain gallery
               video too — the one video kind that never got one. Guestbook
@@ -2435,6 +2411,9 @@ export default function CameraScreen() {
                     maxLength={MAX_CAPTION_LENGTH}
                     multiline={false}
                     returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    editable={!isUploading}
+                    selectTextOnFocus
                   />
                   <AppText style={S.captionCounterText}>
                     {MAX_CAPTION_LENGTH -
@@ -2483,7 +2462,7 @@ export default function CameraScreen() {
               <CloseChevron size={18} />
             </Pressable>
           </View>
-          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md + keyboardHeight }]}>
             <View style={S.captionInputContainer}>
               <View style={S.captionInputBox}>
                 <TextInput
@@ -2494,7 +2473,10 @@ export default function CameraScreen() {
                   placeholderTextColor="rgba(255, 255, 255, 0.45)"
                   maxLength={MAX_CAPTION_LENGTH}
                   multiline={false}
-                  returnKeyType="done"
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    editable={!isUploading}
+                    selectTextOnFocus
                 />
                 <AppText style={S.captionCounterText}>
                   {MAX_CAPTION_LENGTH - challengeCaption.length}
@@ -2540,7 +2522,7 @@ export default function CameraScreen() {
               <CloseChevron size={18} />
             </Pressable>
           </View>
-          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md }]}>
+          <View style={[S.challengePreviewActions, { paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.md + keyboardHeight }]}>
             <View style={S.captionInputContainer}>
               <View style={S.captionInputBox}>
                 <TextInput
@@ -2551,7 +2533,10 @@ export default function CameraScreen() {
                   placeholderTextColor="rgba(255, 255, 255, 0.45)"
                   maxLength={MAX_CAPTION_LENGTH}
                   multiline={false}
-                  returnKeyType="done"
+                    returnKeyType="done"
+                    onSubmitEditing={() => Keyboard.dismiss()}
+                    editable={!isUploading}
+                    selectTextOnFocus
                 />
                 <AppText style={S.captionCounterText}>
                   {MAX_CAPTION_LENGTH - galleryCaption.length}
@@ -2579,153 +2564,51 @@ export default function CameraScreen() {
 
       {/* 3. Bottom Controls Panel */}
       <View style={[S.bottomPanel, { minHeight: bottomPanelHeight + insets.bottom, paddingBottom: insets.bottom }]}>
-        <View style={S.bottomControlsRow}>
-          {/* Flash Button — web only has an on/off torch, not the native
-              off/on/auto strobe, so the icon reflects whichever state this
-              platform actually has.
+        <ViewfinderBottomControls
+          flashMode={
+            isAudioCapture || !showFlashControl
+              ? undefined
+              : isWeb
+                ? (torchOn ? 'on' : 'off')
+                : flash
+          }
+          onFlash={toggleFlash}
+          showFlip={!isAudioCapture}
+          flipDisabled={isRecording}
+          onFlip={toggleFacing}
+          captureType={captureType}
+          recording={isRecording}
+          captureDisabled={(outOfShots && !isGuestbookCapture) || isUploading}
+          onCapture={handleCapture}
+          showInvite={!isGuestbookCapture}
+          onInvite={() => setShareVisible(true)}
+          showGallery={!isGuestbookCapture && !(isRecording && captureType === 'video')}
+          gallerySource={latestPhotoUri ? { uri: latestPhotoUri } : undefined}
+          onGallery={() => {
+            const target = {
+              pathname: '/celebration/[celebrationId]',
+              params: {
+                celebrationId: String(celebrationId),
+                ...(latestPhotoId ? { openPhotoId: latestPhotoId } : {}),
+              },
+            };
 
-              A torch belongs to one physical camera rather than to the
-              device: most front cameras have none, and a browser cannot
-              light one that does not exist. Where there is nothing to switch
-              on, the control is left out instead of sitting there dead. The
-              placeholder keeps the shutter centred in the row. */}
-          {/* Flash and flip are camera controls with nothing to act on in
-              audio mode. Both leave a same-sized spacer so the shutter stays
-              centred and does not shift as the mode changes. */}
-          {isAudioCapture || !showFlashControl ? (
-            <View style={S.controlBtn} />
-          ) : (
-            <Pressable
-              onPress={toggleFlash}
-              style={S.controlBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Toggle flash"
-            >
-              <FlashIcon mode={isWeb ? (torchOn ? 'on' : 'off') : flash} />
-            </Pressable>
-          )}
-
-          {/* Flip Camera Button */}
-          {isAudioCapture ? (
-            <View style={S.controlBtn} />
-          ) : (
-            <Pressable
-              onPress={toggleFacing}
-              style={[S.controlBtn, isRecording && { opacity: 0.35 }]}
-              disabled={isRecording}
-              accessibilityRole="button"
-              accessibilityLabel="Flip camera"
-            >
-              <FlipIcon />
-            </Pressable>
-          )}
-
-          <Pressable
-            onPress={handleCapture}
-            // Guestbook messages do not draw on the guest's photo allowance,
-            // so a guest who has used every shot can still leave one.
-            disabled={(outOfShots && !isGuestbookCapture) || isUploading}
-            style={({ pressed }) => [
-              S.shutterBtn,
-              captureType !== 'photo' && S.shutterBtnVideoMode,
-              isRecording && S.shutterBtnRecording,
-              pressed && { opacity: 0.8 },
-              ((outOfShots && !isGuestbookCapture) || isUploading) && { opacity: 0.4 },
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={
-              captureType === 'photo'
-                ? 'Take photo'
-                : isRecording
-                  ? `Stop ${captureType} recording`
-                  : `Start ${captureType} recording`
+            if (router.canDismiss()) {
+              router.dismissTo(target as never);
+              return;
             }
-          >
-            <View
-              style={[
-                S.shutterBtnInner,
-                captureType !== 'photo' && S.shutterBtnInnerVideoMode,
-                isRecording && S.shutterBtnInnerRecording,
-              ]}
-            />
-          </Pressable>
-
-          {/* QR Invite Button — hidden for the Guestbook, which is not an
-              invite surface. A same-sized spacer keeps the shutter centred. */}
-          {isGuestbookCapture ? (
-            <View style={S.controlBtnSpacer} />
-          ) : (
-            <Pressable
-              onPress={() => setShareVisible(true)}
-              style={S.controlBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Invite guests"
-            >
-              <QrCodeIcon size={24} color="#FFFFFF" />
-            </Pressable>
-          )}
-
-          {/* Photos Button — hidden for the Guestbook, which has no event
-              gallery preview of its own, and hidden while a video is actively
-              recording, since this is the one control that exits the
-              viewfinder (it navigates to the gallery) and tapping it mid-take
-              would silently abandon the recording. `controlBtnSpacer` is the
-              same 44x44 footprint as the button itself, so the shutter stays
-              exactly centred while this is hidden — nothing else in the row
-              moves. */}
-          {isGuestbookCapture || (isRecording && captureType === 'video') ? (
-            <View style={S.controlBtnSpacer} />
-          ) : (
-          <Pressable
-            onPress={() => {
-              // This screen is a `transparentModal` sitting on top of the
-              // gallery, which is still mounted underneath it.
-              //
-              // `replace` was the wrong verb for that shape: it swaps *this
-              // modal's own stack entry* for the gallery route, so the gallery
-              // ends up rendered inside a modal slot whose `contentStyle` is
-              // `backgroundColor: 'transparent'`, with nothing left behind it.
-              // On web that reads as a blank white page. Every other exit from
-              // this screen uses `back()`, which is why only this button broke.
-              //
-              // `dismissTo` pops back to the gallery already in the stack and
-              // applies the params on the way, so the modal is torn down
-              // properly and the newly uploaded photo opens over a real screen.
-              const target = {
-                pathname: '/celebration/[celebrationId]',
-                params: {
-                  celebrationId: String(celebrationId),
-                  ...(latestPhotoId ? { openPhotoId: latestPhotoId } : {}),
-                },
-              };
-
-              // Nothing to dismiss to when the camera was deep-linked into
-              // directly and is the only entry in the stack. `replace` is
-              // correct there: there is no underlying screen to preserve.
-              if (router.canDismiss()) {
-                router.dismissTo(target as never);
-                return;
-              }
-              router.replace(target as never);
-            }}
-            style={S.photosBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Open gallery"
-          >
-            {latestPhotoUri ? (
-              <Image source={{ uri: latestPhotoUri }} style={S.photosBtnThumb} />
-            ) : (
-              <View style={S.photosBtnPlaceholder}>
-                <View style={S.photosBtnPlaceholderDot} />
-              </View>
-            )}
-          </Pressable>
-          )}
-        </View>
+            router.replace(target as never);
+          }}
+        />
 
         {/* The Guestbook swaps the left mode for audio; every other target
-            keeps photo/video, and only when the event allows video at all. */}
-        {isGuestbookCapture || videoCaptureEnabled ? (
+            keeps photo/video, and only when there is a choice worth showing.
+            `showVideoOption` already folds in `videoCaptureEnabled`, so a
+            guest on a photo-only event drops out here and gets no rail at
+            all — a one-option selector reading "PHOTO" is not a choice, it
+            is a label for the only thing they can do. The host keeps the
+            rail either way; for them the dimmed VIDEO is the upsell. */}
+        {isGuestbookCapture || showVideoOption ? (
           <View style={S.captureModeRail}>
             <View style={S.captureModeLabelRow}>
               <Animated.View
@@ -2764,6 +2647,9 @@ export default function CameraScreen() {
                       S.captureModeLabel,
                       captureType === option.key && S.captureModeLabelActive,
                       isRecording && { opacity: 0.45 },
+                      // Visible but quieter — the host can see the mode
+                      // exists, and tapping it says how to get it.
+                      option.key === 'video' && !videoUnlocked && { opacity: 0.5 },
                     ]}
                   >
                     {option.label}
@@ -2774,6 +2660,26 @@ export default function CameraScreen() {
           </View>
         ) : null}
       </View>
+
+      {/*
+        The same upgrade surface the gallery uses — not a camera-specific
+        paywall. On success the host lands back here with video unlocked and
+        the mode already switched, which is what they were tapping for.
+      */}
+      {videoUpgradeOpen ? (
+        <UpgradeSheet
+          visible
+          celebrationId={String(celebrationId)}
+          currentPlan={entitlements.plan}
+          options={upgradesForFeature(entitlements.plan, 'video')}
+          title="Unlock Video"
+          onClose={() => setVideoUpgradeOpen(false)}
+          onUpgraded={() => {
+            setVideoUpgradeOpen(false);
+            setCaptureType('video');
+          }}
+        />
+      ) : null}
 
       {/* 4. Flying Image Animation layer */}
       {flyingThumbnailUri && (
@@ -2926,7 +2832,7 @@ export default function CameraScreen() {
     marginHorizontal: spacing.md,
   },
   headerTitle: {
-    fontFamily: 'InstrumentSerif_400Regular',
+    fontFamily: fontFamilies.display,
     fontSize: HEADER_TITLE_SIZE,
     // Explicit, because the inherited `body` leading of 22 is shorter than
     // this font size and was cropping the ascenders.
@@ -2977,33 +2883,6 @@ export default function CameraScreen() {
     zIndex: 100,
   },
 
-  // Photos Left Pill
-  photosLeftTag: {
-    position: 'absolute',
-    bottom: PILL_INSET,
-    left: PILL_INSET,
-    backgroundColor: 'rgba(11, 11, 12, 0.65)',
-    // Height, radius and padding all come from the same constants as the zoom
-    // pill, so the two read as one family. It was a 48px circle against the
-    // pill's 36px, which sat 12px proud of it on the shared bottom edge.
-    height: PILL_HEIGHT,
-    minWidth: PILL_HEIGHT,
-    borderRadius: PILL_RADIUS,
-    paddingHorizontal: PILL_PADDING + 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 20,
-  },
-  photosLeftCount: {
-    fontFamily: 'InstrumentSerif_400Regular',
-    fontSize: COUNTER_SIZE,
-    // Same fix as the header: the inherited leading of 22 was shorter than the
-    // old 26px size, so the digits were cropped top and bottom and could not
-    // sit on the container's centre line. This leading fits inside PILL_HEIGHT.
-    lineHeight: COUNTER_LEADING,
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
   recordingPill: {
     position: 'absolute',
     top: PILL_INSET,
@@ -3168,34 +3047,6 @@ export default function CameraScreen() {
     alignItems: 'center',
     zIndex: 20,
   },
-  zoomPill: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(11, 11, 12, 0.6)',
-    height: PILL_HEIGHT,
-    borderRadius: PILL_RADIUS,
-    padding: PILL_PADDING,
-    gap: 4,
-    alignItems: 'center',
-  },
-  zoomOption: {
-    width: 38,
-    height: PILL_INNER_HEIGHT,
-    borderRadius: PILL_INNER_HEIGHT / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoomOptionActive: {
-    backgroundColor: '#FFFFFF',
-  },
-  zoomOptionText: {
-    fontFamily: 'InstrumentSans_400Regular',
-    fontSize: 12,
-    color: '#FFFFFF',
-  },
-  zoomOptionTextActive: {
-    color: '#0B0B0C',
-  },
-
   // ── Bottom Panel ──
   bottomPanel: {
     backgroundColor: '#0B0B0C',
@@ -3245,79 +3096,6 @@ export default function CameraScreen() {
   captureModeLabelActive: {
     color: '#FFFFFF',
   },
-  bottomControlsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-  },
-  controlBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  controlBtnSpacer: {
-    width: 44,
-    height: 44,
-  },
-  shutterBtn: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 5,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  shutterBtnVideoMode: {
-    borderColor: 'rgba(255, 255, 255, 0.92)',
-  },
-  shutterBtnRecording: {
-    borderColor: 'rgba(255, 59, 48, 0.72)',
-  },
-  shutterBtnInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#FFFFFF',
-  },
-  shutterBtnInnerVideoMode: {
-    backgroundColor: '#FF453A',
-  },
-  shutterBtnInnerRecording: {
-    width: 26,
-    height: 26,
-    borderRadius: 8,
-    backgroundColor: '#FF453A',
-  },
-  photosBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.8)',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  photosBtnThumb: {
-    width: '100%',
-    height: '100%',
-  },
-  photosBtnPlaceholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photosBtnPlaceholderDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.4)',
-  },
-
   // ── Flying Thumbnail ──
   flyingThumbnail: {
     position: 'absolute',
@@ -3327,26 +3105,6 @@ export default function CameraScreen() {
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
     zIndex: 999,
-  },
-
-  // Flash Auto Badge
-  flashAutoBadge: {
-    position: 'absolute',
-    right: -2,
-    bottom: -4,
-    backgroundColor: '#0B0B0C',
-    borderRadius: 6,
-    width: 12,
-    height: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#FFFFFF',
-  },
-  flashAutoText: {
-    fontSize: 7,
-    color: '#FFFFFF',
-    fontWeight: '900',
   },
 
   // ── Modal / Share Sheet ──
@@ -3479,12 +3237,14 @@ export default function CameraScreen() {
   captionInputBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: 'rgba(11, 11, 12, 0.76)',
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255, 255, 255, 0.22)',
     paddingHorizontal: 16,
-    paddingVertical: Platform.OS === 'ios' ? 12 : 8,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
+    minHeight: 44,
   },
   captionTextInput: {
     flex: 1,
@@ -3505,7 +3265,10 @@ export default function CameraScreen() {
     // the trigger fixes all of it at once, with nothing left to reset.
     fontSize: 16,
     color: '#FFFFFF',
-    padding: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    minHeight: 24,
+    textAlignVertical: 'center',
   },
   captionCounterText: {
     fontFamily: 'InstrumentSans_500Medium',

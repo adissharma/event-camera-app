@@ -87,6 +87,20 @@ export function ChevronRightIcon({ size = 16, color = colours.textSecondary }: I
   );
 }
 
+export function ChevronLeftIcon({ size = 18, color = colours.textSecondary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M15 18l-6-6 6-6"
+        stroke={color}
+        strokeWidth={2.5}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function EyeIcon({ size = 16, color = colours.textPrimary }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -463,6 +477,40 @@ export function ChevronDownIcon({ size = 16, color = colours.textSecondary }: Ic
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </Svg>
+  );
+}
+
+/**
+ * A 3x3 grid of solid squares — the "posts" tab, in the same family as
+ * Instagram's own grid glyph. Solid rather than stroked, matching `PinIcon`'s
+ * fill-based treatment: at tab-icon sizes a stroked square reads as a faint
+ * rectangle, where a filled one stays legible.
+ */
+export function PhotoGridIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M3 3h5.5v5.5H3zM9.25 3h5.5v5.5h-5.5zM15.5 3H21v5.5h-5.5zM3 9.25h5.5v5.5H3zM9.25 9.25h5.5v5.5h-5.5zM15.5 9.25H21v5.5h-5.5zM3 15.5h5.5V21H3zM9.25 15.5h5.5V21h-5.5zM15.5 15.5H21V21h-5.5z"
+        fill={color}
+      />
+    </Svg>
+  );
+}
+
+/**
+ * A play triangle inside a rounded frame — the "videos" tab.
+ */
+export function VideoTabIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M4 5.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
+        stroke={color}
+        strokeWidth={2}
+        strokeLinejoin="round"
+      />
+      <Path d="M10.3 9.2v5.6l4.7-2.8z" fill={color} />
     </Svg>
   );
 }

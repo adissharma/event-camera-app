@@ -1,5 +1,5 @@
 import { Platform } from 'react-native';
-import type { AuthError as SupabaseAuthError, Session } from '@supabase/supabase-js';
+import type { Session } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
 import { makeRedirectUri } from 'expo-auth-session';
@@ -18,11 +18,12 @@ WebBrowser.maybeCompleteAuthSession();
 function toSession(session: Session | null): AuthSession | null {
   if (!session?.user) return null;
   const rawMeta = session.user.user_metadata ?? {};
-  const displayName =
+  const providerName =
     (rawMeta.display_name as string | undefined) ??
     (rawMeta.full_name as string | undefined) ??
     (rawMeta.name as string | undefined) ??
     null;
+  const displayName = providerName?.trim().split(/\s+/, 1)[0] || null;
 
   const avatarUrl =
     (rawMeta.avatar_url as string | undefined) ??
@@ -237,15 +238,14 @@ export const supabaseAuthProvider: AuthProvider = {
             };
           }
 
-          // If Apple returned a full name on first sign-up, sync to profile
+          // Apple provides this only on the initial native authorisation.
+          // Keep the first name as Stories.' display name and persist it.
           const givenName = credential.fullName?.givenName ?? '';
-          const familyName = credential.fullName?.familyName ?? '';
-          const fullName = `${givenName} ${familyName}`.trim();
-          if (fullName && data.session?.user) {
+          if (givenName && data.session?.user) {
             try {
-              await supabase.auth.updateUser({ data: { display_name: fullName } });
-              await supabase.from('profiles').update({ display_name: fullName }).eq('id', data.session.user.id);
-              session.user.displayName = fullName;
+              await supabase.auth.updateUser({ data: { display_name: givenName } });
+              await supabase.from('profiles').update({ display_name: givenName }).eq('id', data.session.user.id);
+              session.user.displayName = givenName;
             } catch {
               // Ignore profile update error
             }

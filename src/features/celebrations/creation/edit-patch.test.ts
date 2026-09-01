@@ -102,6 +102,9 @@ describe('buildEditPatch', () => {
       expect(buildEditPatch('package', draftWith({}))).toEqual({});
       // The cover step saves itself through its own onSave.
       expect(buildEditPatch('cover', draftWith({}))).toEqual({});
+      expect(buildEditPatch('cover', draftWith({ themeSlug: 'midnight' }))).toEqual({
+        themeSlug: 'midnight',
+      });
     });
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -34,9 +34,34 @@ export default function ChallengePackPreviewScreen() {
   const [adding, setAdding] = useState(false);
 
   const pack = findChallengePack(String(packId));
+  const [selectedLabels, setSelectedLabels] = useState<Set<string>>(
+    () => new Set(pack?.challenges.map((challenge) => challenge.label) ?? []),
+  );
+
+  const selectedChallenges = useMemo(
+    () => pack?.challenges.filter((challenge) => selectedLabels.has(challenge.label)) ?? [],
+    [pack, selectedLabels],
+  );
+
+  function toggleChallenge(label: string) {
+    void Haptics.selectionAsync().catch(() => {});
+    setSelectedLabels((current) => {
+      const next = new Set(current);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  }
 
   async function handleAdd() {
     if (!pack) return;
+    if (selectedChallenges.length === 0) {
+      return;
+    }
+
     setAdding(true);
     try {
       const celebrationIdStr = String(celebrationId);
@@ -55,8 +80,8 @@ export default function ChallengePackPreviewScreen() {
         existingCount = parsed.length;
       }
 
-      const duplicates = pack.challenges.filter((c) => existingLabels.has(c.label.trim().toLowerCase()));
-      const toAdd = pack.challenges.filter((c) => !existingLabels.has(c.label.trim().toLowerCase()));
+      const duplicates = selectedChallenges.filter((c) => existingLabels.has(c.label.trim().toLowerCase()));
+      const toAdd = selectedChallenges.filter((c) => !existingLabels.has(c.label.trim().toLowerCase()));
 
       const room = Math.max(0, MAX_CHALLENGES - existingCount);
       const overflow = Math.max(0, toAdd.length - room);
@@ -135,7 +160,16 @@ export default function ChallengePackPreviewScreen() {
   return (
     <Screen
       scrollable={false}
-      stickyAction={<Button label="Add these challenges" loading={adding} haptic onPress={handleAdd} />}
+      stickyAction={
+        <Button
+          label="Add these challenges"
+          loading={adding}
+          disabled={selectedChallenges.length === 0}
+          disabledReason="Choose at least one challenge to add."
+          haptic
+          onPress={handleAdd}
+        />
+      }
     >
       <FlatList
         data={pack.challenges}
@@ -158,7 +192,7 @@ export default function ChallengePackPreviewScreen() {
 
             <View style={{ gap: spacing.xs, alignItems: 'center' }}>
               <View style={S.packIconCircle}>
-                <AppText style={{ fontSize: 28 }}>{pack.icon}</AppText>
+                <AppText style={S.packIconText}>{pack.icon}</AppText>
               </View>
               <AppText variant="displayLarge" align="center">{pack.name}</AppText>
               <AppText variant="bodyLarge" tone="secondary" align="center">
@@ -168,7 +202,14 @@ export default function ChallengePackPreviewScreen() {
           </View>
         }
         renderItem={({ item }) => (
-          <View style={S.challengeRow}>
+          <Pressable
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selectedLabels.has(item.label) }}
+            accessibilityLabel={item.label}
+            accessibilityHint={item.instructions}
+            onPress={() => toggleChallenge(item.label)}
+            style={[S.challengeRow, selectedLabels.has(item.label) && S.challengeRowSelected]}
+          >
             <View style={S.challengeIconCircle}>
               <ChallengeIconSVG type={item.icon} size={22} />
             </View>
@@ -180,7 +221,14 @@ export default function ChallengePackPreviewScreen() {
                 {item.instructions}
               </AppText>
             </View>
-          </View>
+            <View style={[S.checkCircle, selectedLabels.has(item.label) && S.checkCircleSelected]}>
+              {selectedLabels.has(item.label) ? (
+                <AppText variant="caption" tone="onBrand">
+                  ✓
+                </AppText>
+              ) : null}
+            </View>
+          </Pressable>
         )}
       />
     </Screen>
@@ -208,13 +256,18 @@ const S = StyleSheet.create({
     color: colours.textSecondary,
   },
   packIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colours.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
+    overflow: 'visible',
+  },
+  packIconText: {
+    fontSize: 34,
+    lineHeight: 42,
   },
   challengeRow: {
     flexDirection: 'row',
@@ -226,6 +279,10 @@ const S = StyleSheet.create({
     borderColor: colours.borderStrong,
     padding: spacing.base,
   },
+  challengeRowSelected: {
+    borderColor: colours.brandPrimary,
+    backgroundColor: colours.brandSoft,
+  },
   challengeIconCircle: {
     width: 40,
     height: 40,
@@ -233,5 +290,18 @@ const S = StyleSheet.create({
     backgroundColor: colours.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
+  },
+  checkCircleSelected: {
+    borderWidth: 0,
+    backgroundColor: colours.brandPrimary,
   },
 });

@@ -20,8 +20,17 @@ export type ChallengePack = {
   name: string;
   icon: string;
   description: string;
+  category: ChallengePackCategory;
   challenges: ChallengePackChallenge[];
 };
+
+export type ChallengePackCategory = 'weddings' | 'parties' | 'holidays';
+
+export const CHALLENGE_PACK_CATEGORIES: { id: ChallengePackCategory; label: string }[] = [
+  { id: 'weddings', label: 'Weddings' },
+  { id: 'parties', label: 'Parties' },
+  { id: 'holidays', label: 'Holidays' },
+];
 
 export const CHALLENGE_PACKS: ChallengePack[] = [
   {
@@ -29,6 +38,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Christian Wedding',
     icon: '💍',
     description: 'The moments every wedding day builds toward.',
+    category: 'weddings',
     challenges: [
       { label: 'The First Look', icon: '👀', instructions: 'Capture the couple seeing each other for the first time.' },
       { label: 'Happy Tears', icon: '🥹', instructions: 'Spot someone getting emotional and capture the moment.' },
@@ -42,6 +52,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Bachelorette / Hen Party',
     icon: '👰',
     description: 'Main character energy and the moments worth remembering the next morning.',
+    category: 'parties',
     challenges: [
       { label: 'Main Character Energy', icon: '✨', instructions: 'Capture the bride-to-be having her moment.' },
       { label: 'Cheers', icon: '🥂', instructions: 'Get the perfect group toast.' },
@@ -55,6 +66,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Stag Party',
     icon: '🤵',
     description: 'The group shot, the chaos, and the evidence.',
+    category: 'parties',
     challenges: [
       { label: 'The Groom', icon: '🎩', instructions: 'Capture the groom in his natural habitat.' },
       { label: 'The Group Shot', icon: '👬', instructions: 'Get everyone together before things get chaotic.' },
@@ -68,6 +80,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Birthday',
     icon: '🎂',
     description: 'The birthday person, the wish, and the reactions in between.',
+    category: 'parties',
     challenges: [
       { label: 'Birthday Person', icon: '🥳', instructions: 'Capture the birthday person having their moment.' },
       { label: 'Make a Wish', icon: '🕯️', instructions: 'Capture the cake, candles or birthday celebration.' },
@@ -81,6 +94,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Holiday / Group Trip',
     icon: '✈️',
     description: 'From arrival to the moment that sums up the whole trip.',
+    category: 'holidays',
     challenges: [
       { label: 'We Made It', icon: '🛬', instructions: 'Capture the first proper moment of the trip.' },
       { label: 'The View', icon: '🏞️', instructions: 'Capture somewhere worth remembering.' },
@@ -94,6 +108,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Christmas Party',
     icon: '🎄',
     description: 'Festive fits, gifts, and the last ones standing.',
+    category: 'holidays',
     challenges: [
       { label: 'Festive Fits', icon: '🎅', instructions: 'Capture the best Christmas outfit.' },
       { label: 'Cheers', icon: '🥂', instructions: 'Capture the perfect festive toast.' },
@@ -107,6 +122,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Baby Shower',
     icon: '🍼',
     description: 'The parents-to-be, and the details worth looking back on.',
+    category: 'parties',
     challenges: [
       { label: 'The Parents-to-Be', icon: '🤰', instructions: 'Capture a moment with the parents-to-be.' },
       { label: 'Best Reaction', icon: '😲', instructions: 'Catch a brilliant reaction during the celebration.' },
@@ -120,6 +136,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Engagement Party',
     icon: '💎',
     description: 'The ring, the reactions, and the celebration of what comes next.',
+    category: 'weddings',
     challenges: [
       { label: 'The Ring', icon: '💍', instructions: 'Capture a great shot of the ring.' },
       { label: 'The Couple', icon: '🥰', instructions: 'Capture the newly engaged couple together.' },
@@ -133,6 +150,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Anniversary Party',
     icon: '🥂',
     description: 'The couple, the story so far, and the people who came to celebrate it.',
+    category: 'parties',
     challenges: [
       { label: 'The Couple', icon: '💑', instructions: 'Capture the couple celebrating together.' },
       { label: 'Then & Now', icon: '📷', instructions: 'Capture a moment that echoes their story.' },
@@ -146,6 +164,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Graduation',
     icon: '🎓',
     description: 'The graduate, the celebration, and what comes next.',
+    category: 'parties',
     challenges: [
       { label: 'The Graduate', icon: '🎓', instructions: 'Capture the graduate having their moment.' },
       { label: 'Cap Toss', icon: '🎉', instructions: 'Capture the celebration as it happens.' },
@@ -159,6 +178,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Retirement Party',
     icon: '🏆',
     description: 'The guest of honor, and the people celebrating their next chapter.',
+    category: 'parties',
     challenges: [
       { label: 'The Retiree', icon: '🥳', instructions: 'Capture the guest of honor having their moment.' },
       { label: 'Colleagues & Friends', icon: '🤝', instructions: 'Capture a moment between coworkers or friends.' },
@@ -172,6 +192,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Housewarming',
     icon: '🏡',
     description: 'The new place, the hosts, and the friends who came to see it.',
+    category: 'parties',
     challenges: [
       { label: 'The New Place', icon: '🏠', instructions: 'Capture a detail of the new home worth remembering.' },
       { label: 'The Hosts', icon: '🥳', instructions: 'Capture the hosts enjoying their new space.' },
@@ -185,6 +206,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Gender Reveal',
     icon: '🎀',
     description: 'The big moment, and the reactions around it.',
+    category: 'parties',
     challenges: [
       { label: 'The Reveal', icon: '🎉', instructions: 'Capture the big reveal moment.' },
       { label: 'Best Reaction', icon: '😲', instructions: 'Capture the happiest or funniest reaction.' },
@@ -198,6 +220,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Jewish Wedding',
     icon: '🕍',
     description: 'The chuppah, the celebration, and the moments in between.',
+    category: 'weddings',
     challenges: [
       { label: 'Under the Chuppah', icon: '✡️', instructions: 'Capture the couple beneath the chuppah.' },
       { label: 'Breaking the Glass', icon: '🥂', instructions: 'Catch the glass-breaking moment and the cheer that follows.' },
@@ -211,6 +234,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Muslim Wedding',
     icon: '🕌',
     description: 'The nikkah, the celebration, and the moments that follow.',
+    category: 'weddings',
     challenges: [
       { label: 'The Nikkah Moment', icon: '📖', instructions: 'Capture the couple during their nikkah.' },
       { label: 'Joyful Celebration', icon: '🎊', instructions: 'Catch the energy when everyone is celebrating together.' },
@@ -224,6 +248,7 @@ export const CHALLENGE_PACKS: ChallengePack[] = [
     name: 'Hindu Wedding',
     icon: '🪔',
     description: 'Colour, family and celebration, without assuming one script for every ceremony.',
+    category: 'weddings',
     challenges: [
       { label: 'A Grand Entrance', icon: '🎉', instructions: 'Capture one of the unforgettable entrances.' },
       { label: 'Colour Everywhere', icon: '🌈', instructions: 'Find a detail, outfit or decoration that stands out.' },

@@ -45,11 +45,17 @@ a billing SDK directly, so the platform rules are enforced in one place.
 
 ```
 PaymentProvider (interface)
-  ├── StoreKitProvider      iOS
+  ├── RevenueCatProvider    iOS StoreKit/App Store purchases
   ├── PlayBillingProvider   Android
   ├── WebCheckoutProvider   external web contexts only
   └── DevelopmentProvider   no billing service contacted; FEATURE_FLAGS.realPurchases = false
 ```
+
+The iOS implementation uses `react-native-purchases` and the plan catalogue's
+`storeProductId` values. The current packages are event-scoped non-subscription
+products, so the provider fetches them as `PRODUCT_CATEGORY.NON_SUBSCRIPTION`
+and purchases them with RevenueCat's direct store-product API rather than using
+RevenueCat's hosted paywall.
 
 The catalogue carries `apple_product_id`, `google_product_id` and
 `web_product_id` on both `plans` and `add_ons` from the start. Retrofitting a

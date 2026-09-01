@@ -98,16 +98,3 @@ export const TREATMENT_VISUALS: Record<SupportedPhotoTreatment, TreatmentVisual>
     colorMatrix: null,
   },
 };
-
-/**
- * "'26  08  09" — a classic disposable-camera / instant-print date stamp:
- * two-digit year, then month and day, space-separated, apostrophe-prefixed
- * year. Pure so both the live gallery and the onboarding preview format the
- * same way from one definition.
- */
-export function formatDisposableDateStamp(date: Date): string {
-  const yy = String(date.getFullYear()).slice(-2);
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  return `'${yy}  ${mm}  ${dd}`;
-}

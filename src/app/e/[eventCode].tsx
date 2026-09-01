@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 import { GuestEventCover } from '@/features/celebrations/guest-event-cover';
+import { resolveCoverTemplate } from '@/features/celebrations/cover-templates';
 import {
   fetchGuestEventPreview,
   guestSessionKeys,
@@ -245,6 +246,7 @@ export default function GuestEntryScreen() {
           bounces={false}
         >
           <GuestEventCover
+            template={resolveCoverTemplate(preview.themeSlug)}
             coverSource={coverSource}
             coverHeight={coverHeight}
             title={preview.title}

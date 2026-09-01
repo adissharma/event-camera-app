@@ -34,7 +34,6 @@ export function buildEditPatch(step: CreationStep, draft: CreationDraft): EventS
         captureMode: draft.captureMode,
       };
 
-    case 'guest-reveal':
     case 'reveal': {
       const { mode, revealAt } = resolveReveal(
         draft.guestRevealChoice,
@@ -50,6 +49,9 @@ export function buildEditPatch(step: CreationStep, draft: CreationDraft): EventS
 
     case 'treatment':
       return { photoTreatment: draft.photoTreatment, dateStampEnabled: draft.dateStampEnabled };
+
+    case 'cover':
+      return draft.themeSlug ? { themeSlug: draft.themeSlug } : {};
 
     default:
       return {};

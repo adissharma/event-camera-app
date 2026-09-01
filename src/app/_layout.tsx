@@ -4,12 +4,11 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { View } from 'react-native';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
-  InstrumentSerif_400Regular,
-  InstrumentSerif_400Regular_Italic,
-} from '@expo-google-fonts/instrument-serif';
+  Newsreader_400Regular,
+  Newsreader_400Regular_Italic,
+} from '@expo-google-fonts/newsreader';
 import {
   InstrumentSans_400Regular,
   InstrumentSans_500Medium,
@@ -46,6 +45,15 @@ function RootNavigator() {
       }}
     >
       <Stack.Screen
+        name="join"
+        options={{
+          // Full screen rather than a card: it is a viewfinder, and the inset
+          // sheet would letterbox the camera and shrink the scanning window.
+          presentation: 'fullScreenModal',
+          animation: 'slide_from_bottom',
+        }}
+      />
+      <Stack.Screen
         name="celebration/[celebrationId]/camera"
         options={{
           presentation: 'transparentModal',
@@ -74,8 +82,8 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    InstrumentSerif_400Regular,
-    InstrumentSerif_400Regular_Italic,
+    Newsreader_400Regular,
+    Newsreader_400Regular_Italic,
     InstrumentSans_400Regular,
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,

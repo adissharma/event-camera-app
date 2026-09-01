@@ -1,8 +1,18 @@
+import { useCallback } from 'react';
 import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { LockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, easing, layout, radii, spacing, useMotion } from '@/design';
 
 const PREVIEW_IMAGES = [
   require('../../../../assets/images/placeholders/christian_wedding.png'),
@@ -21,7 +31,7 @@ export function RevealPreview({
     <View style={styles.previewContainer}>
       <View style={styles.photoRow}>
         {PREVIEW_IMAGES.map((imgSrc, index) => (
-          <View key={index} style={styles.photoTile}>
+          <WavePhotoTile key={index} index={index}>
             <Image
               source={imgSrc}
               style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
@@ -36,13 +46,61 @@ export function RevealPreview({
                 </View>
               </View>
             ) : null}
-          </View>
+          </WavePhotoTile>
         ))}
       </View>
 
       <AppText style={styles.statusText}>{message}</AppText>
     </View>
   );
+}
+
+function WavePhotoTile({
+  index,
+  children,
+}: {
+  index: number;
+  children: React.ReactNode;
+}) {
+  const motion = useMotion();
+  const wave = useSharedValue(0);
+  const lift = motion.translate(12);
+  const scaleAmount = motion.reduceMotion ? 0 : 0.025;
+  const delayMs = motion.reduceMotion ? 0 : 360 + index * 110;
+  const riseDuration = motion.duration('micro');
+  const settleDuration = motion.duration('microSlow');
+
+  useFocusEffect(
+    useCallback(() => {
+      wave.value = 0;
+      wave.value = withDelay(
+        delayMs,
+        withSequence(
+          withTiming(1, { duration: riseDuration, easing: easing.enter }),
+          withTiming(0, { duration: settleDuration, easing: easing.standard }),
+        ),
+      );
+
+      const settle = setTimeout(() => {
+        wave.value = 0;
+      }, delayMs + riseDuration + settleDuration + 250);
+
+      return () => {
+        clearTimeout(settle);
+        cancelAnimation(wave);
+        wave.value = 0;
+      };
+    }, [delayMs, riseDuration, settleDuration, wave]),
+  );
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: -lift * wave.value },
+      { scale: 1 + scaleAmount * wave.value },
+    ],
+  }));
+
+  return <Animated.View style={[styles.photoTile, animatedStyle]}>{children}</Animated.View>;
 }
 
 export function ChoiceTile({

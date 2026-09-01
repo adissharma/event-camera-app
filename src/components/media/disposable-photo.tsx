@@ -10,152 +10,18 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { Canvas, Image as SkiaImage, Picture, type SkImage } from '@shopify/react-native-skia';
+
 import {
-  Blur,
-  Canvas,
-  ColorMatrix,
-  Group,
-  Image as SkiaImage,
-  LinearGradient,
-  Paint,
-  RadialGradient,
-  Rect,
-  RuntimeShader,
-  Shader,
-  Skia,
-  useImage,
-  vec,
-} from '@shopify/react-native-skia';
-
-import { AppText } from '@/components/ui/text';
-import { buildDisposableRecipe, contrast, compose, exposure, saturation, threshold, warmth } from '@/features/media/disposable-recipe';
-import { formatDisposableDateStamp } from '@/features/media/photo-treatment';
-
-const DUST_TEXTURES = [
-  require('../../../assets/images/textures/dust-1.png'),
-  require('../../../assets/images/textures/dust-2.png'),
-];
-
-const SCRATCH_TEXTURES = [
-  require('../../../assets/images/textures/scratches-1.png'),
-  require('../../../assets/images/textures/scratches-2.png'),
-];
-
-/**
- * Procedural film grain.
- *
- * Generated per-pixel in the shader rather than sampled from a texture. A
- * static noise PNG — which is what this replaced — has to be stretched to
- * whatever size the container happens to be, so it resamples into soft
- * blotches, repeats the identical pattern on every photo, and changes
- * apparent grain size between a grid cell and a full-screen viewer. A shader
- * has none of those problems: the noise is evaluated at the device's own
- * pixel grid, at the same physical size everywhere, and `seed` gives every
- * photo its own field.
- *
- * Returns mid-grey-centred noise so it can be composited with an `overlay`
- * blend, where exactly 0.5 is a no-op — deviations lighten and darken by
- * equal measure instead of fogging the image the way an additive layer does.
- */
-const GRAIN_SHADER = Skia.RuntimeEffect.Make(`
-uniform float2 resolution;
-uniform float seed;
-uniform float scale;
-
-float hash(float2 p) {
-  p = fract(p * float2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-half4 main(float2 xy) {
-  float n = hash(xy * scale + float2(seed, seed * 1.7));
-  return half4(half3(n), 1.0);
-}
-`)!;
-
-/**
- * Film response shader.
- *
- * The static colour matrix gets us the broad tonal shape cheaply; this shader
- * adds the analogue character the matrix can't express:
- *
- * - cooler shadows / warmer highlights rather than a global wash
- * - slightly lifted blacks
- * - luma-aware grain that shows more in mids and shadows than clipped whites
- */
-const ANALOG_SHADER = Skia.RuntimeEffect.Make(`
-uniform shader image;
-uniform float shadowCool;
-uniform float highlightWarmth;
-uniform float fade;
-uniform float saturationAmount;
-uniform float contrastAmount;
-uniform float grainIntensity;
-uniform float grainScale;
-uniform float seed;
-
-half luminance(half3 c) {
-  return dot(c, half3(0.2126, 0.7152, 0.0722));
-}
-
-half rand(float2 p) {
-  p = fract(p * float2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
-}
-
-half grain(float2 p, float scale, float seed) {
-  half g1 = rand(p * scale + float2(seed * 0.73, seed * 1.17));
-  half g2 = rand(p * scale * 1.93 + float2(seed * 1.91, seed * 0.41));
-  return mix(g1, g2, 0.42);
-}
-
-half3 adjustSaturation(half3 c, float amount) {
-  half l = luminance(c);
-  return mix(half3(l), c, half(amount));
-}
-
-half3 adjustContrast(half3 c, float amount) {
-  return (c - 0.5) * half(amount) + 0.5;
-}
-
-half4 main(float2 xy) {
-  half4 src = image.eval(xy);
-  half3 color = clamp(src.rgb, 0.0, 1.0);
-  half l = luminance(color);
-
-  half shadowMask = 1.0 - smoothstep(0.18, 0.62, l);
-  half highlightMask = smoothstep(0.54, 0.94, l);
-  half midMask = 1.0 - abs(l * 2.0 - 1.0);
-
-  color = adjustSaturation(color, saturationAmount);
-  color = adjustContrast(color, contrastAmount);
-
-  color.r += half(highlightWarmth) * highlightMask;
-  color.g += half(highlightWarmth) * 0.42 * highlightMask;
-  color.b -= half(highlightWarmth) * 0.55 * highlightMask;
-
-  color.r -= half(shadowCool) * 0.18 * shadowMask;
-  color.g += half(shadowCool) * 0.04 * shadowMask;
-  color.b += half(shadowCool) * shadowMask;
-
-  half3 fadedBlack = half3(fade * 1.15, fade * 1.08, fade);
-  color = mix(color, max(color, fadedBlack), min(0.9, fade * 6.0) * shadowMask);
-
-  half grainValue = grain(xy, grainScale, seed) - 0.5;
-  half grainAmount = half(grainIntensity) * (0.72 + shadowMask * 0.35 + midMask * 0.18);
-  color += grainValue * grainAmount;
-
-  return half4(clamp(color, 0.0, 1.0), src.a);
-}
-`)!;
-
-/**
- * Grain granularity, in device pixels. Slightly coarser than one pixel —
- * true 1px noise reads as digital sensor noise, and real film grain clumps.
- */
-const GRAIN_SCALE = 0.9;
+  getDisposableRender,
+  loadSourceImage,
+  peekAnyRenderFor,
+  peekSourceImage,
+} from '@/features/media/disposable-cache';
+import { formatDisposableDateStamp } from '@/features/media/disposable-date-stamp';
+import { recordDisposablePicture } from '@/features/media/disposable-paint';
+import { buildDisposableRecipe } from '@/features/media/disposable-recipe';
+import { decideRenderSize, resizeTransformScale } from '@/features/media/disposable-resize';
 
 export interface DisposablePhotoProps {
   source: ImageSourcePropType;
@@ -170,15 +36,16 @@ export interface DisposablePhotoProps {
   style?: StyleProp<ViewStyle>;
   resizeMode?: ImageResizeMode;
   /**
-   * Skip the heavier layers (grain, leak, dust, scratches) on small
-   * surfaces where they cannot be seen anyway. Colour and vignette stay.
+   * Skip the layers that cannot be seen on a small surface — dust, scratches,
+   * light leaks. Tone, colour, grain and vignette still apply, so a grid cell
+   * still previews the look.
    */
   compact?: boolean;
-  /** Called once the layered render is ready to be captured/exported. */
+  /** Called once the render is complete enough to be captured/exported. */
   onReady?: () => void;
 }
 
-/** Skia's `useImage` wants a URL string or a bundled asset, not an RN source object. */
+/** Skia wants a URL string or a bundled asset, not an RN source object. */
 function toSkiaSource(source: ImageSourcePropType): string | number | null {
   if (typeof source === 'number') return source;
   if (Array.isArray(source)) return source[0]?.uri ?? null;
@@ -187,16 +54,93 @@ function toSkiaSource(source: ImageSourcePropType): string | number | null {
 }
 
 /**
- * The disposable-camera treatment, composited on a Skia canvas.
+ * The decoded source image, shared with every other surface showing the same
+ * photo.
  *
- * Layer order matters and mirrors how a real frame is formed: the emulsion's
- * colour response and softness first, then the lens vignette, then light that
- * leaked onto the film, and only then the physical debris — grain in the
- * emulsion, dust and scratches on the surface.
+ * Replaces react-native-skia's `useImage`, which caches nothing: under it, a
+ * grid cell and the full-screen viewer of the same photo each fetch and decode
+ * the original independently, and the viewer's decode lands in the middle of
+ * the open animation. On a cache hit this returns the image from the very
+ * first render — synchronously, before any effect runs — so the first frame
+ * the user sees is already filtered.
+ */
+function useSharedSourceImage(source: string | number | null): SkImage | null {
+  // The decoded image is stored *with the source it came from*, and handed
+  // back only when the two still agree.
+  //
+  // Without that pairing there is a window, one render long, where the props
+  // describe the new photo but this state still holds the old one's image:
+  // state updates in an effect, and effects run after the render that
+  // scheduled them. Swiping to the next photo therefore rendered the previous
+  // photo's pixels under the *new* photo's cache key — so the viewer showed
+  // one photo sharp with a different one behind it, and, worse, the wrong
+  // image was then cached against that key and kept coming back. The grid hit
+  // the same thing whenever a recycled cell was handed a different photo.
+  const [loaded, setLoaded] = useState<{ source: string | number; image: SkImage } | null>(() => {
+    if (typeof source !== 'string') return null;
+    const resident = peekSourceImage(source);
+    return resident ? { source, image: resident } : null;
+  });
+
+  useEffect(() => {
+    if (source === null) {
+      setLoaded(null);
+      return undefined;
+    }
+
+    const resident = typeof source === 'string' ? peekSourceImage(source) : null;
+    if (resident) {
+      setLoaded({ source, image: resident });
+      return undefined;
+    }
+
+    let cancelled = false;
+    void loadSourceImage(source).then((image) => {
+      if (!cancelled && image) setLoaded({ source, image });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [source]);
+
+  // A mismatch means the photo changed and its image has not arrived yet.
+  // Returning null keeps the rest of the component from rendering anything at
+  // all for that beat, which the untreated `<Image>` underneath already covers.
+  return loaded && loaded.source === source ? loaded.image : null;
+}
+
+/**
+ * How long a burst of layout changes must go quiet before it counts as
+ * "settled" and earns a re-render. Comfortably longer than one animation frame
+ * (so a continuously-animating resize never lands one) and short enough that a
+ * genuine one-off resize — rotating the device, say — still feels immediate.
+ */
+const RESIZE_SETTLE_MS = 120;
+
+/**
+ * The disposable-camera treatment, drawn on a Skia canvas.
  *
- * Every value that varies comes from `buildDisposableRecipe(seedKey)`, which
- * is deterministic, so a photo looks the same on every render while differing
- * from the photo beside it.
+ * All of the look lives in one shader, built into one paint by
+ * `buildDisposablePaint` — the same call the full-resolution exporter makes.
+ * This component holds no filter logic of its own, which is the point: there
+ * is nothing here that can drift from what gets saved to the camera roll.
+ *
+ * What it does hold is the machinery that keeps that work off the navigation
+ * path. Two things made opening a disposable photo lag where `original` and
+ * `black_and_white` did not:
+ *
+ * 1. The source image was decoded from scratch on every mount, so tapping a
+ *    thumbnail re-decoded the full-resolution original *during* the open
+ *    animation. `useSharedSourceImage` shares one decode across every surface.
+ * 2. Drawing a `<Picture>` re-runs the shader over every pixel each time the
+ *    canvas redraws, and the hero transition animates the container's width
+ *    and height, so that was every frame. The filtered result is now
+ *    rasterised once into an image and the animation blits that instead —
+ *    the same thing an unfiltered photo does.
+ *
+ * Everything that varies between photos comes from
+ * `buildDisposableRecipe(seedKey)`, which is deterministic — a photo looks the
+ * same on every render while differing from the photo beside it.
  */
 export function DisposablePhoto({
   source,
@@ -208,309 +152,186 @@ export function DisposablePhoto({
   compact = false,
   onReady,
 }: DisposablePhotoProps) {
-  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  // Two sizes, deliberately not one.
+  //
+  // `liveSize` tracks the container on every layout event, including every
+  // frame of an animated resize. `renderSize` is what the filter is actually
+  // rendered at, and only follows `liveSize` once layout has stopped changing
+  // for a beat — so a whole open or close transition produces one render
+  // rather than one per frame. The gap between them is covered by drawing the
+  // rendered image at `liveSize`, which is a texture blit and costs nothing.
+  const [liveSize, setLiveSize] = useState<{ width: number; height: number } | null>(null);
+  const [renderSize, setRenderSize] = useState<{ width: number; height: number } | null>(null);
+  const resizeSettleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readyRef = useRef(false);
 
-  const recipe = useMemo(() => buildDisposableRecipe(seedKey), [seedKey]);
+  useEffect(
+    () => () => {
+      if (resizeSettleTimer.current) clearTimeout(resizeSettleTimer.current);
+    },
+    [],
+  );
 
+  const recipe = useMemo(() => buildDisposableRecipe(seedKey), [seedKey]);
   const skiaSource = toSkiaSource(source);
-  const image = useImage(skiaSource ?? '');
-  // Hooks cannot be called conditionally, so the chosen variant is always
-  // loaded and simply left undrawn when the recipe omits that layer.
-  const dust = useImage(DUST_TEXTURES[recipe.dust?.variant ?? 0]);
-  const scratches = useImage(SCRATCH_TEXTURES[recipe.scratches?.variant ?? 0]);
+  const image = useSharedSourceImage(skiaSource);
+
+  // The imprint is drawn into the canvas alongside the filter rather than laid
+  // over it as a `<Text>`. A text node stacked on top of a photo is exactly
+  // what a date back does *not* look like.
+  const stamp = useMemo(
+    () =>
+      dateStampEnabled && !compact
+        ? formatDisposableDateStamp(capturedAt ? new Date(capturedAt) : new Date())
+        : undefined,
+    [capturedAt, compact, dateStampEnabled],
+  );
+
+  const devicePixelRatio = PixelRatio.get();
+  const fit = resizeMode === 'contain' ? 'contain' : 'cover';
+
+  // The filtered photo, flattened to an image. Cached across mounts, so
+  // closing a photo and reopening it costs nothing, and so the grid cell's
+  // render is not thrown away when the viewer opens.
+  //
+  // `stand-in` is what keeps the open animation free of shader work. On a
+  // first view at this size there is nothing cached to draw, and rendering one
+  // would land squarely in the transition — so a render of the *same photo at
+  // another size*, which the grid cell already produced, is drawn scaled
+  // instead. It is correctly filtered, just softer, and it is replaced by the
+  // exact-size render as soon as that exists.
+  const rendered = useMemo(() => {
+    if (!image || !renderSize || renderSize.width <= 0 || renderSize.height <= 0) return null;
+    return getDisposableRender({
+      image,
+      recipe,
+      seedKey,
+      width: renderSize.width,
+      height: renderSize.height,
+      devicePixelRatio,
+      fit,
+      compact,
+      dateStamp: stamp,
+    });
+  }, [compact, devicePixelRatio, fit, image, recipe, renderSize, seedKey, stamp]);
+
+  // Only consulted while `rendered` is still null, so it costs a cache lookup
+  // and nothing else once the real render lands.
+  const standIn = useMemo(() => {
+    if (rendered || !renderSize || renderSize.height <= 0) return null;
+    // Under `contain` the render is shaped like the photo, not like the box it
+    // sits in, so that is the shape a stand-in has to match.
+    const targetAspect =
+      fit === 'contain' && image
+        ? image.width() / image.height()
+        : renderSize.width / renderSize.height;
+    return peekAnyRenderFor(seedKey, targetAspect);
+  }, [fit, image, rendered, renderSize, seedKey]);
+  const shown = rendered ?? standIn;
+
+  // Fallback for when no offscreen GPU surface is available. Replays the
+  // shader on every canvas redraw, which is the behaviour this component used
+  // to have everywhere — slower, but correct, and never a silently unfiltered
+  // photo.
+  const picture = useMemo(() => {
+    if (shown || !image || !renderSize || renderSize.width <= 0 || renderSize.height <= 0) {
+      return null;
+    }
+    return recordDisposablePicture(image, recipe, {
+      width: renderSize.width,
+      height: renderSize.height,
+      devicePixelRatio,
+      fit,
+      compact,
+      dateStamp: stamp ? { text: stamp } : undefined,
+    });
+  }, [compact, devicePixelRatio, fit, image, recipe, shown, renderSize, stamp]);
+
+  const scale = resizeTransformScale(renderSize, liveSize);
+  const pictureTransform = useMemo(
+    () => (scale ? [{ scaleX: scale.scaleX }, { scaleY: scale.scaleY }] : undefined),
+    [scale],
+  );
 
   useEffect(() => {
     readyRef.current = false;
   }, [skiaSource, seedKey, compact]);
 
   useEffect(() => {
-    const layersReady = Boolean(image) && (compact || (Boolean(dust) && Boolean(scratches)));
-    if (!readyRef.current && layersReady && size) {
+    if (!readyRef.current && (rendered || picture)) {
+      // Deliberately `rendered`, not `shown`: a scaled stand-in is not what an
+      // export should capture.
       readyRef.current = true;
       onReady?.();
     }
-  }, [compact, dust, image, onReady, scratches, size]);
+  }, [onReady, picture, rendered]);
 
   function handleLayout(event: LayoutChangeEvent) {
     const { width, height } = event.nativeEvent.layout;
-    readyRef.current = false;
-    setSize((current) =>
-      current && current.width === width && current.height === height
-        ? current
-        : { width, height },
+    const incoming = { width, height };
+
+    setLiveSize((current) =>
+      current && current.width === width && current.height === height ? current : incoming,
     );
+
+    setRenderSize((current) => {
+      const decision = decideRenderSize(current, incoming);
+      switch (decision.kind) {
+        case 'unchanged':
+          return current;
+        case 'immediate':
+          return decision.size;
+        case 'debounce':
+          // Restarting this timer on every layout event is what makes a
+          // continuous resize animation fire it exactly once, after the last
+          // frame — not once per frame.
+          if (resizeSettleTimer.current) clearTimeout(resizeSettleTimer.current);
+          resizeSettleTimer.current = setTimeout(() => {
+            resizeSettleTimer.current = null;
+            setRenderSize(decision.size);
+          }, RESIZE_SETTLE_MS);
+          return current;
+      }
+    });
   }
-
-  const ready = image !== null && size !== null && size.width > 0 && size.height > 0;
-
-  const analogUniforms = useMemo(
-    () => ({
-      shadowCool: recipe.shadowCool,
-      highlightWarmth: recipe.highlightWarmth,
-      fade: recipe.fade,
-      saturationAmount: recipe.saturation,
-      contrastAmount: recipe.contrast,
-      grainIntensity: compact ? recipe.grainIntensity * 0.35 : recipe.grainIntensity,
-      grainScale: PixelRatio.get() * GRAIN_SCALE * recipe.grainScale,
-      seed: recipe.grainSeed,
-    }),
-    [
-      compact,
-      recipe.contrast,
-      recipe.fade,
-      recipe.grainIntensity,
-      recipe.grainScale,
-      recipe.grainSeed,
-      recipe.highlightWarmth,
-      recipe.saturation,
-      recipe.shadowCool,
-    ],
-  );
-
-  const leakVectors = useMemo(() => {
-    if (!size || !recipe.lightLeak) return null;
-    const { width, height } = size;
-    // Leaks enter from a corner and fall off toward the middle of the frame.
-    const corners = [
-      { start: vec(0, 0), end: vec(width * 0.75, height * 0.7) },
-      { start: vec(width, 0), end: vec(width * 0.25, height * 0.7) },
-      { start: vec(0, height), end: vec(width * 0.75, height * 0.3) },
-      { start: vec(width, height), end: vec(width * 0.25, height * 0.3) },
-    ];
-    return corners[recipe.lightLeak.corner];
-  }, [size, recipe.lightLeak]);
-
-  const edgeBurnVectors = useMemo(() => {
-    if (!size || !recipe.edgeBurn) return null;
-    const { width, height } = size;
-    return recipe.edgeBurn.side === 'left'
-      ? {
-          start: vec(0, height * 0.5),
-          end: vec(width * recipe.edgeBurn.width, height * 0.5),
-        }
-      : {
-          start: vec(width, height * 0.5),
-          end: vec(width * (1 - recipe.edgeBurn.width), height * 0.5),
-        };
-  }, [size, recipe.edgeBurn]);
-
-  const halationMatrix = useMemo(
-    () =>
-      [
-        threshold(0.62),
-        exposure(1.18),
-        warmth(0.18),
-        saturation(0.88),
-        contrast(1.28),
-      ].reduce(compose),
-    [],
-  );
-
-  const dateStampSize = size ? Math.max(9, Math.min(22, size.width * 0.055)) : 11;
 
   return (
     <View style={style} onLayout={handleLayout}>
       {/*
-        Always mounted underneath the canvas. Skia's image decode is async, so
-        without this the cell would be empty for a frame or two on every
-        scroll — and empty-until-loaded is exactly the blank-photo failure
-        this whole component replaced. It simply gets covered once ready.
+        Always mounted underneath the canvas. Decoding is async even on a cache
+        hit for a photo never seen before, so without this the cell would be
+        empty for a frame or two on every scroll — and empty-until-loaded is
+        exactly the blank-photo failure this whole component replaced. It
+        simply gets covered once ready.
       */}
       <RNImage source={source} style={StyleSheet.absoluteFill} resizeMode={resizeMode} />
 
-      {ready && size && (
+      {shown && liveSize ? (
         <Canvas style={StyleSheet.absoluteFill}>
-          {/* 1. Emulsion: base tone curve, split-toning and grain. */}
-          <Group
-            layer={
-              <Paint>
-                <RuntimeShader source={ANALOG_SHADER} uniforms={analogUniforms}>
-                  <ColorMatrix matrix={recipe.colorMatrix} />
-                </RuntimeShader>
-              </Paint>
-            }
-          >
-            <SkiaImage
-              image={image}
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              fit={resizeMode === 'contain' ? 'contain' : 'cover'}
-            />
-          </Group>
+          {/*
+            Under `cover` the render was produced at the container's own shape,
+            so `fill` simply stretches it onto the box — including while that
+            box is mid-animation at a different size, which is what makes the
+            transition a blit rather than a re-render.
 
-          {/* 2. Very slight optical softness. */}
-          <Group
-            opacity={0.18}
-            blendMode="screen"
-            layer={
-              <Paint>
-                <Blur blur={recipe.blurRadius} />
-              </Paint>
-            }
-          >
-            <SkiaImage
-              image={image}
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              fit={resizeMode === 'contain' ? 'contain' : 'cover'}
-            />
-          </Group>
-
-          {/* 3. Highlight bloom / halation. */}
-          {!compact && (
-            <Group
-              opacity={recipe.halation.opacity}
-              blendMode="screen"
-              layer={
-                <Paint>
-                  <Blur blur={recipe.halation.blurRadius} />
-                  <ColorMatrix matrix={halationMatrix} />
-                </Paint>
-              }
-            >
-              <SkiaImage
-                image={image}
-                x={0}
-                y={0}
-                width={size.width}
-                height={size.height}
-                fit={resizeMode === 'contain' ? 'contain' : 'cover'}
-              />
-            </Group>
-          )}
-
-          {/* 4. Lens vignette — an actual radial falloff. */}
-          <Rect x={0} y={0} width={size.width} height={size.height}>
-            <RadialGradient
-              c={vec(size.width / 2, size.height / 2)}
-              r={Math.hypot(size.width, size.height) / 2}
-              colors={[
-                `rgba(${recipe.vignette.colour}, 0)`,
-                `rgba(${recipe.vignette.colour}, ${recipe.vignette.opacity})`,
-              ]}
-              positions={[recipe.vignette.innerStop, 1]}
-            />
-          </Rect>
-
-          {/* 5. Gate/edge burn. */}
-          {!compact && recipe.edgeBurn && edgeBurnVectors && (
-            <Rect
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              blendMode="multiply"
-            >
-              <LinearGradient
-                start={edgeBurnVectors.start}
-                end={edgeBurnVectors.end}
-                colors={[
-                  `rgba(${recipe.edgeBurn.colour}, ${recipe.edgeBurn.opacity})`,
-                  'rgba(0, 0, 0, 0)',
-                ]}
-              />
-            </Rect>
-          )}
-
-          {/* 6. Light that leaked onto the film. Only on some frames. */}
-          {!compact && recipe.lightLeak && leakVectors && (
-            <Rect
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              blendMode="screen"
-            >
-              <LinearGradient
-                start={leakVectors.start}
-                end={leakVectors.end}
-                colors={[
-                  `rgba(${recipe.lightLeak.colour}, ${recipe.lightLeak.strength})`,
-                  `rgba(${recipe.lightLeak.colour}, 0)`,
-                ]}
-              />
-            </Rect>
-          )}
-
-          {/* 7. A second, coarser grain pass to break up the digital regularity. */}
-          {!compact && (
-            <Rect
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              opacity={recipe.grainIntensity * 0.4}
-              blendMode="softLight"
-            >
-              <Shader
-                source={GRAIN_SHADER}
-                uniforms={{
-                  resolution: [size.width, size.height],
-                  seed: recipe.grainSeed * 1.7,
-                  scale: PixelRatio.get() * recipe.grainScale * 0.42,
-                }}
-              />
-            </Rect>
-          )}
-
-          {/* 8. Debris on the film surface. */}
-          {!compact && recipe.dust && dust && (
-            <SkiaImage
-              image={dust}
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              fit="cover"
-              opacity={recipe.dust.opacity}
-              blendMode="screen"
-            />
-          )}
-          {!compact && recipe.scratches && scratches && (
-            <SkiaImage
-              image={scratches}
-              x={0}
-              y={0}
-              width={size.width}
-              height={size.height}
-              fit="cover"
-              opacity={recipe.scratches.opacity}
-              blendMode="screen"
-            />
-          )}
+            Under `contain` the render is shaped like the photo instead (the
+            surface is sized to it, so no filter layer has an empty margin to
+            bleed into), so it has to be fitted here rather than stretched.
+          */}
+          <SkiaImage
+            image={shown}
+            x={0}
+            y={0}
+            width={liveSize.width}
+            height={liveSize.height}
+            fit={fit === 'contain' ? 'contain' : 'fill'}
+          />
         </Canvas>
-      )}
-
-      {dateStampEnabled && !compact && (
-        <View style={styles.dateStampContainer} pointerEvents="none">
-          {/* Scales with the render surface, so it reads the same relative
-              size in a grid cell as it does full screen. */}
-          <AppText style={[styles.dateStampText, { fontSize: dateStampSize }]}>
-            {formatDisposableDateStamp(capturedAt ? new Date(capturedAt) : new Date())}
-          </AppText>
-        </View>
-      )}
+      ) : picture ? (
+        <Canvas style={StyleSheet.absoluteFill}>
+          <Picture picture={picture} transform={pictureTransform} />
+        </Canvas>
+      ) : null}
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  dateStampContainer: {
-    position: 'absolute',
-    bottom: '3%',
-    right: '4%',
-  },
-  dateStampText: {
-    fontFamily: 'monospace',
-    color: '#ff8c2b',
-    fontWeight: '700',
-    textShadowColor: 'rgba(120, 40, 0, 0.55)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-});

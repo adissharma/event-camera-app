@@ -1,18 +1,17 @@
 /**
  * Semantic typography scale.
  *
- * Display: Instrument Serif (SIL OFL 1.1) — a refined transitional serif with
- * high-but-not-Didone contrast, slightly narrow proportions and elegant
- * ballpoint terminals. It ships in a single regular weight, which is the right
- * constraint on a near-black canvas: white type optically gains weight against
- * black (halation), so a bold serif reads blunt where a regular reads sharp.
+ * Display: Newsreader (OFL 1.1) — a high-contrast editorial serif used for
+ * event names, cover titles and the app's larger moments. The regular weight
+ * is the right constraint on a near-black canvas: white type optically gains
+ * weight against black (halation), so a bold serif reads blunt where a regular
+ * reads sharp.
  *
  * Text/UI: Instrument Sans (SIL OFL 1.1) — a neo-grotesque (NOT geometric) with
  * excellent legibility at 13–17pt, open apertures and tabular figures.
  *
- * These are siblings from one superfamily. That is the rationale for the
- * pairing — shared skeleton and rhythm — rather than the reflexive
- * elegant-serif-plus-any-sans pattern the brief rules out.
+ * The serif gives the product its editorial voice, while Instrument Sans keeps
+ * controls, labels and dense UI readable.
  *
  * The `eyebrow` role is the deliberate counterweight to the serif: wide-tracked
  * uppercase sans micro-labels. It is what makes the system read as editorial
@@ -27,9 +26,9 @@
 import type { TextStyle } from 'react-native';
 
 export const fontFamilies = {
-  display: 'InstrumentSerif_400Regular',
+  display: 'Newsreader_400Regular',
   /** Used sparingly — a single emphasised word, never a whole line. */
-  displayItalic: 'InstrumentSerif_400Regular_Italic',
+  displayItalic: 'Newsreader_400Regular_Italic',
   textRegular: 'InstrumentSans_400Regular',
   textMedium: 'InstrumentSans_500Medium',
   textSemiBold: 'InstrumentSans_600SemiBold',

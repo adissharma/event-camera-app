@@ -1,6 +1,7 @@
-import { Switch, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/text';
+import { AppSwitch } from '@/components/forms/app-switch';
 import { colours, layout, radii, spacing } from '@/design';
 
 export interface ToggleRowProps {
@@ -8,6 +9,7 @@ export interface ToggleRowProps {
   description?: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  hideLabel?: boolean;
   disabled?: boolean;
   disabledReason?: string;
 }
@@ -24,6 +26,7 @@ export function ToggleRow({
   description,
   value,
   onValueChange,
+  hideLabel = false,
   disabled = false,
   disabledReason,
 }: ToggleRowProps) {
@@ -41,9 +44,9 @@ export function ToggleRow({
         borderColor: colours.borderSubtle,
         opacity: disabled ? 0.5 : 1,
       }}
-    >
+      >
       <View style={{ flex: 1, gap: spacing.xxs }}>
-        <AppText variant="labelLarge">{label}</AppText>
+        {!hideLabel ? <AppText variant="labelLarge">{label}</AppText> : null}
         {description ? (
           <AppText variant="bodySmall" tone="secondary">
             {description}
@@ -56,15 +59,12 @@ export function ToggleRow({
         ) : null}
       </View>
 
-      <Switch
+      <AppSwitch
         accessibilityLabel={label}
         accessibilityHint={disabled ? disabledReason : description}
         value={value}
         onValueChange={onValueChange}
         disabled={disabled}
-        trackColor={{ false: colours.surfaceRaised, true: colours.background }}
-        thumbColor={colours.textPrimary}
-        ios_backgroundColor={colours.surfaceRaised}
       />
     </View>
   );

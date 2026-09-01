@@ -28,7 +28,6 @@ export const CREATION_STEPS = [
   'cover',
   'photo-limit',
   'reveal',
-  'guest-reveal',
   'treatment',
   'package',
 ] as const;
@@ -191,6 +190,30 @@ export function resolveReveal(
   endsAt: string | null,
   customRevealAt: string | null,
 ): { mode: RevealMode; revealAt: string | null } {
+  /**
+   * A *custom* reveal time that has already passed becomes an immediate
+   * reveal.
+   *
+   * Time keeps moving while a host finishes the rest of setup, and a guest
+   * reveal is a relative offset from the host's, so both can legitimately
+   * resolve to a moment already gone by the time the event is published.
+   * Scheduling that in the past would leave the gallery waiting for an
+   * instant that never arrives; the honest reading is that the reveal has
+   * already happened. This is why neither reveal schema re-validates against
+   * the clock — see `validation.ts`.
+   *
+   * Applied only to `custom`. `at_close` keeps scheduling against the closing
+   * time even once it has passed, so that reopening settings for a finished
+   * event still reads back as "After event ends" rather than silently
+   * becoming "As they arrive" — see `decodeRevealMode`.
+   */
+  const scheduleOrReveal = (at: string | null): { mode: RevealMode; revealAt: string | null } => {
+    if (!at) return { mode: 'manual', revealAt: null };
+    return new Date(at).getTime() <= Date.now()
+      ? { mode: 'instant', revealAt: null }
+      : { mode: 'scheduled', revealAt: at };
+  };
+
   switch (choice) {
     case 'during':
       return { mode: 'instant', revealAt: null };
@@ -201,12 +224,10 @@ export function resolveReveal(
           // schedule against yet if the closing time isn't set.
           { mode: 'manual', revealAt: null };
     case 'custom':
-      return customRevealAt
-        ? { mode: 'scheduled', revealAt: customRevealAt }
-        : // A wrong reveal time is worse than asking the host to press a
-          // button, so a custom choice with nothing picked yet falls back
-          // to manual rather than inventing a time.
-          { mode: 'manual', revealAt: null };
+      // A wrong reveal time is worse than asking the host to press a button,
+      // so a custom choice with nothing picked yet falls back to manual
+      // rather than inventing a time.
+      return scheduleOrReveal(customRevealAt);
     case 'never':
       return { mode: 'manual', revealAt: null };
   }

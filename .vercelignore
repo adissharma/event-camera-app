@@ -7,3 +7,20 @@ android/
 .expo/
 dist/
 .git/
+
+# Local env files. `.vercelignore` REPLACES `.gitignore` for CLI deploys, so
+# without this line the gitignored `.env.local` is uploaded and `expo export`
+# reads it during the build — baking local development values (a dev payment
+# provider, placeholder keys) into a production bundle. Vercel's own project
+# environment variables are the only source of truth for a deploy.
+.env
+.env*.local
+
+# Build artefacts and scratch space. Neither is part of the web bundle, and
+# together they were 25k of the 36k files being uploaded — past Vercel's
+# 15k-file limit, which is what forced `--archive=tgz` and turned a deploy
+# into a multi-minute upload. `build/` holds native/Xcode output and design
+# captures; `.tmp/` is scratch from `npm run db:bundle`.
+build/
+.tmp/
+.vercel/

@@ -109,20 +109,32 @@ async function runFfmpeg(args: string[], timeoutMs = 180_000) {
   await execFileAsync(ffmpegPath, args, { timeout: timeoutMs, maxBuffer: 2 * 1024 * 1024 });
 }
 
-function photoTreatmentFilter(treatment: RecapPhotoTreatment, dateStampEnabled: boolean) {
+function photoTreatmentFilter(treatment: RecapPhotoTreatment) {
   if (treatment === 'black_and_white') return 'hue=s=0';
   if (treatment === 'disposable') {
-    const base = 'eq=contrast=1.08:saturation=0.82:brightness=0.025,colorbalance=rs=.04:gs=.015:bs=-.025';
-    // The native gallery's disposable treatment is a layered Skia render. The
-    // worker uses a deterministic FFmpeg approximation so filtered recaps can
-    // be generated server-side without a React Native render surface.
-    return dateStampEnabled ? `${base},vignette=PI/5` : base;
+    // The app's disposable treatment is a Skia shader (see
+    // `src/features/media/disposable-shader.ts`). A recap is rendered
+    // server-side by FFmpeg with no React Native surface to draw into, so this
+    // is a deliberate approximation of the same preset rather than the same
+    // code: punchy contrast, richer saturation, cool shadows and warm
+    // highlights, and a soft wide vignette.
+    //
+    // It tracks the preset by hand, so it needs revisiting when the preset
+    // moves. Two things it does not reproduce: the grain, and the dust — both
+    // would need filters this pipeline has not been proven to have available,
+    // and a recap that fails to render is worse than one without grain.
+    const tone = 'eq=contrast=1.26:saturation=1.16:brightness=0.02';
+    const split = 'colorbalance=rs=-.02:bs=.03:rm=.02:bm=-.01:rh=.05:bh=-.04';
+    // Unconditional. It used to be applied only when the date stamp was on,
+    // which coupled two unrelated settings — turning the stamp off silently
+    // removed the vignette too.
+    return `${tone},${split},vignette=PI/6`;
   }
   if (treatment === 'warm_film') return 'eq=contrast=1.04:saturation=1.05:brightness=0.015,colorbalance=rs=.035:gs=.012:bs=-.018';
   return null;
 }
 
-function photoPanFilter(index: number, seconds: number, treatment: RecapPhotoTreatment, dateStampEnabled: boolean) {
+function photoPanFilter(index: number, seconds: number, treatment: RecapPhotoTreatment) {
   const frames = Math.max(2, Math.round(seconds * FPS));
   const progress = `n/${frames - 1}`;
   const xCenter = 'floor((iw-ow)/2)';
@@ -141,7 +153,7 @@ function photoPanFilter(index: number, seconds: number, treatment: RecapPhotoTre
   return [
     `scale=${scaledWidth}:${scaledHeight}:force_original_aspect_ratio=increase`,
     `crop=${WIDTH}:${HEIGHT}:${pan.x}:${pan.y}`,
-    photoTreatmentFilter(treatment, dateStampEnabled),
+    photoTreatmentFilter(treatment),
     'setsar=1',
     `fps=${FPS}`,
     'format=yuv420p',
@@ -163,13 +175,12 @@ async function renderPhoto(
   seconds: number,
   index: number,
   treatment: RecapPhotoTreatment,
-  dateStampEnabled: boolean,
 ) {
   await runFfmpeg([
     '-y', '-loop', '1', '-i', inputPath,
     '-f', 'lavfi', '-i', 'anullsrc=channel_layout=stereo:sample_rate=48000',
     '-t', String(seconds),
-    '-vf', photoPanFilter(index, seconds, treatment, dateStampEnabled),
+    '-vf', photoPanFilter(index, seconds, treatment),
     '-map', '0:v:0', '-map', '1:a:0', '-r', String(FPS),
     '-fps_mode', 'cfr', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20',
     '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-ar', '48000',
@@ -274,7 +285,7 @@ async function processOne() {
       const response = await fetch(mediaUrl);
       if (!response.ok) continue;
       await fs.writeFile(inputPath, Buffer.from(await response.arrayBuffer()));
-      if (item.media_type === 'photo') await renderPhoto(inputPath, segmentPath, item.segmentSeconds, index, photoTreatment, dateStampEnabled);
+      if (item.media_type === 'photo') await renderPhoto(inputPath, segmentPath, item.segmentSeconds, index, photoTreatment);
       else await renderVideo(inputPath, segmentPath, item.segmentSeconds);
       segmentPaths.push(segmentPath);
       durations.push(item.segmentSeconds);

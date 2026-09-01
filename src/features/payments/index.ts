@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 
 import { FEATURE_FLAGS } from '@/config/feature-flags';
 import { developmentPaymentProvider } from './development-provider';
+import { revenueCatPaymentProvider } from './revenuecat-provider';
 import type { PaymentProvider } from './types';
 
 export * from './types';
@@ -20,9 +21,7 @@ export function getPaymentProvider(): PaymentProvider {
 
   switch (Platform.OS) {
     case 'ios':
-      // StoreKit. Digital feature unlocking on iOS must go through IAP — see
-      // docs/payments.md.
-      throw new Error('StoreKit provider not implemented yet');
+      return revenueCatPaymentProvider;
     case 'android':
       throw new Error('Play Billing provider not implemented yet');
     default:

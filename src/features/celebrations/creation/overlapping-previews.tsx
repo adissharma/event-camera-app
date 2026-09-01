@@ -68,46 +68,76 @@ export function OverlappingPreviews({ treatment }: OverlappingPreviewsProps) {
   });
 
   const resolved = normalisePhotoTreatment(treatment);
-  const visual = TREATMENT_VISUALS[resolved];
 
   /**
-   * Disposable is drawn by the same component the real gallery uses, so the
-   * preview cannot drift from what a host actually gets — the two cards pass
-   * different seeds, which also demonstrates that no two photos come out
-   * identical.
+   * All three renderers stay mounted. Swapping between PremiumImage, a native
+   * colour-matrix tree and a Skia canvas made the selected image disappear for
+   * a frame while the new renderer decoded its source. Keeping them warm and
+   * changing only opacity makes treatment changes atomic and flicker-free.
    *
-   * The other treatments deliberately stay on `PremiumImage`. These preview
-   * assets are square (1024x1024) shown in a 9:16 card, and `PremiumImage`
-   * is the one path that fits that mismatch correctly via expo-image's
-   * `contentFit` plus the manifest's focal point; a plain RN `Image` crops
-   * them to an unrecognisable strip.
+   * Disposable still uses the same component as the real gallery, while the
+   * other treatments retain PremiumImage's focal-point-aware crop.
    */
   function card(assetKey: VisualAssetKey, seedKey: string) {
-    if (resolved === 'disposable') {
-      const { source } = getVisualAsset(assetKey);
-      // The manifest allows an asset with no bundled file; nothing to treat.
-      if (!source) return null;
-      return (
-        <DisposablePhoto
-          source={source}
-          seedKey={seedKey}
-          dateStampEnabled
-          style={styles.image}
-          resizeMode="cover"
-        />
-      );
-    }
+    const { source } = getVisualAsset(assetKey);
+    if (!source) return null;
 
-    const image = (
-      <PremiumImage assetKey={assetKey} aspectRatio={9 / 16} radius="lg" style={styles.image} />
-    );
+    const originalVisible = resolved === 'original';
+    const monochromeVisible = resolved === 'black_and_white';
+    const disposableVisible = resolved === 'disposable';
 
-    return visual.colorMatrix ? (
-      <ColorMatrix matrix={visual.colorMatrix as unknown as NativeMatrix} style={styles.image}>
-        {image}
-      </ColorMatrix>
-    ) : (
-      image
+    return (
+      <View style={styles.image}>
+        <View
+          pointerEvents="none"
+          accessibilityElementsHidden={!originalVisible}
+          importantForAccessibility={originalVisible ? 'auto' : 'no-hide-descendants'}
+          style={[styles.layer, originalVisible ? styles.visible : styles.hidden]}
+        >
+          <PremiumImage
+            assetKey={assetKey}
+            aspectRatio={9 / 16}
+            radius="lg"
+            transitionMs={0}
+            style={styles.image}
+          />
+        </View>
+
+        <View
+          pointerEvents="none"
+          accessibilityElementsHidden={!monochromeVisible}
+          importantForAccessibility={monochromeVisible ? 'auto' : 'no-hide-descendants'}
+          style={[styles.layer, monochromeVisible ? styles.visible : styles.hidden]}
+        >
+          <ColorMatrix
+            matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
+            style={styles.image}
+          >
+            <PremiumImage
+              assetKey={assetKey}
+              aspectRatio={9 / 16}
+              radius="lg"
+              transitionMs={0}
+              style={styles.image}
+            />
+          </ColorMatrix>
+        </View>
+
+        <View
+          pointerEvents="none"
+          accessibilityElementsHidden={!disposableVisible}
+          importantForAccessibility={disposableVisible ? 'auto' : 'no-hide-descendants'}
+          style={[styles.layer, disposableVisible ? styles.visible : styles.hidden]}
+        >
+          <DisposablePhoto
+            source={source}
+            seedKey={seedKey}
+            dateStampEnabled
+            style={styles.image}
+            resizeMode="cover"
+          />
+        </View>
+      </View>
     );
   }
 
@@ -157,5 +187,18 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  layer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  visible: {
+    opacity: 1,
+  },
+  hidden: {
+    opacity: 0,
   },
 });

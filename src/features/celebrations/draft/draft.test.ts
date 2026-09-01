@@ -21,10 +21,24 @@ describe('reveal resolution', () => {
   });
 
   it('uses the custom time when one is set', () => {
-    const custom = '2026-08-20T09:00:00.000Z';
+    // Relative to now, not a literal date: a hardcoded one silently becomes a
+    // *past* time once the clock passes it, and the case below shows that is a
+    // different assertion entirely.
+    const custom = new Date(Date.now() + 86_400_000).toISOString();
     expect(resolveReveal('custom', CLOSE, custom)).toEqual({
       mode: 'scheduled',
       revealAt: custom,
+    });
+  });
+
+  it('treats a custom time that has already passed as an immediate reveal', () => {
+    // Time keeps moving while a host finishes setup, and a guest reveal is an
+    // offset from the host's, so both can legitimately resolve to a moment
+    // already gone by the time the event is published. Scheduling that would
+    // leave the gallery waiting for an instant that never arrives.
+    expect(resolveReveal('custom', CLOSE, '2020-01-01T00:00:00.000Z')).toEqual({
+      mode: 'instant',
+      revealAt: null,
     });
   });
 
@@ -85,7 +99,7 @@ describe('step validation', () => {
     it('rejects when guest is during but host is at close', () => {
       expect(
         validateStep(
-          'guest-reveal',
+          'reveal',
           draftWith({ hostRevealChoice: 'at_close', guestRevealChoice: 'during' }),
         ),
       ).toMatch(/Guests cannot view photos before you/);
@@ -94,7 +108,7 @@ describe('step validation', () => {
     it('rejects when host is custom but guest is not custom', () => {
       expect(
         validateStep(
-          'guest-reveal',
+          'reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: new Date(Date.now() + 3600000).toISOString(),
@@ -107,7 +121,7 @@ describe('step validation', () => {
     it('rejects a custom reveal with null times', () => {
       expect(
         validateStep(
-          'guest-reveal',
+          'reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: null,
@@ -118,10 +132,14 @@ describe('step validation', () => {
       ).toMatch(/Choose a day and time/);
     });
 
-    it('rejects a custom reveal in the past', () => {
+    it('accepts a custom reveal whose time has already passed', () => {
+      // Deliberately not an error. Re-opening settings for an event whose
+      // reveal time has come and gone used to block the host on a step they
+      // had already completed correctly; `resolveReveal` turns an elapsed
+      // custom time into an immediate reveal instead.
       expect(
         validateStep(
-          'guest-reveal',
+          'reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: '2020-01-01T00:00:00.000Z',
@@ -129,7 +147,7 @@ describe('step validation', () => {
             guestCustomRevealAt: '2020-01-01T00:00:00.000Z',
           }),
         ),
-      ).toMatch(/future/);
+      ).toBeNull();
     });
 
     it('rejects when guest custom reveal is before host custom reveal', () => {
@@ -137,7 +155,7 @@ describe('step validation', () => {
       const guestTime = new Date(hostTime.getTime() - 3600_000); // 1 hour earlier
       expect(
         validateStep(
-          'guest-reveal',
+          'reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: hostTime.toISOString(),

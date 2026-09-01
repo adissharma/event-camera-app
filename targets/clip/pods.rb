@@ -2,7 +2,9 @@ require File.join(File.dirname(`node --print "require.resolve('react-native/pack
 
 exclude = [
   # Bug in Expo Updates preventing it from working with App Clips.
-  "expo-updates"
+  "expo-updates",
+  "expo-dev-launcher",
+  "expo-dev-menu"
 ]
 use_expo_modules!(exclude: exclude)
 

@@ -2,18 +2,70 @@
   "buildCommand": "expo export --platform web",
   "outputDirectory": "dist",
   "functions": {
-    "api/recap-worker.ts": { "maxDuration": 300 }
+    "api/recap-worker.ts": {
+      "maxDuration": 300
+    }
   },
   "rewrites": [
-    { "source": "/j/:slug", "destination": "/j/%5Bslug%5D.html" },
-    { "source": "/e/:eventCode", "destination": "/e/%5BeventCode%5D.html" },
-    { "source": "/e/:eventCode/gallery", "destination": "/e/%5BeventCode%5D/gallery.html" },
-    { "source": "/celebration/:celebrationId", "destination": "/celebration/%5BcelebrationId%5D.html" },
-    { "source": "/celebration/:celebrationId/edit", "destination": "/celebration/%5BcelebrationId%5D/edit.html" },
-    { "source": "/celebration/:celebrationId/camera", "destination": "/celebration/%5BcelebrationId%5D/camera.html" },
-    { "source": "/celebration/:celebrationId/preview", "destination": "/celebration/%5BcelebrationId%5D/preview.html" },
-    { "source": "/celebration/:celebrationId/challenges", "destination": "/celebration/%5BcelebrationId%5D/challenges.html" },
-    { "source": "/celebration/:celebrationId/photos/:photoId", "destination": "/celebration/%5BcelebrationId%5D/photos/%5BphotoId%5D.html" },
-    { "source": "/celebration/:celebrationId/challenges/:challengeId", "destination": "/celebration/%5BcelebrationId%5D/challenges/%5BchallengeId%5D.html" }
+    {
+      "source": "/j/:slug",
+      "destination": "/j/%5Bslug%5D.html"
+    },
+    {
+      "source": "/e/:eventCode",
+      "destination": "/e/%5BeventCode%5D.html"
+    },
+    {
+      "source": "/e/:eventCode/gallery",
+      "destination": "/e/%5BeventCode%5D/gallery.html"
+    },
+    {
+      "source": "/celebration/:celebrationId",
+      "destination": "/celebration/%5BcelebrationId%5D.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/edit",
+      "destination": "/celebration/%5BcelebrationId%5D/edit.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/camera",
+      "destination": "/celebration/%5BcelebrationId%5D/camera.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/preview",
+      "destination": "/celebration/%5BcelebrationId%5D/preview.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/guestbook",
+      "destination": "/celebration/%5BcelebrationId%5D/guestbook.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/guestbook-settings",
+      "destination": "/celebration/%5BcelebrationId%5D/guestbook-settings.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/joined-guests",
+      "destination": "/celebration/%5BcelebrationId%5D/joined-guests.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/photos/:photoId",
+      "destination": "/celebration/%5BcelebrationId%5D/photos/%5BphotoId%5D.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/challenges",
+      "destination": "/celebration/%5BcelebrationId%5D/challenges.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/challenges/packs",
+      "destination": "/celebration/%5BcelebrationId%5D/challenges/packs.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/challenges/packs/:packId",
+      "destination": "/celebration/%5BcelebrationId%5D/challenges/packs/%5BpackId%5D.html"
+    },
+    {
+      "source": "/celebration/:celebrationId/challenges/:challengeId",
+      "destination": "/celebration/%5BcelebrationId%5D/challenges/%5BchallengeId%5D.html"
+    }
   ]
 }

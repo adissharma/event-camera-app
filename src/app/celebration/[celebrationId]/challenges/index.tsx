@@ -34,6 +34,8 @@ import {
   ChallengeIconSVG as SharedChallengeIconSVG,
 } from '@/features/celebrations/challenge-icons';
 import { ChallengesEmptyState } from '@/features/celebrations/challenges-empty-state';
+import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { useIsEventHost } from '@/features/entitlements/use-event-role';
 
 // ── Models & Presets ──
 
@@ -127,7 +129,7 @@ function ChallengeDragHandle({
 
 // ── View All Challenges Screen Component ──
 
-export default function ViewChallengesScreen() {
+function ViewChallengesScreenContent() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -626,3 +628,24 @@ const S = StyleSheet.create({
     marginBottom: spacing.sm,
   },
 });
+
+/**
+ * Challenges is a Stories+ feature, so the screen checks before it
+ * renders rather than trusting whatever opened it. A host without the package
+ * is offered the upgrade; a guest is sent back without ever seeing it.
+ */
+export default function ViewChallengesScreen() {
+  const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
+  const { isHost } = useIsEventHost(String(celebrationId));
+
+  return (
+    <FeatureGate
+      celebrationId={String(celebrationId)}
+      feature="challenges"
+      title="Unlock Challenges"
+      isHost={isHost}
+    >
+      <ViewChallengesScreenContent />
+    </FeatureGate>
+  );
+}

@@ -99,7 +99,7 @@ export default function ReviewStep() {
             : date(hostReveal.revealAt),
     },
     {
-      step: 'guest-reveal',
+      step: 'reveal',
       label: 'Guests’ access',
       value:
         guestReveal.mode === 'instant'
@@ -147,7 +147,7 @@ export default function ReviewStep() {
         <DeviceFrame>
           <GuestCoverPreview
             draft={draft}
-            theme={selectedTheme ? parseCoverTheme(selectedTheme.design_tokens) : undefined}
+            theme={selectedTheme ? parseCoverTheme(selectedTheme.design_tokens, selectedTheme.slug) : undefined}
           />
         </DeviceFrame>
 

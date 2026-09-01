@@ -1,11 +1,11 @@
+import { DISPOSABLE_PRESET } from './disposable-preset';
 import {
   buildDisposableRecipe,
+  channelMixer,
   compose,
-  contrast,
-  exposure,
   saturation,
-  threshold,
-  warmth,
+  temperature,
+  tint,
   type ColorMatrix4x5,
 } from './disposable-recipe';
 
@@ -28,35 +28,19 @@ const IDENTITY: ColorMatrix4x5 = [
 
 describe('compose', () => {
   it('leaves a matrix unchanged when composed with the identity', () => {
-    const m = contrast(1.2);
+    const m = saturation(1.2);
     expect(compose(IDENTITY, m)).toEqual(m);
     compose(m, IDENTITY).forEach((v, i) => expect(v).toBeCloseTo(m[i], 10));
   });
 
   it('composes in left-to-right order', () => {
-    // Two exposure scalings should multiply.
-    const combined = compose(exposure(2), exposure(3));
-    const [r] = apply(combined, [0.1, 0.1, 0.1]);
-    expect(r).toBeCloseTo(0.6, 10);
-  });
-
-  it('carries offsets through the second matrix linear part', () => {
-    // contrast() offsets around mid-grey; scaling after it must scale the
-    // offset too, or the composition silently shifts exposure.
-    const combined = compose(contrast(2), exposure(0.5));
+    const combined = compose(temperature(0.1), temperature(0.1));
     const [r] = apply(combined, [0.5, 0.5, 0.5]);
-    expect(r).toBeCloseTo(0.25, 10);
+    expect(r).toBeCloseTo(0.5 * 1.09 * 1.09, 10);
   });
 });
 
 describe('colour primitives', () => {
-  it('pivots contrast around mid-grey', () => {
-    const [r, g, b] = apply(contrast(1.4), [0.5, 0.5, 0.5]);
-    expect(r).toBeCloseTo(0.5, 10);
-    expect(g).toBeCloseTo(0.5, 10);
-    expect(b).toBeCloseTo(0.5, 10);
-  });
-
   it('leaves colour untouched at full saturation', () => {
     const [r, g, b] = apply(saturation(1), [0.2, 0.6, 0.9]);
     expect(r).toBeCloseTo(0.2, 10);
@@ -73,16 +57,31 @@ describe('colour primitives', () => {
   });
 
   it('warms by raising red and lowering blue', () => {
-    const [r, , b] = apply(warmth(0.06), [0.5, 0.5, 0.5]);
+    const [r, , b] = apply(temperature(0.06), [0.5, 0.5, 0.5]);
     expect(r).toBeGreaterThan(0.5);
     expect(b).toBeLessThan(0.5);
   });
 
-  it('pushes sub-threshold values below zero and stretches highlights up', () => {
-    const [dark] = apply(threshold(0.6), [0.4, 0.4, 0.4]);
-    const [bright] = apply(threshold(0.6), [0.9, 0.9, 0.9]);
-    expect(dark).toBeLessThan(0);
-    expect(bright).toBeGreaterThan(0.7);
+  it('shifts toward magenta on a positive tint', () => {
+    const [r, g, b] = apply(tint(0.1), [0.5, 0.5, 0.5]);
+    expect(g).toBeLessThan(0.5);
+    expect(r).toBeGreaterThan(g);
+    expect(b).toBeGreaterThan(g);
+  });
+
+  it('leaves neutrals alone in the channel mixer', () => {
+    // The whole reason this is a mixer rather than a per-channel gain: it must
+    // enrich a blue sky without tinting every grey in the frame.
+    const mixer = channelMixer(0.3, -0.2);
+    const [r, g, b] = apply(mixer, [0.5, 0.5, 0.5]);
+    expect(r).toBeCloseTo(0.5, 10);
+    expect(g).toBeCloseTo(0.5, 10);
+    expect(b).toBeCloseTo(0.5, 10);
+  });
+
+  it('enriches a colour the channel mixer is pointed at', () => {
+    const [, , b] = apply(channelMixer(0.3, 0), [0.2, 0.35, 0.8]);
+    expect(b).toBeGreaterThan(0.8);
   });
 });
 
@@ -92,70 +91,46 @@ describe('buildDisposableRecipe', () => {
   });
 
   it('differs between photos', () => {
-    const a = buildDisposableRecipe('media-item-a');
-    const b = buildDisposableRecipe('media-item-b');
-    expect(a).not.toEqual(b);
+    expect(buildDisposableRecipe('media-item-a')).not.toEqual(
+      buildDisposableRecipe('media-item-b'),
+    );
   });
 
-  it('keeps every randomised value inside its tasteful range', () => {
-    // Sweep enough seeds to exercise the ranges rather than one lucky draw.
-    for (let i = 0; i < 300; i += 1) {
+  it('keeps every randomised value inside the preset range it came from', () => {
+    const within = (value: number, { base, vary }: { base: number; vary: number }) => {
+      const low = base * (1 - vary);
+      const high = base * (1 + vary);
+      // Tiny epsilon: these are floating-point products of the same numbers.
+      expect(value).toBeGreaterThanOrEqual(Math.min(low, high) - 1e-9);
+      expect(value).toBeLessThanOrEqual(Math.max(low, high) + 1e-9);
+    };
+
+    // Enough seeds to exercise the ranges rather than one lucky draw.
+    for (let i = 0; i < 500; i += 1) {
       const recipe = buildDisposableRecipe(`seed-${i}`);
 
-      expect(recipe.shadowCool).toBeGreaterThanOrEqual(0.035);
-      expect(recipe.shadowCool).toBeLessThan(0.08);
-      expect(recipe.highlightWarmth).toBeGreaterThanOrEqual(0.03);
-      expect(recipe.highlightWarmth).toBeLessThan(0.075);
-      expect(recipe.fade).toBeGreaterThanOrEqual(0.018);
-      expect(recipe.fade).toBeLessThan(0.05);
-
-      expect(recipe.saturation).toBeGreaterThanOrEqual(0.98);
-      expect(recipe.saturation).toBeLessThan(1.08);
-      expect(recipe.contrast).toBeGreaterThanOrEqual(1.03);
-      expect(recipe.contrast).toBeLessThan(1.11);
-
-      expect(recipe.grainIntensity).toBeGreaterThanOrEqual(0.075);
-      expect(recipe.grainIntensity).toBeLessThan(0.14);
-      expect(recipe.grainScale).toBeGreaterThanOrEqual(0.85);
-      expect(recipe.grainScale).toBeLessThan(1.35);
-
-      expect(recipe.blurRadius).toBeGreaterThanOrEqual(0.45);
-      expect(recipe.blurRadius).toBeLessThan(0.95);
-
-      expect(recipe.halation.opacity).toBeGreaterThanOrEqual(0.08);
-      expect(recipe.halation.opacity).toBeLessThan(0.18);
-      expect(recipe.halation.blurRadius).toBeGreaterThanOrEqual(1.2);
-      expect(recipe.halation.blurRadius).toBeLessThan(2.4);
-
-      expect(recipe.vignette.opacity).toBeGreaterThanOrEqual(0.2);
-      expect(recipe.vignette.opacity).toBeLessThan(0.4);
-      expect(recipe.vignette.innerStop).toBeGreaterThanOrEqual(0.52);
-      expect(recipe.vignette.innerStop).toBeLessThan(0.7);
-
-      if (recipe.edgeBurn) {
-        expect(['left', 'right']).toContain(recipe.edgeBurn.side);
-        expect(recipe.edgeBurn.opacity).toBeGreaterThanOrEqual(0.05);
-        expect(recipe.edgeBurn.opacity).toBeLessThan(0.12);
-        expect(recipe.edgeBurn.width).toBeGreaterThanOrEqual(0.2);
-        expect(recipe.edgeBurn.width).toBeLessThan(0.34);
-      }
-
-      if (recipe.lightLeak) {
-        expect(recipe.lightLeak.strength).toBeGreaterThanOrEqual(0.05);
-        expect(recipe.lightLeak.strength).toBeLessThan(0.12);
-        expect([0, 1, 2, 3]).toContain(recipe.lightLeak.corner);
-      }
+      within(recipe.grain.intensity, DISPOSABLE_PRESET.grain.intensity);
+      within(recipe.vignette.strength, DISPOSABLE_PRESET.vignette.strength);
+      within(recipe.vignette.radius, DISPOSABLE_PRESET.vignette.radius);
 
       if (recipe.dust) {
-        expect([0, 1]).toContain(recipe.dust.variant);
-        expect(recipe.dust.opacity).toBeGreaterThanOrEqual(0.03);
-        expect(recipe.dust.opacity).toBeLessThan(0.08);
+        within(recipe.dust.opacity, DISPOSABLE_PRESET.dust.opacity);
+        within(recipe.dust.density, DISPOSABLE_PRESET.dust.density);
+        within(recipe.dust.size, DISPOSABLE_PRESET.dust.size);
       }
-
       if (recipe.scratches) {
-        expect([0, 1]).toContain(recipe.scratches.variant);
-        expect(recipe.scratches.opacity).toBeGreaterThanOrEqual(0.025);
-        expect(recipe.scratches.opacity).toBeLessThan(0.055);
+        within(recipe.scratches.opacity, DISPOSABLE_PRESET.scratches.opacity);
+        within(recipe.scratches.width, DISPOSABLE_PRESET.scratches.width);
+      }
+      if (recipe.lightLeak) {
+        within(recipe.lightLeak.opacity, DISPOSABLE_PRESET.lightLeak.opacity);
+        within(recipe.lightLeak.spread, DISPOSABLE_PRESET.lightLeak.spread);
+        // The leak slides along its own edge, so the origin has to stay on the
+        // frame or the leak enters from somewhere that is not an edge at all.
+        recipe.lightLeak.origin.forEach((component) => {
+          expect(component).toBeGreaterThanOrEqual(-0.3);
+          expect(component).toBeLessThanOrEqual(1.3);
+        });
       }
 
       expect(recipe.colorMatrix).toHaveLength(20);
@@ -163,25 +138,44 @@ describe('buildDisposableRecipe', () => {
     }
   });
 
-  it('leaves most photos without a light leak, but not all', () => {
-    const seeds = Array.from({ length: 300 }, (_, i) => `seed-${i}`);
-    const withLeak = seeds.filter((s) => buildDisposableRecipe(s).lightLeak !== null).length;
-    // Both branches must actually occur — a leak on every photo (or none)
-    // is the failure this randomisation exists to avoid.
-    expect(withLeak).toBeGreaterThan(30);
-    expect(withLeak).toBeLessThan(270);
+  it('fires each optional layer at roughly its configured frequency', () => {
+    const total = 4000;
+    const seeds = Array.from({ length: total }, (_, i) => `seed-${i}`);
+    // Not point-free: `map` passes the index as a second argument, which
+    // would land in `buildDisposableRecipe`'s optional `preset` parameter.
+    const recipes = seeds.map((seed) => buildDisposableRecipe(seed));
+
+    const rate = (predicate: (r: (typeof recipes)[number]) => boolean) =>
+      recipes.filter(predicate).length / total;
+
+    // Generous bands: this is asserting "the dice are the dice we asked for",
+    // not a precise proportion.
+    expect(rate((r) => r.lightLeak !== null)).toBeCloseTo(
+      DISPOSABLE_PRESET.lightLeak.probability,
+      1,
+    );
+    expect(rate((r) => r.dust !== null)).toBeCloseTo(DISPOSABLE_PRESET.dust.probability, 1);
+    expect(rate((r) => r.scratches !== null)).toBeLessThan(0.15);
+  });
+
+  it('spreads light leaks over every configured edge', () => {
+    const edges = new Set(
+      Array.from({ length: 2000 }, (_, i) => buildDisposableRecipe(`seed-${i}`).lightLeak?.edge)
+        .filter(Boolean),
+    );
+    expect(edges.size).toBe(DISPOSABLE_PRESET.lightLeak.edges.length);
   });
 
   it('keeps mid-grey close to neutral, so the look never reads as orange', () => {
     for (let i = 0; i < 100; i += 1) {
-      const { colorMatrix } = buildDisposableRecipe(`seed-${i}`);
-      const [r, g, b] = apply(colorMatrix, [0.5, 0.5, 0.5]);
+      const [r, g, b] = apply(buildDisposableRecipe(`seed-${i}`).colorMatrix, [0.5, 0.5, 0.5]);
       // Warm, but only just: red should lead blue by a visible-yet-subtle margin.
       expect(r).toBeGreaterThan(b);
-      expect(r - b).toBeLessThan(0.14);
-      // And exposure shouldn't run away in either direction.
-      expect(g).toBeGreaterThan(0.4);
-      expect(g).toBeLessThan(0.68);
+      expect(r - b).toBeLessThan(0.1);
+      // And the matrix should not be shifting exposure — that is the tone
+      // curve's job, in the shader.
+      expect(g).toBeGreaterThan(0.45);
+      expect(g).toBeLessThan(0.55);
     }
   });
 });

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState, useRef } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
   Image,
@@ -19,6 +18,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
+import { LoadingState } from '@/components/feedback/loading-state';
+import { UploadStatus, type UploadPhase } from '@/components/feedback/upload-status';
 import { CameraIcon, ClockIcon, LockIcon, CloseIcon, ShareIcon, PinIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import { BRAND_CONFIG } from '@/config/brand';
@@ -46,7 +47,7 @@ export default function GuestGalleryScreen() {
 
   const [storedSession, setStoredSession] = useState<GuestSession | null>(null);
   const [isVerifyingSession, setIsVerifyingSession] = useState(true);
-  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadPhase, setUploadPhase] = useState<UploadPhase | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [activePhoto, setActivePhoto] = useState<any | null>(null);
   const [shareVisible, setShareVisible] = useState(false);
@@ -129,12 +130,13 @@ export default function GuestGalleryScreen() {
       return;
     }
 
-    setUploadProgress(0);
+    setUploadPhase('processing');
     setUploadError(null);
 
     try {
       // 1. Resize and compress the image on canvas
       const compressedBlob = await compressImageWeb(file);
+      setUploadPhase('uploading');
       
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
 
@@ -170,14 +172,14 @@ export default function GuestGalleryScreen() {
         });
       }
 
-      setUploadProgress(100);
-      setTimeout(() => setUploadProgress(null), 1200);
+      setUploadPhase('complete');
+      setTimeout(() => setUploadPhase(null), 1600);
       void refetch();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (err) {
       console.error('Upload failed:', err);
       setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
-      setUploadProgress(null);
+      setUploadPhase(null);
     }
   };
 
@@ -213,7 +215,7 @@ export default function GuestGalleryScreen() {
   if (isVerifyingSession || isLoading) {
     return (
       <View style={[S.root, S.centred]}>
-        <ActivityIndicator color={colours.textSecondary} />
+        <LoadingState label="Loading the gallery" detail="Checking your invitation and photos." />
       </View>
     );
   }
@@ -370,14 +372,7 @@ export default function GuestGalleryScreen() {
           </View>
         </View>
 
-        {uploadProgress !== null && (
-          <View style={S.progressContainer}>
-            <ActivityIndicator size="small" color={colours.accentWarm} />
-            <AppText variant="caption" style={S.progressText}>
-              Compressing and uploading photo...
-            </AppText>
-          </View>
-        )}
+        {uploadPhase ? <UploadStatus phase={uploadPhase} mediaType="photo" /> : null}
 
         {uploadError && (
           <AppText variant="caption" tone="error" style={S.errorText}>
@@ -436,8 +431,8 @@ export default function GuestGalleryScreen() {
       {!session.is_locked && (shotsRemaining === null || shotsRemaining > 0) && (
         <Pressable
           onPress={triggerCapture}
-          disabled={uploadProgress !== null}
-          style={[S.fab, uploadProgress !== null && S.fabDisabled]}
+          disabled={uploadPhase !== null}
+          style={[S.fab, uploadPhase !== null && S.fabDisabled]}
         >
           <CameraIcon size={24} color={colours.textOnBrand} />
           <AppText variant="labelLarge" style={S.fabLabel}>Capture Photo</AppText>
