@@ -7,13 +7,21 @@ import { buildCoverPath, normaliseExtension, inferMimeTypeFromUri } from '@/feat
 import { readLocalImageBytes } from '@/features/media/read-local-image';
 import { resolveDraftAllowedMediaTypes } from '@/features/media/event-media';
 import { getPaymentProvider } from '@/features/payments';
-import type { PaymentProvider } from '@/features/payments/types';
+import type { PaymentProvider, PurchaseReceipt } from '@/features/payments/types';
+import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchase-verification';
 import { isFreePlanKey } from '@/features/payments/plan-catalogue';
 import { resolveReveal, type CreationDraft } from '@/features/celebrations/draft/types';
 import { assertCreatedCelebration } from '@/types/database';
 
 export interface PublishedEvent {
   celebrationId: string;
+  /**
+   * True when the event is published but its package is still being
+   * confirmed with the store. The host has paid; the tier lands as soon as
+   * verification or the webhook completes. Screens should say the package is
+   * being applied rather than claim it is active.
+   */
+  pendingVerification?: boolean;
   eventSessionId: string;
   publicSlug: string;
   eventCode: string;
@@ -84,7 +92,10 @@ export function buildGuestUrl(eventCode: string, token: string): string {
  * Exported for testing — the fail-open shape is easy to reintroduce by
  * accident, so it is pinned directly.
  */
-export async function purchaseOrThrow(provider: PaymentProvider, productKey: string): Promise<void> {
+export async function purchaseOrThrow(
+  provider: PaymentProvider,
+  productKey: string,
+): Promise<PurchaseReceipt | null> {
   const [product] = await provider.getProducts([productKey]);
   if (!product) {
     throw new PublicationError(
@@ -100,6 +111,12 @@ export async function purchaseOrThrow(provider: PaymentProvider, productKey: str
   if (outcome.status === 'failed') {
     throw new PublicationError(outcome.message, 'purchase');
   }
+  // 'pending' is a deferred purchase — Ask to Buy, awaiting a parent's
+  // approval. There is no receipt yet and may not be one for days, so there
+  // is nothing to verify: the event publishes on the free tier and
+  // RevenueCat's webhook grants the package if and when it is approved.
+  if (outcome.status === 'pending') return null;
+  return outcome.receipt;
 }
 
 async function resolveThemeId(themeKey: string | null | undefined): Promise<string | undefined> {
@@ -152,6 +169,7 @@ export async function publishDraft(
     let publicSlug: string | undefined;
     let guestToken: string | undefined;
     let publishedCoverPath = draft.coverStoragePath;
+    let pendingVerification = false;
 
     // 1. Server-side draft.
     if (!celebrationId) {
@@ -201,21 +219,55 @@ export async function publishDraft(
     // way — a free event is published against its plan key exactly like a
     // paid one, so entitlements resolve through the same path.
     const provider = getPaymentProvider();
+    let planReceipt: PurchaseReceipt | null = null;
     if (draft.planKey && !isFreePlanKey(draft.planKey)) {
-      await purchaseOrThrow(provider, draft.planKey);
+      planReceipt = await purchaseOrThrow(provider, draft.planKey);
     }
+    const addOnReceipts: (PurchaseReceipt | null)[] = [];
     for (const addOnKey of draft.addOnKeys) {
-      await purchaseOrThrow(provider, addOnKey);
+      addOnReceipts.push(await purchaseOrThrow(provider, addOnKey));
     }
 
     // 4. Publish. Idempotent server-side, so a retry here is safe.
+    //
+    // The receipt travels with the call so the server can record WHAT was
+    // bought against the transaction that bought it. It records only —
+    // entitlements stay inactive until step 5 verifies the receipt with the
+    // store, so this call alone can no longer grant a paid tier.
     const { data: publishData, error: publishError } = await client.rpc('publish_celebration', {
       p_celebration_id: celebrationId!,
       p_plan_key: draft.planKey ?? undefined,
       p_add_on_keys: draft.addOnKeys,
+      p_platform: toDatabasePlatform(planReceipt?.platform ?? provider.platform),
+      p_platform_product_id: planReceipt?.platformProductId ?? undefined,
+      p_platform_transaction_id: planReceipt?.platformTransactionId ?? undefined,
     });
 
     if (publishError) throw new PublicationError(publishError.message, 'publish');
+
+    // 5. Verify the receipt. Until this succeeds the event is published on
+    // the free tier, because the server refuses to grant a paid tier on the
+    // client's word alone.
+    //
+    // A failure here is deliberately NOT fatal to publication. The host has
+    // been charged and their event exists; RevenueCat's webhook grants the
+    // tier independently and usually within seconds, so tearing down a
+    // published event over a slow confirmation would be the worse outcome.
+    // The error is surfaced so the caller can say the package is still being
+    // applied, rather than pretending everything is done.
+    for (const receipt of [planReceipt, ...addOnReceipts]) {
+      if (!receipt) continue;
+      try {
+        await verifyPurchase(receipt);
+      } catch (verificationError) {
+        if (verificationError instanceof VerificationError && verificationError.recoverable) {
+          console.warn('[publication] purchase awaiting confirmation', verificationError.code);
+          pendingVerification = true;
+          continue;
+        }
+        throw verificationError;
+      }
+    }
 
     const published = publishData as unknown as {
       celebration_id: string;
@@ -232,6 +284,7 @@ export async function publishDraft(
       eventCode: published.event_code,
       guestUrl: buildGuestUrl(published.event_code, guestToken ?? ''),
       wasAlreadyPublished: published.was_already_published ?? false,
+      pendingVerification,
       eventName: draft.title.trim(),
       supportingLine: draft.supportingLine.trim() || null,
       endsAt: draft.endsAt,

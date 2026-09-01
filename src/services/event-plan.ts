@@ -1,4 +1,5 @@
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
+import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchase-verification';
 import { getPaymentProvider } from '@/features/payments';
 import { upgradeChargeFor } from '@/features/payments/upgrade-catalogue';
 import type { PaywallPlan } from '@/features/payments/plan-catalogue';
@@ -96,11 +97,17 @@ export async function upgradeEventPlan({
   }
 
   const client = requireSupabase();
-  const { data, error } = await (client as any).rpc('upgrade_celebration_plan', {
+
+  // Records the purchase against the transaction that paid for it. It does
+  // NOT grant the tier — the server refuses to do that on the client's word,
+  // so this returns the OLD plan key and the new one only arrives once the
+  // receipt is verified below.
+  const { error } = await (client as any).rpc('upgrade_celebration_plan', {
     p_celebration_id: celebrationId,
     p_plan_key: to.catalogueKey,
     p_platform_product_id: outcome.receipt.platformProductId,
     p_platform_transaction_id: outcome.receipt.platformTransactionId,
+    p_platform: toDatabasePlatform(outcome.receipt.platform),
   });
   if (error) {
     // The money is gone and the tier is not active. Say so plainly rather
@@ -112,5 +119,28 @@ export async function upgradeEventPlan({
       'activation',
     );
   }
-  return (data as string | null) ?? to.catalogueKey;
+
+  // Verification is what actually grants the tier.
+  try {
+    await verifyPurchase(outcome.receipt);
+  } catch (verificationError) {
+    if (verificationError instanceof VerificationError && verificationError.recoverable) {
+      // Charged, recorded, not yet confirmed. RevenueCat's webhook grants it
+      // independently, so this is a wait rather than a loss — and the copy
+      // has to say that, because a host who has just paid and sees an error
+      // will otherwise assume the money went nowhere.
+      throw new UpgradeError(
+        'Payment went through and your package is being applied. It will appear here shortly — you have not been charged twice.',
+        'activation',
+      );
+    }
+    throw new UpgradeError(
+      verificationError instanceof Error
+        ? verificationError.message
+        : 'Could not confirm your purchase.',
+      'activation',
+    );
+  }
+
+  return to.catalogueKey;
 }

@@ -389,6 +389,22 @@ export const supabaseAuthProvider: AuthProvider = {
   onSessionChange(listener) {
     if (!supabase) return () => {};
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      // Tell RevenueCat who this is. Server-side receipt verification looks a
+      // transaction up under the Supabase user id, so a purchase made while
+      // RevenueCat still holds its anonymous per-install id can never be
+      // verified — the money is taken and the tier never arrives. Fired here
+      // rather than at each purchase site so no sign-in route can forget it.
+      //
+      // Deliberately not awaited: identity settles in the background and the
+      // session callback must stay synchronous for its own callers.
+      // Imported lazily so the auth module does not drag
+      // `react-native-purchases` into every bundle and test that touches
+      // sign-in — the package ships untranspiled ESM and is iOS-only.
+      if (session?.user?.id) {
+        void import('@/features/payments/revenuecat-provider')
+          .then((module) => module.identifyPurchaser())
+          .catch(() => {});
+      }
       listener(toSession(session));
     });
     return () => data.subscription.unsubscribe();

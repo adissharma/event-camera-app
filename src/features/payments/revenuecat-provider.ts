@@ -8,6 +8,7 @@ import Purchases, {
 } from 'react-native-purchases';
 
 import { REVENUECAT_CONFIG } from '@/config/app-config';
+import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 import { PAYWALL_PLANS } from './plan-catalogue';
 import { UPGRADE_PATHS } from './upgrade-catalogue';
 import type { PaymentProvider, PurchaseProduct, PurchaseReceipt } from './types';
@@ -70,10 +71,58 @@ async function ensureConfigured() {
     }
 
     await Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
-    Purchases.configure({ apiKey: REVENUECAT_CONFIG.iosApiKey });
+
+    // `appUserID` is the Supabase user id, not RevenueCat's anonymous
+    // per-install default. Server-side verification depends on it entirely:
+    // the verification endpoint looks a transaction up under the user id it
+    // read from the caller's own access token, so an anonymous id would leave
+    // every purchase unattributable and unverifiable. It is also what lets a
+    // host who reinstalls, or buys on a second device, still be recognised.
+    //
+    // Null when signed out — RevenueCat then falls back to an anonymous id,
+    // and `logIn` below promotes it once a session exists.
+    const userId = await currentUserId();
+    Purchases.configure({ apiKey: REVENUECAT_CONFIG.iosApiKey, appUserID: userId });
   })();
 
   return configurePromise;
+}
+
+/** The signed-in Supabase user, or null. */
+async function currentUserId(): Promise<string | null> {
+  try {
+    if (!isBackendConfigured) return null;
+    const client = requireSupabase();
+    const { data } = await client.auth.getSession();
+    return data.session?.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Points RevenueCat at the signed-in user.
+ *
+ * Called after sign-in, because configuration may have happened while signed
+ * out (or as a different user on a shared device). Without this the purchase
+ * is recorded against an anonymous id and the server can never match it to
+ * the account that is asking to be upgraded.
+ */
+export async function identifyPurchaser(): Promise<void> {
+  if (Platform.OS !== 'ios' || !REVENUECAT_CONFIG.iosApiKey) return;
+  const userId = await currentUserId();
+  if (!userId) return;
+  try {
+    await ensureConfigured();
+    const { customerInfo } = await Purchases.logIn(userId);
+    if (customerInfo.originalAppUserId !== userId) {
+      console.warn('[revenuecat] identity did not settle on the expected user');
+    }
+  } catch (error) {
+    // Not fatal on its own — a purchase attempt will surface it — but it
+    // means verification would fail, so it must not pass silently.
+    console.error('[revenuecat] could not identify purchaser', error);
+  }
 }
 
 function toPurchaseProduct(planKey: string, product: PurchasesStoreProduct): PurchaseProduct {
