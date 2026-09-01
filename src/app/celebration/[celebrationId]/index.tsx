@@ -2570,14 +2570,35 @@ export function EventDetailView({
     reveal.markRevealedSeen();
     setHeroMediaTrack(track);
     setHeroIndex(index);
+    // `measure` gives the exact on-screen rect the open animation grows
+    // from, so it is preferred — but the viewer must never depend on it.
+    //
+    // On react-native-web every DOM node carries a `measure`, so this branch
+    // is taken on web too, and there it is ASYNCHRONOUS: nothing opens until
+    // the callback runs. Anything that stops that callback — the node being
+    // re-rendered away, a layout thrash, a browser that defers the work —
+    // leaves the tap doing nothing at all, with no error and nothing to see.
+    // The open is too important to sit behind a callback that might not come.
+    //
+    // So: arm a fallback on the next tick. Whichever path arrives first opens
+    // the viewer and the other becomes a no-op, which means an accurate
+    // animation when `measure` is prompt and a slightly less precise one when
+    // it is not — never a dead tap.
+    let opened = false;
+    const openOnce = (bounds: ReturnType<typeof getThumbBounds>) => {
+      if (opened) return;
+      opened = true;
+      setHeroStartBounds(bounds);
+      openHeroViewer();
+    };
+
     if (e?.currentTarget?.measure) {
       e.currentTarget.measure((_x: number, _y: number, w: number, h: number, pageX: number, pageY: number) => {
-        setHeroStartBounds({ x: pageX, y: pageY, width: w, height: h });
-        openHeroViewer();
+        openOnce({ x: pageX, y: pageY, width: w, height: h });
       });
+      setTimeout(() => openOnce(getThumbBounds(index)), 0);
     } else {
-      setHeroStartBounds(getThumbBounds(index));
-      openHeroViewer();
+      openOnce(getThumbBounds(index));
     }
   }
 
@@ -2836,11 +2857,29 @@ export function EventDetailView({
    * layout, and animating it ran a full layout pass per frame; a transform
    * does not, which is where the cost actually was.
    */
-  const heroPanResponder = useRef(
+  /**
+ * How far a finger may travel before it counts as a drag rather than a tap.
+ *
+ * This was 4px, which is below every platform's own touch slop — Android's
+ * `ViewConfiguration.getScaledTouchSlop()` is ~8dp and iOS uses ~10pt — so
+ * the jitter of an ordinary finger press routinely exceeded it. Once a
+ * horizontal pan responder claims the gesture the press underneath is
+ * terminated, and a `Pressable` whose press is terminated fires nothing at
+ * all: the tap silently does nothing, which is exactly the reported symptom.
+ *
+ * A mouse click never jitters, which is why this only shows up on touch, and
+ * a deliberate swipe travels far beyond 10px, so raising the threshold to a
+ * real slop costs the swipe nothing.
+ */
+const TOUCH_SLOP = 10;
+
+const heroPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponderCapture: () => false,
+      // Same slop as the grid: a tap inside the viewer (which toggles the
+      // chrome) is cancelled by this claim in exactly the same way.
       onMoveShouldSetPanResponderCapture: (_, gestureState) =>
-        Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
+        Math.abs(gestureState.dx) > TOUCH_SLOP || Math.abs(gestureState.dy) > TOUCH_SLOP,
       onPanResponderTerminationRequest: () => false,
       // Interrupting a settle should hand the page to the finger from exactly
       // where it is. Stopping the spring and folding its value into an offset
@@ -3662,7 +3701,11 @@ export function EventDetailView({
       if (!showMediaTabs) return false;
       const absX = Math.abs(dx);
       const absY = Math.abs(dy);
-      if (absX < 4 || absX < absY * 0.8) return false;
+      // Below the slop this is a tap, not a swipe, and claiming it here is
+      // what was swallowing taps on gallery photos. The ratio test is
+      // unchanged — this only stops the responder claiming movement too
+      // small to have been intended as a drag at all.
+      if (absX < TOUCH_SLOP || absX < absY * 0.8) return false;
 
       // Dashboard <- Photos <-> Videos:
       // right from Photos belongs to the screen's normal back gesture, while
