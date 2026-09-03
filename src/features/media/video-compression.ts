@@ -65,14 +65,29 @@ const MAX_DELIVERY_LONG_SIDE = 1920;
 const MINIMUM_SOURCE_SIZE_FOR_COMPRESSION_MB = 1;
 
 /**
- * ~0.11 bits per pixel per frame sits in the band commonly cited as the
- * floor for H.264 output that reads as visually lossless — well above the
- * library's own WhatsApp-tuned "auto" bands (roughly 0.02-0.05 bpp at these
- * resolutions), which is exactly why this module uses `manual` mode instead
- * of leaning on that default.
+ * Bits per pixel per frame.
+ *
+ * This was 0.11 — the band commonly cited as the floor for H.264 that reads
+ * as visually LOSSLESS. That is the right target for an archival master and
+ * the wrong one for delivery: at 1080p it asks for ~6.8 Mbps, which is close
+ * enough to what phones already record that compressing saved almost
+ * nothing. Stored clips were landing at 9-13 Mbps and a thirty-second
+ * recording cost 33MB, against a 5GB monthly egress allowance that a single
+ * event can exhaust.
+ *
+ * 0.045 bpp is ~2.8 Mbps at 1080p, which is roughly what Instagram and
+ * WhatsApp deliver and is not distinguishable from the source on a phone
+ * screen at arm's length — which is where these clips are watched. It sits
+ * above the library's own "auto" band (0.02-0.05 at these resolutions, tuned
+ * for chat clips and visibly blocky), so `manual` mode is still doing real
+ * work rather than deferring to a default.
+ *
+ * The trade is deliberate and reversible: raise this number for more
+ * quality and larger files, lower it for the opposite. Nothing else in the
+ * module needs to change with it.
  */
-const TARGET_BITS_PER_PIXEL_PER_FRAME = 0.11;
-const MIN_BITRATE_BPS = 1_200_000;
+const TARGET_BITS_PER_PIXEL_PER_FRAME = 0.045;
+const MIN_BITRATE_BPS = 800_000;
 
 /**
  * This app's cameras have no slow-motion/high-frame-rate capture mode —
@@ -93,8 +108,13 @@ function estimateTargetBitrate(
   const pixels = Math.max(width * height, 1);
   const target = Math.round(pixels * ASSUMED_SOURCE_FPS * TARGET_BITS_PER_PIXEL_PER_FRAME);
   // Never ask for more than the source already had — that would grow the
-  // file, not shrink it — and always leave a margin below it.
-  const capBySource = sourceBitrateBps > 0 ? Math.round(sourceBitrateBps * 0.92) : target;
+  // file, not shrink it.
+  //
+  // The margin was 0.92, which meant an already-modest source could only ever
+  // be cut by 8%: a clip recorded slightly below target came back essentially
+  // unchanged, having spent the transcode for nothing. 0.7 makes the floor a
+  // real reduction while still never exceeding the source.
+  const capBySource = sourceBitrateBps > 0 ? Math.round(sourceBitrateBps * 0.7) : target;
   return Math.max(MIN_BITRATE_BPS, Math.min(target, capBySource));
 }
 

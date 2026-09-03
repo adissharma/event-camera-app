@@ -9,6 +9,7 @@ import {
   normaliseMimeType,
 } from '@/features/media/storage-paths';
 import { readLocalMediaBytes } from '@/features/media/read-local-image';
+import { downscalePhotoForUpload } from '@/features/media/photo-downscale';
 import type { MediaSource, MediaType } from '@/types/database';
 
 /**
@@ -74,7 +75,25 @@ export async function uploadGuestMedia(
   const client = requireSupabase();
   const requestedMimeType = normaliseMimeType(params.mimeType ?? inferMimeTypeFromUri(params.localUri));
   const mediaType = params.mediaType ?? inferMediaTypeFromMimeType(requestedMimeType);
-  const { bytes, sizeBytes: fileSizeBytes, mimeType: detectedMimeType } = await readLocalMediaBytes(params.localUri);
+
+  // Photos are shrunk to delivery size HERE, at the one funnel every capture
+  // path goes through — camera, library picker, challenge, guestbook — rather
+  // than at each of those sites, where the next one added would forget. Video
+  // has its own on-device pass before this point and audio has nothing to
+  // shrink, so both pass straight through.
+  //
+  // The dimensions the caller already holds are handed on so this does not
+  // have to decode the image just to measure it.
+  const downscaled =
+    mediaType === 'photo'
+      ? await downscalePhotoForUpload(params.localUri, {
+          width: params.width,
+          height: params.height,
+        })
+      : null;
+  const uploadUri = downscaled?.uri ?? params.localUri;
+
+  const { bytes, sizeBytes: fileSizeBytes, mimeType: detectedMimeType } = await readLocalMediaBytes(uploadUri);
   const mimeType =
     requestedMimeType ||
     normaliseMimeType(detectedMimeType) ||
@@ -151,8 +170,10 @@ export async function uploadGuestMedia(
       p_guest_token: params.guestToken,
       p_file_size_bytes: fileSizeBytes ?? bytes.byteLength,
       p_mime_type: mimeType,
-      p_width: params.width ?? null,
-      p_height: params.height ?? null,
+      // The resized file's own dimensions when it was resized — recording
+      // the pre-resize values would describe a file nobody ever receives.
+      p_width: downscaled?.width ?? params.width ?? null,
+      p_height: downscaled?.height ?? params.height ?? null,
       p_duration_ms: params.durationMs ?? null,
       p_thumbnail_uploaded: thumbnailUploaded,
     },
