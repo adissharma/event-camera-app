@@ -297,8 +297,12 @@ async function processOne() {
     await composeSegments(segmentPaths, durations, outputPath);
     const workspaceId = (session.celebrations as any)?.workspace_id;
     const storagePath = `${workspaceId}/${session.celebration_id}/recaps/${recap.event_session_id}-${Date.now()}.mp4`;
+    // A year. The path carries `Date.now()`, so a re-render writes a NEW
+    // object rather than replacing this one — nothing served from this path
+    // can ever change, and a recap is a video that guests rewatch. The
+    // default of one hour had every viewer re-downloading ~10MB apiece.
     const { error: uploadError } = await supabase.storage.from('event-recaps').upload(storagePath, await fs.readFile(outputPath), {
-      contentType: 'video/mp4', upsert: true,
+      contentType: 'video/mp4', upsert: true, cacheControl: String(365 * 24 * 60 * 60),
     });
     if (uploadError) throw uploadError;
     const playbackUrl = `${url}/storage/v1/object/public/event-recaps/${storagePath}`;

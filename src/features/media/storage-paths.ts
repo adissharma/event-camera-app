@@ -14,6 +14,30 @@ import { STORAGE_BUCKETS } from '@/config/app-config';
 
 const SAFE_SEGMENT = /^[0-9a-fA-F-]{36}$/;
 
+/**
+ * `cacheControl` for anything uploaded to storage, in seconds.
+ *
+ * Supabase defaults to 3600 — one hour — after which every viewer re-downloads
+ * the file in full from the CDN. For event media that default is badly wrong
+ * in both directions: an uploaded photo is IMMUTABLE (a new capture gets a new
+ * path, it never overwrites an old one), so there is nothing to revalidate,
+ * and galleries are looked at repeatedly by many guests over days.
+ *
+ * The cost of the one-hour default is not theoretical. 578MB of stored objects
+ * had produced 93GB of cached egress — roughly 160 downloads per file —
+ * against a 5GB monthly allowance, because every viewer re-fetched every photo
+ * once an hour for as long as the event stayed interesting.
+ *
+ * One year, which is the conventional maximum. Safe precisely because these
+ * paths are content-addressed by upload: nothing served from one ever changes,
+ * so a stale cache entry cannot exist.
+ *
+ * Passed as seconds because that is what supabase-js expects — it builds the
+ * `Cache-Control: max-age=<seconds>` header itself, and does not accept a
+ * full header value, so `immutable` cannot be added through this option.
+ */
+export const IMMUTABLE_CACHE_SECONDS = String(365 * 24 * 60 * 60);
+
 export class InvalidStoragePathError extends Error {
   constructor(message: string) {
     super(message);

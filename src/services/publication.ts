@@ -390,6 +390,11 @@ export async function uploadCover(localUri: string, celebrationId: string): Prom
 
   const { error: uploadError } = await client.storage
     .from(STORAGE_BUCKETS.covers)
+    // Deliberately left on the default one-hour cache, unlike event media.
+    // `upsert: true` means a host replacing their cover writes to the SAME
+    // path, so a long cache would pin the old image in every viewer's browser
+    // and CDN long after it changed. Covers are also small — three of them
+    // account for under 3MB — so they are not what the egress bill is made of.
     .upload(path, bytes, {
       contentType: resolvedMime.startsWith('image/') ? resolvedMime : 'image/jpeg',
       upsert: true,

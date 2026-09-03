@@ -2,7 +2,12 @@ import * as Crypto from 'expo-crypto';
 
 import { requireSupabase } from '@/lib/supabase/client';
 import { signalMediaChanged } from '@/lib/supabase/media-signal';
-import { inferMediaTypeFromMimeType, inferMimeTypeFromUri, normaliseMimeType } from '@/features/media/storage-paths';
+import {
+  IMMUTABLE_CACHE_SECONDS,
+  inferMediaTypeFromMimeType,
+  inferMimeTypeFromUri,
+  normaliseMimeType,
+} from '@/features/media/storage-paths';
 import { readLocalMediaBytes } from '@/features/media/read-local-image';
 import type { MediaSource, MediaType } from '@/types/database';
 
@@ -108,7 +113,11 @@ export async function uploadGuestMedia(
 
   const { error: uploadError } = await client.storage
     .from(intent.bucket)
-    .upload(intent.storage_path, bytes, { contentType: mimeType, upsert: false });
+    .upload(intent.storage_path, bytes, {
+      contentType: mimeType,
+      upsert: false,
+      cacheControl: IMMUTABLE_CACHE_SECONDS,
+    });
 
   if (uploadError) throw new Error(`Guest ${mediaLabel} storage upload failed: ${uploadError.message}`);
 
@@ -124,6 +133,7 @@ export async function uploadGuestMedia(
         .upload(intent.thumbnail_storage_path, thumbnail.bytes, {
           contentType: params.thumbnailMimeType ?? 'image/jpeg',
           upsert: false,
+          cacheControl: IMMUTABLE_CACHE_SECONDS,
         });
       thumbnailUploaded = !thumbnailError;
       if (thumbnailError) {
