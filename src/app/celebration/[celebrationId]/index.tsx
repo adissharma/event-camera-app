@@ -108,6 +108,7 @@ import {
 import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 import { getPaywallPlan } from '@/features/payments/plan-catalogue';
 import { createUniqueChannel } from '@/lib/supabase/realtime';
+import { subscribeToMediaChanges } from '@/lib/supabase/media-signal';
 import {
   shareMediaFile,
   shareMediaToInstagram,
@@ -149,6 +150,31 @@ const ROW_GAP = 6;
  * read it directly — so the cell keeps its 4:5 shape and simply gets bigger,
  * and tap-to-open still starts from the right cell.
  */
+/**
+ * How far a finger may travel before it counts as a drag rather than a tap.
+ *
+ * This was 4px, which is below every platform's own touch slop — Android's
+ * `ViewConfiguration.getScaledTouchSlop()` is ~8dp and iOS uses ~10pt — so
+ * the jitter of an ordinary finger press routinely exceeded it. Once a pan
+ * responder claims the gesture the press underneath is terminated, and a
+ * `Pressable` whose press is terminated fires nothing at all: the tap
+ * silently does nothing.
+ *
+ * A mouse click never jitters, which is why this only showed up on touch,
+ * and a deliberate swipe travels far beyond 10px. The threshold costs the
+ * drag nothing: React Native zeroes `gestureState.dx/dy` when a responder is
+ * granted, so movement is already measured from the claim rather than from
+ * touch-down.
+ */
+const TOUCH_SLOP = 10;
+
+/**
+ * How long `measure` gets before the estimated thumbnail bounds are used
+ * instead. Long enough that a real `measure` always wins, short enough that
+ * a tap which somehow loses it still feels like it responded.
+ */
+const MEASURE_FALLBACK_MS = 150;
+
 const GALLERY_COLUMNS = 2;
 const RECAP_MIN_ITEMS = 3;
 const RECAP_MAX_ITEMS = 120;
@@ -1089,6 +1115,12 @@ export default function CelebrationDashboard({ celebrationId: propCelebrationId 
     queryFn: () => fetchCelebrationDetail(String(celebrationId)),
     enabled: Boolean(celebrationId),
     refetchInterval: isBackendConfigured ? 10000 : false,
+    // The interval pauses while the tab is in the background, and the global
+    // default turns focus refetching OFF — so returning to a backgrounded
+    // Android Chrome tab could show up to ten seconds of stale gallery
+    // before the next tick. For a screen whose whole promise is "everyone
+    // sees it", coming back to the tab should show the current truth.
+    refetchOnWindowFocus: true,
   });
 
   const archive = useMutation({
@@ -2068,6 +2100,32 @@ export function EventDetailView({
     };
   }, [celebration.id, primarySession?.id, queryClient]);
 
+  // The same news, by a route a guest can actually hear.
+  //
+  // The `postgres_changes` subscription above works for a host and is
+  // structurally dead for a guest: Supabase applies RLS per subscriber, and
+  // `media_items` grants SELECT to `authenticated` only. A guest is `anon`
+  // and reads the gallery through `get_guest_gallery`, so every row event is
+  // filtered out before reaching them — the subscription succeeds and then
+  // delivers nothing. Until now a guest's only route to a new photo was the
+  // ten-second poll.
+  //
+  // A broadcast carries no rows, so it is not RLS-gated and leaks nothing;
+  // each device then refetches through the door it is already allowed
+  // through. See `media-signal.ts`.
+  useEffect(() => {
+    if (!isBackendConfigured || previewMode) return;
+    const eventCode = celebration.event_code;
+    if (!eventCode) return;
+
+    return subscribeToMediaChanges(String(eventCode), () => {
+      void queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+      });
+      void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+    });
+  }, [celebration.event_code, celebration.id, previewMode, queryClient]);
+
   // ── Load challenges ──
   //
   // Declared before the realtime subscription below, which depends on it — see
@@ -2596,7 +2654,23 @@ export function EventDetailView({
       e.currentTarget.measure((_x: number, _y: number, w: number, h: number, pageX: number, pageY: number) => {
         openOnce({ x: pageX, y: pageY, width: w, height: h });
       });
-      setTimeout(() => openOnce(getThumbBounds(index)), 0);
+      // A SAFETY NET, NOT A RACE.
+      //
+      // This was 0ms, which made it a race `measure` frequently lost — on
+      // iOS `measure` is a bridge round-trip, so the timer often fired
+      // first. That mattered because `getThumbBounds` is a rough estimate:
+      // it assumes a fixed 350pt grid offset and knows nothing about scroll
+      // position, so the further the gallery is scrolled the more wrong it
+      // is. Feeding those bounds to the open animation starts the image from
+      // the wrong rectangle, which reads as a flash and a jump in crop —
+      // the transition looking broken, caused by the guard rather than by
+      // anything it was guarding against.
+      //
+      // `measure` is now given a window it comfortably wins, so the estimate
+      // is used only if the callback genuinely never arrives. The cost of
+      // being wrong in that direction is a delayed open; the cost of being
+      // wrong the other way is every open looking broken.
+      setTimeout(() => openOnce(getThumbBounds(index)), MEASURE_FALLBACK_MS);
     } else {
       openOnce(getThumbBounds(index));
     }
@@ -2857,23 +2931,7 @@ export function EventDetailView({
    * layout, and animating it ran a full layout pass per frame; a transform
    * does not, which is where the cost actually was.
    */
-  /**
- * How far a finger may travel before it counts as a drag rather than a tap.
- *
- * This was 4px, which is below every platform's own touch slop — Android's
- * `ViewConfiguration.getScaledTouchSlop()` is ~8dp and iOS uses ~10pt — so
- * the jitter of an ordinary finger press routinely exceeded it. Once a
- * horizontal pan responder claims the gesture the press underneath is
- * terminated, and a `Pressable` whose press is terminated fires nothing at
- * all: the tap silently does nothing, which is exactly the reported symptom.
- *
- * A mouse click never jitters, which is why this only shows up on touch, and
- * a deliberate swipe travels far beyond 10px, so raising the threshold to a
- * real slop costs the swipe nothing.
- */
-const TOUCH_SLOP = 10;
-
-const heroPanResponder = useRef(
+  const heroPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponderCapture: () => false,
       // Same slop as the grid: a tap inside the viewer (which toggles the
@@ -2886,28 +2944,38 @@ const heroPanResponder = useRef(
       // means the incoming gesture's delta is measured from there instead of
       // from zero, so grabbing a moving page does not make it jump.
       onPanResponderGrant: () => {
+        // No origin correction is needed here: React Native zeroes
+        // `gestureState.dx/dy` in `onResponderGrant` before this runs, so the
+        // deltas below already measure from the moment the responder claimed
+        // rather than from touch-down. Raising the claim threshold therefore
+        // costs the drag nothing — it does not start with a jump the size of
+        // the threshold.
         heroPanX.stopAnimation((value: number) => {
           heroPanX.setOffset(value);
           heroPanX.setValue(0);
         });
       },
       onPanResponderMove: (_, gestureState) => {
-        if (gestureState.dy > 0 && Math.abs(gestureState.dy) > Math.abs(gestureState.dx)) {
-          heroPanY.setValue(gestureState.dy);
+        const { dx, dy } = gestureState;
+
+        if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+          heroPanY.setValue(dy);
           return;
         }
-        if (Math.abs(gestureState.dx) <= Math.abs(gestureState.dy)) return;
+        if (Math.abs(dx) <= Math.abs(dy)) return;
 
         // Resist dragging past either end, so the first and last photos feel
         // like the end of the carousel rather than a broken one.
-        const atStart = heroIndexRef.current === 0 && gestureState.dx > 0;
+        const atStart = heroIndexRef.current === 0 && dx > 0;
         const atEnd =
-          heroIndexRef.current === heroPhotosLengthRef.current - 1 && gestureState.dx < 0;
-        heroPanX.setValue(atStart || atEnd ? gestureState.dx * 0.25 : gestureState.dx);
+          heroIndexRef.current === heroPhotosLengthRef.current - 1 && dx < 0;
+        heroPanX.setValue(atStart || atEnd ? dx * 0.25 : dx);
       },
       onPanResponderRelease: (_, gestureState) => {
+        const { dx, dy } = gestureState;
+
         heroPanX.flattenOffset();
-        if (gestureState.dy > 100 || (gestureState.dy > 50 && gestureState.vy > 0.5)) {
+        if (dy > 100 || (dy > 50 && gestureState.vy > 0.5)) {
           closeHeroViewer();
           return;
         }
@@ -2918,10 +2986,10 @@ const heroPanResponder = useRef(
         }).start();
 
         const pageWidth = heroPageWidthRef.current;
-        const goingBack = gestureState.dx > 0;
+        const goingBack = dx > 0;
         const committed =
-          Math.abs(gestureState.dx) > pageWidth * 0.22 ||
-          (Math.abs(gestureState.dx) > 16 && Math.abs(gestureState.vx) > 0.3);
+          Math.abs(dx) > pageWidth * 0.22 ||
+          (Math.abs(dx) > 16 && Math.abs(gestureState.vx) > 0.3);
         const nextIndex = heroIndexRef.current + (goingBack ? -1 : 1);
         const canGo = committed && nextIndex >= 0 && nextIndex < heroPhotosLengthRef.current;
 
@@ -2932,7 +3000,7 @@ const heroPanResponder = useRef(
           // handed the offset that exactly cancels it; the layout effect
           // applies both together and then springs the offset away, which is
           // the movement the user sees.
-          heroCommitOffsetRef.current = gestureState.dx + (goingBack ? -pageWidth : pageWidth);
+          heroCommitOffsetRef.current = dx + (goingBack ? -pageWidth : pageWidth);
           heroIndexRef.current = nextIndex;
           setHeroIndex(nextIndex);
           return;
@@ -3479,7 +3547,7 @@ const heroPanResponder = useRef(
   async function sharePhoto(photo: PhotoItem) {
     const eventCode = guestAuth?.slug || celebration?.public_slug || '';
     const photoIdVal = photo.id || photo.uri;
-    const shareLink = `https://event-camera-app-navy.vercel.app/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
+    const shareLink = `${BRAND_CONFIG.guestDomain}/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
 
     try {
       await Share.share(

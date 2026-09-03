@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 
 import { requireSupabase } from '@/lib/supabase/client';
+import { signalMediaChanged } from '@/lib/supabase/media-signal';
 import { inferMediaTypeFromMimeType, inferMimeTypeFromUri, normaliseMimeType } from '@/features/media/storage-paths';
 import { readLocalMediaBytes } from '@/features/media/read-local-image';
 import type { MediaSource, MediaType } from '@/types/database';
@@ -155,6 +156,12 @@ export async function uploadGuestMedia(
     storage_path: string;
     shots_used: number;
   };
+
+  // Tell the other devices watching this event. Awaited only so far as the
+  // helper's own timeout allows, and it never throws: the upload has already
+  // succeeded and must not be reported as failed because an announcement did
+  // not get out.
+  await signalMediaChanged(params.eventCode);
 
   return {
     mediaItemId: result.media_item_id,
