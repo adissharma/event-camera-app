@@ -12,14 +12,38 @@
  */
 
 export const BRAND_CONFIG = {
-  appName: 'Stories.',
-  shortName: 'Stories.',
+  appName: 'Stills.',
+  shortName: 'Stills.',
   tagline: 'Every guest. Every angle.',
   supportEmail: 'support@example.com',
   websiteUrl: 'https://example.com',
-  /** Must match the Universal Link / App Link domain in `app.json`. */
-  guestDomain: 'https://event-camera-app-navy.vercel.app',
+  /**
+   * The canonical production origin. Every generated link — invitations, QR
+   * codes, share links, the verification endpoint — is built from this, so
+   * moving domains is a one-line change here rather than a hunt.
+   *
+   * Must match the Universal Link / App Link domain in `app.json`.
+   */
+  guestDomain: 'https://withstills.com',
 } as const;
+
+/**
+ * Origins we used to publish links from.
+ *
+ * Every QR code already printed, every invitation already sent and every
+ * link already pasted into a group chat carries one of these, and a domain
+ * move must not turn those into dead paper. The scanner accepts them
+ * alongside the canonical host, and `app.json` keeps their Universal Link
+ * and App Link entries so an old link still opens the app rather than the
+ * browser.
+ *
+ * Nothing is ever GENERATED from this list — it is read-only history. Add to
+ * it when the canonical domain changes; remove an entry only when you are
+ * willing to break every link that used it.
+ */
+export const LEGACY_GUEST_DOMAINS = [
+  'https://event-camera-app-navy.vercel.app',
+] as const;
 
 export type BrandConfig = typeof BRAND_CONFIG;
 

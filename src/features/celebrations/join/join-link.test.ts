@@ -1,6 +1,8 @@
 import { joinRouteFor, parseJoinInput, parseJoinUrl } from './join-link';
 
-const HOST = 'https://event-camera-app-navy.vercel.app';
+const HOST = 'https://withstills.com';
+/** A domain we have retired but whose QR codes are still in the world. */
+const LEGACY_HOST = 'https://event-camera-app-navy.vercel.app';
 
 describe('links we mint', () => {
   it('reads a plain share link', () => {
@@ -35,7 +37,9 @@ describe('links that are not ours', () => {
   // is a destination the scanner must refuse to send a guest to.
   it.each([
     ['another host entirely', 'https://evil.example.com/j/abc123'],
-    ['our path on a lookalike host', 'https://event-camera-app-navy.vercel.app.evil.com/j/abc123'],
+    ['our path on a lookalike host', 'https://withstills.com.evil.com/j/abc123'],
+    ['a lookalike of the retired host', 'https://event-camera-app-navy.vercel.app.evil.com/j/abc123'],
+    ['a near-miss on the canonical host', 'https://with-stills.com/j/abc123'],
     ['a javascript: payload', 'javascript:alert(1)//j/abc'],
     ['a data: payload', 'data:text/html,<script>alert(1)</script>'],
     ['a file: path', 'file:///etc/passwd'],
@@ -84,5 +88,25 @@ describe('the route both paths hand off to', () => {
 
   it('carries the token through as a param the flow already reads', () => {
     expect(joinRouteFor({ code: 'abc123', token: 'tok en' })).toBe('/j/abc123?t=tok%20en');
+  });
+});
+
+describe('links minted before the domain moved', () => {
+  // Every QR code already printed and every invitation already sent carries
+  // the old host. A domain move must not turn those into dead paper, so the
+  // retired host stays on the allow-list — while remaining an allow-list.
+  it('still reads an invitation on the retired host', () => {
+    expect(parseJoinUrl(`${LEGACY_HOST}/j/abc123`)).toEqual({ code: 'abc123', token: null });
+  });
+
+  it('still carries the token from a retired-host link', () => {
+    expect(parseJoinUrl(`${LEGACY_HOST}/j/abc123#t=tok_1`)).toEqual({
+      code: 'abc123',
+      token: 'tok_1',
+    });
+  });
+
+  it('reads the canonical host too, which is what new links use', () => {
+    expect(parseJoinUrl(`${HOST}/j/abc123`)).toEqual({ code: 'abc123', token: null });
   });
 });

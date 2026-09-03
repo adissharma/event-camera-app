@@ -24,6 +24,7 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
+import { BRAND_CONFIG } from '@/config/brand';
 import { colours, radii, spacing } from '@/design';
 import { useAuth } from '@/features/auth/context';
 import { LockIcon } from '@/components/ui/icons';
@@ -410,7 +411,7 @@ export default function PhotoViewerScreen() {
 
     const eventCode = celebration?.public_slug || '';
     const photoIdVal = activePhoto.id || activePhoto.uri;
-    const shareLink = `https://event-camera-app-navy.vercel.app/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
+    const shareLink = `${BRAND_CONFIG.guestDomain}/e/${eventCode}?photoId=${encodeURIComponent(photoIdVal)}`;
 
     try {
       await Share.share(

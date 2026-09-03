@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Stories.",
+    "name": "Stills.",
     "slug": "event-camera-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,6 +13,7 @@
       "appleTeamId": "AL3AF36W3B",
       "supportsTablet": false,
       "associatedDomains": [
+        "applinks:withstills.com",
         "applinks:event-camera-app-navy.vercel.app"
       ],
       "infoPlist": {
@@ -45,6 +46,21 @@
           "data": [
             {
               "scheme": "https",
+              "host": "withstills.com",
+              "pathPrefix": "/j"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
               "host": "event-camera-app-navy.vercel.app",
               "pathPrefix": "/j"
             }
@@ -65,8 +81,8 @@
     },
     "web": {
       "output": "static",
-      "name": "Stories.",
-      "shortName": "Stories.",
+      "name": "Stills.",
+      "shortName": "Stills.",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [

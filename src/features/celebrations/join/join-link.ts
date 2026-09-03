@@ -1,6 +1,6 @@
 import Constants from 'expo-constants';
 
-import { BRAND_CONFIG } from '@/config/brand';
+import { BRAND_CONFIG, LEGACY_GUEST_DOMAINS } from '@/config/brand';
 
 /**
  * Recognising an event invitation, wherever it came from.
@@ -24,8 +24,23 @@ export interface JoinTarget {
   token: string | null;
 }
 
-/** Hosts we will follow. Anything else is somebody else's website. */
-const GUEST_HOST = hostOf(BRAND_CONFIG.guestDomain);
+/**
+ * Hosts we will follow. Anything else is somebody else's website.
+ *
+ * The canonical host plus every host we have previously published links
+ * from. A QR code printed on a wedding sign outlives a domain move, so
+ * accepting only the current host would silently reject invitations that
+ * are still very much in circulation — the scanner would report a valid
+ * link as "not one of ours".
+ *
+ * Still an allow-list, and still exact-match: adding old hosts widens what
+ * we accept by exactly the set we ourselves issued, and nothing else.
+ */
+const GUEST_HOSTS: ReadonlySet<string> = new Set(
+  [BRAND_CONFIG.guestDomain, ...LEGACY_GUEST_DOMAINS]
+    .map(hostOf)
+    .filter((host): host is string => Boolean(host)),
+);
 
 /**
  * The app's own deep-link scheme, read from the manifest rather than repeated
@@ -72,7 +87,8 @@ export function parseJoinUrl(raw: string): JoinTarget | null {
   }
 
   const scheme = url.protocol.replace(/:$/, '').toLowerCase();
-  const isWebLink = (scheme === 'https' || scheme === 'http') && url.host.toLowerCase() === GUEST_HOST;
+  const isWebLink =
+    (scheme === 'https' || scheme === 'http') && GUEST_HOSTS.has(url.host.toLowerCase());
   // The app's own deep-link scheme, which is what an OS-level link handoff
   // and some printed codes use. `eventcamera://j/abc` parses with the code as
   // the host rather than as a path segment, so both shapes are read below.

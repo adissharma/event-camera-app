@@ -6,6 +6,19 @@
       "maxDuration": 300
     }
   },
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.withstills.com"
+        }
+      ],
+      "destination": "https://withstills.com/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/j/:slug",

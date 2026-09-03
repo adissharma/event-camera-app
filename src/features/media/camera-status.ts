@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 
+import { BRAND_CONFIG } from '@/config/brand';
+
 let useNativeCameraPermissions: any = () => [null, () => {}];
 try {
   useNativeCameraPermissions = require('expo-camera').useCameraPermissions;
@@ -150,7 +152,10 @@ function useNativeCameraAccess(): CameraAccess {
 
   return {
     status,
-    detail: status === 'denied' ? 'You can turn this on for Stories. in Settings.' : null,
+    detail:
+      status === 'denied'
+        ? `You can turn this on for ${BRAND_CONFIG.appName} in Settings.`
+        : null,
     requestAccess,
     openSettings,
   };

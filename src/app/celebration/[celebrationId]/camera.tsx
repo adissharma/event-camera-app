@@ -2081,7 +2081,7 @@ export default function CameraScreen() {
             Camera Access Required
           </AppText>
           <AppText variant="bodyMedium" align="center" tone="secondary" style={{ marginBottom: spacing.xl }}>
-            Stories. needs your camera to capture beautiful memories directly at the event.
+            {BRAND_CONFIG.appName} needs your camera to capture beautiful memories directly at the event.
           </AppText>
           <Pressable
             style={S.permissionBtn}
