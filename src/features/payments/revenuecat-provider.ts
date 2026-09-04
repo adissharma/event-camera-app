@@ -161,6 +161,18 @@ export const revenueCatPaymentProvider: PaymentProvider = {
     const products = await Purchases.getProducts(productIds, PRODUCT_CATEGORY.NON_SUBSCRIPTION);
     products.forEach((product) => productCache.set(product.identifier, product));
 
+    // StoreKit silently omits products it will not sell — wrong bundle id,
+    // metadata incomplete, agreements unsigned, not yet propagated. The array
+    // just comes back short, and the caller can only report "unavailable"
+    // without ever learning which id the store declined to return.
+    if (products.length < productIds.length) {
+      const returned = new Set(products.map((product) => product.identifier));
+      console.error(
+        '[revenuecat] store returned no product for',
+        productIds.filter((productId) => !returned.has(productId)),
+      );
+    }
+
     return products
       .map((product) => {
         const planKey = planKeyByProductId.get(product.identifier);
@@ -194,6 +206,16 @@ export const revenueCatPaymentProvider: PaymentProvider = {
       ) {
         return { status: 'cancelled' };
       }
+
+      // The host sees `message`; this is the only place the store's own
+      // error code and underlying reason survive, and without them a failed
+      // purchase on a device is undiagnosable.
+      console.error('[revenuecat] purchase failed', {
+        productId: storeProduct.identifier,
+        code: isPurchasesError(error) ? error.code : null,
+        underlyingErrorMessage: isPurchasesError(error) ? error.underlyingErrorMessage : null,
+        error,
+      });
 
       return {
         status: 'failed',

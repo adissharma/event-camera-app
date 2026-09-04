@@ -680,11 +680,19 @@ export default function PackageScreen() {
         await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
         router.replace('/create/success');
       } catch (error) {
-        const stage = error instanceof PublicationError ? error.stage : null;
+        const failure = error instanceof PublicationError ? error : null;
+        // A host who tapped Cancel on the store sheet did not hit a problem
+        // and must not be told they did.
+        if (failure?.cancelled) return;
         setPublishError(
-          stage === 'purchase'
-            ? 'That payment did not go through. Nothing has been charged.'
-            : stage === 'publish'
+          failure?.stage === 'purchase'
+            ? // The purchase-stage messages are already written for the host,
+              // and they differ in what the host should DO — retry later,
+              // update a payment method, use a different account. Collapsing
+              // them into one sentence threw that away and left "it failed"
+              // as the only thing anyone, host or us, could ever learn.
+              failure.message
+            : failure?.stage === 'publish'
               ? 'Your event was saved but could not be published. Try again.'
               : 'We could not create your event. Check your connection and try again.',
         );

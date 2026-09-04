@@ -52,6 +52,12 @@ export class PublicationError extends Error {
   constructor(
     message: string,
     readonly stage: 'draft' | 'cover' | 'purchase' | 'publish',
+    /**
+     * Set when the host dismissed the store sheet themselves. Nothing went
+     * wrong, so screens must not show an error for it — but it still has to
+     * unwind the publish, hence an error rather than a return value.
+     */
+    readonly cancelled = false,
   ) {
     super(message);
     this.name = 'PublicationError';
@@ -106,7 +112,7 @@ export async function purchaseOrThrow(
 
   const outcome = await provider.purchase(product);
   if (outcome.status === 'cancelled') {
-    throw new PublicationError('Purchase cancelled', 'purchase');
+    throw new PublicationError('Purchase cancelled', 'purchase', true);
   }
   if (outcome.status === 'failed') {
     throw new PublicationError(outcome.message, 'purchase');

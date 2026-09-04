@@ -49,11 +49,13 @@ export default function ReviewStep() {
     } catch (error) {
       // Stage-aware, because "your card was declined" and "we could not reach
       // the server" need entirely different reactions from the host.
-      const stage = error instanceof PublicationError ? error.stage : null;
+      const failure = error instanceof PublicationError ? error : null;
+      // Cancelling the store sheet is a choice, not a failure.
+      if (failure?.cancelled) return;
       setPublishError(
-        stage === 'purchase'
-          ? 'That payment did not go through. Nothing has been charged.'
-          : stage === 'publish'
+        failure?.stage === 'purchase'
+          ? failure.message
+          : failure?.stage === 'publish'
             ? 'Your event was saved but could not be published. Try again.'
             : 'We could not create your event. Check your connection and try again.',
       );
