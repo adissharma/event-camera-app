@@ -5,6 +5,7 @@
   },
   "build": {
     "staging": {
+      "autoIncrement": true,
       "ios": {
         "distribution": "store"
       },
@@ -16,6 +17,7 @@
       }
     },
     "production": {
+      "autoIncrement": true,
       "ios": {
         "distribution": "store"
       },
