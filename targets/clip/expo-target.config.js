@@ -26,7 +26,13 @@ module.exports = (config) => ({
   entitlements: {
     // Clip invocation uses the `appclips:` prefix, distinct from the parent
     // app's `applinks:` Universal Links.
+    // Canonical host first, then the host we published links from before the
+    // move. A Clip invocation is triggered by the URL in a QR code, and codes
+    // printed on the old domain are still in circulation — dropping it here
+    // would stop those opening the Clip, exactly as it would for the parent
+    // app's `applinks:`. Kept in step with `app.json`'s associatedDomains.
     'com.apple.developer.associated-domains': [
+      'appclips:withstills.com',
       'appclips:event-camera-app-navy.vercel.app',
     ],
   },
