@@ -9,7 +9,7 @@ import type { PaywallPlan } from '@/features/payments/plan-catalogue';
  *
  * Entitlements belong to the event rather than to whoever is looking at it, so
  * this is keyed on the celebration and never on the signed-in account — a host
- * who bought Stories+ for a wedding has not bought it for their next event.
+ * who bought Stills+ for a wedding has not bought it for their next event.
  */
 
 export const eventPlanKeys = {

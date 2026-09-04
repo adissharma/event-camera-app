@@ -1234,7 +1234,7 @@ export interface EventPreviewMode {
  * The mark on a feature the host can see but has not bought.
  *
  * Deliberately small and unlabelled — a padlock reads instantly, where a
- * "Stories+" pill would put pricing into a row of event features. The
+ * "Stills+" pill would put pricing into a row of event features. The
  * explanation belongs on the upgrade sheet the tap opens, not here.
  */
 function LockedBadge() {
@@ -1351,7 +1351,7 @@ export function EventDetailView({
    *
    * `onUnlocked` is what makes an upgrade feel like a step rather than a
    * detour: it carries the thing the host was originally reaching for, so
-   * buying Stories+ to add a challenge opens challenge creation instead of
+   * buying Stills+ to add a challenge opens challenge creation instead of
    * dropping them back on the gallery to find it again.
    */
   const [upgradeRequest, setUpgradeRequest] = useState<{
@@ -1379,7 +1379,7 @@ export function EventDetailView({
   }, [celebration, isHost]);
 
   /*
-   * Guestbook and Challenges are Stories+ features, and the two audiences are
+   * Guestbook and Challenges are Stills+ features, and the two audiences are
    * treated oppositely on purpose.
    *
    * The host sees them whether or not the package includes them, because the

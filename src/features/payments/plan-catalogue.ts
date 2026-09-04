@@ -7,7 +7,7 @@ import { formatPrice } from '@/services/plans';
  * One definition, two consumers: the paywall's hero entitlement list and its
  * pricing cards both read from here. That is the point — the previous screen
  * carried its own `FALLBACK_PLANS` array alongside the catalogue's, so "how
- * many guests does Stories include" had two answers that could drift apart.
+ * many guests does Stills Lite include" had two answers that could drift apart.
  * A number typed once cannot disagree with itself.
  *
  * This sits deliberately *beside* `services/plans.ts` rather than replacing
@@ -121,7 +121,7 @@ export const PAYWALL_PLANS: readonly PaywallPlan[] = [
   },
   {
     id: 'stories',
-    displayName: 'Stories',
+    displayName: 'Stills Lite',
     catalogueKey: 'guests_100',
     guestLimit: 100,
     photoAllowance: PHOTOS_PER_GUEST.stories,
@@ -137,7 +137,7 @@ export const PAYWALL_PLANS: readonly PaywallPlan[] = [
   },
   {
     id: 'stories_plus',
-    displayName: 'Stories+',
+    displayName: 'Stills+',
     catalogueKey: 'guests_unlimited',
     guestLimit: 'unlimited',
     photoAllowance: 'unlimited',
@@ -163,6 +163,19 @@ export const FREE_PAYWALL_PLAN: PaywallPlan =
 
 export const RECOMMENDED_PLAN_ID: PaywallPlanId =
   PAYWALL_PLANS.find((plan) => plan.isRecommended)?.id ?? 'stories_plus';
+
+/**
+ * The top tier's display name, for copy that names the thing being sold.
+ *
+ * Screens hard-coded "Stills+" in their own strings, which meant renaming the
+ * tier renamed it in the paywall and nowhere else — a host would have read one
+ * name on the pricing card and a different one on the locked row that sold it,
+ * and a third on Apple's purchase sheet. The catalogue is the one place a tier
+ * is named; everything else asks.
+ */
+export function topTierName(): string {
+  return getPaywallPlan('stories_plus')?.displayName ?? 'Stills+';
+}
 
 export function getPaywallPlan(id: PaywallPlanId | null | undefined): PaywallPlan | null {
   if (!id) return null;

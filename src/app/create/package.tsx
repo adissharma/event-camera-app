@@ -53,6 +53,7 @@ import {
   planForCatalogueKey,
   planGuestSubtitle,
   planPriceLabel,
+  topTierName,
   type PaywallPlan,
   type PaywallPlanId,
 } from '@/features/payments/plan-catalogue';
@@ -865,7 +866,7 @@ export default function PackageScreen() {
                 ]}
               >
                 {/*
-                  Stays on Stories+ whichever plan is selected — it marks the
+                  Stays on Stills+ whichever plan is selected — it marks the
                   recommendation, not the selection. The two are told apart by
                   the border and the filled radio, which follow the tap.
                 */}
@@ -1062,7 +1063,7 @@ export default function PackageScreen() {
               onPress={upgradeToUnlimited}
               disabled={isPublishing}
               accessibilityRole="button"
-              accessibilityLabel="Upgrade to Stories+"
+              accessibilityLabel={`Upgrade to ${topTierName()}`}
               accessibilityState={{ disabled: isPublishing }}
               style={({ pressed }) => [
                 S.continueButton,
@@ -1070,7 +1071,7 @@ export default function PackageScreen() {
               ]}
             >
               <AppText variant="button" style={S.continueLabel}>
-                Upgrade to Stories+
+                Upgrade to {topTierName()}
               </AppText>
             </Pressable>
             <Pressable

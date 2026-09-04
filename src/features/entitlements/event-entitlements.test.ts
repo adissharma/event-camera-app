@@ -33,7 +33,7 @@ describe('what an event includes', () => {
     }
   });
 
-  it('puts guestbook, challenges and video behind Stories+ only', () => {
+  it('puts guestbook, challenges and video behind Stills+ only', () => {
     for (const feature of ['guestbook', 'challenges', 'video'] as const) {
       expect(entitlementsForPlanKey('guests_25').has(feature)).toBe(false);
       expect(entitlementsForPlanKey('guests_100').has(feature)).toBe(false);
@@ -61,7 +61,7 @@ describe('which upgrade unlocks a feature', () => {
   });
 
   it('never offers a sideways or downward move', () => {
-    // Stories costs more than Small Event but adds none of these, so it must
+    // Stills Lite costs more than Small Event but adds none of these, so it must
     // not appear as a way to get them.
     expect(upgradesForFeature(small, 'video').map((p) => p.id)).toEqual(['stories_plus']);
   });
@@ -69,7 +69,7 @@ describe('which upgrade unlocks a feature', () => {
 
 describe('which upgrades satisfy a guest allowance', () => {
   it('offers every package that would do it, cheapest first', () => {
-    // A Small Event host asking for 100 can be served by Stories or Stories+;
+    // A Small Event host asking for 100 can be served by Stills Lite or Stills+;
     // choosing between them is the host's call, not this layer's.
     expect(upgradesForGuestLimit(small, 100).map((p) => p.id)).toEqual([
       'stories',
@@ -78,7 +78,7 @@ describe('which upgrades satisfy a guest allowance', () => {
   });
 
   it('omits packages that would not actually satisfy the request', () => {
-    // Stories caps at 100, so it is not an answer to "I want unlimited".
+    // Stills Lite caps at 100, so it is not an answer to "I want unlimited".
     expect(upgradesForGuestLimit(small, 'unlimited').map((p) => p.id)).toEqual(['stories_plus']);
   });
 
@@ -106,12 +106,18 @@ describe('what the upgrade screen promises', () => {
 
   it('does not re-promise something the host already has', () => {
     // Both include 20 photos per guest, so the jump from Small Event to
-    // Stories must not claim to add photos.
+    // Stills Lite must not claim to add photos.
     expect(upgradeGains(small, stories)).not.toContain('20 photos per guest');
   });
 
   it('reads as a sentence', () => {
-    expect(upgradeSummary(stories, plus)).toMatch(/^Upgrade to Stories\+ to unlock .+\.$/);
+    // The tier's name is read from the plan rather than repeated here: this
+    // test is about the sentence's shape, and hard-coding the name made a
+    // rename look like a broken summary.
+    const escaped = plus.displayName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    expect(upgradeSummary(stories, plus)).toMatch(
+      new RegExp(`^Upgrade to ${escaped} to unlock .+\\.$`),
+    );
     expect(upgradeSummary(stories, plus)).toContain(' and ');
   });
 });

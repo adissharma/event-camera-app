@@ -39,7 +39,7 @@ describe('paid plans', () => {
     ]);
   });
 
-  it('recommends Stories+, and only Stories+', () => {
+  it('recommends Stills+, and only Stills+', () => {
     expect(RECOMMENDED_PLAN_ID).toBe('stories_plus');
     expect(PAYWALL_PLANS.filter((p) => p.isRecommended)).toHaveLength(1);
   });
@@ -57,7 +57,7 @@ describe('hero entitlement rows', () => {
     }
   });
 
-  it('describes Stories+ as fully included', () => {
+  it('describes Stills+ as fully included', () => {
     const rows = planFeatureRows(getPaywallPlan('stories_plus')!);
     expect(rows.map((r) => r.label)).toEqual([
       'Unlimited guests',
@@ -69,7 +69,7 @@ describe('hero entitlement rows', () => {
     expect(rows.every((r) => r.included)).toBe(true);
   });
 
-  it('describes Stories with its three exclusions', () => {
+  it('describes Stills Lite with its three exclusions', () => {
     const rows = planFeatureRows(getPaywallPlan('stories')!);
     expect(rows.map((r) => r.label)).toEqual([
       '100 guests',

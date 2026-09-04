@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet, Pressable, ScrollView, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { topTierName } from '@/features/payments/plan-catalogue';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { Screen } from '@/components/layout/screen';
@@ -361,7 +363,7 @@ export default function EditEventScreen() {
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Challenges</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>
-                  {entitlements.has('challenges') ? 'Manage Challenges' : 'Stories+'}
+                  {entitlements.has('challenges') ? 'Manage Challenges' : topTierName()}
                 </AppText>
               </View>
               {entitlements.has('challenges') ? <ChevronRightIcon /> : <LockIcon size={14} color={colours.textSecondary} />}
@@ -378,7 +380,7 @@ export default function EditEventScreen() {
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Guestbook</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>
-                  {entitlements.has('guestbook') ? 'Edit message' : 'Stories+'}
+                  {entitlements.has('guestbook') ? 'Edit message' : topTierName()}
                 </AppText>
               </View>
               {entitlements.has('guestbook') ? <ChevronRightIcon /> : <LockIcon size={14} color={colours.textSecondary} />}

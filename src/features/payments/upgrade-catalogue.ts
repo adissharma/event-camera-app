@@ -12,7 +12,7 @@ import {
  *
  * These tiers are one-time purchases, not subscriptions, and StoreKit offers
  * no proration for those — a host who bought Small Event and then wants
- * Stories+ would otherwise be charged the full £49.99 on top of the £14.99
+ * Stills+ would otherwise be charged the full £49.99 on top of the £14.99
  * they already paid. So each upgrade path is its own product, priced at the
  * difference, and the store charges that instead.
  *

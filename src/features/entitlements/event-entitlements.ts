@@ -11,12 +11,12 @@ import {
  *
  * The single place the app answers "can this event do X". Screens ask this
  * rather than reading the plan catalogue themselves, because a screen that
- * knows Guestbook needs Stories+ is a screen that has to be found and edited
+ * knows Guestbook needs Stills+ is a screen that has to be found and edited
  * the next time packaging changes — and the ones that get missed fail open,
  * which is the expensive direction.
  *
  * Entitlements belong to the *event*, not to the person looking at it. A host
- * who bought Stories+ for one wedding has not bought it for the next, and a
+ * who bought Stills+ for one wedding has not bought it for the next, and a
  * guest's own account is irrelevant to what the event they were invited to
  * includes. Everything here is therefore derived from the plan the event was
  * published on.
@@ -97,7 +97,7 @@ export function upgradeForFeature(
  * current one.
  *
  * Plural because the answer legitimately is: a host on Small Event who wants
- * more room may be served by either Stories or Stories+, and picking for them
+ * more room may be served by either Stills Lite or Stills+, and picking for them
  * is not this layer's job. The spec is explicit that packages which would
  * *not* satisfy the request must not be offered, which is what the filter is
  * for — an upgrade screen listing a tier that still cannot do the thing is

@@ -376,7 +376,7 @@ export default function CameraScreen() {
   const isGuest = detail?.viewerRole === 'guest';
 
   /*
-   * Video is a Stories+ capability, and the two audiences differ.
+   * Video is a Stills+ capability, and the two audiences differ.
    *
    * A host testing their own event still sees the PHOTO / VIDEO rail even
    * without the package — tapping VIDEO opens the upgrade instead of switching

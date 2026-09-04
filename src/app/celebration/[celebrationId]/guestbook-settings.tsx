@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Guestbook is a Stories+ feature, so the screen checks before it
+ * Guestbook is a Stills+ feature, so the screen checks before it
  * renders rather than trusting whatever opened it. A host without the package
  * is offered the upgrade; a guest is sent back without ever seeing it.
  */

@@ -630,7 +630,7 @@ const S = StyleSheet.create({
 });
 
 /**
- * Challenges is a Stories+ feature, so the screen checks before it
+ * Challenges is a Stills+ feature, so the screen checks before it
  * renders rather than trusting whatever opened it. A host without the package
  * is offered the upgrade; a guest is sent back without ever seeing it.
  */
