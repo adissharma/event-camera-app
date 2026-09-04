@@ -30,6 +30,14 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Stills uses your camera so you can take photos and videos for this event.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Stills uses your microphone so the videos you record for this event have sound.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Stills saves photos to your library so you can keep and share them.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Stills accesses your photo library so you can add photos you have already taken to this event.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
