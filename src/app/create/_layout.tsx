@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 
-import { CreationDraftProvider } from '@/features/celebrations/draft/store';
+import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { colours } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { useAuth } from '@/features/auth/context';
@@ -38,6 +38,28 @@ export default function CreateLayout() {
       resetToUnauthenticatedRoot(router);
     }
   }, [isBackendConfigured, isRestoring, isSignedIn, router]);
+
+  // Leaving the flow discards it.
+  //
+  // This layout unmounts when the host navigates out of `/create` by any
+  // route — the Back control on the first step, the swipe-back gesture, a
+  // deep link, the sign-out redirect above — which is a far more reliable
+  // "they left" signal than trying to intercept each of those separately.
+  // It does NOT unmount moving between steps, or on the way to `success`,
+  // because the whole flow lives under this one layout.
+  //
+  // A published event is safe: `success` resets the draft first, so there is
+  // no `serverCelebrationId` left for this to act on.
+  const { draft, reset } = useCreationDraft();
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  useEffect(() => {
+    return () => {
+      if (!draftRef.current.serverCelebrationId) return;
+      void reset({ discardServerDraft: true });
+    };
+  }, [reset]);
 
   return (
     <Stack
