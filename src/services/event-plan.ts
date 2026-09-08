@@ -3,6 +3,7 @@ import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchas
 import { getPaymentProvider } from '@/features/payments';
 import { upgradeChargeFor } from '@/features/payments/upgrade-catalogue';
 import type { PaywallPlan } from '@/features/payments/plan-catalogue';
+import { SAMPLE_PLAN_KEY, isSampleCelebrationId } from '@/features/celebrations/sample-event';
 
 /**
  * The package an event is on, and moving it up.
@@ -25,6 +26,13 @@ export const eventPlanKeys = {
  * guests who must never see them at all.
  */
 export async function fetchEventPlanKey(celebrationId: string): Promise<string | null> {
+  // The example album is shown on the top package, because its whole job is
+  // to show what a finished event looks like — an example with the Guestbook
+  // and Challenges locked would be advertising the paywall rather than the
+  // product. Resolved here rather than by special-casing each gated surface,
+  // so every one of them unlocks through the path it already uses.
+  if (isSampleCelebrationId(celebrationId)) return SAMPLE_PLAN_KEY;
+
   if (!isBackendConfigured) return null;
   const client = requireSupabase();
   const { data, error } = await (client as any).rpc('celebration_plan_key', {

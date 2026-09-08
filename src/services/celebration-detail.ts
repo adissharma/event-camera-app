@@ -239,7 +239,8 @@ function sampleCelebrationDetail(): CelebrationDetail {
       contributors: new Set(SAMPLE_EVENT.photos.map((photo) => photo.displayName)).size,
       photos: SAMPLE_EVENT.photos.length,
     },
-    hasAudioGuestbook: false,
+    // The Guestbook is part of what the example is showing off.
+    hasAudioGuestbook: true,
     viewerRole: 'guest',
     guestShotsUsed: null,
     isSample: true,

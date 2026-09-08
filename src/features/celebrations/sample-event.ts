@@ -68,6 +68,16 @@ export function sampleEventEndsAt(now: Date = new Date()): string {
  */
 export const SAMPLE_GUESTS_JOINED = 30;
 
+/**
+ * The package the example is shown on.
+ *
+ * The top tier, deliberately: the example exists to show what a finished
+ * event looks like, and one with the Guestbook and Challenges locked would be
+ * showing the paywall instead. It buys nothing and counts toward nothing —
+ * `fetchEventPlanKey` simply answers this for the sample id.
+ */
+export const SAMPLE_PLAN_KEY = 'guests_unlimited';
+
 export interface SampleMedia {
   id: string;
   /** A bundled asset, resolved by `require`. Never a storage path. */

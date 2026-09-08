@@ -51,6 +51,7 @@ import {
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { FeatureGate } from '@/features/entitlements/feature-gate';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
+import { SAMPLE_COVER, isSampleCelebrationId } from '@/features/celebrations/sample-event';
 
 type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
 
@@ -126,6 +127,7 @@ function GuestbookScreenContent() {
   });
 
   const isHost = (detail?.viewerRole ?? 'guest') === 'host';
+  const isSample = isSampleCelebrationId(String(celebrationId));
 
   const hostQuery = useQuery({
     queryKey: ['guestbook', 'host', String(celebrationId)],
@@ -136,7 +138,10 @@ function GuestbookScreenContent() {
   const guestQuery = useQuery({
     queryKey: ['guestbook', 'guest', String(celebrationId)],
     queryFn: () => fetchGuestGuestbook(String(celebrationId)),
-    enabled: Boolean(celebrationId) && !isHost,
+    // The example album has no guestbook rows and no guest token to read
+    // them with. Its slides come from the definition instead — none yet, so
+    // the intro card stands alone and explains what this is.
+    enabled: Boolean(celebrationId) && !isHost && !isSample,
   });
 
   const payload = isHost ? hostQuery.data : guestQuery.data;
@@ -212,10 +217,13 @@ function GuestbookScreenContent() {
   const canDeleteActive =
     Boolean(activeMessage) && (isHost || Boolean(guestMeta?.guestToken));
 
-  const description =
-    payload?.guestbook.instructions?.trim() || 'Leave a message for the host.';
+  const description = isSample
+    ? 'Guests record a short video message for the couple. Each one is private — only the host ever sees them.'
+    : payload?.guestbook.instructions?.trim() || 'Leave a message for the host.';
 
-  const footnote = isHost
+  const footnote = isSample
+    ? 'Sample album — messages from this event are not shown.'
+    : isHost
     ? resolvedMessages.length === 0
       ? 'No one has left a message yet. Messages here are private to you.'
       : `${resolvedMessages.length} private message${resolvedMessages.length === 1 ? '' : 's'}, visible only to you.`
@@ -288,7 +296,14 @@ function GuestbookScreenContent() {
           </View>
         ) : (
           <StoryViewer
-            backdrop={{ kind: 'solid', color: '#0B0B0C' }}
+            // Challenges blur a photo from the event behind their intro; the
+            // Guestbook normally has no cover to do that with. The example
+            // does, so it gets the same treatment rather than flat black.
+            backdrop={
+              isSample
+                ? { kind: 'blurredImage' as const, source: SAMPLE_COVER }
+                : { kind: 'solid', color: '#0B0B0C' }
+            }
             // The host picks an emoji in Guestbook settings; the book glyph is
             // the fallback for a Guestbook that has never been configured.
             icon={
@@ -308,7 +323,8 @@ function GuestbookScreenContent() {
               setActiveSlideIndex(index);
             }}
             onDismiss={() => router.back()}
-            cta={isHost ? undefined : { label: 'Leave a message', onPress: openRecorder }}
+            // No CTA on the example: there is nothing to record into.
+            cta={isHost || isSample ? undefined : { label: 'Leave a message', onPress: openRecorder }}
             canDeleteActive={canDeleteActive}
             onPressOverflow={() => setMenuVisible(true)}
             renderSlideCaption={(item) =>
