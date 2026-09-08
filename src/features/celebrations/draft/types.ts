@@ -48,6 +48,18 @@ export interface CreationDraft {
   createdAt: string;
   updatedAt: string;
   editCelebrationId: string | null;
+  /**
+   * The server-side draft row this journey has already created, if any.
+   *
+   * Publication creates the celebration before it charges, so a failure at the
+   * purchase step leaves a real row behind. Remembering it lets the next
+   * attempt reuse that row instead of creating a second one — without this, a
+   * host who retries a declined payment three times ends up with three
+   * abandoned events.
+   *
+   * Cleared when the journey ends, either by publishing or by being abandoned.
+   */
+  serverCelebrationId: string | null;
 
   // Step 1
   title: string;
@@ -120,7 +132,7 @@ export interface CreationDraft {
 }
 
 // 6: added hostRevealChoice, hostCustomRevealAt, guestRevealChoice, guestCustomRevealAt
-export const DRAFT_VERSION = 6;
+export const DRAFT_VERSION = 7;
 
 export function createEmptyDraft(userId: string | null, timezone: string): CreationDraft {
   const now = new Date().toISOString();
@@ -174,6 +186,7 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
     qrTemplateKey: 'digital_card',
 
     editCelebrationId: null,
+    serverCelebrationId: null,
     editSessionId: null,
   };
 }

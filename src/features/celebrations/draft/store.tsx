@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { useAuth } from '@/features/auth/context';
+import { permanentlyDeleteCelebration } from '@/services/celebrations';
 import {
   CREATION_STEPS,
   DRAFT_VERSION,
@@ -65,7 +66,12 @@ interface DraftContextValue {
   /** True when a previously saved draft was found and restored. */
   wasRestored: boolean;
   update: (patch: Partial<CreationDraft>) => void;
-  reset: () => Promise<void>;
+  /**
+   * Clears the in-progress draft. Pass `discardServerDraft` when the host is
+   * abandoning the journey rather than completing it, to also delete any
+   * unpublished celebration row a failed attempt left behind.
+   */
+  reset: (options?: { discardServerDraft?: boolean }) => Promise<void>;
 }
 
 const DraftContext = createContext<DraftContextValue | null>(null);
@@ -173,10 +179,34 @@ export function CreationDraftProvider({ children }: { children: ReactNode }) {
     dispatch({ type: 'patch', patch });
   }, []);
 
-  const reset = useCallback(async () => {
-    dispatch({ type: 'reset', userId, timezone: deviceTimezone() });
-    await AsyncStorage.removeItem(storageKey(userId)).catch(() => {});
-  }, [userId]);
+  // `reset` must see the current draft without being rebuilt on every
+  // keystroke — it is in the dependency list of effects that navigate.
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+
+  const reset = useCallback(
+    async (options?: { discardServerDraft?: boolean }) => {
+      // Publication creates the celebration row before it charges, so an
+      // abandoned journey can leave a real, unpublished event behind. Starting
+      // a new journey discards it: the host walked away from that work on
+      // purpose, and keeping it would show them an event they never finished
+      // making. A published event never takes this path — `success` resets
+      // without the flag.
+      const orphan = draftRef.current.serverCelebrationId;
+      if (options?.discardServerDraft && orphan) {
+        await permanentlyDeleteCelebration(orphan).catch((error) => {
+          // Best effort. Losing the cleanup leaves a hidden draft row, which
+          // is untidy; failing the reset would strand the host on a screen
+          // they are trying to leave, which is worse.
+          console.warn('[creation-draft] could not discard abandoned draft', error);
+        });
+      }
+
+      dispatch({ type: 'reset', userId, timezone: deviceTimezone() });
+      await AsyncStorage.removeItem(storageKey(userId)).catch(() => {});
+    },
+    [userId],
+  );
 
   const value = useMemo<DraftContextValue>(
     () => ({ draft, isRestoring, wasRestored, update, reset }),

@@ -675,7 +675,13 @@ export default function PackageScreen() {
         // existing draft → cover → purchase → publish sequence. The free tier
         // is skipped at the purchase stage by `isFreePlanKey`, so this call is
         // identical either way and there is no second payment path here.
-        const result = await publishDraft({ ...draft, planKey: plan.catalogueKey, addOnKeys: [] });
+        const result = await publishDraft(
+          { ...draft, planKey: plan.catalogueKey, addOnKeys: [] },
+          // Reuse the row a previous failed attempt already created, so
+          // retrying a declined payment does not leave a trail of events.
+          draft.serverCelebrationId ?? undefined,
+          (celebrationId) => update({ serverCelebrationId: celebrationId }),
+        );
         setPublicationResult(result);
         await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
         router.replace('/create/success');

@@ -29,7 +29,7 @@ import { copy } from '@/i18n';
 export default function ReviewStep() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { draft } = useCreationDraft();
+  const { draft, update } = useCreationDraft();
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const { data: themes = [] } = useQuery({
@@ -42,7 +42,11 @@ export default function ReviewStep() {
     setIsPublishing(true);
     setPublishError(null);
     try {
-      const result = await publishDraft(draft);
+      const result = await publishDraft(
+        draft,
+        draft.serverCelebrationId ?? undefined,
+        (celebrationId) => update({ serverCelebrationId: celebrationId }),
+      );
       setPublicationResult(result);
       await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
       router.replace('/create/success');

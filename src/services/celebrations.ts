@@ -56,6 +56,12 @@ export async function listCelebrations(): Promise<CelebrationSummary[]> {
          event_sessions ( id, name, status, ends_at, reveal_at, reveal_mode, sequence_number, shot_limit_per_guest )`,
       )
       .is('deleted_at', null)
+      // Unpublished drafts are journey state, not events. Publication creates
+      // the row before it charges, so a failed purchase or a lost connection
+      // leaves one behind — and showing it puts an event on the host's home
+      // screen that they never finished creating and cannot use. The creation
+      // flow owns these rows and deletes them when the journey is abandoned.
+      .neq('status', 'draft')
       .order('created_at', { ascending: false });
 
     if (error) throw error;

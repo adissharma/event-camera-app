@@ -12,8 +12,9 @@ export default function CreateEntryScreen() {
 
   useEffect(() => {
     if (isRestoring) return;
-    // Reset and navigate immediately without waiting
-    void reset();
+    // Starting a new event discards any unpublished row an earlier, abandoned
+    // journey created — see `reset`.
+    void reset({ discardServerDraft: true });
     router.replace('/create/name');
   }, [isRestoring, router, reset]);
 

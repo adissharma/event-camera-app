@@ -160,6 +160,14 @@ async function resolveThemeId(themeKey: string | null | undefined): Promise<stri
 export async function publishDraft(
   draft: CreationDraft,
   existingCelebrationId?: string,
+  /**
+   * Called the moment the server-side row exists, before anything that can
+   * fail after it. The caller persists the id so a retry reuses this row
+   * rather than creating another, and so an abandoned journey has something
+   * to clean up. A `return` value cannot serve this: the interesting cases
+   * are exactly the ones where this function throws.
+   */
+  onCelebrationCreated?: (celebrationId: string) => void,
 ): Promise<PublishedEvent> {
   try {
     if (!isBackendConfigured) {
@@ -203,6 +211,7 @@ export async function publishDraft(
 
       const created = assertCreatedCelebration(data as never);
       celebrationId = created.celebrationId;
+      onCelebrationCreated?.(created.celebrationId);
       eventSessionId = created.eventSessionId;
       publicSlug = created.publicSlug;
       // The ONLY moment this exists in plaintext. Only its digest is stored.
