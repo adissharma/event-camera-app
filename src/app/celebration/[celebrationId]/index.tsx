@@ -42,17 +42,16 @@ import { isPermanentQueryError } from '@/lib/query-client';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import {
   SAMPLE_COVER,
-  SAMPLE_EVENT_NOTE,
   SAMPLE_PHOTOS,
   isSampleCelebrationId,
   sampleAssetUri,
+  sampleCapturedAt,
 } from '@/features/celebrations/sample-event';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { shouldShowHostControls } from '@/lib/platform-guards';
 import {
   loadStoredGuestSession,
   loadStoredGuestSessionByCelebrationId,
-  clearStoredGuestSession,
   guestSessionStorage,
 } from '@/services/guest-session';
 import { Screen } from '@/components/layout/screen';
@@ -1414,26 +1413,23 @@ export function EventDetailView({
   /** True when the host is being shown something they cannot yet use. */
   const showingLockedFeatures = isHost && (!guestbookUnlocked || !challengesUnlocked);
 
-  // Guests can't swipe back out of the event (see the `gestureEnabled` below)
-  // — a guest who joins by mistake, or wants to switch events, needs an
-  // explicit way out. Confirmed because it's easy to graze this control while
-  // reaching for something else in a one-handed grip. Clearing the stored
-  // session only forgets it locally: the guest's server-side row and their
-  // photos are untouched, and re-entering the same code recognises this
-  // device again — see `join_event_by_code`'s device-fingerprint reuse.
-  function handleLeaveEvent() {
-    Alert.alert('Leave this event?', 'You can rejoin any time with the same event code.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Leave',
-        style: 'destructive',
-        onPress: () => {
-          void clearStoredGuestSession(celebration.public_slug ?? celebration.id).then(() => {
-            router.replace('/j');
-          });
-        },
-      },
-    ]);
+  // Closing an event is just closing a screen.
+  //
+  // This used to clear the stored guest session and ask "Leave this event?"
+  // first — treating the close control as a decision to give the event up.
+  // That was the wrong model. Once someone has joined, the event is their
+  // album too: they should be able to shut it and open it again later
+  // without re-entering a code, and without being asked to confirm walking
+  // away from something they are not walking away from.
+  //
+  // The session is deliberately left intact, which is what makes returning
+  // free. Guests go to the join screen, which is their home; hosts to theirs.
+  function handleCloseEvent() {
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+    router.replace(isHost ? '/home' : '/j');
   }
 
   // ── Dimensions Hook (Fully Reactive to Hot Reloads and Screen Orientations) ──
@@ -2004,7 +2000,7 @@ export function EventDetailView({
         SAMPLE_PHOTOS.map((photo) => ({
           uri: sampleAssetUri(photo.source),
           takenBy: photo.displayName,
-          capturedAt: photo.capturedAt,
+          capturedAt: sampleCapturedAt(photo),
           id: photo.id,
           isMine: false,
           isPinned: false,
@@ -4097,9 +4093,9 @@ export function EventDetailView({
               ) : (
                 <Pressable
                   style={S.navBtn}
-                  onPress={handleLeaveEvent}
+                  onPress={handleCloseEvent}
                   accessibilityRole="button"
-                  accessibilityLabel="Leave event"
+                  accessibilityLabel="Close event"
                 >
                   <CloseIcon size={20} color="#FFFFFF" />
                 </Pressable>
@@ -4158,13 +4154,7 @@ export function EventDetailView({
               <AppText variant="displayHero" align="center" style={S.heroTitle} numberOfLines={3}>
                 {celebration.title}
               </AppText>
-              {detail.isSample ? (
-                // Replaces the date rather than adding a line: one quiet
-                // eyebrow under the title, in the slot that already exists.
-                <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
-                  {SAMPLE_EVENT_NOTE}
-                </AppText>
-              ) : heroDate ? (
+              {heroDate ? (
                 <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
                   {heroDate}
                 </AppText>

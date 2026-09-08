@@ -16,6 +16,7 @@ import {
   SAMPLE_EVENT,
   SAMPLE_CELEBRATION_ID,
   isSampleCelebrationId,
+  sampleCapturedAt,
 } from '@/features/celebrations/sample-event';
 
 export interface EventMetrics {
@@ -247,7 +248,7 @@ function sampleCelebrationDetail(): CelebrationDetail {
       // Not a storage path — `resolveSampleMediaSource` intercepts these
       // before any signed-URL call is attempted.
       storagePath: photo.id,
-      capturedAt: photo.capturedAt,
+      capturedAt: sampleCapturedAt(photo),
       displayName: photo.displayName,
       mediaType: 'photo' as const,
       challengeId: photo.challengeId ?? null,

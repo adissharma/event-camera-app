@@ -117,6 +117,17 @@ export function EventCardTile({
         resizeMode="cover"
       />
 
+      {celebration.isSample ? (
+        // Top corner, above the scrim, which only darkens the lower half —
+        // the badge needs its own quiet backing to stay legible over whatever
+        // the cover happens to be doing up there.
+        <View style={S.sampleBadge}>
+          <AppText variant="caption" style={S.sampleBadgeText}>
+            {SAMPLE_EVENT_LABEL}
+          </AppText>
+        </View>
+      ) : null}
+
       {/* Cinematic readability scrim: transparent at top, rapid dark fade in bottom of card */}
       <LinearGradient
         colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.60)', 'rgba(0,0,0,0.92)']}
@@ -145,14 +156,7 @@ export function EventCardTile({
           >
             {celebration.title}
           </AppText>
-          {celebration.isSample ? (
-            // Deliberately the same slot and tone as the date it replaces: the
-            // card should read as an album with a quiet note, not as a
-            // different kind of object with a badge stuck on it.
-            <AppText variant="caption" tone="secondary" style={S.cardDate}>
-              {SAMPLE_EVENT_LABEL}
-            </AppText>
-          ) : dateSubtext ? (
+          {dateSubtext ? (
             <AppText variant="caption" tone="secondary" style={S.cardDate}>
               {dateSubtext}
             </AppText>
@@ -210,5 +214,23 @@ const S = StyleSheet.create({
   cardDate: {
     marginTop: 4,
     fontSize: 12,
+  },
+  sampleBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    zIndex: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 999,
+    // Enough to read over a bright cover, not enough to become a button.
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
+  },
+  sampleBadgeText: {
+    fontSize: 10,
+    letterSpacing: 0.4,
+    color: 'rgba(255, 255, 255, 0.92)',
   },
 });

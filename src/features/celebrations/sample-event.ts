@@ -38,11 +38,26 @@ export function isSampleCelebrationId(id: string | null | undefined): boolean {
   return id === SAMPLE_CELEBRATION_ID;
 }
 
-/** Shown on the album card, beneath the title. */
-export const SAMPLE_EVENT_LABEL = 'Example album';
+/** Shown in the album card's top corner. */
+export const SAMPLE_EVENT_LABEL = 'Sample album';
 
-/** One quiet line inside the event itself. Nothing more. */
-export const SAMPLE_EVENT_NOTE = 'An example of a finished Stills album';
+/**
+ * When the sample reception happened.
+ *
+ * Always a month ago, rather than a fixed date. A hard-coded date is right
+ * for exactly as long as it takes to age: "June 2026" reads as a real recent
+ * wedding this year and as an abandoned demo two years from now. Rolling it
+ * keeps the album feeling like something that just happened, forever, with
+ * nothing to maintain.
+ *
+ * Computed per call rather than at module load so a long-running app does not
+ * hold on to the date it started with.
+ */
+export function sampleEventEndsAt(now: Date = new Date()): string {
+  const ended = new Date(now);
+  ended.setMonth(ended.getMonth() - 1);
+  return ended.toISOString();
+}
 
 /**
  * Guests joined.
@@ -59,8 +74,14 @@ export interface SampleMedia {
   source: number;
   /** Who the gallery credits. Guest names, because guests took these. */
   displayName: string;
-  /** Drives the "captured at" ordering and any time display. */
-  capturedAt: string;
+  /**
+   * Minutes past 15:00 on the day of the reception.
+   *
+   * Stored as an offset rather than a timestamp because the event date rolls
+   * — see `sampleEventEndsAt`. A fixed `capturedAt` would have the gallery
+   * claiming photos were taken months before the album says the wedding was.
+   */
+  minutesIntoDay: number;
   /** Set where a photo genuinely answers a challenge. */
   challengeId?: string;
 }
@@ -89,47 +110,47 @@ export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
     id: 'sample-photo-1',
     source: require('../../../assets/sample-event/01.jpg'),
     displayName: 'Rosie',
-    capturedAt: '2026-06-13T15:40:00.000Z',
+    minutesIntoDay: 40,
     challengeId: SAMPLE_CHALLENGE_IDS.unexpectedStar,
   },
   {
     id: 'sample-photo-2',
     source: require('../../../assets/sample-event/02.jpg'),
     displayName: 'Tom',
-    capturedAt: '2026-06-13T17:05:00.000Z',
+    minutesIntoDay: 125,
     challengeId: SAMPLE_CHALLENGE_IDS.tinyGuest,
   },
   {
     id: 'sample-photo-3',
     source: require('../../../assets/sample-event/03.jpg'),
     displayName: 'Priya',
-    capturedAt: '2026-06-13T20:15:00.000Z',
+    minutesIntoDay: 315,
     challengeId: SAMPLE_CHALLENGE_IDS.happyTears,
   },
   {
     id: 'sample-photo-4',
     source: require('../../../assets/sample-event/04.jpg'),
     displayName: 'Dan',
-    capturedAt: '2026-06-13T20:32:00.000Z',
+    minutesIntoDay: 332,
   },
   {
     id: 'sample-photo-5',
     source: require('../../../assets/sample-event/05.jpg'),
     displayName: 'Priya',
-    capturedAt: '2026-06-13T21:48:00.000Z',
+    minutesIntoDay: 408,
   },
   {
     id: 'sample-photo-6',
     source: require('../../../assets/sample-event/06.jpg'),
     displayName: 'Marcus',
-    capturedAt: '2026-06-13T22:20:00.000Z',
+    minutesIntoDay: 440,
     challengeId: SAMPLE_CHALLENGE_IDS.danceFloor,
   },
   {
     id: 'sample-photo-7',
     source: require('../../../assets/sample-event/07.jpg'),
     displayName: 'Ellie',
-    capturedAt: '2026-06-13T23:05:00.000Z',
+    minutesIntoDay: 485,
   },
 ] as const;
 
@@ -192,12 +213,10 @@ export const SAMPLE_EVENT = {
   id: SAMPLE_CELEBRATION_ID,
   title: 'Amelia & James',
   celebrationType: 'wedding' as const,
-  /**
-   * In the past, so it sorts and renders as a finished album rather than an
-   * event still collecting photos. Fixed rather than relative: a date that
-   * drifts with the clock is a date that eventually reads oddly.
-   */
-  endsAt: '2026-06-13T23:59:00.000Z',
+  /** See `sampleEventEndsAt` — always a month ago. */
+  get endsAt() {
+    return sampleEventEndsAt();
+  },
   timezone: 'Europe/London',
   guestsJoined: SAMPLE_GUESTS_JOINED,
   photos: SAMPLE_PHOTOS,
@@ -217,6 +236,13 @@ export const SAMPLE_EVENT = {
  * Works in both environments: Metro serves an http URL in development, and
  * the packaged app resolves to a local asset path.
  */
+/** A photo's timestamp on the rolling event date. */
+export function sampleCapturedAt(photo: SampleMedia, now: Date = new Date()): string {
+  const day = new Date(sampleEventEndsAt(now));
+  day.setHours(15, 0, 0, 0);
+  return new Date(day.getTime() + photo.minutesIntoDay * 60_000).toISOString();
+}
+
 export function sampleAssetUri(source: number): string {
   return Image.resolveAssetSource(source).uri;
 }

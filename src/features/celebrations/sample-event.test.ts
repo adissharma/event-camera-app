@@ -4,6 +4,8 @@ import {
   SAMPLE_CHALLENGE_IDS,
   SAMPLE_PHOTOS,
   isSampleCelebrationId,
+  sampleCapturedAt,
+  sampleEventEndsAt,
 } from './sample-event';
 
 /**
@@ -20,9 +22,26 @@ describe('the example album', () => {
   });
 
   it('reads as one evening, in order', () => {
-    const times = SAMPLE_PHOTOS.map((photo) => new Date(photo.capturedAt).getTime());
-    const sorted = [...times].sort((a, b) => a - b);
-    expect(times).toEqual(sorted);
+    const times = SAMPLE_PHOTOS.map((photo) => photo.minutesIntoDay);
+    expect(times).toEqual([...times].sort((a, b) => a - b));
+  });
+
+  it('dates itself a month ago, so it never reads as an abandoned demo', () => {
+    const now = new Date('2027-03-15T12:00:00.000Z');
+    expect(sampleEventEndsAt(now).slice(0, 7)).toBe('2027-02');
+  });
+
+  it('times its photos on the day the album says the wedding was', () => {
+    const now = new Date('2027-03-15T12:00:00.000Z');
+    const eventDay = sampleEventEndsAt(now).slice(0, 10);
+    SAMPLE_PHOTOS.forEach((photo) => {
+      // Same calendar day, or the small hours of the next one — a reception
+      // that runs past midnight is fine; one dated months off is not.
+      const captured = new Date(sampleCapturedAt(photo, now));
+      const eventStart = new Date(`${eventDay}T00:00:00.000Z`).getTime();
+      const withinTwoDays = captured.getTime() - eventStart < 2 * 24 * 60 * 60 * 1000;
+      expect(withinTwoDays).toBe(true);
+    });
   });
 
   it('bundles a real asset for every photo', () => {
