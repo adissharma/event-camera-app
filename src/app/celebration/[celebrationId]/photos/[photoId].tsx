@@ -255,7 +255,6 @@ export default function PhotoViewerScreen() {
           // Swipe left (negative dx) -> try to go to next photo
           if (gestureState.dx < -thresholdPx || (gestureState.dx < -10 && gestureState.vx < -0.5)) {
             if (currentIndexRef.current < photosLengthRef.current - 1) {
-              void Haptics.selectionAsync().catch(() => {});
               // Animate to full page swipe distance and commit index
               Animated.timing(panX, {
                 toValue: -carouselWidth,
@@ -277,7 +276,6 @@ export default function PhotoViewerScreen() {
           // Swipe right (positive dx) -> try to go to previous photo
           if (gestureState.dx > thresholdPx || (gestureState.dx > 10 && gestureState.vx > 0.5)) {
             if (currentIndexRef.current > 0) {
-              void Haptics.selectionAsync().catch(() => {});
               // Animate to full page swipe distance and commit index
               Animated.timing(panX, {
                 toValue: carouselWidth,
