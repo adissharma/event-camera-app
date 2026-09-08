@@ -124,6 +124,32 @@ function getPhotoSource(uri: string) {
 
 // ── Redesigned Photo Viewer Component ──
 
+/**
+ * How long the page should take to finish travelling once the finger lifts.
+ *
+ * A fixed duration makes every swipe cost the same, so a hard flick and a slow
+ * drag both settle in the same beat — which reads as hesitation on the flick,
+ * because the photo lags behind the gesture that threw it. Continuing at
+ * roughly the speed the finger was already moving keeps the motion feeling
+ * like one gesture rather than a gesture followed by an animation.
+ *
+ * `velocity` is PanResponder's, in points per millisecond. The bounds keep a
+ * near-stationary release from crawling and a violent flick from teleporting
+ * so fast the eye cannot follow which way it went.
+ */
+const MIN_SWIPE_SETTLE_MS = 90;
+// Never above the 200ms this replaced: the point is to reward a flick, not to
+// make an ordinary swipe slower than it already was.
+const MAX_SWIPE_SETTLE_MS = 200;
+
+function swipeSettleDuration(remainingPx: number, velocity: number): number {
+  const speed = Math.abs(velocity);
+  // No usable velocity (a slow drag pushed past the threshold) — fall back to
+  // the middle of the range rather than dividing by ~zero.
+  if (speed < 0.05) return MAX_SWIPE_SETTLE_MS;
+  return Math.min(MAX_SWIPE_SETTLE_MS, Math.max(MIN_SWIPE_SETTLE_MS, remainingPx / speed));
+}
+
 export default function PhotoViewerScreen() {
   const { celebrationId, photoId } = useLocalSearchParams<{ celebrationId: string; photoId: string }>();
   const router = useRouter();
@@ -258,7 +284,10 @@ export default function PhotoViewerScreen() {
               // Animate to full page swipe distance and commit index
               Animated.timing(panX, {
                 toValue: -carouselWidth,
-                duration: 200,
+                duration: swipeSettleDuration(
+                  carouselWidth - Math.abs(gestureState.dx),
+                  gestureState.vx,
+                ),
                 useNativeDriver: true,
               }).start(() => {
                 panX.setValue(0);
@@ -279,7 +308,10 @@ export default function PhotoViewerScreen() {
               // Animate to full page swipe distance and commit index
               Animated.timing(panX, {
                 toValue: carouselWidth,
-                duration: 200,
+                duration: swipeSettleDuration(
+                  carouselWidth - Math.abs(gestureState.dx),
+                  gestureState.vx,
+                ),
                 useNativeDriver: true,
               }).start(() => {
                 panX.setValue(0);
