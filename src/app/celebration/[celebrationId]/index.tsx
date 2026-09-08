@@ -40,6 +40,13 @@ import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import { useAuth } from '@/features/auth/context';
 import { isPermanentQueryError } from '@/lib/query-client';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
+import {
+  SAMPLE_COVER,
+  SAMPLE_EVENT_NOTE,
+  SAMPLE_PHOTOS,
+  isSampleCelebrationId,
+  sampleAssetUri,
+} from '@/features/celebrations/sample-event';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { shouldShowHostControls } from '@/lib/platform-guards';
 import {
@@ -1289,7 +1296,10 @@ export function EventDetailView({
   // The one cover for this event, shared with the dashboard card and the guest
   // invitation. Re-signs automatically when the host replaces it, because a
   // replacement writes a new storage path.
-  const coverSource = useCoverSource(celebration.cover_storage_path);
+  const resolvedCoverSource = useCoverSource(celebration.cover_storage_path);
+  // Bundled asset, no storage path — substituted after the hook, which cannot
+  // be called conditionally.
+  const coverSource = detail?.isSample ? SAMPLE_COVER : resolvedCoverSource;
 
   const { session } = useAuth();
 
@@ -1983,6 +1993,25 @@ export function EventDetailView({
     if (previewMode) return;
     if (!mediaPhotos || mediaPhotos.length === 0) {
       setPhotos([]);
+      return;
+    }
+
+    // The example album's media are bundled assets, so there is nothing to
+    // sign — and asking storage for paths that do not exist would fail the
+    // whole batch and empty the gallery.
+    if (isSampleCelebrationId(String(celebration.id))) {
+      setPhotos(
+        SAMPLE_PHOTOS.map((photo) => ({
+          uri: sampleAssetUri(photo.source),
+          takenBy: photo.displayName,
+          capturedAt: photo.capturedAt,
+          id: photo.id,
+          isMine: false,
+          isPinned: false,
+          challengeId: photo.challengeId ?? null,
+          mediaType: 'photo' as const,
+        })),
+      );
       return;
     }
 
@@ -4129,7 +4158,13 @@ export function EventDetailView({
               <AppText variant="displayHero" align="center" style={S.heroTitle} numberOfLines={3}>
                 {celebration.title}
               </AppText>
-              {heroDate ? (
+              {detail.isSample ? (
+                // Replaces the date rather than adding a line: one quiet
+                // eyebrow under the title, in the slot that already exists.
+                <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
+                  {SAMPLE_EVENT_NOTE}
+                </AppText>
+              ) : heroDate ? (
                 <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
                   {heroDate}
                 </AppText>

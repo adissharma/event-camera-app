@@ -11,6 +11,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { AppText } from '@/components/ui/text';
 import { useCoverSource } from '@/features/celebrations/cover-source';
+import { SAMPLE_COVER, SAMPLE_EVENT_LABEL } from '@/features/celebrations/sample-event';
 import { colours, fontFamilies, radii, spacing } from '@/design';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import type { CelebrationSummary } from '@/services/celebrations';
@@ -76,8 +77,12 @@ export function EventCardTile({
     }).start();
   }, [fadeAnim, index]);
 
-  // The host's own cover, resolved via useCoverSource (falls back to FALLBACK_COVER)
-  const coverSource = useCoverSource(celebration.coverStoragePath);
+  // The host's own cover, resolved via useCoverSource (falls back to FALLBACK_COVER).
+  // The example album's cover is a bundled asset with no storage path, so it
+  // is substituted after the hook rather than around it — hooks cannot be
+  // called conditionally, and the null path already returns the fallback.
+  const resolvedCover = useCoverSource(celebration.coverStoragePath);
+  const coverSource = celebration.isSample ? SAMPLE_COVER : resolvedCover;
 
   // Resolve theme design tokens
   const theme = (themes ?? []).find(
@@ -140,7 +145,14 @@ export function EventCardTile({
           >
             {celebration.title}
           </AppText>
-          {dateSubtext ? (
+          {celebration.isSample ? (
+            // Deliberately the same slot and tone as the date it replaces: the
+            // card should read as an album with a quiet note, not as a
+            // different kind of object with a badge stuck on it.
+            <AppText variant="caption" tone="secondary" style={S.cardDate}>
+              {SAMPLE_EVENT_LABEL}
+            </AppText>
+          ) : dateSubtext ? (
             <AppText variant="caption" tone="secondary" style={S.cardDate}>
               {dateSubtext}
             </AppText>

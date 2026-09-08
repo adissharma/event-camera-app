@@ -31,6 +31,7 @@ import { resetToUnauthenticatedRoot } from '@/lib/navigation/session-root';
 import {
   celebrationKeys,
   listCelebrations,
+  sampleCelebrationSummary,
   restoreCelebrationFromTrash,
   type CelebrationSummary,
 } from '@/services/celebrations';
@@ -444,8 +445,12 @@ export default function HomeScreen() {
     () => list.filter((event) => !isCompletedEvent(event)),
     [list],
   );
+  // The example album holds the first slot, ahead of the host's own finished
+  // events, which keep their existing order underneath. Reserving a slot
+  // rather than sorting means real albums are never reordered by its
+  // presence.
   const completedEvents = useMemo(
-    () => list.filter(isCompletedEvent),
+    () => [sampleCelebrationSummary(), ...list.filter(isCompletedEvent)],
     [list],
   );
   const upcomingHeroWidth = screenWidth - layout.gutter * 2;
@@ -454,6 +459,45 @@ export default function HomeScreen() {
   const upcomingScrollX = useRef(new Animated.Value(0)).current;
   const completedCardWidth = Math.round((screenWidth - layout.gutter * 2 - spacing.base) / 2);
   const firstName = firstNameFrom(profile);
+
+  // Extracted so the empty state can show it too: a host with no events of
+  // their own is exactly the person the example album exists for, and the
+  // old "No events found" branch would have hidden it from them.
+  const albumsSection = (
+    <View style={styles.dashboardSection}>
+      <AppText variant="titleMedium" style={styles.sectionTitle}>
+        Albums
+      </AppText>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.completedCarouselContent}
+        style={styles.edgeToEdgeCarousel}
+      >
+        {completedEvents.map((celebration, index) => (
+          <View
+            key={celebration.id}
+            style={[
+              styles.completedCardWrap,
+              {
+                width: completedCardWidth,
+                transform: [
+                  { rotate: COMPLETED_CARD_ROTATIONS[index % COMPLETED_CARD_ROTATIONS.length] },
+                ],
+              },
+            ]}
+          >
+            <EventCardTile
+              celebration={celebration}
+              index={index}
+              themes={themes}
+              onPress={() => router.push(`/celebration/${celebration.id}`)}
+            />
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
 
   useEffect(() => {
     if (params.openProfile !== '1') return;
@@ -651,43 +695,11 @@ export default function HomeScreen() {
               </View>
             ) : null}
 
-            {completedEvents.length > 0 ? (
-              <View style={styles.dashboardSection}>
-                <AppText variant="titleMedium" style={styles.sectionTitle}>
-                  Albums
-                </AppText>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.completedCarouselContent}
-                  style={styles.edgeToEdgeCarousel}
-                >
-                  {completedEvents.map((celebration, index) => (
-                    <View
-                      key={celebration.id}
-                      style={[
-                        styles.completedCardWrap,
-                        {
-                          width: completedCardWidth,
-                          transform: [
-                            { rotate: COMPLETED_CARD_ROTATIONS[index % COMPLETED_CARD_ROTATIONS.length] },
-                          ],
-                        },
-                      ]}
-                    >
-                      <EventCardTile
-                        celebration={celebration}
-                        index={index}
-                        themes={themes}
-                        onPress={() => router.push(`/celebration/${celebration.id}`)}
-                      />
-                    </View>
-                  ))}
-                </ScrollView>
-              </View>
-            ) : null}
+            {albumsSection}
           </>
         ) : (
+          <>
+            {albumsSection}
           <View style={styles.emptyContainer}>
             <AppText variant="heading" tone="secondary" style={styles.emptyText}>
               No events found
@@ -696,6 +708,7 @@ export default function HomeScreen() {
               Tap the button below to capture the memories of your first celebration.
             </AppText>
           </View>
+          </>
         )}
       </ScrollView>
 

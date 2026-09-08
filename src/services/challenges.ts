@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
+import { SAMPLE_CHALLENGES, isSampleCelebrationId } from '@/features/celebrations/sample-event';
 
 /**
  * Challenges, as the whole app sees them.
@@ -94,6 +95,20 @@ export async function listChallenges(
   celebrationId: string,
   defaults: NewChallenge[] = [],
 ): Promise<EventChallenge[] | null> {
+  // The example album's challenges are defined in code, not stored. Checked
+  // first so its id never reaches a query, and so no seeding path can try to
+  // write rows for an event that does not exist.
+  if (isSampleCelebrationId(celebrationId)) {
+    return SAMPLE_CHALLENGES.map((challenge, index) => ({
+      id: challenge.id,
+      label: challenge.label,
+      icon: challenge.icon,
+      instructions: challenge.instructions,
+      photoUri: null,
+      sortOrder: index,
+    }));
+  }
+
   if (!isBackendConfigured) return null;
 
   const client = requireSupabase();
@@ -163,6 +178,13 @@ export async function seedChallenges(
   celebrationId: string,
   challenges: NewChallenge[],
 ): Promise<EventChallenge[]> {
+  // The example album's challenges live in code, not rows. Nothing offers
+  // this — it renders read-only — but failing here makes that a property of
+  // the data layer rather than of the screens.
+  if (isSampleCelebrationId(celebrationId)) {
+    throw new Error('The example album cannot be changed.');
+  }
+
   const client = requireSupabase();
   const { data, error } = await (client as any).rpc('seed_event_challenges_if_empty', {
     p_celebration_id: celebrationId,
@@ -184,6 +206,13 @@ export async function createChallenge(
   celebrationId: string,
   challenge: NewChallenge & { sortOrder?: number },
 ): Promise<EventChallenge> {
+  // The example album's challenges live in code, not rows. Nothing offers
+  // this — it renders read-only — but failing here makes that a property of
+  // the data layer rather than of the screens.
+  if (isSampleCelebrationId(celebrationId)) {
+    throw new Error('The example album cannot be changed.');
+  }
+
   const client = requireSupabase();
   const { data, error } = await client
     .from('event_challenges')
@@ -236,6 +265,13 @@ export async function replaceChallenges(
   celebrationId: string,
   next: { id?: string; label: string; icon: string; instructions?: string | null; photoUri?: string | null }[],
 ): Promise<EventChallenge[]> {
+  // The example album's challenges live in code, not rows. Nothing offers
+  // this — it renders read-only — but failing here makes that a property of
+  // the data layer rather than of the screens.
+  if (isSampleCelebrationId(celebrationId)) {
+    throw new Error('The example album cannot be changed.');
+  }
+
   const client = requireSupabase();
 
   const { data: current, error } = await client

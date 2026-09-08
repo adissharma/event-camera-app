@@ -12,6 +12,11 @@ import type {
   RevealMode,
 } from '@/types/database';
 import { resolveThemeId } from '@/services/themes';
+import {
+  SAMPLE_EVENT,
+  SAMPLE_CELEBRATION_ID,
+  isSampleCelebrationId,
+} from '@/features/celebrations/sample-event';
 
 export interface EventMetrics {
   /** Guests who have joined. Not page views — a joined guest session. */
@@ -23,6 +28,13 @@ export interface EventMetrics {
 }
 
 export interface CelebrationDetail {
+  /**
+   * The example album. Everything that would let a viewer change an event
+   * keys off this — see `viewerRole`, which stays `'guest'` so no host
+   * control renders, while this distinguishes "someone else's event" from
+   * "the example" where the copy needs to differ.
+   */
+  isSample?: boolean;
   celebration: CelebrationRow;
   sessions: EventSessionRow[];
   primarySession: EventSessionRow | null;
@@ -186,7 +198,73 @@ export async function requestEventRecap(
  * guest RPC using the token from this device's locally stored guest session —
  * see `loadStoredGuestSessionByCelebrationId`.
  */
+/**
+ * The example album, assembled from the sample definition.
+ *
+ * `viewerRole: 'guest'` is doing real work: every host-only control in the
+ * app already hides on that role, so the example inherits read-only behaviour
+ * from a rule the codebase enforces everywhere rather than from a new set of
+ * checks that would need adding to each screen and remembering forever.
+ *
+ * The photo count is `SAMPLE_PHOTOS.length` throughout — nothing here states
+ * a total independently, so the gallery cannot advertise more than it holds.
+ */
+function sampleCelebrationDetail(): CelebrationDetail {
+  const sessionId = `${SAMPLE_CELEBRATION_ID}-session`;
+
+  return {
+    celebration: {
+      id: SAMPLE_CELEBRATION_ID,
+      title: SAMPLE_EVENT.title,
+      celebration_type: SAMPLE_EVENT.celebrationType,
+      status: 'published',
+      ends_at: SAMPLE_EVENT.endsAt,
+      timezone: SAMPLE_EVENT.timezone,
+      public_slug: SAMPLE_CELEBRATION_ID,
+      cover_storage_path: null,
+      created_by: null,
+    } as unknown as CelebrationRow,
+    sessions: [],
+    primarySession: {
+      id: sessionId,
+      name: 'Main event',
+      status: 'closed',
+      ends_at: SAMPLE_EVENT.endsAt,
+    } as unknown as EventSessionRow,
+    metrics: {
+      guestsJoined: SAMPLE_EVENT.guestsJoined,
+      // Derived, never stated: a contributor count larger than the number of
+      // distinct names on the photos would be visibly untrue.
+      contributors: new Set(SAMPLE_EVENT.photos.map((photo) => photo.displayName)).size,
+      photos: SAMPLE_EVENT.photos.length,
+    },
+    hasAudioGuestbook: false,
+    viewerRole: 'guest',
+    guestShotsUsed: null,
+    isSample: true,
+    mediaPhotos: SAMPLE_EVENT.photos.map((photo) => ({
+      id: photo.id,
+      // Not a storage path — `resolveSampleMediaSource` intercepts these
+      // before any signed-URL call is attempted.
+      storagePath: photo.id,
+      capturedAt: photo.capturedAt,
+      displayName: photo.displayName,
+      mediaType: 'photo' as const,
+      challengeId: photo.challengeId ?? null,
+      isMine: false,
+      isPinned: false,
+    })),
+    challengePhotos: [],
+    recap: null,
+  };
+}
+
 export async function fetchCelebrationDetail(celebrationId: string): Promise<CelebrationDetail> {
+  // The example album never touches the database. Checked before anything
+  // else so no query, RLS policy or guest-token path ever sees an id that
+  // does not exist there.
+  if (isSampleCelebrationId(celebrationId)) return sampleCelebrationDetail();
+
   if (isBackendConfigured) {
     const client = requireSupabase();
 

@@ -1,6 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 import type { CelebrationRow, EventSessionRow } from '@/types/database';
+import {
+  SAMPLE_EVENT,
+  SAMPLE_CELEBRATION_ID,
+  isSampleCelebrationId,
+} from '@/features/celebrations/sample-event';
 
 /**
  * Celebration data access.
@@ -12,6 +17,11 @@ import type { CelebrationRow, EventSessionRow } from '@/types/database';
 
 export interface CelebrationSummary {
   id: string;
+  /**
+   * The example album. Set only by `sampleCelebrationSummary` — a real row can
+   * never carry it, because it is not a database column.
+   */
+  isSample?: boolean;
   title: string;
   status: CelebrationRow['status'];
   coverStoragePath: string | null;
@@ -38,6 +48,38 @@ export const celebrationKeys = {
   trash: () => [...celebrationKeys.all, 'trash'] as const,
   detail: (id: string) => [...celebrationKeys.all, 'detail', id] as const,
 };
+
+/**
+ * The example album as a list entry.
+ *
+ * Shaped exactly like a real summary so `EventCardTile` and the sorting need
+ * no special case beyond the badge — `isSample` is the only thing that marks
+ * it. `coverStoragePath` is null because its cover is a bundled asset, not a
+ * storage object; the card resolves that through `sampleCoverSource`.
+ */
+export function sampleCelebrationSummary(): CelebrationSummary {
+  return {
+    id: SAMPLE_CELEBRATION_ID,
+    title: SAMPLE_EVENT.title,
+    status: 'published',
+    coverStoragePath: null,
+    publicSlug: SAMPLE_CELEBRATION_ID,
+    startsAt: null,
+    endsAt: SAMPLE_EVENT.endsAt,
+    timezone: SAMPLE_EVENT.timezone,
+    defaultThemeId: null,
+    isSample: true,
+    primarySession: {
+      id: `${SAMPLE_CELEBRATION_ID}-session`,
+      name: 'Main event',
+      status: 'closed',
+      ends_at: SAMPLE_EVENT.endsAt,
+      reveal_at: null,
+      reveal_mode: 'instant',
+      shot_limit_per_guest: null,
+    },
+  };
+}
 
 export async function listCelebrations(): Promise<CelebrationSummary[]> {
   try {
@@ -153,7 +195,22 @@ export async function listTrashedCelebrations(): Promise<TrashedCelebrationSumma
   }));
 }
 
+/**
+ * The example album is not the host's to change.
+ *
+ * The UI never offers these — it renders as `viewerRole: 'guest'`, so no host
+ * control appears — but a deep link, a stale query cache or a future call site
+ * could still reach them. Failing here means "cannot be deleted" is a property
+ * of the data layer rather than a promise the screens keep.
+ */
+function refuseSampleMutation(celebrationId: string): void {
+  if (isSampleCelebrationId(celebrationId)) {
+    throw new Error('The example album cannot be changed.');
+  }
+}
+
 export async function moveCelebrationToTrash(celebrationId: string): Promise<void> {
+  refuseSampleMutation(celebrationId);
   const client = requireSupabase();
   const { error } = await (client.rpc as any)('move_celebration_to_trash', {
     p_celebration_id: celebrationId,
@@ -162,6 +219,7 @@ export async function moveCelebrationToTrash(celebrationId: string): Promise<voi
 }
 
 export async function restoreCelebrationFromTrash(celebrationId: string): Promise<void> {
+  refuseSampleMutation(celebrationId);
   const client = requireSupabase();
   const { error } = await (client.rpc as any)('restore_celebration_from_trash', {
     p_celebration_id: celebrationId,
@@ -170,6 +228,7 @@ export async function restoreCelebrationFromTrash(celebrationId: string): Promis
 }
 
 export async function permanentlyDeleteCelebration(celebrationId: string): Promise<void> {
+  refuseSampleMutation(celebrationId);
   const client = requireSupabase();
   const { error } = await (client.rpc as any)('permanently_delete_celebration', {
     p_celebration_id: celebrationId,
