@@ -38,6 +38,7 @@ import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
+import { isPermanentQueryError } from '@/lib/query-client';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import { fetchMyProfile, profileKeys, firstNameFrom } from '@/services/profile';
 import { shouldShowHostControls } from '@/lib/platform-guards';
@@ -1114,7 +1115,13 @@ export default function CelebrationDashboard({ celebrationId: propCelebrationId 
     queryKey: celebrationDetailKeys.detail(String(celebrationId)),
     queryFn: () => fetchCelebrationDetail(String(celebrationId)),
     enabled: Boolean(celebrationId),
-    refetchInterval: isBackendConfigured ? 10000 : false,
+    // Polling stops for good once the event cannot be read — deleted, or not
+    // visible to this account. Left unconditional, the interval reissues a
+    // fully-retried request every ten seconds forever, which is how two
+    // unreadable events produced 170-odd identical errors in a few minutes.
+    // Transient failures keep polling, because those do recover.
+    refetchInterval: (query) =>
+      isBackendConfigured && !isPermanentQueryError(query.state.error) ? 10000 : false,
     // The interval pauses while the tab is in the background, and the global
     // default turns focus refetching OFF — so returning to a backgrounded
     // Android Chrome tab could show up to ten seconds of stale gallery
