@@ -123,24 +123,19 @@ export default function CoverStep() {
         draft.editCelebrationId ? undefined : (
           <View style={{ alignItems: 'center', gap: spacing.sm }}>
             <Button label={copy.create.coverAddPhoto} onPress={() => setEditing(true)} haptic />
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
-              <AppText variant="caption" tone="secondary">
+            <Pressable
+              accessibilityRole="link"
+              accessibilityLabel={copy.create.coverAddLater}
+              onPress={() => router.push('/create/photo-limit')}
+              hitSlop={8}
+            >
+              <AppText
+                variant="bodySmall"
+                style={{ fontWeight: '700', textDecorationLine: 'underline' }}
+              >
                 {copy.create.coverAddLater}
               </AppText>
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={copy.create.skip}
-                onPress={() => router.push('/create/photo-limit')}
-                hitSlop={8}
-              >
-                <AppText
-                  variant="bodySmall"
-                  style={{ fontWeight: '700', textDecorationLine: 'underline' }}
-                >
-                  {copy.create.skip}
-                </AppText>
-              </Pressable>
-            </View>
+            </Pressable>
           </View>
         )
       }
