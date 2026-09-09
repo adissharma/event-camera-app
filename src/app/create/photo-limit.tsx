@@ -7,8 +7,7 @@ import { ExpandingSection } from '@/components/feedback/expanding-section';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
-import { CaptureLimitPreview } from '@/features/celebrations/creation/capture-limit-preview';
-import { useCoverSource } from '@/features/celebrations/cover-source';
+import { useStage, useStageDraft } from '@/features/celebrations/creation/preview-stage';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { copy } from '@/i18n';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
@@ -20,7 +19,6 @@ const DEFAULT_LIMITED_COUNT = 16;
 
 export default function PhotoLimitStep() {
   const { draft, update } = useCreationDraft();
-  const coverSource = useCoverSource(draft.coverLocalUri ?? draft.coverStoragePath);
 
   /*
    * Present only when this step was opened from Manage Event, i.e. the event
@@ -58,6 +56,9 @@ export default function PhotoLimitStep() {
     update({ shotLimitPerGuest: null });
   }
 
+  useStage('capture');
+  useStageDraft(draft);
+
   return (
     <CreationStepScreen
       step="photo-limit"
@@ -65,9 +66,12 @@ export default function PhotoLimitStep() {
       scrollable={false}
     >
       <View style={{ flex: 1, gap: spacing.base }}>
-        <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' }}>
-          <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
-        </View>
+        {/*
+          The phone is drawn by the stage behind this screen, not here — see
+          `preview-stage`. This reserves the band it occupies so the controls
+          below sit where they always did.
+        */}
+        <View style={{ flex: 1, minHeight: 0 }} pointerEvents="none" />
 
         <View style={{ gap: spacing.base }}>
           <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
