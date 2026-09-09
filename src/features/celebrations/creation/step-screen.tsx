@@ -125,11 +125,6 @@ export function CreationStepScreen({
   return (
     <Screen
       scrollable={scrollable}
-      // Transparent so the persistent phone behind the navigator shows
-      // through — `Screen` otherwise paints the canvas colour over it, which
-      // is opaque and hid the stage completely. The canvas is still painted,
-      // once, by `PreviewStageProvider`'s root.
-      backgroundColor="transparent"
       contentStyle={scrollable ? undefined : { flex: 1 }}
       stickyAction={
         action ?? (

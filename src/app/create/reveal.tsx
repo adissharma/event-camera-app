@@ -10,10 +10,10 @@ import { AppText } from '@/components/ui/text';
 import { colours, spacing } from '@/design';
 import {
   PickerModal,
+  RevealPreview,
   revealSharedStyles,
 } from '@/features/celebrations/creation/reveal-step-shared';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
-import { useStage, useStageDraft } from '@/features/celebrations/creation/preview-stage';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { resolveReveal } from '@/features/celebrations/draft/types';
 
@@ -240,9 +240,6 @@ export default function RevealStep() {
     return `Photos will be revealed in ${days} day${days > 1 ? 's' : ''}`;
   }
 
-  useStage('gallery');
-  useStageDraft(draft);
-
   return (
     <CreationStepScreen
       step="reveal"
@@ -250,15 +247,7 @@ export default function RevealStep() {
       supporting="Choose when you and your guests can look back at the captured memories."
     >
       <View style={{ gap: spacing.xxl }}>
-        {/*
-          The gallery inside the phone is the preview now — same phone the
-          host has been looking at since the theme step, panned to its middle.
-          The status line stays, because "when this unlocks" is the decision
-          being made and it belongs with the controls, not inside the phone.
-        */}
-        <AppText variant="bodySmall" tone="secondary">
-          {getUnlockTimeText()}
-        </AppText>
+        <RevealPreview locked={hostReveal.mode !== 'instant'} message={getUnlockTimeText()} />
 
         <View style={{ gap: spacing.base }}>
           <AppText variant="bodyLarge">When do you want to see new photos?</AppText>

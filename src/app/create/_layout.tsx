@@ -3,12 +3,6 @@ import { Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 
 import { useCreationDraft } from '@/features/celebrations/draft/store';
-import { PreviewStageProvider } from '@/features/celebrations/creation/preview-stage';
-import {
-  CaptureLayer,
-  CoverLayer,
-  GalleryLayer,
-} from '@/features/celebrations/creation/preview-stage-layers';
 import { colours } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { useAuth } from '@/features/auth/context';
@@ -68,26 +62,12 @@ export default function CreateLayout() {
   }, [reset]);
 
   return (
-    // The phone lives here, above the navigator, so it survives every step in
-    // the flow. Inside a step it would be destroyed on navigation, which is
-    // the flash this whole arrangement exists to prevent.
-    <PreviewStageProvider
-      renderLayer={(layer, stageDraft) => {
-        if (layer === 'cover') return <CoverLayer draft={stageDraft} />;
-        if (layer === 'capture') return <CaptureLayer draft={stageDraft} />;
-        return <GalleryLayer draft={stageDraft} />;
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colours.background },
+        animation: 'slide_from_right',
       }}
-    >
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          // Transparent, so the phone behind the navigator shows through
-          // while a step slides. An opaque screen would hide the very thing
-          // that is meant to stay continuous.
-          contentStyle: { backgroundColor: 'transparent' },
-          animation: 'slide_from_right',
-        }}
-      />
-    </PreviewStageProvider>
+    />
   );
 }
