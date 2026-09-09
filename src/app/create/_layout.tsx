@@ -9,6 +9,7 @@ import {
   CoverLayer,
   GalleryLayer,
 } from '@/features/celebrations/creation/preview-stage-layers';
+import { colours } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { useAuth } from '@/features/auth/context';
 import { resetToUnauthenticatedRoot } from '@/lib/navigation/session-root';
@@ -81,13 +82,10 @@ export default function CreateLayout() {
         screenOptions={{
           headerShown: false,
           // Transparent, so the phone behind the navigator shows through
-          // while it moves. An opaque screen would hide the very thing
+          // while a step slides. An opaque screen would hide the very thing
           // that is meant to stay continuous.
           contentStyle: { backgroundColor: 'transparent' },
-          // The creation chrome performs a deliberate fade → phone move →
-          // fade sequence. A native push animation would slide a second page
-          // over that composition and make it read as a screen replacement.
-          animation: 'none',
+          animation: 'slide_from_right',
         }}
       />
     </PreviewStageProvider>

@@ -111,10 +111,12 @@ export default function CoverStep() {
     : 'Add a date';
 
 
-  // This is the same phone that travels into capture and gallery. The
-  // carousel is now its gesture/control surface rather than another set of
-  // device frames, so there is no hand-off or match cut on Next.
-  useStage('cover');
+  // The theme step keeps its carousel, which is itself a row of phones — so
+  // the persistent one stays hidden here rather than becoming a second phone
+  // behind it. Its hidden geometry is the carousel's, so handing over on Next
+  // is a cross-fade between two phones in the same place at the same size,
+  // not a phone leaving and another arriving.
+  useStage('hidden');
   useStageDraft(draft);
 
   return (

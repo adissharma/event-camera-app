@@ -9,7 +9,6 @@
 
 import { Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useQuery } from '@tanstack/react-query';
 
 import { AppText } from '@/components/ui/text';
 import { colours, radii, spacing } from '@/design';
@@ -18,7 +17,6 @@ import { CaptureLimitPreview } from './capture-limit-preview';
 import { useCoverSource } from '@/features/celebrations/cover-source';
 import { SAMPLE_PHOTOS, sampleAssetUri } from '@/features/celebrations/sample-event';
 import type { CreationDraft } from '@/features/celebrations/draft/types';
-import { listCoverTemplateThemes, themeKeys } from '@/services/themes';
 
 /**
  * The gallery, as the host will actually see it.
@@ -76,24 +74,9 @@ export function GalleryLayer({ draft }: { draft: CreationDraft | null }) {
 
 export function CoverLayer({ draft }: { draft: CreationDraft | null }) {
   if (!draft) return null;
-  return <ResolvedCoverLayer draft={draft} />;
-}
-
-function ResolvedCoverLayer({ draft }: { draft: CreationDraft }) {
-  const { data: themes = [] } = useQuery({
-    queryKey: themeKeys.curated(),
-    queryFn: listCoverTemplateThemes,
-  });
-  const selected = themes.find(
-    (theme) => theme.slug === draft.themeSlug || theme.id === draft.themeSlug,
-  );
-
   return (
     <View style={S.fill}>
-      <GuestCoverPreview
-        draft={draft}
-        theme={parseCoverTheme(selected?.design_tokens, selected?.slug ?? draft.themeSlug)}
-      />
+      <GuestCoverPreview draft={draft} theme={parseCoverTheme(draft.themeSlug)} />
     </View>
   );
 }
@@ -106,11 +89,7 @@ export function CaptureLayer({ draft }: { draft: CreationDraft | null }) {
 
   return (
     <View style={S.captureWrap}>
-      <CaptureLimitPreview
-        limit={draft.shotLimitPerGuest}
-        coverSource={coverSource}
-        embedded
-      />
+      <CaptureLimitPreview limit={draft.shotLimitPerGuest} coverSource={coverSource} />
     </View>
   );
 }
@@ -156,5 +135,5 @@ const S = StyleSheet.create({
     height: 120,
   },
   // Low in the frame, where a viewfinder's shot counter and controls are.
-  captureWrap: { flex: 1 },
+  captureWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: '12%' },
 });
