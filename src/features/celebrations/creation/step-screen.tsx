@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { View, Alert, Pressable, StyleSheet } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -8,7 +8,7 @@ import { ProgressThread } from '@/components/feedback/progress-thread';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, spacing } from '@/design';
+import { colours, easing, layout, spacing, useMotion } from '@/design';
 import { copy } from '@/i18n';
 import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
@@ -17,6 +17,15 @@ import { buildEditPatch } from './edit-patch';
 import { updateEventSettings, celebrationDetailKeys } from '@/services/celebration-detail';
 import { celebrationKeys } from '@/services/celebrations';
 import Svg, { Path } from 'react-native-svg';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
+import {
+  usePreviewStage,
+  type StageName,
+} from '@/features/celebrations/creation/preview-stage';
 export interface CreationStepScreenProps {
   step: CreationStep;
   heading: string;
@@ -77,8 +86,22 @@ export function CreationStepScreen({
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
+  const previewStage = usePreviewStage();
+  const motion = useMotion();
 
   const [saving, setSaving] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
+  const transitionTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const chromeOpacity = useSharedValue(1);
+
+  useEffect(
+    () => () => {
+      transitionTimers.current.forEach(clearTimeout);
+    },
+    [],
+  );
+
+  const chromeStyle = useAnimatedStyle(() => ({ opacity: chromeOpacity.value }));
 
   const index = CREATION_STEPS.indexOf(step);
   const total = CREATION_STEPS.length;
@@ -88,6 +111,32 @@ export function CreationStepScreen({
     nextHref ?? (index < total - 1 ? `/create/${CREATION_STEPS[index + 1]}` : undefined);
 
   const isEditing = Boolean(draft.editCelebrationId);
+
+  const nextPhoneStage: Partial<Record<CreationStep, StageName>> = {
+    cover: 'capture',
+    'photo-limit': 'gallery',
+  };
+
+  function navigateAfterPhoneMove(href: string, target: StageName) {
+    if (transitioning) return;
+    setTransitioning(true);
+
+    const fadeDuration = motion.duration('microSlow');
+    chromeOpacity.value = withTiming(0, {
+      duration: fadeDuration,
+      easing: easing.exit,
+    });
+
+    const moveTimer = setTimeout(() => {
+      previewStage?.setStage(target);
+
+      const navigationTimer = setTimeout(() => {
+        router.push(href as never);
+      }, previewStage?.transitionDuration ?? motion.duration('emotional'));
+      transitionTimers.current.push(navigationTimer);
+    }, fadeDuration);
+    transitionTimers.current.push(moveTimer);
+  }
 
   async function defaultSave() {
     if (!draft.editCelebrationId || !draft.editSessionId) return;
@@ -118,7 +167,13 @@ export function CreationStepScreen({
         setSaving(false);
       }
     } else {
-      if (resolvedNext) router.push(resolvedNext as never);
+      if (!resolvedNext) return;
+      const target = nextPhoneStage[step];
+      if (target && previewStage) {
+        navigateAfterPhoneMove(resolvedNext, target);
+      } else {
+        router.push(resolvedNext as never);
+      }
     }
   };
 
@@ -133,7 +188,7 @@ export function CreationStepScreen({
       contentStyle={scrollable ? undefined : { flex: 1 }}
       stickyAction={
         action ?? (
-          <View style={{ gap: spacing.sm }}>
+          <Animated.View style={[{ gap: spacing.sm }, chromeStyle]}>
             {blockingError ? (
               <AppText variant="caption" tone="warning" accessibilityLiveRegion="polite">
                 {blockingError}
@@ -141,17 +196,24 @@ export function CreationStepScreen({
             ) : null}
             <Button
               label={isEditing ? 'Save' : (nextLabel ?? copy.common.next)}
-              disabled={blockingError !== null}
               disabledReason={blockingError ?? undefined}
               loading={saving}
+              disabled={blockingError !== null || transitioning}
               haptic
               onPress={handlePress}
             />
-          </View>
+          </Animated.View>
         )
       }
     >
-      <View style={[{ gap: spacing.xl }, scrollable ? null : { flex: 1 }]}>
+      <Animated.View
+        pointerEvents={transitioning ? 'none' : 'auto'}
+        style={[
+          { gap: spacing.xl },
+          scrollable ? null : { flex: 1 },
+          chromeStyle,
+        ]}
+      >
         <View style={styles.topNav}>
           <Pressable 
             onPress={() => {
@@ -180,7 +242,7 @@ export function CreationStepScreen({
         <Reveal index={1} style={scrollable ? undefined : { flex: 1 }}>
           {children}
         </Reveal>
-      </View>
+      </Animated.View>
     </Screen>
   );
 }

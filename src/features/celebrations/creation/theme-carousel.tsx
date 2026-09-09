@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
   Platform,
@@ -6,27 +6,26 @@ import {
   ScrollView,
   View,
   useWindowDimensions,
-  type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
 import Animated, {
-  cancelAnimation,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
   withSpring,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { useFocusEffect } from 'expo-router';
 import { PanGestureHandler } from 'react-native-gesture-handler';
 
-import { DeviceFrame } from '@/components/media/device-frame';
+import {
+  canonicalDeviceWidth,
+  DEVICE_ASPECT_RATIO,
+} from '@/components/media/device-frame';
 import { CloseIcon } from '@/components/ui/icons';
+import { AppText } from '@/components/ui/text';
 import { GuestCoverPreview, parseCoverTheme } from './guest-cover-preview';
-import { colours, easing, spacing, useMotion } from '@/design';
+import { colours, spacing } from '@/design';
 import type { CreationDraft } from '../draft/types';
 import type { ThemeRow } from '@/types/database';
 
@@ -38,12 +37,9 @@ export interface ThemeCarouselProps {
 }
 
 /**
- * Horizontally swiped theme picker built from live cover previews.
- *
- * The card is deliberately narrower than the screen so the next theme peeks in
- * from the right. That peek is the entire discovery mechanism — without it a
- * host has no reason to suspect the cover swipes at all, and a row of theme
- * name chips would be a weaker version of the same information.
+ * Horizontally swiped theme picker controlling the persistent live preview.
+ * The visual phone is mounted once above the navigator; this component owns
+ * only its swipe/tap surface, label, dots, and full-screen inspection mode.
  */
 export function ThemeCarousel({
   draft,
@@ -51,8 +47,7 @@ export function ThemeCarousel({
   selectedSlug,
   onSelect,
 }: ThemeCarouselProps) {
-  const { width } = useWindowDimensions();
-  const motion = useMotion();
+  const { width, height } = useWindowDimensions();
   const selectedIndex = Math.max(
     0,
     themes.findIndex((theme) => theme.slug === selectedSlug),
@@ -62,42 +57,11 @@ export function ThemeCarousel({
   const selectedSlugRef = useRef<string | null>(selectedSlug);
   const [isPreviewVisible, setIsPreviewVisible] = useState(false);
 
-  /**
-   * Measured height of the carousel row.
-   *
-   * The card has to be sized from the space available VERTICALLY, not from the
-   * screen width. A phone frame is 19.5:9, so a width-derived card is more than
-   * twice as tall as it is wide and simply overflowed — the frame was clipped at
-   * the notch and the guest's join button was cut off the bottom.
-   */
-  const [rowHeight, setRowHeight] = useState(0);
-
   const gap = spacing.base;
-  const DEVICE_RATIO = 19.5 / 9;
-
-  // Fit to height first, then cap the width so a short, wide screen still
-  // leaves the next card peeking rather than filling the viewport.
-  //
-  // Backed off a further 8% from that fit — a subtle reduction, not a
-  // redesign — so the row leaves a bit more breathing room around the dots,
-  // the CTAs and the rest of the screen instead of using every available
-  // pixel of height.
-  const PHONE_SHRINK = 0.92;
-  const heightDerivedWidth = rowHeight > 0 ? Math.floor((rowHeight / DEVICE_RATIO) * PHONE_SHRINK) : 0;
-  const cardWidth = Math.max(140, Math.min(heightDerivedWidth || 200, Math.round(width * 0.62)));
-  // The dots below already signal that more themes exist, so the next card only
-  // needs a gentle peek. A small offset keeps the phone optically centred
-  // without letting the neighbour pull it as far left as the old layout did.
-  const sidePadding = Math.max(
-    spacing.base,
-    Math.round((width - cardWidth) / 2) - Math.round(cardWidth * 0.12),
-  );
+  const cardWidth = canonicalDeviceWidth(width, height);
+  const cardHeight = cardWidth * DEVICE_ASPECT_RATIO;
+  const sidePadding = Math.max(spacing.base, Math.round((width - cardWidth) / 2));
   const snapInterval = cardWidth + gap;
-
-  function handleRowLayout(event: LayoutChangeEvent) {
-    const measured = Math.floor(event.nativeEvent.layout.height);
-    if (measured > 0 && measured !== rowHeight) setRowHeight(measured);
-  }
 
   const [activeIndex, setActiveIndex] = useState(selectedIndex);
 
@@ -116,47 +80,6 @@ export function ThemeCarousel({
   useEffect(() => {
     selectedSlugRef.current = selectedSlug;
   }, [selectedSlug]);
-
-  const nudge = useSharedValue(0);
-
-  /**
-   * A single nudge on every arrival, never a loop.
-   *
-   * A permanently bouncing card reads as broken within about ten seconds, and
-   * the motion system forbids looping decoration outright. Two gentle cycles
-   * say "this moves" and then stop. Suppressed entirely under reduce-motion,
-   * where a repeating horizontal translation is exactly the pattern that
-   * triggers people.
-   */
-  useFocusEffect(
-    useCallback(() => {
-      nudge.value = 0;
-      if (motion.reduceMotion || themes.length < 2) return;
-
-      const travel = -14;
-      const step = (to: number, duration: number) =>
-        withTiming(to, { duration, easing: easing.inOut });
-
-      nudge.value = withDelay(
-        600,
-        withSequence(step(travel, 260), step(0, 260), step(travel * 0.6, 200), step(0, 220)),
-      );
-
-      const settle = setTimeout(() => {
-        nudge.value = 0;
-      }, 600 + 260 + 260 + 200 + 220 + 250);
-
-      return () => {
-        clearTimeout(settle);
-        cancelAnimation(nudge);
-        nudge.value = 0;
-      };
-    }, [motion.reduceMotion, nudge, themes.length]),
-  );
-
-  const nudgeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: nudge.value }],
-  }));
 
   function clampIndex(index: number) {
     return Math.max(0, Math.min(themes.length - 1, index));
@@ -200,7 +123,13 @@ export function ThemeCarousel({
 
   return (
     <View style={{ flex: 1, gap: spacing.sm }}>
-      <Animated.View style={[{ flex: 1 }, nudgeStyle]} onLayout={handleRowLayout}>
+      {/*
+        The scroll view is the gesture surface for the one phone mounted by
+        PreviewStageProvider. Its pages are intentionally transparent: adding
+        a DeviceFrame here would bring back the second silhouette this flow is
+        designed to remove.
+      */}
+      <View style={{ flex: 1, justifyContent: 'center' }}>
         <ScrollView
           ref={scrollRef}
           horizontal
@@ -218,54 +147,36 @@ export function ThemeCarousel({
           onScrollEndDrag={handleScrollEnd}
           onMomentumScrollEnd={handleScrollEnd}
           contentContainerStyle={{
-            paddingHorizontal: Math.max(spacing.base, sidePadding),
+            paddingHorizontal: sidePadding,
             gap,
             alignItems: 'center',
           }}
         >
-          {(rowHeight === 0 ? [] : themes).map((theme, index) => {
+          {themes.map((theme, index) => {
             const isActive = index === activeIndex;
-            const card = (
-              <DeviceFrame width={cardWidth}>
-                <GuestCoverPreview
-                  draft={draft}
-                  theme={parseCoverTheme(theme.design_tokens, theme.slug)}
-                  compact={false}
-                  // Only the focused card is interactive — a tap anywhere on
-                  // it opens the full-screen preview (see `GuestCoverPreview`).
-                  // A half-visible neighbour instead scrolls into view, via
-                  // the wrapper below.
-                  editable={isActive}
-                  onPreview={() => setIsPreviewVisible(true)}
-                />
-              </DeviceFrame>
-            );
-
-            // Always the same element type at this position, active or not —
-            // only `disabled`/`style` change. Branching between a `View` and
-            // a `Pressable` here used to force React to unmount and remount
-            // this whole subtree the instant a swipe settled and `isActive`
-            // flipped, which is what showed up as a flash right as the new
-            // card was selected.
             return (
               <Pressable
                 key={theme.slug}
-                disabled={isActive}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isActive }}
-                accessibilityLabel={isActive ? undefined : `${theme.name} theme`}
+                accessibilityLabel={`${theme.name} theme${isActive ? ', selected. Tap to preview.' : ''}`}
                 onPress={() => {
-                  scrollRef.current?.scrollTo({ x: index * snapInterval, animated: true });
+                  if (isActive) {
+                    setIsPreviewVisible(true);
+                  } else {
+                    scrollRef.current?.scrollTo({ x: index * snapInterval, animated: true });
+                  }
                 }}
-                style={{ width: cardWidth, opacity: isActive ? 1 : 0.55 }}
-              >
-                {card}
-              </Pressable>
+                style={{ width: cardWidth, height: cardHeight }}
+              />
             );
           })}
         </ScrollView>
-      </Animated.View>
+      </View>
 
+      <AppText variant="caption" tone="secondary" style={{ textAlign: 'center' }}>
+        {themes[activeIndex]?.name ?? 'Swipe to choose a theme'}
+      </AppText>
       <PaginationDots themes={themes} activeIndex={activeIndex} />
       <FullScreenCoverPreviewPager
         visible={isPreviewVisible}

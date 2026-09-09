@@ -26,6 +26,8 @@ import {
 export interface CaptureLimitPreviewProps {
   limit: number | null | undefined;
   coverSource: ImageSourcePropType;
+  /** The persistent creation phone supplies the bezel and clipping. */
+  embedded?: boolean;
 }
 
 const ZOOM_OPTIONS = [
@@ -35,7 +37,11 @@ const ZOOM_OPTIONS = [
 ] as const;
 
 /** A cropped, inert slice of the guest camera's lower viewfinder. */
-export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewProps) {
+export function CaptureLimitPreview({
+  limit,
+  coverSource,
+  embedded = false,
+}: CaptureLimitPreviewProps) {
   const motion = useMotion();
   const shake = useSharedValue(0);
   const travel = motion.translate(6);
@@ -73,7 +79,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
 
   return (
     <Animated.View
-      style={[S.frame, shakeStyle]}
+      style={[S.frame, embedded && S.embeddedFrame, shakeStyle]}
       accessibilityLabel="Guest camera capture-limit preview"
     >
       <View style={S.viewfinder}>
@@ -103,7 +109,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
         </View>
       </View>
 
-      <View style={S.bottomPanel}>
+      <View style={[S.bottomPanel, embedded && S.embeddedBottomPanel]}>
         <ViewfinderBottomControls
           flashMode="off"
           gallerySource={coverSource}
@@ -111,7 +117,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
         />
       </View>
 
-      <View style={S.lowerEdge} pointerEvents="none" />
+      {!embedded ? <View style={S.lowerEdge} pointerEvents="none" /> : null}
       <LinearGradient
         colors={[colours.background, 'rgba(11,11,12,0.72)', 'rgba(11,11,12,0)']}
         locations={[0, 0.36, 1]}
@@ -131,6 +137,13 @@ const S = StyleSheet.create({
     borderBottomRightRadius: 22,
     overflow: 'hidden',
     backgroundColor: '#000000',
+  },
+  embeddedFrame: {
+    flex: 1,
+    maxWidth: undefined,
+    height: undefined,
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
   },
   topFade: {
     position: 'absolute',
@@ -178,5 +191,8 @@ const S = StyleSheet.create({
     paddingBottom: spacing.lg,
     justifyContent: 'center',
     backgroundColor: '#0B0B0C',
+  },
+  embeddedBottomPanel: {
+    height: '24%',
   },
 });

@@ -9,6 +9,18 @@ export interface DeviceFrameProps {
   width?: number;
 }
 
+export const DEVICE_ASPECT_RATIO = 19.5 / 9;
+
+/**
+ * The creation flow needs the phone to keep the same physical dimensions even
+ * though it is mounted above several different routes. Deriving that width
+ * from the viewport (rather than from each screen's remaining layout space)
+ * gives the carousel and the persistent stage one shared answer.
+ */
+export function canonicalDeviceWidth(viewportWidth: number, viewportHeight: number) {
+  return Math.max(176, Math.min(viewportWidth * 0.62, viewportHeight * 0.29));
+}
+
 /**
  * A phone frame for the guest preview.
  *
@@ -21,7 +33,7 @@ export interface DeviceFrameProps {
  * drop shadow theatre. The content inside is the subject.
  */
 export function DeviceFrame({ children, width = 240 }: DeviceFrameProps) {
-  const height = width * (19.5 / 9);
+  const height = width * DEVICE_ASPECT_RATIO;
   const bezel = 6;
 
   return (

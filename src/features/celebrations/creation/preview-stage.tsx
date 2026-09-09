@@ -48,6 +48,11 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { colours, easing, useMotion } from '@/design';
+import {
+  canonicalDeviceWidth,
+  DeviceFrame,
+  DEVICE_ASPECT_RATIO,
+} from '@/components/media/device-frame';
 import type { CreationDraft } from '@/features/celebrations/draft/types';
 
 /**
@@ -68,6 +73,9 @@ interface StageGeometry {
   translate: number;
   scale: number;
   opacity: number;
+  /** Opaque crop above/below the phone, expressed as screen fractions. */
+  cropTop: number;
+  cropBottom: number;
   /** Which content the phone is showing at this stage. */
   layer: 'cover' | 'capture' | 'gallery';
 }
@@ -82,23 +90,37 @@ interface StageGeometry {
  * movement is a single pan with two stops on it.
  */
 const STAGES: Record<StageName, StageGeometry> = {
-  // Not an arbitrary off-screen park: this is where the theme carousel's
-  // selected phone sits, so the cross-fade on Next lands one phone exactly
-  // where the other was, at the same size, rather than reading as one leaving
-  // and another arriving.
-  hidden: { translate: 0, scale: 1, opacity: 0, layer: 'cover' },
-  cover: { translate: 0, scale: 1, opacity: 1, layer: 'cover' },
+  // `hidden` parks the mounted phone for creation steps outside this visual
+  // sequence. The cover step itself uses `cover`; it never renders a second
+  // frame that would need a hand-off.
+  hidden: { translate: 0, scale: 1, opacity: 0, cropTop: 0, cropBottom: 1, layer: 'cover' },
+  cover: { translate: 0, scale: 1, opacity: 1, cropTop: 0, cropBottom: 1, layer: 'cover' },
   // Each layer composes itself within one screen, so these are shifts of a
   // full-height phone, not offsets into a taller one. Values much past ±0.2
   // push a layer's content out of the viewport entirely — the first version
   // of this table did exactly that, and the phone vanished.
-  capture: { translate: -0.06, scale: 1.12, opacity: 1, layer: 'capture' },
-  gallery: { translate: -0.14, scale: 1.12, opacity: 1, layer: 'gallery' },
+  capture: {
+    translate: -0.05,
+    scale: 1.12,
+    opacity: 1,
+    cropTop: 0.31,
+    cropBottom: 0.62,
+    layer: 'capture',
+  },
+  gallery: {
+    translate: -0.14,
+    scale: 1.12,
+    opacity: 1,
+    cropTop: 0.19,
+    cropBottom: 0.54,
+    layer: 'gallery',
+  },
 };
 
 interface StageContextValue {
   setStage: (stage: StageName) => void;
   setDraft: (draft: CreationDraft) => void;
+  transitionDuration: number;
 }
 
 const StageContext = createContext<StageContextValue | null>(null);
@@ -127,6 +149,11 @@ export function useStageDraft(draft: CreationDraft): void {
   }, [context, draft]);
 }
 
+/** Used by the creation chrome to sequence its UI around the phone move. */
+export function usePreviewStage(): StageContextValue | null {
+  return useContext(StageContext);
+}
+
 export function PreviewStageProvider({
   children,
   renderLayer,
@@ -141,40 +168,46 @@ export function PreviewStageProvider({
 }) {
   const [stage, setStage] = useState<StageName>('hidden');
   const [draft, setDraft] = useState<CreationDraft | null>(null);
-  const { height: screenHeight } = useWindowDimensions();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const motion = useMotion();
 
+  const transitionDuration = motion.duration('emotional');
+
   const value = useMemo<StageContextValue>(
-    () => ({ setStage, setDraft }),
-    [],
+    () => ({ setStage, setDraft, transitionDuration }),
+    [transitionDuration],
   );
 
   const geometry = STAGES[stage];
 
-  // One screen tall. Each layer is a composition that fills it and places its
-  // own focus — the viewfinder low, the gallery grid high — so the stage moves
-  // the phone rather than scrolling a taller image behind a window.
-  const phoneHeight = screenHeight;
+  // The frame is sized once from the viewport and reused for every layer.
+  const phoneWidth = canonicalDeviceWidth(screenWidth, screenHeight);
+  const phoneHeight = phoneWidth * DEVICE_ASPECT_RATIO;
+  const phoneTop = screenHeight * 0.2;
 
   const translate = useSharedValue(STAGES.hidden.translate);
   const scale = useSharedValue(STAGES.hidden.scale);
   const opacity = useSharedValue(STAGES.hidden.opacity);
+  const cropTop = useSharedValue(STAGES.hidden.cropTop);
+  const cropBottom = useSharedValue(STAGES.hidden.cropBottom);
 
   const timing = useCallback(
     (): WithTimingConfig => ({
       // One duration for every stage change, so a move the host makes twice
       // never feels like two different animations.
-      duration: motion.reduceMotion ? 0 : 620,
+      duration: transitionDuration,
       easing: easing.inOut,
     }),
-    [motion.reduceMotion],
+    [transitionDuration],
   );
 
   useEffect(() => {
     translate.value = withTiming(geometry.translate, timing());
     scale.value = withTiming(geometry.scale, timing());
     opacity.value = withTiming(geometry.opacity, timing());
-  }, [geometry, timing, translate, scale, opacity]);
+    cropTop.value = withTiming(geometry.cropTop, timing());
+    cropBottom.value = withTiming(geometry.cropBottom, timing());
+  }, [geometry, timing, translate, scale, opacity, cropTop, cropBottom]);
 
   const phoneStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -182,6 +215,15 @@ export function PreviewStageProvider({
       { translateY: translate.value * phoneHeight },
       { scale: scale.value },
     ],
+  }));
+
+  const topMaskStyle = useAnimatedStyle(() => ({
+    height: cropTop.value * screenHeight,
+    opacity: cropTop.value > 0 ? 1 : 0,
+  }));
+  const bottomMaskStyle = useAnimatedStyle(() => ({
+    top: cropBottom.value * screenHeight,
+    opacity: cropBottom.value < 1 ? 1 : 0,
   }));
 
   return (
@@ -193,13 +235,19 @@ export function PreviewStageProvider({
           another thing to press.
         */}
         <View style={S.stageLayer} pointerEvents="none">
-          <Animated.View style={[S.phone, { height: phoneHeight }, phoneStyle]}>
-            {(['cover', 'capture', 'gallery'] as const).map((layer) => (
-              <StageLayer key={layer} visible={geometry.layer === layer}>
-                {renderLayer(layer, draft)}
-              </StageLayer>
-            ))}
+          <Animated.View
+            style={[S.phone, { top: phoneTop, width: phoneWidth, height: phoneHeight }, phoneStyle]}
+          >
+            <DeviceFrame width={phoneWidth}>
+              {(['cover', 'capture', 'gallery'] as const).map((layer) => (
+                <StageLayer key={layer} visible={geometry.layer === layer}>
+                  {renderLayer(layer, draft)}
+                </StageLayer>
+              ))}
+            </DeviceFrame>
           </Animated.View>
+          <Animated.View style={[S.topMask, topMaskStyle]} />
+          <Animated.View style={[S.bottomMask, bottomMaskStyle]} />
         </View>
 
         <View style={S.content}>{children}</View>
@@ -248,12 +296,21 @@ const S = StyleSheet.create({
     alignItems: 'center',
   },
   phone: {
-    width: '100%',
-    // Anchored at the top so `translateY` alone decides which part of the
-    // phone is in view; centring it would make every stage's offset depend on
-    // the window height as well as its own intent.
+    position: 'absolute',
+  },
+  topMask: {
     position: 'absolute',
     top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colours.background,
+  },
+  bottomMask: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colours.background,
   },
   content: { flex: 1 },
 });
