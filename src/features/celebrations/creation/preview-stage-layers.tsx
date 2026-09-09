@@ -98,7 +98,14 @@ const TILE_GAP = 3;
 
 const S = StyleSheet.create({
   fill: { flex: 1 },
-  gallery: { flex: 1, paddingTop: spacing.xl },
+  gallery: {
+    flex: 1,
+    // The grid sits in the upper-middle of the phone, which is where it lands
+    // in the real gallery once its hero has scrolled away — and where the
+    // reveal step's copy expects to find it.
+    justifyContent: 'center',
+    paddingBottom: '18%',
+  },
   galleryHeader: {
     paddingHorizontal: spacing.base,
     paddingBottom: spacing.sm,
@@ -127,5 +134,6 @@ const S = StyleSheet.create({
     bottom: 0,
     height: 120,
   },
-  captureWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  // Low in the frame, where a viewfinder's shot counter and controls are.
+  captureWrap: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: '12%' },
 });

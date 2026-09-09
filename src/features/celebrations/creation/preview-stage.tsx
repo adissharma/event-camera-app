@@ -88,8 +88,12 @@ const STAGES: Record<StageName, StageGeometry> = {
   // and another arriving.
   hidden: { translate: 0, scale: 1, opacity: 0, layer: 'cover' },
   cover: { translate: 0, scale: 1, opacity: 1, layer: 'cover' },
-  capture: { translate: -0.22, scale: 1.22, opacity: 1, layer: 'capture' },
-  gallery: { translate: -0.46, scale: 1.22, opacity: 1, layer: 'gallery' },
+  // Each layer composes itself within one screen, so these are shifts of a
+  // full-height phone, not offsets into a taller one. Values much past ±0.2
+  // push a layer's content out of the viewport entirely — the first version
+  // of this table did exactly that, and the phone vanished.
+  capture: { translate: -0.06, scale: 1.12, opacity: 1, layer: 'capture' },
+  gallery: { translate: -0.14, scale: 1.12, opacity: 1, layer: 'gallery' },
 };
 
 interface StageContextValue {
@@ -147,10 +151,10 @@ export function PreviewStageProvider({
 
   const geometry = STAGES[stage];
 
-  // The phone is taller than the window on purpose: the parts a later stage
-  // pans to have to exist off screen before the pan begins, or the movement
-  // would reveal an edge rather than more phone.
-  const phoneHeight = screenHeight * 1.35;
+  // One screen tall. Each layer is a composition that fills it and places its
+  // own focus — the viewfinder low, the gallery grid high — so the stage moves
+  // the phone rather than scrolling a taller image behind a window.
+  const phoneHeight = screenHeight;
 
   const translate = useSharedValue(STAGES.hidden.translate);
   const scale = useSharedValue(STAGES.hidden.scale);
