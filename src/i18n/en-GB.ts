@@ -67,7 +67,10 @@ export const enGB = {
     closingInPast: 'Pick a future time',
 
     // Step 3
-    coverHeading: 'Choose a cover',
+    coverHeading: 'Add a cover photo',
+    coverAddPhoto: 'Add photo',
+    coverAddLater: 'Would you like to add this later?',
+    skip: 'Skip',
     choosePhoto: 'Choose a photo',
     takePhoto: 'Take a photo',
     removePhoto: 'Remove',

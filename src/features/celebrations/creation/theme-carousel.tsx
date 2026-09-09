@@ -25,6 +25,7 @@ import { PanGestureHandler } from 'react-native-gesture-handler';
 
 import { DeviceFrame } from '@/components/media/device-frame';
 import { CloseIcon } from '@/components/ui/icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GuestCoverPreview, parseCoverTheme } from './guest-cover-preview';
 import { colours, easing, spacing, useMotion } from '@/design';
 import type { CreationDraft } from '../draft/types';
@@ -82,7 +83,7 @@ export function ThemeCarousel({
   // redesign — so the row leaves a bit more breathing room around the dots,
   // the CTAs and the rest of the screen instead of using every available
   // pixel of height.
-  const PHONE_SHRINK = 0.92;
+  const PHONE_SHRINK = 0.88;
   const heightDerivedWidth = rowHeight > 0 ? Math.floor((rowHeight / DEVICE_RATIO) * PHONE_SHRINK) : 0;
   const cardWidth = Math.max(140, Math.min(heightDerivedWidth || 200, Math.round(width * 0.62)));
   // The dots below already signal that more themes exist, so the next card only
@@ -226,19 +227,27 @@ export function ThemeCarousel({
           {(rowHeight === 0 ? [] : themes).map((theme, index) => {
             const isActive = index === activeIndex;
             const card = (
-              <DeviceFrame width={cardWidth}>
-                <GuestCoverPreview
-                  draft={draft}
-                  theme={parseCoverTheme(theme.design_tokens, theme.slug)}
-                  compact={false}
-                  // Only the focused card is interactive — a tap anywhere on
-                  // it opens the full-screen preview (see `GuestCoverPreview`).
-                  // A half-visible neighbour instead scrolls into view, via
-                  // the wrapper below.
-                  editable={isActive}
-                  onPreview={() => setIsPreviewVisible(true)}
+              <View style={{ position: 'relative' }}>
+                <DeviceFrame width={cardWidth}>
+                  <GuestCoverPreview
+                    draft={draft}
+                    theme={parseCoverTheme(theme.design_tokens, theme.slug)}
+                    compact={false}
+                    editable={isActive}
+                    onPreview={() => setIsPreviewVisible(true)}
+                  />
+                </DeviceFrame>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={[colours.background, 'transparent']}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: cardWidth * 0.18, borderRadius: 24 }}
                 />
-              </DeviceFrame>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={['transparent', colours.background]}
+                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: cardWidth * 0.18, borderRadius: 24 }}
+                />
+              </View>
             );
 
             // Always the same element type at this position, active or not —

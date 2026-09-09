@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
@@ -31,6 +32,7 @@ import { isBackendConfigured } from '@/lib/supabase/client';
  */
 export default function CoverStep() {
   const { draft, update } = useCreationDraft();
+  const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
@@ -113,9 +115,35 @@ export default function CoverStep() {
     <CreationStepScreen
       step="cover"
       heading={copy.create.coverHeading}
+      headingAlign="center"
       // The carousel scrolls horizontally and fills the remaining height.
       scrollable={false}
       onSave={handleSave}
+      action={
+        draft.editCelebrationId ? undefined : (
+          <View style={{ alignItems: 'center', gap: spacing.sm }}>
+            <Button label={copy.create.coverAddPhoto} onPress={() => setEditing(true)} haptic />
+            <View style={{ alignItems: 'center', gap: spacing.xs }}>
+              <AppText variant="caption" tone="secondary">
+                {copy.create.coverAddLater}
+              </AppText>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel={copy.create.skip}
+                onPress={() => router.push('/create/photo-limit')}
+                hitSlop={8}
+              >
+                <AppText
+                  variant="bodySmall"
+                  style={{ fontWeight: '700', textDecorationLine: 'underline' }}
+                >
+                  {copy.create.skip}
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
+        )
+      }
     >
       {/* Pulled up slightly now that there's no supporting line beneath the
           heading, so the carousel gets more of the screen rather than the gap
@@ -155,14 +183,6 @@ export default function CoverStep() {
           )}
         </View>
 
-        {/* Secondary — sits well below the primary Next action in the sticky
-            footer, so it never competes with it. */}
-        <Button
-          label="Add photo"
-          variant="secondary"
-          size="medium"
-          onPress={() => setEditing(true)}
-        />
       </View>
 
       <BottomSheet
