@@ -123,7 +123,7 @@ export default function CoverStep() {
         draft.editCelebrationId ? undefined : (
           <View style={{ alignItems: 'center', gap: spacing.sm }}>
             <Button label={copy.create.coverAddPhoto} onPress={() => setEditing(true)} haptic />
-            <View style={{ alignItems: 'center', gap: spacing.xs }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
               <AppText variant="caption" tone="secondary">
                 {copy.create.coverAddLater}
               </AppText>

@@ -83,7 +83,7 @@ export function ThemeCarousel({
   // redesign — so the row leaves a bit more breathing room around the dots,
   // the CTAs and the rest of the screen instead of using every available
   // pixel of height.
-  const PHONE_SHRINK = 0.88;
+  const PHONE_SHRINK = 0.78;
   const heightDerivedWidth = rowHeight > 0 ? Math.floor((rowHeight / DEVICE_RATIO) * PHONE_SHRINK) : 0;
   const cardWidth = Math.max(140, Math.min(heightDerivedWidth || 200, Math.round(width * 0.62)));
   // The dots below already signal that more themes exist, so the next card only
@@ -275,7 +275,6 @@ export function ThemeCarousel({
         </ScrollView>
       </Animated.View>
 
-      <PaginationDots themes={themes} activeIndex={activeIndex} />
       <FullScreenCoverPreviewPager
         visible={isPreviewVisible}
         draft={draft}
@@ -432,29 +431,5 @@ function FullScreenCoverPreviewPager({
         </PanGestureHandler>
       </View>
     </Modal>
-  );
-}
-
-/**
- * Just the dots. With only three themes on offer and no name label above them
- * any more, the row needs no accessible live-region text of its own — each
- * card already announces `"${theme.name} theme"` when it takes focus.
- */
-function PaginationDots({ themes, activeIndex }: { themes: ThemeRow[]; activeIndex: number }) {
-  return (
-    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-      {themes.map((theme, index) => (
-        <View
-          key={theme.slug}
-          style={{
-            width: index === activeIndex ? 16 : 6,
-            height: 6,
-            borderRadius: 3,
-            backgroundColor:
-              index === activeIndex ? colours.brandPrimary : colours.borderStrong,
-          }}
-        />
-      ))}
-    </View>
   );
 }
