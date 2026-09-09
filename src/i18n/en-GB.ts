@@ -60,7 +60,7 @@ export const enGB = {
 
     // Step 2
     closingHeading: 'What day does your event end?',
-    closingTimeHeading: 'What time does it end?',
+    closingTimeHeading: 'What time does your event end?',
     closingDateLabel: 'Date',
     closingTimeLabel: 'Time',
     timezoneLabel: 'Time zone',
