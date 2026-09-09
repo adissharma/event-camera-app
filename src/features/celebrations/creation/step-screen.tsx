@@ -162,11 +162,6 @@ export function CreationStepScreen({
       stickyAction={
         action ?? (
           <View style={{ gap: spacing.sm }}>
-            {blockingError ? (
-              <AppText variant="caption" tone="warning" accessibilityLiveRegion="polite">
-                {blockingError}
-              </AppText>
-            ) : null}
             <Button
               label={isEditing ? 'Save' : (nextLabel ?? copy.common.next)}
               disabled={blockingError !== null}
