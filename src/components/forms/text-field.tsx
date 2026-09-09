@@ -11,8 +11,16 @@ import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing, typography } from '@/design';
 
 export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
-  /** Always visible. Placeholder-only labelling disappears exactly when needed. */
-  label: string;
+  /**
+   * Visible above the field when present.
+   *
+   * Normally required, because placeholder-only labelling disappears exactly
+   * when the user needs it — the moment they start typing. Optional only for
+   * a field whose screen title already names it, where a label would be the
+   * same word twice on a screen with one input. Accessibility still needs a
+   * name, so the placeholder stands in when this is absent.
+   */
+  label?: string;
   /** Shown under the field until an error replaces it. */
   hint?: string;
   error?: string;
@@ -33,13 +41,17 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
 
   return (
     <View style={[{ gap: spacing.sm }, containerStyle]}>
-      <AppText variant="label" tone="secondary">
-        {label}
-      </AppText>
+      {label ? (
+        <AppText variant="label" tone="secondary">
+          {label}
+        </AppText>
+      ) : null}
 
       <TextInput
         ref={ref}
-        accessibilityLabel={label}
+        // Falls back to the placeholder when there is no visible label, so the
+        // field is never announced as unnamed.
+        accessibilityLabel={label ?? rest.placeholder}
         // Announced together with the label, so a screen-reader user hears the
         // problem rather than only that the field is invalid.
         accessibilityHint={error ?? hint}

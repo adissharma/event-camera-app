@@ -50,12 +50,10 @@ export default function NameStep() {
     <CreationStepScreen
       step="name"
       heading={copy.create.nameHeading}
-      supporting={copy.create.nameSupporting}
     >
       <View style={{ gap: spacing.lg }}>
         <TextField
           ref={inputRef}
-          label={copy.create.nameLabel}
           placeholder={copy.create.namePlaceholder}
           value={draft.title}
           onChangeText={(title) => {

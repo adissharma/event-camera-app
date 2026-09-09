@@ -73,7 +73,6 @@ export default function PhotoLimitStep() {
           <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
             <CaptureModeCard
               title={copy.create.photoLimitLimited}
-              description={copy.create.photoLimitLimitedDescription}
               selected={selectedCaptureMode === 'limited'}
               onPress={() => selectLimited()}
               style={{ flex: 1 }}
@@ -81,7 +80,6 @@ export default function PhotoLimitStep() {
 
             <CaptureModeCard
               title={copy.create.photoLimitUnlimited}
-              description={copy.create.photoLimitUnlimitedDescription}
               selected={selectedCaptureMode === 'unlimited'}
               onPress={selectUnlimited}
               // Visible and tappable, just not yet applicable — the host is
@@ -135,7 +133,8 @@ function CaptureModeCard({
   style,
 }: {
   title: string;
-  description: string;
+  /** Only where the label alone leaves a real question. */
+  description?: string;
   selected: boolean;
   onPress: () => void;
   style?: ViewStyle;
@@ -164,9 +163,11 @@ function CaptureModeCard({
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.base }}>
         <View style={{ flex: 1, gap: spacing.xs }}>
           <AppText variant="labelLarge">{title}</AppText>
-          <AppText variant="bodySmall" tone="secondary">
-            {description}
-          </AppText>
+          {description ? (
+            <AppText variant="bodySmall" tone="secondary">
+              {description}
+            </AppText>
+          ) : null}
         </View>
 
         <View

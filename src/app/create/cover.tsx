@@ -158,7 +158,7 @@ export default function CoverStep() {
         {/* Secondary — sits well below the primary Next action in the sticky
             footer, so it never competes with it. */}
         <Button
-          label="+ Add cover photo"
+          label="Add photo"
           variant="secondary"
           size="medium"
           onPress={() => setEditing(true)}
@@ -168,7 +168,7 @@ export default function CoverStep() {
       <BottomSheet
         visible={editing}
         onClose={() => setEditing(false)}
-        title="Cover photo"
+        title="Cover"
       >
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -181,7 +181,7 @@ export default function CoverStep() {
             <View style={{ flexDirection: 'row', gap: spacing.sm }}>
               <View style={{ flex: 1 }}>
                 <Button
-                  label={draft.coverLocalUri ? 'Change photo' : 'Add photo'}
+                  label={draft.coverLocalUri ? 'Change' : 'Add photo'}
                   variant="secondary"
                   size="medium"
                   leading={<ImageIcon size={16} color={colours.brandPrimary} />}
@@ -207,7 +207,7 @@ export default function CoverStep() {
           </View>
 
           <TextField
-            label="Date subtitle"
+            label="Date caption"
             value={draft.coverDateLabel ?? ''}
             onChangeText={(text) => update({ coverDateLabel: text.length > 0 ? text : null })}
             placeholder={formattedClosingDate}

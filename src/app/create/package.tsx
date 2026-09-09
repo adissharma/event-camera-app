@@ -930,7 +930,7 @@ export default function PackageScreen() {
           style={S.freeCta}
         >
           <AppText variant="labelLarge" style={S.freeCtaText}>
-            Try for free with {FREE_PAYWALL_PLAN.guestLimit} guests
+            Continue free with {FREE_PAYWALL_PLAN.guestLimit} guests
           </AppText>
         </Pressable>
 
@@ -1066,10 +1066,10 @@ export default function PackageScreen() {
             <View style={S.sheetHandle} />
             <View style={S.confirmCopy}>
               <AppText variant="titleLarge" style={S.confirmTitle}>
-                Keep it small, or unlock the full experience?
+                Continue free?
               </AppText>
               <AppText variant="bodySmall" tone="secondary" style={S.confirmSubtitle}>
-                The free option does not include videos, challenges, or guestbook.
+                No videos, challenges or guestbook.
               </AppText>
             </View>
 

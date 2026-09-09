@@ -54,49 +54,35 @@ export const enGB = {
 
   create: {
     // Step 1
-    nameHeading: 'What should we call your event?',
-    nameSupporting: 'This is the name your guests will see when they join.',
-    nameLabel: 'Cover title',
+    nameHeading: 'Name your event',
     namePlaceholder: "What's the occasion?",
-    nameRequired: 'Give your event a name so guests know where they have landed',
+    nameRequired: 'Add a name',
 
     // Step 2
-    closingHeading: 'When does your event end?',
-    closingSupporting:
-      'Guests can start snapping as soon as you share the QR code, and keep going until then.',
-    closingDateLabel: 'Closing date',
-    closingTimeLabel: 'Closing time',
+    closingHeading: 'Event ends',
+    closingDateLabel: 'Date',
+    closingTimeLabel: 'Time',
     timezoneLabel: 'Time zone',
-    closingInPast: 'Choose a closing time in the future',
+    closingInPast: 'Pick a future time',
 
     // Step 3
-    coverHeading: 'Make it feel like your event.',
-    coverSupporting: 'This is the first thing your guests see.',
+    coverHeading: 'Choose a cover',
     choosePhoto: 'Choose a photo',
     takePhoto: 'Take a photo',
-    removePhoto: 'Remove photo',
+    removePhoto: 'Remove',
     previewCover: 'Cover',
     previewCamera: 'Camera',
     previewGallery: 'Gallery',
 
     // Step 4
-    photoLimitHeading: 'How many Moments can each guest capture?',
+    photoLimitHeading: 'Moments per guest',
     photoLimitLimited: 'Limited',
-    photoLimitLimitedDescription: 'Choose a set number per guest.',
     photoLimitUnlimited: 'Unlimited',
-    photoLimitUnlimitedDescription: 'No limit.',
     photoLimitUnlimitedSupporting: '{price}',
     photoLimitCount: '{count} photos',
     photoLimitCustom: 'Custom',
     photoLimitCustomLabel: 'Photos per guest',
     photoLimitCustomPlaceholder: 'Enter a number',
-    photoLimitCustomHint: 'Set the number of photos each guest can take.',
-    cameraRollToggle: 'Allow adding from camera roll',
-    cameraRollToggleDescription: 'As well as taking photos in the app.',
-    cameraRollAnytime: 'Any time',
-    cameraRollAnytimeDescription: 'Guests can add camera-roll photos whenever they like.',
-    cameraRollAfterClose: 'Only after the event ends',
-    cameraRollAfterCloseDescription: 'Guests shoot live during the event, and add extras once it closes.',
 
     // Step 7 — kept for post-publish editing, where the finer-grained
     // own-photos-only option still applies. The creation flow itself now only
@@ -109,9 +95,6 @@ export const enGB = {
     // Step 7/8, merged: when photos appear, and who they appear for. Framed
     // entirely around the guest experience — the host isn't waiting on this
     // the way a guest is, so the copy never implies otherwise.
-    revealHeading: 'When should photos appear in the gallery?',
-    revealSupporting:
-      "This is for guests only. You'll be able to see the photos immediately as they come through.",
     guestsCanViewGallery: 'Guests can view the gallery',
     guestsCanViewGalleryDescription:
       'Including photos taken by other guests.',
@@ -123,11 +106,10 @@ export const enGB = {
     revealCustomDescription: '',
     revealDeveloping: 'Developing',
     revealReturnAt: 'Come back at {time}',
-    revealEditableNote: 'You can change any of this later, once your event is live.',
 
     // Step 9
-    treatmentHeading: 'How should the photos look?',
-    treatmentSupporting: 'You can change or remove this later. Your originals are always kept.',
+    treatmentHeading: 'Photo look',
+    treatmentSupporting: 'Originals are always kept.',
     treatmentOriginal: 'Original',
     treatmentDisposable: 'Disposable',
     treatmentBlackAndWhite: 'Monochrome',

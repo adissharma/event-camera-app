@@ -156,6 +156,21 @@ export default function SuccessScreen() {
                 </AppText>
               </Pressable>
             </View>
+
+            {/*
+              The one fact the flow no longer states anywhere else.
+              A host can reasonably assume the event begins when they say so,
+              and it does not — guests shoot from the moment they have the
+              link. This is where that matters, because this is where the
+              link gets shared.
+            */}
+            <AppText
+              variant="bodySmall"
+              align="center"
+              style={{ color: footerText, marginTop: spacing.sm }}
+            >
+              Guests can start shooting as soon as they have this.
+            </AppText>
           </Animated.View>
 
           <Animated.View style={entrance.item(4)}>

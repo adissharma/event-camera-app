@@ -50,7 +50,6 @@ export default function ClosingStep() {
     <CreationStepScreen
       step="closing"
       heading={copy.create.closingHeading}
-      supporting={copy.create.closingSupporting}
       // The calendar is the scroll surface on this step; the screen must not be.
       scrollable={false}
     >

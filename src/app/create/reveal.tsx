@@ -244,20 +244,20 @@ export default function RevealStep() {
     <CreationStepScreen
       step="reveal"
       heading="The Big Reveal"
-      supporting="Choose when you and your guests can look back at the captured memories."
+      supporting="When photos appear."
     >
       <View style={{ gap: spacing.xxl }}>
         <RevealPreview locked={hostReveal.mode !== 'instant'} message={getUnlockTimeText()} />
 
         <View style={{ gap: spacing.base }}>
-          <AppText variant="bodyLarge">When do you want to see new photos?</AppText>
+          <AppText variant="bodyLarge">You see photos</AppText>
           <SegmentedControl
             accessibilityLabel="When do you want to see new photos?"
             value={draft.hostRevealChoice}
             onChange={handleHostChoiceChange}
             options={[
               { value: 'during', label: 'Immediately' },
-              { value: 'at_close', label: 'After event ends' },
+              { value: 'at_close', label: 'At close' },
               { value: 'custom', label: 'Custom' },
             ]}
           />
@@ -294,15 +294,15 @@ export default function RevealStep() {
         </View>
 
         <View style={{ gap: spacing.base }}>
-          <AppText variant="bodyLarge">When should guests see the photos?</AppText>
+          <AppText variant="bodyLarge">Guests see photos</AppText>
           <SegmentedControl
             accessibilityLabel="When should guests see the photos?"
             value={guestRevealSelection}
             onChange={handleGuestChoiceChange}
             options={[
               { value: 'never', label: 'Never' },
-              { value: 'same', label: 'Same time as me' },
-              { value: 'review', label: 'After I review' },
+              { value: 'same', label: 'Same time' },
+              { value: 'review', label: 'After review' },
             ]}
           />
 
@@ -329,7 +329,6 @@ export default function RevealStep() {
             <ToggleRow
               label="Let guests view photos taken by others"
               hideLabel
-              description="Guests can browse the shared gallery when their reveal access allows it."
               value={draft.galleryVisibility === 'all_guests'}
               onValueChange={(allowed) =>
                 update({ galleryVisibility: allowed ? 'all_guests' : 'own_only' })
