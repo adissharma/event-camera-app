@@ -603,15 +603,17 @@ export default function HomeScreen() {
             end={ACCENT_GRADIENT_END}
             style={styles.headerPlusRing}
           >
-            <Pressable
-              onPress={() => router.push('/create')}
-              style={styles.headerPlusBtn}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Create an event"
-            >
-              <PlusIcon size={24} color="#0B0B0C" />
-            </Pressable>
+            <View style={styles.headerPlusGap}>
+              <Pressable
+                onPress={() => router.push('/create')}
+                style={styles.headerPlusBtn}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="Create an event"
+              >
+                <PlusIcon size={24} color="#0B0B0C" />
+              </Pressable>
+            </View>
           </LinearGradient>
         </View>
       </View>
@@ -934,10 +936,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerPlusBtn: {
+  /**
+   * The dark gap between the gradient and the ivory face, so the gradient
+   * reads as a ring rather than bleeding into the fill. Exactly what the
+   * Guestbook chip does between its own gradient and its content.
+   */
+  headerPlusGap: {
     width: 52 - 4.4,
     height: 52 - 4.4,
     borderRadius: 26 - 2.2,
+    backgroundColor: '#0B0B0C',
+    padding: 2.2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerPlusBtn: {
+    width: 52 - 8.8,
+    height: 52 - 8.8,
+    borderRadius: 26 - 4.4,
     backgroundColor: '#EFE9E0', // warm ivory, makes the create action pop
     alignItems: 'center',
     justifyContent: 'center',
@@ -956,7 +972,10 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    // A solid near-black rather than a white overlay: over the dashboard's
+    // shader background a translucent fill picks up whatever is behind it and
+    // drifts light. This stays dark wherever it lands.
+    backgroundColor: '#141417',
     alignItems: 'center',
     justifyContent: 'center',
   },
