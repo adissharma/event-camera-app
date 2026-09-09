@@ -85,10 +85,6 @@ export default function NameStep() {
             ))}
           </View>
         </View>
-
-        <AppText variant="caption" tone="secondary">
-          You can change this at any time, even after guests have joined.
-        </AppText>
       </View>
     </CreationStepScreen>
   );

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { CalendarPicker } from '@/components/forms/calendar-picker';
@@ -14,7 +14,7 @@ import {
   formatSelectedDate,
   formatTime12h,
 } from '@/components/forms/month-calendar';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, fontFamilies, layout, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
 
 export default function ClosingStep() {
@@ -62,18 +62,19 @@ export default function ClosingStep() {
             flexDirection: 'row',
             alignItems: 'center',
             gap: spacing.base,
-            padding: spacing.base,
-            borderRadius: radii.lg,
-            backgroundColor: colours.surface,
-            borderWidth: layout.hairline,
-            borderColor: selected ? colours.brandPrimary : colours.borderStrong,
           }}
         >
           <View style={{ flex: 1, gap: spacing.xxs }}>
             <AppText variant="eyebrow" tone="secondary">
               Ends
             </AppText>
-            <AppText variant="labelLarge">
+            {/*
+              Instrument Sans, and smaller than a title. The chosen date sits
+              directly under the screen heading, and in the display face at
+              title size the two read as competing headlines rather than as a
+              heading and its answer.
+            */}
+            <AppText style={S.selectedDate}>
               {selected ? formatSelectedDate(selected) : 'Choose a date'}
             </AppText>
           </View>
@@ -157,3 +158,12 @@ export default function ClosingStep() {
     </CreationStepScreen>
   );
 }
+
+const S = StyleSheet.create({
+  selectedDate: {
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 20,
+    letterSpacing: -0.1,
+    color: colours.textPrimary,
+  },
+});
