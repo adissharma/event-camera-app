@@ -78,7 +78,13 @@ export const enGB = {
     previewGallery: 'Gallery',
 
     // Step 4
-    photoLimitHeading: 'Moments per guest',
+    photoLimitHeading: 'How many photos can each guest take?',
+    photoLimitCopy5: 'Make every shot count.',
+    photoLimitCopy10: 'A little room to play.',
+    photoLimitCopy16: 'Plenty for the good stuff.',
+    photoLimitCopy24: 'Like a roll of film.',
+    photoLimitCopy36: 'For the snap-happy.',
+    photoLimitCopyUnlimited: 'No limits. Just moments.',
     photoLimitLimited: 'Limited',
     photoLimitUnlimited: 'Unlimited',
     photoLimitUnlimitedSupporting: '{price}',

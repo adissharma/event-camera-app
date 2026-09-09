@@ -1,11 +1,10 @@
-import { useState } from 'react';
-import { Pressable, View, type ViewStyle } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, PanResponder, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 
-import { ExpandingSection } from '@/components/feedback/expanding-section';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, spacing } from '@/design';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { CaptureLimitPreview } from '@/features/celebrations/creation/capture-limit-preview';
 import { useCoverSource } from '@/features/celebrations/cover-source';
@@ -16,7 +15,16 @@ import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
 import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 
 const LIMITED_COUNT_OPTIONS = [5, 10, 16, 24, 36] as const;
+const SLIDER_VALUES: (number | null)[] = [...LIMITED_COUNT_OPTIONS, null];
 const DEFAULT_LIMITED_COUNT = 16;
+const DYNAMIC_COPY = [
+  copy.create.photoLimitCopy5,
+  copy.create.photoLimitCopy10,
+  copy.create.photoLimitCopy16,
+  copy.create.photoLimitCopy24,
+  copy.create.photoLimitCopy36,
+  copy.create.photoLimitCopyUnlimited,
+];
 
 export default function PhotoLimitStep() {
   const { draft, update } = useCreationDraft();
@@ -34,74 +42,43 @@ export default function PhotoLimitStep() {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const storedCount = draft.shotLimitPerGuest;
-  const hasLimitedSelection = typeof storedCount === 'number' && Number.isFinite(storedCount);
-  const selectedCaptureMode =
-    storedCount === null ? 'unlimited' : hasLimitedSelection ? 'limited' : null;
+  const selectedIndex = storedCount === null ? 5 : Math.max(0, LIMITED_COUNT_OPTIONS.indexOf((storedCount ?? DEFAULT_LIMITED_COUNT) as never));
 
-  function selectLimited(nextChoice?: (typeof LIMITED_COUNT_OPTIONS)[number]) {
-    const resolvedChoice = nextChoice ?? inferLimitedChoice(storedCount) ?? DEFAULT_LIMITED_COUNT;
+  useEffect(() => {
+    if (storedCount === undefined) update({ shotLimitPerGuest: DEFAULT_LIMITED_COUNT });
+  }, [storedCount, update]);
 
-    void Haptics.selectionAsync().catch(() => {});
-    update({ shotLimitPerGuest: resolvedChoice });
-  }
-
-  function selectUnlimited() {
-    // Intercepted before the write, never after. Applying it and rolling back
-    // on a cancelled purchase would briefly grant an allowance the event has
-    // not paid for, and this draft is saved as the host moves through it.
-    if (unlimitedGated) {
+  function selectIndex(index: number) {
+    if (index === 5 && unlimitedGated) {
       void Haptics.selectionAsync().catch(() => {});
       setUpgradeOpen(true);
       return;
     }
     void Haptics.selectionAsync().catch(() => {});
-    update({ shotLimitPerGuest: null });
+    update({ shotLimitPerGuest: SLIDER_VALUES[index] });
   }
 
   return (
     <CreationStepScreen
       step="photo-limit"
       heading={copy.create.photoLimitHeading}
+      headingAlign="center"
       scrollable={false}
     >
       <View style={{ flex: 1, gap: spacing.base }}>
         <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' }}>
           <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
         </View>
-
-        <View style={{ gap: spacing.base }}>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, alignItems: 'stretch' }}>
-            <CaptureModeCard
-              title={copy.create.photoLimitLimited}
-              selected={selectedCaptureMode === 'limited'}
-              onPress={() => selectLimited()}
-              style={{ flex: 1 }}
-            />
-
-            <CaptureModeCard
-              title={copy.create.photoLimitUnlimited}
-              selected={selectedCaptureMode === 'unlimited'}
-              onPress={selectUnlimited}
-              // Visible and tappable, just not yet applicable — the host is
-              // the one who can change that, so the card's job is to be found.
-              style={{ flex: 1, opacity: unlimitedGated ? 0.55 : 1 }}
-            />
+        <View style={{ alignItems: 'center', gap: spacing.sm }}>
+          <DynamicLimitCopy index={selectedIndex} />
+          <DiscreteSlider index={selectedIndex} onChange={selectIndex} />
+          <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: spacing.xs }}>
+            {SLIDER_VALUES.map((value, index) => (
+              <AppText key={String(value)} variant="caption" tone={index === selectedIndex ? undefined : 'secondary'}>
+                {value === null ? '∞' : value}
+              </AppText>
+            ))}
           </View>
-
-          <ExpandingSection expanded={selectedCaptureMode === 'limited'}>
-            <View style={{ gap: spacing.sm, paddingTop: spacing.xs }}>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-                {LIMITED_COUNT_OPTIONS.map((option) => (
-                  <CountChoiceChip
-                    key={option}
-                    label={String(option)}
-                    selected={storedCount === option}
-                    onPress={() => selectLimited(option)}
-                  />
-                ))}
-              </View>
-            </View>
-          </ExpandingSection>
         </View>
       </View>
 
@@ -125,116 +102,72 @@ export default function PhotoLimitStep() {
   );
 }
 
-function CaptureModeCard({
-  title,
-  description,
-  selected,
-  onPress,
-  style,
-}: {
-  title: string;
-  /** Only where the label alone leaves a real question. */
-  description?: string;
-  selected: boolean;
-  onPress: () => void;
-  style?: ViewStyle;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={title}
-      accessibilityHint={description}
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          gap: spacing.sm,
-          padding: spacing.base,
-          borderRadius: radii.lg,
-          backgroundColor: selected ? colours.brandSoft : colours.surface,
-          borderWidth: selected ? 2 : layout.hairline,
-          borderColor: selected ? colours.brandPrimary : colours.borderStrong,
-          minHeight: 124,
-          opacity: pressed ? 0.92 : 1,
-        },
-        style,
-      ]}
-    >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.base }}>
-        <View style={{ flex: 1, gap: spacing.xs }}>
-          <AppText variant="labelLarge">{title}</AppText>
-          {description ? (
-            <AppText variant="bodySmall" tone="secondary">
-              {description}
-            </AppText>
-          ) : null}
-        </View>
+function DynamicLimitCopy({ index }: { index: number }) {
+  const opacity = useRef(new Animated.Value(1)).current;
 
-        <View
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderWidth: selected ? 0 : layout.hairline,
-            borderColor: colours.borderStrong,
-            backgroundColor: selected ? colours.brandPrimary : 'transparent',
-            marginTop: 2,
-          }}
-        >
-          {selected ? (
-            <AppText variant="caption" tone="onBrand">
-              ✓
-            </AppText>
-          ) : null}
-        </View>
-      </View>
-    </Pressable>
-  );
-}
+  useEffect(() => {
+    opacity.setValue(0);
+    Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+  }, [index, opacity]);
 
-function CountChoiceChip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
   return (
-    <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={label}
-      onPress={onPress}
-      style={{
-        minWidth: 58,
-        minHeight: layout.minTouchTarget,
-        paddingHorizontal: spacing.base,
-        paddingVertical: spacing.sm,
-        borderRadius: radii.pill,
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: selected ? colours.brandPrimary : colours.surfaceMuted,
-        borderWidth: selected ? 0 : layout.hairline,
-        borderColor: colours.borderStrong,
-      }}
-    >
-      <AppText variant="label" tone={selected ? 'onBrand' : 'secondary'}>
-        {label}
+    <Animated.View style={{ opacity }}>
+      <AppText variant="bodyLarge" tone="secondary" align="center">
+        {DYNAMIC_COPY[index]}
       </AppText>
-    </Pressable>
+    </Animated.View>
   );
 }
 
-function inferLimitedChoice(value: number | null | undefined) {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return null;
-  }
+function DiscreteSlider({ index, onChange }: { index: number; onChange: (index: number) => void }) {
+  const trackWidth = useRef(0);
+  const position = useRef(new Animated.Value(index / 5)).current;
+  const current = useRef(index);
+  const panResponder = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderGrant: (event) => {
+      current.current = trackWidth.current
+        ? Math.max(0, Math.min(5, Math.round((event.nativeEvent.locationX / trackWidth.current) * 5)))
+        : index;
+      position.setValue(current.current / 5);
+    },
+    onPanResponderMove: (_event, gesture) => {
+      if (!trackWidth.current) return;
+      const next = Math.max(0, Math.min(1, current.current / 5 + gesture.dx / trackWidth.current));
+      position.setValue(next);
+    },
+    onPanResponderRelease: (_event, gesture) => {
+      if (!trackWidth.current) return;
+      const next = Math.max(0, Math.min(5, Math.round(current.current + (gesture.dx / trackWidth.current) * 5)));
+      current.current = next;
+      Animated.spring(position, { toValue: next / 5, useNativeDriver: false, bounciness: 4 }).start();
+      onChange(next);
+    },
+  })).current;
 
-  return LIMITED_COUNT_OPTIONS.includes(value as (typeof LIMITED_COUNT_OPTIONS)[number])
-    ? (value as (typeof LIMITED_COUNT_OPTIONS)[number])
-    : DEFAULT_LIMITED_COUNT;
+  useEffect(() => {
+    current.current = index;
+    Animated.spring(position, { toValue: index / 5, useNativeDriver: false, bounciness: 4 }).start();
+  }, [index, position]);
+
+  return (
+    <View
+      onLayout={(event) => { trackWidth.current = event.nativeEvent.layout.width; }}
+      style={{ width: '100%', height: 58, justifyContent: 'center' }}
+      {...panResponder.panHandlers}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Photos per guest"
+      accessibilityValue={{ min: 5, max: 36, now: index === 5 ? 36 : [5, 10, 16, 24, 36][index] }}
+    >
+      <View style={{ height: 10, borderRadius: 5, backgroundColor: colours.surfaceMuted }}>
+        <Animated.View style={{ width: position.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), height: 10, borderRadius: 5, backgroundColor: colours.brandPrimary }} />
+      </View>
+      {[0, 1, 2, 3, 4, 5].map((stop) => (
+        <View key={stop} style={{ position: 'absolute', left: `${(stop / 5) * 100}%`, top: 24, width: 10, height: 10, marginLeft: -5, borderRadius: 5, backgroundColor: colours.borderStrong }} />
+      ))}
+      <Animated.View style={{ position: 'absolute', left: position.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }), top: 9, width: 40, height: 40, marginLeft: -20, borderRadius: 20, backgroundColor: colours.brandPrimary, borderWidth: 3, borderColor: colours.background, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 5, shadowOffset: { width: 0, height: 2 }, elevation: 3 }} />
+    </View>
+  );
 }
