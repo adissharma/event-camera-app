@@ -59,7 +59,7 @@ export const enGB = {
     nameRequired: 'Add a name',
 
     // Step 2
-    closingHeading: 'When does your event end?',
+    closingHeading: 'What day does your event end?',
     closingTimeHeading: 'What time does it end?',
     closingDateLabel: 'Date',
     closingTimeLabel: 'Time',
