@@ -35,37 +35,27 @@ function possessive(name: string): string {
 /**
  * Suggestions for a host whose first name we know.
  *
- * Ordered by how often each occasion actually happens, not alphabetically:
- * birthdays and parties are the common case, weddings the high-value one.
+ * Keep this intentionally short: the name step is a single decision, and
+ * three suggestions are enough to demonstrate the patterns without turning
+ * the form into a list of competing choices.
  */
 export function suggestionsFor(firstName: string): NameSuggestion[] {
   const owned = possessive(firstName);
 
   const engagementPrefix = `${firstName} and `;
-  const engagementSuffix = ' — engagement';
-
-  const wedsPrefix = `${firstName} weds `;
+  const engagementSuffix = ' engagement';
 
   return [
-    { label: `${owned} party`, value: `${owned} party` },
     { label: `${owned} birthday`, value: `${owned} birthday` },
-    { label: `${owned} wedding`, value: `${owned} wedding` },
-    { label: `${owned} hen party`, value: `${owned} hen party` },
-    { label: `${owned} stag party`, value: `${owned} stag party` },
     {
       label: engagementPrefix,
       gapLabel: 'name',
       labelSuffix: engagementSuffix,
-      value: `${engagementPrefix}${engagementSuffix}`,
-      // Drops the cursor between "and " and " — engagement".
+      value: `${engagementPrefix}engagement`,
+      // Drops the cursor between "and " and " engagement".
       cursorAt: engagementPrefix.length,
     },
-    {
-      label: wedsPrefix,
-      gapLabel: 'name',
-      value: wedsPrefix,
-      cursorAt: wedsPrefix.length,
-    },
+    { label: `${owned} wedding`, value: `${owned} wedding` },
   ];
 }
 
@@ -78,9 +68,6 @@ export function suggestionsFor(firstName: string): NameSuggestion[] {
  */
 export const GENERIC_SUGGESTIONS: NameSuggestion[] = [
   { label: 'Birthday party', value: 'Birthday party' },
-  { label: 'Our wedding', value: 'Our wedding' },
   { label: 'Engagement party', value: 'Engagement party' },
-  { label: 'Hen party', value: 'Hen party' },
-  { label: 'Stag party', value: 'Stag party' },
-  { label: 'Leaving do', value: 'Leaving do' },
+  { label: 'Our wedding', value: 'Our wedding' },
 ];

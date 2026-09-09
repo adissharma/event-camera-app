@@ -12,6 +12,8 @@ import { colours, layout, spacing } from '@/design';
 
 export interface ScreenProps {
   children: ReactNode;
+  /** Rendered above the scroll surface so it remains fixed while content moves. */
+  fixedHeader?: ReactNode;
   /** Pinned to the bottom above the safe area. Use for the primary action. */
   stickyAction?: ReactNode;
   /** When false, the sticky action stays fixed while the keyboard overlays it. */
@@ -37,6 +39,7 @@ export interface ScreenProps {
  */
 export function Screen({
   children,
+  fixedHeader,
   stickyAction,
   stickyActionFollowsKeyboard = true,
   scrollable = true,
@@ -55,18 +58,40 @@ export function Screen({
       (stickyAction ? spacing.xl : insets.bottom + spacing.xl) + bottomInsetExtra,
   };
 
-  const body = scrollable ? (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={[padding, contentStyle]}
-      keyboardShouldPersistTaps="handled"
-      keyboardDismissMode="interactive"
-      showsVerticalScrollIndicator={false}
+  const bodyPadding: ViewStyle = fixedHeader
+    ? { ...padding, paddingTop: 0 }
+    : padding;
+
+  const fixedHeaderBlock = fixedHeader ? (
+    <View
+      style={{
+        paddingHorizontal: layout.gutter,
+        paddingTop: insets.top + spacing.sm,
+        backgroundColor,
+      }}
     >
-      {children}
-    </ScrollView>
+      {fixedHeader}
+    </View>
+  ) : null;
+
+  const body = scrollable ? (
+    <View style={{ flex: 1 }}>
+      {fixedHeaderBlock}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[bodyPadding, contentStyle]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
+        showsVerticalScrollIndicator={false}
+      >
+        {children}
+      </ScrollView>
+    </View>
   ) : (
-    <View style={[{ flex: 1 }, padding, contentStyle]}>{children}</View>
+    <View style={{ flex: 1 }}>
+      {fixedHeaderBlock}
+      <View style={[{ flex: 1 }, bodyPadding, contentStyle]}>{children}</View>
+    </View>
   );
 
   const stickyActionBlock = stickyAction ? (

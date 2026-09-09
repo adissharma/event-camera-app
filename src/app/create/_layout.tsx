@@ -66,7 +66,10 @@ export default function CreateLayout() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colours.background },
-        animation: 'slide_from_right',
+        // CreationStepScreen owns the body entrance animation. Keeping the
+        // native route transition still lets the header stay mounted and
+        // visually fixed while only the step body moves.
+        animation: 'none',
       }}
     />
   );

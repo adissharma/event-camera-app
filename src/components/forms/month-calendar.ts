@@ -114,12 +114,29 @@ export function formatTime12h(date: Date): string {
 }
 
 export function formatSelectedDate(date: Date): string {
-  return new Intl.DateTimeFormat(LOCALE_CONFIG.locale, {
-    weekday: 'short',
-    day: 'numeric',
+  const monthAndYear = new Intl.DateTimeFormat(LOCALE_CONFIG.locale, {
     month: 'long',
     year: 'numeric',
   }).format(date);
+
+  return `${formatOrdinalDay(date.getDate())} ${monthAndYear}`;
+}
+
+/** English ordinal used by the selected closing-date summary. */
+export function formatOrdinalDay(day: number): string {
+  const remainder100 = day % 100;
+  if (remainder100 >= 11 && remainder100 <= 13) return `${day}th`;
+
+  switch (day % 10) {
+    case 1:
+      return `${day}st`;
+    case 2:
+      return `${day}nd`;
+    case 3:
+      return `${day}rd`;
+    default:
+      return `${day}th`;
+  }
 }
 
 /** The default closing time: 11:59 pm, the end of the day. */

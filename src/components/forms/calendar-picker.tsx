@@ -1,11 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import {
-  FlatList,
-  Pressable,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { useMemo } from 'react';
+import { FlatList, Pressable, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from '@/components/ui/text';
@@ -34,7 +28,7 @@ export interface CalendarPickerProps {
 
 const ROW_HEIGHT = 44;
 /** Breathing space between months with a month label. */
-const MONTH_HEADER_HEIGHT = 36;
+const MONTH_HEADER_HEIGHT = 44;
 /** 6 rows, fixed — see `buildMonth`. */
 const MONTH_BODY_HEIGHT = ROW_HEIGHT * 6;
 const MONTH_HEIGHT = MONTH_HEADER_HEIGHT + MONTH_BODY_HEIGHT;
@@ -42,10 +36,8 @@ const MONTH_HEIGHT = MONTH_HEADER_HEIGHT + MONTH_BODY_HEIGHT;
 /**
  * Vertically scrolling month calendar.
  *
- * Modelled on the iOS calendar: months run continuously downward, and the
- * current month's name stays pinned at the top until the next month reaches
- * it. That pinning is what makes fast flicking usable — without it you lose
- * track of where you are the moment you move quickly.
+ * Modelled on the iOS calendar: months run continuously downward and each
+ * month is named once, prominently, inside the scroll surface.
  *
  * Two implementation choices that matter for that feel:
  *
@@ -73,46 +65,8 @@ export function CalendarPicker({
 
   const months = useMemo(() => buildMonths(floor, monthCount), [floor, monthCount]);
 
-  const [pinnedIndex, setPinnedIndex] = useState(0);
-  const listRef = useRef<FlatList<CalendarMonth>>(null);
-
-  /**
-   * Tracks which month owns the top of the viewport.
-   *
-   * Derived from the scroll offset rather than from `onViewableItemsChanged`:
-   * viewability callbacks fire irregularly during a fast flick, which makes the
-   * pinned title lag or skip a month. Arithmetic on a fixed row height is exact
-   * and costs nothing.
-   */
-  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    const offset = event.nativeEvent.contentOffset.y;
-    // Shift threshold by one row height so that the title transitions to the next month
-    // as soon as the viewport scrolls into the last week of the current month.
-    const index = Math.min(
-      months.length - 1,
-      Math.max(0, Math.floor((offset + ROW_HEIGHT) / MONTH_HEIGHT)),
-    );
-    if (index !== pinnedIndex) setPinnedIndex(index);
-  }
-
-  const pinned = months[pinnedIndex];
-
   return (
     <View style={[{ gap: spacing.sm }, fill ? { flex: 1 } : null]}>
-      {/* Pinned month and year. Large, and deliberately outside the list so it
-          never scrolls with the content. */}
-      <View
-        style={{
-          flexDirection: 'row',
-          alignItems: 'baseline',
-          justifyContent: 'space-between',
-        }}
-      >
-        <AppText variant="titleLarge" accessibilityLiveRegion="polite">
-          {pinned?.label ?? ''}
-        </AppText>
-      </View>
-
       {/* Weekday header, fixed above the scroller. */}
       <View style={{ flexDirection: 'row' }}>
         {WEEKDAY_LABELS.map((label, index) => (
@@ -135,18 +89,12 @@ export function CalendarPicker({
         }}
       >
         <FlatList
-          ref={listRef}
           data={months}
           keyExtractor={(month) => `${month.year}-${month.month}`}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           // Lets a flick carry a long way, which is the point of a scrollable
           // calendar rather than a paged one.
           decelerationRate="normal"
-          // The month name lives in the pinned title above, so in-list headers
-          // must not stick as well — two copies of "July 2026" appeared on
-          // screen at once.
           initialNumToRender={4}
           windowSize={11}
           removeClippedSubviews={false}
@@ -201,7 +149,12 @@ function Month({
             gap: spacing.sm,
           }}
         >
-          <AppText variant="eyebrow" tone="secondary">
+          {/*
+            The only place the month is named now that the pinned header is
+            gone, so it carries that weight rather than sitting back as a
+            quiet separator label.
+          */}
+          <AppText variant="titleMedium" maxFontSizeMultiplier={1.4}>
             {month.label}
           </AppText>
           <View

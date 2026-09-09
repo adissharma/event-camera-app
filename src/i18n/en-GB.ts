@@ -54,7 +54,7 @@ export const enGB = {
 
   create: {
     // Step 1
-    nameHeading: 'Name your event',
+    nameHeading: "Let's Give Your Event a Name",
     namePlaceholder: "What's the occasion?",
     nameRequired: 'Add a name',
 

@@ -29,6 +29,8 @@ export interface TextFieldProps extends Omit<TextInputProps, 'style'> {
   editorial?: boolean;
   /** Extra styling for the input itself, e.g. tracking on a code field. */
   inputStyle?: TextStyle;
+  /** Hides the resting border while retaining the focused/error states. */
+  hideBorderWhenUnfocused?: boolean;
 }
 
 /**
@@ -52,7 +54,18 @@ const EDITORIAL_INPUT = {
 } as const;
 
 export const TextField = forwardRef<TextInput, TextFieldProps>(function TextField(
-  { label, hint, error, containerStyle, editorial = false, inputStyle, onFocus, onBlur, ...rest },
+  {
+    label,
+    hint,
+    error,
+    containerStyle,
+    editorial = false,
+    inputStyle,
+    hideBorderWhenUnfocused = false,
+    onFocus,
+    onBlur,
+    ...rest
+  },
   ref,
 ) {
   const [isFocused, setIsFocused] = useState(false);
@@ -99,12 +112,15 @@ export const TextField = forwardRef<TextInput, TextFieldProps>(function TextFiel
             minHeight: layout.minTouchTarget,
             // Width, not just colour: the focus and error states must survive
             // being seen by someone who cannot distinguish the hues.
-            borderWidth: isFocused || hasError ? 2 : layout.hairline,
+            borderWidth:
+              isFocused || hasError ? 2 : hideBorderWhenUnfocused ? 0 : layout.hairline,
             borderColor: hasError
               ? colours.error
               : isFocused
                 ? colours.focusRing
-                : colours.borderStrong,
+                : hideBorderWhenUnfocused
+                  ? 'transparent'
+                  : colours.borderStrong,
           },
           inputStyle,
         ]}

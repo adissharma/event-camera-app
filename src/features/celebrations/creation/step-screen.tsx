@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { View, Alert, Pressable, StyleSheet } from 'react-native';
+import { View, Alert, Pressable, StyleSheet, useWindowDimensions } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -8,7 +8,7 @@ import { ProgressThread } from '@/components/feedback/progress-thread';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, spacing } from '@/design';
+import { colours, easing, layout, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
@@ -17,9 +17,11 @@ import { buildEditPatch } from './edit-patch';
 import { updateEventSettings, celebrationDetailKeys } from '@/services/celebration-detail';
 import { celebrationKeys } from '@/services/celebrations';
 import Svg, { Path } from 'react-native-svg';
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 export interface CreationStepScreenProps {
   step: CreationStep;
   heading: string;
+  headingAlign?: 'left' | 'center';
   supporting?: string;
   children: ReactNode;
   /** Route to advance to. Defaults to the next step in order. */
@@ -54,7 +56,7 @@ function BackChevronIcon({ size = 18, color = '#A1A1AA' }) {
       <Path
         d="M15 18l-6-6 6-6"
         stroke={color}
-        strokeWidth={2.5}
+        strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -65,6 +67,7 @@ function BackChevronIcon({ size = 18, color = '#A1A1AA' }) {
 export function CreationStepScreen({
   step,
   heading,
+  headingAlign = 'left',
   supporting,
   children,
   nextHref,
@@ -77,6 +80,16 @@ export function CreationStepScreen({
   const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
+  const { width } = useWindowDimensions();
+  const bodyOffset = useSharedValue(Math.min(width * 0.2, 76));
+
+  useEffect(() => {
+    bodyOffset.value = withTiming(0, { duration: 320, easing: easing.enter });
+  }, [bodyOffset]);
+
+  const bodyStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: bodyOffset.value }],
+  }));
 
   const [saving, setSaving] = useState(false);
 
@@ -126,6 +139,26 @@ export function CreationStepScreen({
     <Screen
       scrollable={scrollable}
       contentStyle={scrollable ? undefined : { flex: 1 }}
+      fixedHeader={
+        <View style={styles.fixedHeader}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerSide}>
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={styles.backBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+              >
+                <BackChevronIcon color={colours.brandPrimary} />
+              </Pressable>
+            </View>
+            <View style={styles.progressCenter}>
+              {!isEditing && <ProgressThread current={index + 1} total={total} />}
+            </View>
+            <View style={styles.headerSide} />
+          </View>
+        </View>
+      }
       stickyAction={
         action ?? (
           <View style={{ gap: spacing.sm }}>
@@ -146,58 +179,61 @@ export function CreationStepScreen({
         )
       }
     >
-      <View style={[{ gap: spacing.xl }, scrollable ? null : { flex: 1 }]}>
-        <View style={styles.topNav}>
-          <Pressable 
-            onPress={() => {
-              navigation.goBack();
+      <View style={[styles.bodyViewport, scrollable ? null : { flex: 1 }]}>
+        <Animated.View
+          style={[{ gap: spacing.xl }, scrollable ? null : { flex: 1 }, bodyStyle]}
+        >
+          <Reveal
+            index={0}
+            style={{
+              gap: spacing.md,
+              maxWidth: layout.maxReadableWidth,
+              alignSelf: headingAlign === 'center' ? 'center' : undefined,
             }}
-            style={styles.backBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
           >
-            <BackChevronIcon color={colours.textSecondary} />
-            <AppText style={styles.backBtnText}>Back</AppText>
-          </Pressable>
-        </View>
-
-        {!isEditing && <ProgressThread current={index + 1} total={total} />}
-
-        <Reveal index={0} style={{ gap: spacing.md, maxWidth: layout.maxReadableWidth }}>
-          <AppText variant="displayLarge">{heading}</AppText>
-          {supporting ? (
-            <AppText variant="bodyLarge" tone="secondary">
-              {supporting}
+            <AppText variant="displayLarge" align={headingAlign}>
+              {heading}
             </AppText>
-          ) : null}
-        </Reveal>
+            {supporting ? (
+              <AppText variant="bodyLarge" tone="secondary" align={headingAlign}>
+                {supporting}
+              </AppText>
+            ) : null}
+          </Reveal>
 
-        <Reveal index={1} style={scrollable ? undefined : { flex: 1 }}>
-          {children}
-        </Reveal>
+          <Reveal index={1} style={scrollable ? undefined : { flex: 1 }}>
+            {children}
+          </Reveal>
+        </Animated.View>
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  topNav: {
+  fixedHeader: {
+    gap: spacing.xl,
+    paddingBottom: spacing.xl,
+  },
+  bodyViewport: {
+    width: '100%',
+    overflow: 'hidden',
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: spacing.xs,
-    marginBottom: -spacing.md,
+    gap: spacing.md,
+  },
+  headerSide: {
+    width: 44,
+  },
+  progressCenter: {
+    flex: 1,
   },
   backBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
-    paddingVertical: spacing.xs,
-    paddingRight: spacing.sm,
-    marginLeft: -4,
-  },
-  backBtnText: {
-    fontSize: 14,
-    fontFamily: 'InstrumentSans_500Medium',
-    color: colours.textSecondary,
+    justifyContent: 'center',
+    width: 44,
+    height: 44,
   },
 });

@@ -2,6 +2,8 @@ import {
   buildMonth,
   buildMonths,
   combineDateAndTime,
+  formatOrdinalDay,
+  formatSelectedDate,
   formatTime12h,
   isSameDay,
   startOfDay,
@@ -91,6 +93,29 @@ describe('time display', () => {
     expect(formatTime12h(new Date(2026, 0, 1, 23, 59))).toMatch(/11:59\s?pm/);
     expect(formatTime12h(new Date(2026, 0, 1, 0, 5))).toMatch(/12:05\s?am/);
     expect(formatTime12h(new Date(2026, 0, 1, 12, 0))).toMatch(/12:00\s?pm/);
+  });
+});
+
+describe('selected date display', () => {
+  it('shows the date without a repeated weekday', () => {
+    expect(formatSelectedDate(new Date(2026, 8, 14))).toBe('14th September 2026');
+    expect(formatSelectedDate(new Date(2026, 8, 22))).toBe('22nd September 2026');
+  });
+
+  it('uses the correct ordinal suffixes, including the teen exceptions', () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 31].map(formatOrdinalDay)).toEqual([
+      '1st',
+      '2nd',
+      '3rd',
+      '4th',
+      '11th',
+      '12th',
+      '13th',
+      '21st',
+      '22nd',
+      '23rd',
+      '31st',
+    ]);
   });
 });
 

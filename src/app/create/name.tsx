@@ -50,8 +50,10 @@ export default function NameStep() {
     <CreationStepScreen
       step="name"
       heading={copy.create.nameHeading}
+      headingAlign="center"
+      scrollable={false}
     >
-      <View style={{ gap: spacing.lg }}>
+      <View style={{ flex: 1, justifyContent: 'center', gap: spacing.lg }}>
         <TextField
           ref={inputRef}
           placeholder={copy.create.namePlaceholder}
@@ -65,17 +67,25 @@ export default function NameStep() {
           selection={selection}
           onSelectionChange={() => setSelection(undefined)}
           editorial
+          hideBorderWhenUnfocused
           autoCapitalize="sentences"
           maxLength={200}
           returnKeyType="done"
         />
 
         <View style={{ gap: spacing.sm }}>
-          <AppText variant="eyebrow" tone="secondary">
+          <AppText variant="eyebrow" tone="secondary" align="center">
             {firstName ? 'Suggestions' : 'Common occasions'}
           </AppText>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
+          <View
+            style={{
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              justifyContent: 'center',
+              gap: spacing.sm,
+            }}
+          >
             {suggestions.map((suggestion) => (
               <SuggestionChip
                 key={suggestion.value}
