@@ -82,7 +82,20 @@ async function ensureConfigured() {
     // Null when signed out — RevenueCat then falls back to an anonymous id,
     // and `logIn` below promotes it once a session exists.
     const userId = await currentUserId();
-    Purchases.configure({ apiKey: REVENUECAT_CONFIG.iosApiKey, appUserID: userId });
+    Purchases.configure({
+      apiKey: REVENUECAT_CONFIG.iosApiKey,
+      appUserID: userId,
+      // Have the SDK check the signature on RevenueCat's own responses, so a
+      // tampered reply is visible rather than trusted. INFORMATIONAL, not
+      // ENFORCED: a failed signature is reported but entitlements are still
+      // parsed, which is the right trade here because entitlements are not
+      // granted on the SDK's word anyway — `verify-purchase` re-checks every
+      // receipt server-side before the database activates anything. Enforcing
+      // would add a way for a network oddity to break a paid host's event
+      // while defending against something the server already catches.
+      entitlementVerificationMode:
+        Purchases.ENTITLEMENT_VERIFICATION_MODE.INFORMATIONAL,
+    });
   })();
 
   return configurePromise;
