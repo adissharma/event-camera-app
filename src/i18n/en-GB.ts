@@ -59,7 +59,8 @@ export const enGB = {
     nameRequired: 'Add a name',
 
     // Step 2
-    closingHeading: 'Event ends',
+    closingHeading: 'When does your event end?',
+    closingTimeHeading: 'What time does it end?',
     closingDateLabel: 'Date',
     closingTimeLabel: 'Time',
     timezoneLabel: 'Time zone',

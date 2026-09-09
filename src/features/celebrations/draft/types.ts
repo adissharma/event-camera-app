@@ -25,6 +25,7 @@ import type {
 export const CREATION_STEPS = [
   'name',
   'closing',
+  'closing-time',
   'cover',
   'photo-limit',
   'reveal',

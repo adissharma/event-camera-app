@@ -229,6 +229,9 @@ const STEP_VALIDATORS: Record<CreationStep, (draft: CreationDraft) => string | n
   name: (d) => firstError(nameSchema.safeParse({ title: d.title })),
   closing: (d) =>
     firstError(closingSchema.safeParse({ endsAt: d.endsAt ?? '', timezone: d.timezone })),
+  // The date step owns the closing validity gate; the time step only refines
+  // the already-composed value before handing control to the next screen.
+  'closing-time': () => null,
   cover: () => firstError(coverSchema.safeParse({})),
   'photo-limit': (d) =>
     firstError(photoLimitSchema.safeParse({ shotLimitPerGuest: d.shotLimitPerGuest })),

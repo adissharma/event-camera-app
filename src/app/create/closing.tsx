@@ -1,169 +1,67 @@
-import { useState } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { useEffect, useMemo } from 'react';
+import { View } from 'react-native';
 
-import { CalendarPicker } from '@/components/forms/calendar-picker';
-import { AppText } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { WheelPicker } from '@/components/forms/wheel-picker';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   DEFAULT_CLOSING_HOURS,
   DEFAULT_CLOSING_MINUTES,
   combineDateAndTime,
-  formatSelectedDate,
-  formatTime12h,
 } from '@/components/forms/month-calendar';
-import { colours, fontFamilies, layout, radii, spacing } from '@/design';
+import { spacing } from '@/design';
 import { copy } from '@/i18n';
+
+const MONTHS = Array.from({ length: 12 }, (_, month) =>
+  new Intl.DateTimeFormat('en-GB', { month: 'long' }).format(new Date(2020, month, 1)),
+);
+
+function daysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+function nextDefaultDate() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(DEFAULT_CLOSING_HOURS, DEFAULT_CLOSING_MINUTES, 0, 0);
+  return date;
+}
 
 export default function ClosingStep() {
   const { draft, update } = useCreationDraft();
-  const [showTimePicker, setShowTimePicker] = useState(false);
+  const selected = useMemo(() => (draft.endsAt ? new Date(draft.endsAt) : nextDefaultDate()), [draft.endsAt]);
+  const today = new Date();
+  const years = Array.from({ length: 7 }, (_, index) => today.getFullYear() + index);
+  const days = Array.from({ length: daysInMonth(selected.getFullYear(), selected.getMonth()) }, (_, i) => i + 1);
 
-  const selected = draft.endsAt ? new Date(draft.endsAt) : null;
+  useEffect(() => {
+    if (!draft.endsAt) update({ endsAt: selected.toISOString() });
+  }, [draft.endsAt, selected, update]);
 
-  function selectDay(day: Date) {
-    // Keep the time already chosen; only the date changes. Built from
-    // components rather than by mutating the existing date, so a 31st never
-    // rolls into the following month.
-    const hours = selected?.getHours() ?? DEFAULT_CLOSING_HOURS;
-    const minutes = selected?.getMinutes() ?? DEFAULT_CLOSING_MINUTES;
-    update({ endsAt: combineDateAndTime(day, hours, minutes).toISOString() });
+  function selectPart(part: 'day' | 'month' | 'year', value: number) {
+    const nextYear = part === 'year' ? value : selected.getFullYear();
+    const nextMonth = part === 'month' ? value : selected.getMonth();
+    const nextDay = Math.min(part === 'day' ? value : selected.getDate(), daysInMonth(nextYear, nextMonth));
+    const next = combineDateAndTime(
+      new Date(nextYear, nextMonth, nextDay),
+      selected.getHours(),
+      selected.getMinutes(),
+    );
+    if (next.getTime() <= Date.now()) return;
+    update({ endsAt: next.toISOString() });
   }
-
-  function selectTime(time: Date) {
-    const base = selected ?? new Date();
-    update({
-      endsAt: combineDateAndTime(base, time.getHours(), time.getMinutes()).toISOString(),
-    });
-  }
-
-  const timezoneCode = new Intl.DateTimeFormat('en-GB', {
-    timeZone: draft.timezone,
-    timeZoneName: 'short',
-  })
-    .formatToParts(selected ?? new Date())
-    .find((part) => part.type === 'timeZoneName')?.value;
 
   return (
-    <CreationStepScreen
-      step="closing"
-      heading={copy.create.closingHeading}
-      // The calendar is the scroll surface on this step; the screen must not be.
-      scrollable={false}
-    >
-      <View style={{ gap: spacing.base, flex: 1 }}>
-        {/* The choice, always visible above the calendar. Scrolling months
-            without a persistent answer is disorienting — you lose track of what
-            you actually picked. */}
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: spacing.base,
-          }}
-        >
-          <View style={{ flex: 1, gap: spacing.xxs }}>
-            <AppText variant="eyebrow" tone="secondary">
-              Ends
-            </AppText>
-            {/*
-              Instrument Sans, and smaller than a title. The chosen date sits
-              directly under the screen heading, and in the display face at
-              title size the two read as competing headlines rather than as a
-              heading and its answer.
-            */}
-            <AppText style={S.selectedDate}>
-              {selected ? formatSelectedDate(selected) : 'Choose a date'}
-            </AppText>
-          </View>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={
-              selected ? `Closing time, ${formatTime12h(selected)}. Change` : 'Set a time'
-            }
-            onPress={() => setShowTimePicker((open) => !open)}
-            style={{
-              minHeight: layout.minTouchTarget,
-              justifyContent: 'center',
-              paddingHorizontal: spacing.base,
-              borderRadius: radii.md,
-              borderWidth: layout.hairline,
-              borderColor: showTimePicker ? colours.focusRing : colours.borderStrong,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: spacing.xs }}>
-              {/* Displayed as am/pm; the picker below runs in 24-hour. */}
-              <AppText variant="numeric">
-                {selected ? formatTime12h(selected) : '11:59 pm'}
-              </AppText>
-              {timezoneCode ? (
-                <AppText variant="caption" tone="secondary">
-                  {timezoneCode}
-                </AppText>
-              ) : null}
-            </View>
-          </Pressable>
+    <CreationStepScreen step="closing" heading={copy.create.closingHeading} headingAlign="center" scrollable={false}>
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
+          <WheelPicker values={days} selectedIndex={selected.getDate() - 1} onChange={(index) => selectPart('day', days[index])} accessibilityLabel="Event end day" width={68} />
+          <WheelPicker values={MONTHS} selectedIndex={selected.getMonth()} onChange={selectPart.bind(null, 'month')} accessibilityLabel="Event end month" width={128} />
+          <WheelPicker values={years} selectedIndex={Math.max(0, years.indexOf(selected.getFullYear()))} onChange={(index) => selectPart('year', years[index])} accessibilityLabel="Event end year" width={84} />
         </View>
-
-        {showTimePicker ? (
-          <View
-            style={{
-              gap: spacing.sm,
-              padding: spacing.sm,
-              borderRadius: radii.lg,
-              backgroundColor: colours.surface,
-              borderWidth: layout.hairline,
-              borderColor: colours.borderSubtle,
-            }}
-          >
-            <DateTimePicker
-              value={
-                selected ??
-                combineDateAndTime(new Date(), DEFAULT_CLOSING_HOURS, DEFAULT_CLOSING_MINUTES)
-              }
-              mode="time"
-              display="spinner"
-              // 24-hour in the selector, am/pm in the summary above. Setting a
-              // time is unambiguous in 24-hour; reading one back is friendlier
-              // in 12-hour.
-              is24Hour
-              themeVariant="dark"
-              onChange={(_event, time) => {
-                if (Platform.OS !== 'ios') setShowTimePicker(false);
-                if (time) selectTime(time);
-              }}
-            />
-            {Platform.OS === 'ios' ? (
-              <Button
-                label={copy.common.done}
-                variant="secondary"
-                size="small"
-                onPress={() => setShowTimePicker(false)}
-              />
-            ) : null}
-          </View>
-        ) : null}
-
-        <CalendarPicker
-          selected={selected}
-          onSelect={selectDay}
-          // The past cannot be a closing time, so it is not offerable.
-          minimumDate={new Date()}
-          fill
-        />
       </View>
+      {/* Kept available for a possible return to the calendar experience. */}
+      {/* <CalendarPicker selected={selected} onSelect={(date) => update({ endsAt: date.toISOString() })} minimumDate={new Date()} fill /> */}
     </CreationStepScreen>
   );
 }
-
-const S = StyleSheet.create({
-  selectedDate: {
-    fontFamily: fontFamilies.textMedium,
-    fontSize: 20,
-    letterSpacing: -0.1,
-    color: colours.textPrimary,
-  },
-});
