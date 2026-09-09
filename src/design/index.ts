@@ -1,10 +1,4 @@
-export {
-  colours,
-  elevation,
-  ACCENT_GRADIENT,
-  ACCENT_GRADIENT_START,
-  ACCENT_GRADIENT_END,
-} from './colours';
+export { colours, elevation } from './colours';
 export type { ColourPalette, ElevationToken } from './colours';
 export { spacing, radii, layout } from './spacing';
 export type { SpacingToken, RadiusToken } from './spacing';

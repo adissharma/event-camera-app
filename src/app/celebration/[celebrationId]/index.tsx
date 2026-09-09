@@ -80,11 +80,7 @@ import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal'
 import { serverNow } from '@/services/server-time';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { BRAND_CONFIG } from '@/config/brand';
-import { colours, fontFamilies, radii, spacing, layout,
-  ACCENT_GRADIENT,
-  ACCENT_GRADIENT_START,
-  ACCENT_GRADIENT_END,
-} from '@/design';
+import { colours, fontFamilies, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
 import {
   resolveChallengeBrief,
@@ -4315,9 +4311,9 @@ export function EventDetailView({
                 accessibilityLabel={guestbookUnlocked ? 'Guestbook' : 'Guestbook, upgrade required'}
               >
                 <LinearGradient
-                  colors={ACCENT_GRADIENT}
-                  start={ACCENT_GRADIENT_START}
-                  end={ACCENT_GRADIENT_END}
+                  colors={['#C13584', '#E1306C', '#F77737', '#FCAF45']}
+                  start={{ x: 0, y: 1 }}
+                  end={{ x: 1, y: 0 }}
                   style={[
                     S.instagramGradientOuter,
                     {

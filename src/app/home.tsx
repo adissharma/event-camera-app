@@ -23,7 +23,7 @@ import { DashboardShaderBackground } from '@/components/ui/dashboard-shader-back
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { ClockIcon, PersonIcon } from '@/components/ui/icons';
+import { ClockIcon } from '@/components/ui/icons';
 import { SlideToConfirm } from '@/components/forms/slide-to-confirm';
 import { useAuth } from '@/features/auth/context';
 import { WORDMARK } from '@/features/onboarding/still-intro';
@@ -37,16 +37,7 @@ import {
 } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { fetchMyProfile, firstNameFrom, firstNameFromValue, profileKeys } from '@/services/profile';
-import {
-  colours,
-  fontFamilies,
-  layout,
-  radii,
-  spacing,
-  ACCENT_GRADIENT,
-  ACCENT_GRADIENT_START,
-  ACCENT_GRADIENT_END,
-} from '@/design';
+import { colours, fontFamilies, layout, radii, spacing } from '@/design';
 import { EventCardTile } from '@/features/celebrations/cards/event-card-tile';
 import { useCoverSource } from '@/features/celebrations/cover-source';
 import { galleryHeroImageHeight } from '@/app/celebration/[celebrationId]/index';
@@ -296,15 +287,11 @@ function ProfileSettingsRow({
   title,
   value,
   tone = 'default',
-  icon: Icon,
   onPress,
 }: {
   title: string;
   value: string;
   tone?: 'default' | 'danger';
-  /** Optional leading glyph. Only Join has one — it is the only row here
-   *  that goes somewhere rather than changing a setting. */
-  icon?: (props: { size?: number; color?: string }) => React.ReactElement;
   onPress: () => void;
 }) {
   const isDanger = tone === 'danger';
@@ -315,11 +302,6 @@ function ProfileSettingsRow({
       onPress={onPress}
       style={({ pressed }) => [styles.profileActionRow, pressed && styles.profileActionRowPressed]}
     >
-      {Icon ? (
-        <View style={styles.profileActionIcon}>
-          <Icon size={18} color={colours.textSecondary} />
-        </View>
-      ) : null}
       <View style={styles.profileActionText}>
         <AppText
           variant="labelLarge"
@@ -341,6 +323,70 @@ function ProfileSettingsRow({
 }
 
 // Helper to resolve status label (UPCOMING, completed hides label)
+/**
+ * The dashboard's bottom navigation.
+ *
+ * Three slots of equal width: two quiet destinations and, between them, the
+ * primary action raised so it breaks the bar's top edge. Equal thirds are what
+ * put Join and Profile at the outer thirds rather than jammed against the
+ * gutters, and they leave the centre free for the action to sit in without
+ * crowding either.
+ *
+ * Deliberately not a tab bar: nothing here is a tab and there is no selected
+ * state to show. It is a hairline, small icons and small labels over the
+ * page's own background, with one thing on it that is meant to be pressed.
+ */
+
+/** The bar the reader sees, above the safe-area inset. */
+const NAV_BAR_HEIGHT = 58;
+/** How far the create button rises above that bar. */
+const NAV_RAISE = 20;
+
+interface NavItem {
+  key: string;
+  label: string;
+  icon: (props: { size?: number; color?: string }) => React.ReactElement;
+  onPress: () => void;
+}
+
+function DashboardNav({
+  join,
+  profile,
+  bottomInset,
+}: {
+  join: NavItem;
+  profile: NavItem;
+  bottomInset: number;
+}) {
+  const rowHeight = NAV_RAISE + NAV_BAR_HEIGHT;
+
+  return (
+    <View style={[styles.navRoot, { height: rowHeight + bottomInset }]}>
+      <View style={[styles.navBar, { top: NAV_RAISE }]} pointerEvents="none" />
+
+      {/* Two slots now that Create has gone back to the header, so each
+          centres in its own half rather than leaving a hole between them. */}
+      <View style={[styles.navRow, { height: rowHeight }]}>
+        {[join, profile].map((item) => (
+          <Pressable
+            key={item.key}
+            onPress={item.onPress}
+            style={[styles.navSlot, { paddingTop: NAV_RAISE }]}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+          >
+            <item.icon size={19} color={colours.textSecondary} />
+            <AppText variant="caption" style={styles.navLabel}>
+              {item.label}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ trashedEventId?: string; openProfile?: string }>();
@@ -572,58 +618,27 @@ export default function HomeScreen() {
         <AppText style={styles.wordmark}>{WORDMARK}</AppText>
 
         {/*
-          Profile and Create, in the corner the header's `space-between` puts
-          them in. They used to be split between here and a bottom bar; one
-          corner holds both now, and the bar is gone.
-
-          Order is deliberate: Create sits furthest right, where a thumb
-          reaches first, because it is the only action on this screen that
-          makes something. Profile is the way to everything else.
+          Create, in the corner the header's `space-between` puts it in.
+          It sits apart from Join and Profile deliberately — those two are
+          ways of getting somewhere, this one makes something, and it is the
+          only action on this screen that does.
         */}
-        <View style={styles.headerActions}>
-          <Pressable
-            onPress={() => setProfileModalVisible(true)}
-            style={styles.headerProfileBtn}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Profile"
-          >
-            <PersonIcon size={22} color="#FFFFFF" />
-          </Pressable>
-
-          {/*
-            The Guestbook's gradient, reused rather than re-mixed — same
-            colours, same angle, same 2.2 ring — so the two most important
-            buttons in the app are visibly the same family. The ivory fill
-            and the icon are untouched; the gradient is a ring around them.
-          */}
-          <LinearGradient
-            colors={ACCENT_GRADIENT}
-            start={ACCENT_GRADIENT_START}
-            end={ACCENT_GRADIENT_END}
-            style={styles.headerPlusRing}
-          >
-            <View style={styles.headerPlusGap}>
-              <Pressable
-                onPress={() => router.push('/create')}
-                style={styles.headerPlusBtn}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Create an event"
-              >
-                <PlusIcon size={24} color="#0B0B0C" />
-              </Pressable>
-            </View>
-          </LinearGradient>
-        </View>
+        <Pressable
+          onPress={() => router.push('/create')}
+          style={styles.headerPlusBtn}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel="Create an event"
+        >
+          <PlusIcon size={24} color="#0B0B0C" />
+        </Pressable>
       </View>
 
       <ScrollView 
         contentContainerStyle={[
           styles.scrollContainer, 
-          // Nothing floats over this scroll any more — the bottom bar is
-          // gone and both its controls live in the header.
-          { paddingBottom: insets.bottom + spacing.lg }
+          // Clear of the bottom navigation, which floats over this scroll.
+          { paddingBottom: insets.bottom + NAV_RAISE + NAV_BAR_HEIGHT + spacing.lg }
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -697,6 +712,27 @@ export default function HomeScreen() {
         )}
       </ScrollView>
 
+      {/*
+        Join and Profile. One home each, so there is no second way to reach
+        either — Create is the exception, and it lives in the header.
+      */}
+      <DashboardNav
+        bottomInset={insets.bottom}
+        join={{
+          key: 'join',
+          label: 'Join',
+          icon: QrCodeIcon,
+          // The scanner-and-paste screen, not a second join implementation.
+          onPress: () => router.push('/join'),
+        }}
+        profile={{
+          key: 'profile',
+          label: 'Profile',
+          icon: UserIcon,
+          onPress: () => setProfileModalVisible(true),
+        }}
+      />
+
 
       {/* 7. Profile Bottom Sheet Drawer */}
       <Modal
@@ -727,29 +763,6 @@ export default function HomeScreen() {
                 <AppText variant="bodySmall" style={styles.profileHeaderSubtitle} numberOfLines={1}>
                   {profileName ? `${profileName} · ${profileEmail}` : profileEmail}
                 </AppText>
-              </View>
-            </View>
-
-            {/*
-              Join, rehoused. It left the bottom bar with Profile, and it is
-              the one thing in this sheet that is not about the account — so
-              it sits above Account settings rather than inside it, where a
-              guest arriving to join would have to read past "Change your
-              name" to find it.
-            */}
-            <View style={styles.profileSection}>
-              <View style={styles.profileSettingsCard}>
-                <ProfileSettingsRow
-                  title="Join Event"
-                  value="Scan a QR code or paste a link"
-                  icon={QrCodeIcon}
-                  onPress={() => {
-                    setProfileModalVisible(false);
-                    // The scanner-and-paste screen, not a second join
-                    // implementation.
-                    router.push('/join');
-                  }}
-                />
               </View>
             </View>
 
@@ -913,47 +926,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  profileActionIcon: {
-    width: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  /**
-   * The gradient ring. Holds the button's original 52 so the control keeps
-   * the size and position it had — the ring is drawn inside that, not added
-   * around it.
-   */
-  headerPlusRing: {
+  headerPlusBtn: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    padding: 2.2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  /**
-   * The dark gap between the gradient and the ivory face, so the gradient
-   * reads as a ring rather than bleeding into the fill. Exactly what the
-   * Guestbook chip does between its own gradient and its content.
-   */
-  headerPlusGap: {
-    width: 52 - 4.4,
-    height: 52 - 4.4,
-    borderRadius: 26 - 2.2,
-    backgroundColor: '#0B0B0C',
-    padding: 2.2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerPlusBtn: {
-    width: 52 - 8.8,
-    height: 52 - 8.8,
-    borderRadius: 26 - 4.4,
     backgroundColor: '#EFE9E0', // warm ivory, makes the create action pop
     alignItems: 'center',
     justifyContent: 'center',
@@ -962,22 +938,6 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
-  },
-  /**
-   * Secondary by construction: same footprint as Create, but a faint fill
-   * and an outline glyph instead of a solid ivory disc. No border — a ring
-   * here would compete with the gradient next to it.
-   */
-  headerProfileBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    // A solid near-black rather than a white overlay: over the dashboard's
-    // shader background a translucent fill picks up whatever is behind it and
-    // drifts light. This stays dark wherever it lands.
-    backgroundColor: '#141417',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   /** The stand-in wordmark, at roughly the ink height the logo asset had. */
   wordmark: {
@@ -988,6 +948,50 @@ const styles = StyleSheet.create({
     letterSpacing: -0.4,
   },
 
+  /**
+   * The navigation's full extent, including the space the create button rises
+   * into. Transparent: the bar itself is drawn separately, below.
+   *
+   * The button overlaps the bar's top edge, and doing that with a negative
+   * margin would put it outside its parent's bounds — where Android stops
+   * delivering touches. Giving the container the extra height instead keeps
+   * every tap target inside it.
+   */
+  navRoot: { position: 'absolute', left: 0, right: 0, bottom: 0 },
+
+  /**
+   * The bar: a hairline and the page's own background.
+   *
+   * No pill, no blur, no elevation — it should read as the floor of the
+   * screen rather than as an object floating above the events.
+   */
+  navBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colours.background,
+    borderTopWidth: layout.hairline,
+    borderTopColor: colours.borderSubtle,
+  },
+
+  navRow: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    paddingHorizontal: layout.gutter,
+  },
+  /**
+   * Join and Profile, centred in the bar rather than hung from its top.
+   *
+   * `paddingTop` pushes the content box down past the space the create button
+   * rises into, so `center` centres them in the bar the reader actually sees —
+   * not in the taller container that exists only to hold the button.
+   */
+  navSlot: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
+  navLabel: { color: colours.textSecondary, letterSpacing: 0.3 },
 
   /** Centred on the screen, so the button sits on the midline regardless of
       how wide the labels either side of it turn out to be. */
