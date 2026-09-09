@@ -611,7 +611,8 @@ export default function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Create an event"
               >
-                <PlusIcon size={24} color="#0B0B0C" />
+                <PlusIcon size={20} color="#0B0B0C" />
+                <AppText style={styles.headerPlusLabel}>Create</AppText>
               </Pressable>
             </View>
           </LinearGradient>
@@ -924,12 +925,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   /**
-   * The gradient ring. Holds the button's original 52 so the control keeps
-   * the size and position it had — the ring is drawn inside that, not added
-   * around it.
+   * The gradient ring.
+   *
+   * Height stays 52 so the control still sits on Profile's centre line; the
+   * width is intrinsic now that the button carries a word as well as a glyph.
+   * Radii are half the height at each layer, so the ends stay fully round as
+   * the button grows — a fixed radius would flatten into a lozenge.
    */
   headerPlusRing: {
-    width: 52,
     height: 52,
     borderRadius: 26,
     padding: 2.2,
@@ -942,26 +945,42 @@ const styles = StyleSheet.create({
    * Guestbook chip does between its own gradient and its content.
    */
   headerPlusGap: {
-    width: 52 - 4.4,
     height: 52 - 4.4,
-    borderRadius: 26 - 2.2,
+    borderRadius: (52 - 4.4) / 2,
     backgroundColor: '#0B0B0C',
     padding: 2.2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerPlusBtn: {
-    width: 52 - 8.8,
     height: 52 - 8.8,
-    borderRadius: 26 - 4.4,
-    backgroundColor: '#EFE9E0', // warm ivory, makes the create action pop
+    borderRadius: (52 - 8.8) / 2,
+    // Asymmetric: less on the glyph side than the word side, so the two read
+    // as evenly inset rather than the plus sitting adrift from the edge.
+    paddingLeft: 14,
+    paddingRight: 18,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EFE9E0', // warm ivory, makes the create action pop
     justifyContent: 'center',
     shadowColor: '#000000',
     shadowOpacity: 0.15,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
     elevation: 3,
+  },
+  /**
+   * Instrument Sans, not the display face the wordmark uses. The wordmark is
+   * the brand speaking; this is a control label, and setting both in
+   * Newsreader would make the button read as a second piece of branding
+   * rather than as something to press.
+   */
+  headerPlusLabel: {
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 15,
+    letterSpacing: 0.1,
+    color: '#0B0B0C',
   },
   /**
    * Secondary by construction: same footprint as Create, but a faint fill
