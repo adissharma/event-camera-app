@@ -240,12 +240,12 @@ export function ThemeCarousel({
                 <LinearGradient
                   pointerEvents="none"
                   colors={[colours.background, 'transparent']}
-                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: cardWidth * 0.18, borderRadius: 24 }}
+                  style={{ position: 'absolute', top: 0, left: 0, right: 0, height: cardWidth * 0.28, borderRadius: 24 }}
                 />
                 <LinearGradient
                   pointerEvents="none"
                   colors={['transparent', colours.background]}
-                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: cardWidth * 0.18, borderRadius: 24 }}
+                  style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: cardWidth * 0.28, borderRadius: 24 }}
                 />
               </View>
             );
