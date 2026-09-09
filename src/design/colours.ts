@@ -151,3 +151,21 @@ export const elevation = {
 } as const;
 
 export type ElevationToken = keyof typeof elevation;
+
+/**
+ * The accent gradient.
+ *
+ * The ring around the Guestbook chip, and now around Create. It marks the two
+ * things on the dashboard worth reaching for, and it only works as a signal
+ * while both are drawn from the same four stops at the same angle — which is
+ * why it is a token rather than a literal repeated at each call site. It was
+ * duplicated inline before this, and had already drifted: one copy used a
+ * violet second stop.
+ *
+ * `as const` because `LinearGradient` wants a tuple, not a widened string[].
+ */
+export const ACCENT_GRADIENT = ['#C13584', '#E1306C', '#F77737', '#FCAF45'] as const;
+
+/** The angle the accent gradient is always drawn at: bottom-left to top-right. */
+export const ACCENT_GRADIENT_START = { x: 0, y: 1 } as const;
+export const ACCENT_GRADIENT_END = { x: 1, y: 0 } as const;
