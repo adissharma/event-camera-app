@@ -12,7 +12,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { colours, easing, layout, spacing, useMotion } from '@/design';
-import { DeviceFrame } from '@/components/media/device-frame';
 import {
   ViewfinderBottomControls,
   ViewfinderCameraRollPlusIcon,
@@ -73,11 +72,10 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
   }));
 
   return (
-    <DeviceFrame width={220}>
-      <Animated.View
-        style={[S.frame, shakeStyle]}
-        accessibilityLabel="Guest camera capture-limit preview"
-      >
+    <Animated.View
+      style={[S.frame, shakeStyle]}
+      accessibilityLabel="Guest camera capture-limit preview"
+    >
       <View style={S.viewfinder}>
         <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
         <LinearGradient
@@ -120,15 +118,17 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
         style={S.topFade}
         pointerEvents="none"
       />
-      </Animated.View>
-    </DeviceFrame>
+    </Animated.View>
   );
 }
 
 const S = StyleSheet.create({
   frame: {
     width: '100%',
-    flex: 1,
+    maxWidth: 340,
+    height: 231,
+    borderBottomLeftRadius: 22,
+    borderBottomRightRadius: 22,
     overflow: 'hidden',
     backgroundColor: '#000000',
   },
