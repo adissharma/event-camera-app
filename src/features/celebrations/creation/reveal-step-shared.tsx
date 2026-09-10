@@ -6,7 +6,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -38,38 +37,34 @@ export function RevealPreview({
   const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
   const cellHeight = cellWidth * 1.25;
   const motion = useMotion();
-  const galleryScroll = useSharedValue(-PREVIEW_SCROLL_OFFSET);
-  const scrollTravel = motion.translate(22);
-  const scrollDuration = motion.duration('standardSlow');
-  const scrollDelay = motion.reduceMotion ? 0 : 260;
+  const galleryScroll = useSharedValue(0);
+  const scrollDuration = motion.duration('emotional');
+  const scrollDelay = motion.reduceMotion ? 0 : 320;
 
   useFocusEffect(
     useCallback(() => {
-      galleryScroll.set(-PREVIEW_SCROLL_OFFSET);
+      galleryScroll.set(0);
 
-      if (motion.reduceMotion) return;
+      if (motion.reduceMotion) {
+        galleryScroll.set(-PREVIEW_SCROLL_OFFSET);
+        return;
+      }
 
       galleryScroll.set(
         withDelay(
           scrollDelay,
-          withSequence(
-            withTiming(-PREVIEW_SCROLL_OFFSET - scrollTravel, {
-              duration: scrollDuration,
-              easing: easing.inOut,
-            }),
-            withTiming(-PREVIEW_SCROLL_OFFSET, {
-              duration: scrollDuration,
-              easing: easing.inOut,
-            }),
-          ),
+          withTiming(-PREVIEW_SCROLL_OFFSET, {
+            duration: scrollDuration,
+            easing: easing.inOut,
+          }),
         ),
       );
 
       return () => {
         cancelAnimation(galleryScroll);
-        galleryScroll.set(-PREVIEW_SCROLL_OFFSET);
+        galleryScroll.set(0);
       };
-    }, [galleryScroll, motion.reduceMotion, scrollDelay, scrollDuration, scrollTravel]),
+    }, [galleryScroll, motion.reduceMotion, scrollDelay, scrollDuration]),
   );
 
   const galleryScrollStyle = useAnimatedStyle(() => ({
