@@ -71,8 +71,18 @@ export default function PhotoLimitStep() {
       headingAlign="center"
       scrollable={false}
     >
-      <View style={{ flex: 1, gap: spacing.base, paddingBottom: spacing.xl }}>
-        <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' }}>
+      {/* Phone and slider as one centred block. The preview used to take all
+          the free space, which pushed the slider to the bottom of the screen
+          and left the two reading as unrelated. */}
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          gap: spacing.lg,
+          paddingBottom: spacing.xl,
+        }}
+      >
+        <View style={{ alignItems: 'center' }}>
           <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
         </View>
 
@@ -81,7 +91,7 @@ export default function PhotoLimitStep() {
             {selectedLimit === null ? '∞' : selectedLimit}
           </AppText>
           <LimitCopy text={limitCopy} />
-          <View style={{ width: '100%', marginTop: spacing.lg }}>
+          <View style={{ width: '100%', marginTop: spacing.base }}>
             <SteppedSlider value={selectedLimit} onValueChange={selectLimit} />
           </View>
         </View>
