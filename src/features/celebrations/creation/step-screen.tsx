@@ -139,6 +139,7 @@ export function CreationStepScreen({
     <Screen
       scrollable={scrollable}
       contentStyle={scrollable ? undefined : { flex: 1 }}
+      stickyActionSeparator={false}
       fixedHeader={
         <View style={styles.fixedHeader}>
           <View style={styles.headerRow}>

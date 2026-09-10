@@ -28,6 +28,8 @@ export interface ScreenProps {
   backgroundColor?: string;
   /** Optional override for the sticky action block background. Defaults to the app canvas. */
   stickyActionBackgroundColor?: string;
+  /** Draws the separator above the sticky action. */
+  stickyActionSeparator?: boolean;
 }
 
 /**
@@ -48,6 +50,7 @@ export function Screen({
   bottomInsetExtra = 0,
   backgroundColor = colours.background,
   stickyActionBackgroundColor = colours.background,
+  stickyActionSeparator = true,
 }: ScreenProps) {
   const insets = useSafeAreaInsets();
 
@@ -101,7 +104,7 @@ export function Screen({
         paddingTop: spacing.base,
         paddingBottom: insets.bottom + spacing.base,
         backgroundColor: stickyActionBackgroundColor,
-        borderTopWidth: layout.hairline,
+        borderTopWidth: stickyActionSeparator ? layout.hairline : 0,
         borderTopColor: colours.borderSubtle,
       }}
     >

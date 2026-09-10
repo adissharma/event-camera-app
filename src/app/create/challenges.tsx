@@ -153,6 +153,7 @@ export default function ChallengesStep() {
 
   return (
     <Screen
+      stickyActionSeparator={false}
       stickyAction={
         <View style={{ gap: spacing.sm }}>
           <Button
