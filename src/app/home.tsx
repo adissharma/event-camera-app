@@ -43,9 +43,7 @@ import {
   layout,
   radii,
   spacing,
-  ACCENT_GRADIENT,
-  ACCENT_GRADIENT_START,
-  ACCENT_GRADIENT_END,
+  MOMENTS_SLIDER_GRADIENT,
 } from '@/design';
 import { EventCardTile } from '@/features/celebrations/cards/event-card-tile';
 import { useCoverSource } from '@/features/celebrations/cover-source';
@@ -592,9 +590,9 @@ export default function HomeScreen() {
           </Pressable>
 
           <LinearGradient
-            colors={ACCENT_GRADIENT}
-            start={ACCENT_GRADIENT_START}
-            end={ACCENT_GRADIENT_END}
+            colors={MOMENTS_SLIDER_GRADIENT}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
             style={styles.headerPlusBtn}
           >
             <Pressable
