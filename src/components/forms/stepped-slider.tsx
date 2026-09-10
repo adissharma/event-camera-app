@@ -11,8 +11,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { AppText } from '@/components/ui/text';
-import { colours, MOMENTS_SLIDER_GRADIENT, spacing, useMotion } from '@/design';
+import { colours, MOMENTS_SLIDER_GRADIENT, useMotion } from '@/design';
 import {
   MOMENT_LIMIT_VALUES,
   momentLimitIndex,
@@ -24,6 +23,19 @@ export { MOMENT_LIMIT_VALUES, momentLimitIndex, nearestMomentLimitIndex, type Mo
 
 const TRACK_HEIGHT = 54;
 const DOT_INSET_PERCENT = 7;
+const DOT_INSET = DOT_INSET_PERCENT / 100;
+const STEP_COUNT = MOMENT_LIMIT_VALUES.length - 1;
+
+function dotProgressForIndex(index: number): number {
+  'worklet';
+  return DOT_INSET + (index / STEP_COUNT) * (1 - DOT_INSET * 2);
+}
+
+function fillProgressForIndex(index: number): number {
+  'worklet';
+  // Unlimited intentionally fills through the rounded end of the track.
+  return index === STEP_COUNT ? 1 : dotProgressForIndex(index);
+}
 
 export interface SteppedSliderProps {
   value: MomentLimit | undefined;
@@ -34,21 +46,25 @@ export interface SteppedSliderProps {
 export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
   const motion = useMotion();
   const initialIndex = momentLimitIndex(value);
-  const progress = useSharedValue(initialIndex / (MOMENT_LIMIT_VALUES.length - 1));
+  const progress = useSharedValue(fillProgressForIndex(initialIndex));
   const activeIndex = useSharedValue(initialIndex);
   const trackWidth = useSharedValue(0);
 
-  const notifyChange = useCallback((index: number) => {
+  const notifyValueChange = useCallback((index: number) => {
     const next = MOMENT_LIMIT_VALUES[index];
     if (next === undefined) return;
-    void Haptics.selectionAsync().catch(() => {});
     onValueChange(next);
   }, [onValueChange]);
+
+  const notifySliderSnap = useCallback((index: number) => {
+    void Haptics.selectionAsync().catch(() => {});
+    notifyValueChange(index);
+  }, [notifyValueChange]);
 
   useEffect(() => {
     const index = momentLimitIndex(value);
     activeIndex.set(index);
-    progress.set(withTiming(index / (MOMENT_LIMIT_VALUES.length - 1), {
+    progress.set(withTiming(fillProgressForIndex(index), {
       duration: motion.duration('micro'),
     }));
   }, [activeIndex, motion, progress, value]);
@@ -63,10 +79,10 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     if (width <= 0) return;
 
     const nextProgress = Math.max(0, Math.min(1, x / width));
-    const nextIndex = nearestMomentLimitIndex(nextProgress);
+    const nextIndex = nearestMomentLimitIndex((nextProgress - DOT_INSET) / (1 - DOT_INSET * 2));
     progress.set(
       snap
-        ? withSpring(nextIndex / (MOMENT_LIMIT_VALUES.length - 1), {
+        ? withSpring(fillProgressForIndex(nextIndex), {
             duration: 400,
             dampingRatio: 0.8,
           })
@@ -75,7 +91,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
 
     if (nextIndex !== activeIndex.get()) {
       activeIndex.set(nextIndex);
-      scheduleOnRN(notifyChange, nextIndex);
+      scheduleOnRN(notifySliderSnap, nextIndex);
     }
   };
 
@@ -90,7 +106,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
   const selectedIndex = momentLimitIndex(value);
   const adjustBy = (delta: number) => {
     const nextIndex = Math.max(0, Math.min(MOMENT_LIMIT_VALUES.length - 1, selectedIndex + delta));
-    if (nextIndex !== selectedIndex) notifyChange(nextIndex);
+    if (nextIndex !== selectedIndex) notifyValueChange(nextIndex);
   };
 
   function handleLayout(event: LayoutChangeEvent) {
@@ -98,7 +114,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
   }
 
   return (
-    <View style={{ width: '100%', gap: spacing.sm }}>
+    <View style={{ width: '100%' }}>
       <GestureDetector gesture={gesture}>
         <Animated.View
           accessible
@@ -126,7 +142,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
                 pointerEvents="none"
                 style={{
                   position: 'absolute',
-                  left: `${DOT_INSET_PERCENT + (index / (MOMENT_LIMIT_VALUES.length - 1)) * (100 - DOT_INSET_PERCENT * 2)}%`,
+                  left: `${dotProgressForIndex(index) * 100}%`,
                   marginLeft: -4,
                   width: 8,
                   height: 8,
@@ -138,25 +154,6 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
           })}
         </Animated.View>
       </GestureDetector>
-
-      <View style={{ height: 18, position: 'relative' }} pointerEvents="none">
-        {MOMENT_LIMIT_VALUES.map((item, index) => (
-          <AppText
-            key={String(item)}
-            variant="caption"
-            tone={index === selectedIndex ? 'primary' : 'secondary'}
-            style={{
-              position: 'absolute',
-              left: `${DOT_INSET_PERCENT + (index / (MOMENT_LIMIT_VALUES.length - 1)) * (100 - DOT_INSET_PERCENT * 2)}%`,
-              width: 32,
-              marginLeft: -16,
-              textAlign: 'center',
-            }}
-          >
-            {item === null ? '∞' : item}
-          </AppText>
-        ))}
-      </View>
     </View>
   );
 }

@@ -88,7 +88,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
           <ViewfinderShotCounter
             value={limit === null ? '∞' : limit}
             animateChanges={limit !== null}
-            haptics={limit !== null}
+            haptics={false}
             rollFrom={1}
             rollDelayMs={0}
           />

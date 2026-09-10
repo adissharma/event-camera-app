@@ -78,9 +78,14 @@ export default function PhotoLimitStep() {
           <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
         </View>
 
-        <View style={{ gap: spacing.sm }}>
+        <View style={{ alignItems: 'center', gap: spacing.xs }}>
+          <AppText variant="numericLarge" align="center">
+            {selectedLimit === null ? '∞' : selectedLimit}
+          </AppText>
           <LimitCopy text={limitCopy} duration={motion.duration('micro')} />
-          <SteppedSlider value={selectedLimit} onValueChange={selectLimit} />
+          <View style={{ width: '100%', marginTop: spacing.lg }}>
+            <SteppedSlider value={selectedLimit} onValueChange={selectLimit} />
+          </View>
         </View>
       </View>
 
