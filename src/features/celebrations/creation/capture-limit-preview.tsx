@@ -118,6 +118,12 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
         style={S.topFade}
         pointerEvents="none"
       />
+      <LinearGradient
+        colors={['rgba(11,11,12,0)', 'rgba(11,11,12,0.72)', colours.background]}
+        locations={[0, 0.64, 1]}
+        style={S.bottomFade}
+        pointerEvents="none"
+      />
     </Animated.View>
   );
 }
@@ -136,6 +142,14 @@ const S = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
+    left: 0,
+    height: 54,
+    zIndex: 50,
+  },
+  bottomFade: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
     left: 0,
     height: 54,
     zIndex: 50,
