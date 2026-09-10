@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import Animated, {
   cancelAnimation,
@@ -12,7 +12,7 @@ import Animated, {
 
 import { LockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
-import { colours, easing, layout, radii, spacing, useMotion } from '@/design';
+import { colours, easing, fontFamilies, layout, radii, spacing, useMotion } from '@/design';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const PREVIEW_IMAGES = [
@@ -22,21 +22,26 @@ const PREVIEW_IMAGES = [
   require('../../../../assets/images/placeholders/treatment_preview_2.png'),
 ] as const;
 
-const PREVIEW_WIDTH = 280;
+const PREVIEW_MAX_WIDTH = 340;
 const PREVIEW_GAP = 6;
-const PREVIEW_CELL_WIDTH = (PREVIEW_WIDTH - PREVIEW_GAP) / 2;
-const PREVIEW_CELL_HEIGHT = PREVIEW_CELL_WIDTH * 1.25;
+const SECOND_ROW_PEEK = 24;
+const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
 
 export function RevealPreview({
   locked,
 }: {
   locked: boolean;
 }) {
+  const { width: screenWidth } = useWindowDimensions();
+  const previewWidth = Math.min(PREVIEW_MAX_WIDTH, screenWidth - layout.gutter * 2);
+  const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
+  const cellHeight = cellWidth * 1.25;
+
   return (
     <View style={styles.previewContainer}>
-      <View style={styles.galleryPreview}>
+      <View style={[styles.galleryPreview, { width: previewWidth, height: cellHeight + PREVIEW_GAP + SECOND_ROW_PEEK }]}>
         {PREVIEW_IMAGES.map((imgSrc, index) => (
-          <WavePhotoTile key={index} index={index}>
+          <WavePhotoTile key={index} index={index} style={{ width: cellWidth, height: cellHeight }}>
             <Image
               source={imgSrc}
               style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
@@ -49,6 +54,14 @@ export function RevealPreview({
                 <View style={styles.lockCircle}>
                   <LockIcon size={18} color="#FFFFFF" />
                 </View>
+              </View>
+            ) : null}
+
+            {!locked ? (
+              <View style={[styles.photoNameTag, { maxWidth: Math.max(0, cellWidth - 24) }]}>
+                <AppText style={styles.photoNameText} numberOfLines={1} ellipsizeMode="tail">
+                  {PREVIEW_AUTHORS[index]}
+                </AppText>
               </View>
             ) : null}
           </WavePhotoTile>
@@ -73,9 +86,11 @@ export function RevealPreview({
 function WavePhotoTile({
   index,
   children,
+  style,
 }: {
   index: number;
   children: React.ReactNode;
+  style: { width: number; height: number };
 }) {
   const motion = useMotion();
   const wave = useSharedValue(0);
@@ -115,7 +130,7 @@ function WavePhotoTile({
     ],
   }));
 
-  return <Animated.View style={[styles.photoTile, animatedStyle]}>{children}</Animated.View>;
+  return <Animated.View style={[styles.photoTile, style, animatedStyle]}>{children}</Animated.View>;
 }
 
 export function ChoiceTile({
@@ -204,20 +219,33 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   galleryPreview: {
-    width: PREVIEW_WIDTH,
-    height: PREVIEW_CELL_HEIGHT * 2 + PREVIEW_GAP,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: PREVIEW_GAP,
     position: 'relative',
     alignContent: 'flex-start',
+    overflow: 'hidden',
   },
   photoTile: {
-    width: PREVIEW_CELL_WIDTH,
-    height: PREVIEW_CELL_HEIGHT,
     borderRadius: 22,
     overflow: 'hidden',
-    backgroundColor: colours.surfaceMuted,
+    backgroundColor: colours.surface,
+  },
+  photoNameTag: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    backgroundColor: 'rgba(11, 11, 12, 0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  photoNameText: {
+    fontFamily: fontFamilies.display,
+    fontSize: 13,
+    color: '#EFE9E0',
+    letterSpacing: 0.2,
+    flexShrink: 1,
   },
   lockOverlay: {
     ...StyleSheet.absoluteFill,
@@ -240,14 +268,14 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 48,
+    height: 40,
   },
   bottomFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 48,
+    height: SECOND_ROW_PEEK + spacing.sm,
   },
   choiceTile: {
     flex: 1,
