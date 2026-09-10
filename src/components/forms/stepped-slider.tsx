@@ -64,10 +64,9 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     onValueChange(next);
   }, [onValueChange]);
 
-  const notifySliderSnap = useCallback((index: number) => {
+  const notifySliderStep = useCallback(() => {
     void Haptics.selectionAsync().catch(() => {});
-    notifyValueChange(index);
-  }, [notifyValueChange]);
+  }, []);
 
   useEffect(() => {
     const index = momentLimitIndex(value);
@@ -94,7 +93,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     (nextIndex) => {
       if (nextIndex >= 0 && nextIndex !== activeIndex.get()) {
         activeIndex.set(nextIndex);
-        scheduleOnRN(notifySliderSnap, nextIndex);
+        scheduleOnRN(notifySliderStep);
       }
     },
   );
@@ -116,6 +115,10 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
         duration: 400,
         dampingRatio: 0.8,
       }));
+      // The detent reaction is visual feedback only. Committing from it made
+      // every intermediate spring position compete with the actual tap target,
+      // so a tap could be overwritten by the leftmost value before settling.
+      scheduleOnRN(notifyValueChange, nextIndex);
       return;
     }
 
