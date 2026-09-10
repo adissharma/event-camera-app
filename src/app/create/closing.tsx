@@ -55,9 +55,9 @@ export default function ClosingStep() {
     <CreationStepScreen step="closing" heading={copy.create.closingHeading} headingAlign="center" scrollable={false}>
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
-          <WheelPicker values={days} selectedIndex={selected.getDate() - 1} onChange={(index) => selectPart('day', days[index])} accessibilityLabel="Event end day" width={68} />
-          <WheelPicker values={MONTHS} selectedIndex={selected.getMonth()} onChange={selectPart.bind(null, 'month')} accessibilityLabel="Event end month" width={128} />
-          <WheelPicker values={years} selectedIndex={Math.max(0, years.indexOf(selected.getFullYear()))} onChange={(index) => selectPart('year', years[index])} accessibilityLabel="Event end year" width={84} />
+          <WheelPicker values={days} selectedIndex={selected.getDate() - 1} onChange={(index) => selectPart('day', days[index])} accessibilityLabel="Event end day" width={76} />
+          <WheelPicker values={MONTHS} selectedIndex={selected.getMonth()} onChange={selectPart.bind(null, 'month')} accessibilityLabel="Event end month" width={156} />
+          <WheelPicker values={years} selectedIndex={Math.max(0, years.indexOf(selected.getFullYear()))} onChange={(index) => selectPart('year', years[index])} accessibilityLabel="Event end year" width={96} />
         </View>
       </View>
       {/* Kept available for a possible return to the calendar experience. */}

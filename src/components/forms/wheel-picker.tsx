@@ -76,10 +76,18 @@ export function WheelPicker<T extends string | number>({
         ref={listRef}
         data={values}
         keyExtractor={(value, index) => `${String(value)}-${index}`}
+        extraData={selectedIndex}
         renderItem={({ item, index }: ListRenderItemInfo<T>) => (
           <View style={styles.row}>
             {locked && index !== selectedIndex ? null : (
-              <AppText variant={index === selectedIndex ? 'titleMedium' : 'bodyLarge'} tone={index === selectedIndex ? undefined : 'secondary'} numberOfLines={1} adjustsFontSizeToFit>
+              <AppText
+                variant={index === selectedIndex ? 'titleMedium' : 'bodyLarge'}
+                tone={index === selectedIndex ? undefined : 'secondary'}
+                align="center"
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.25}
+                style={styles.value}
+              >
                 {formatValue(item)}
               </AppText>
             )}
@@ -106,6 +114,7 @@ export function WheelPicker<T extends string | number>({
 const styles = StyleSheet.create({
   container: { overflow: 'hidden', position: 'relative' },
   row: { alignItems: 'center', justifyContent: 'center', height: WHEEL_ROW_HEIGHT, paddingHorizontal: spacing.xs },
+  value: { width: '100%' },
   selectionRail: { position: 'absolute', left: 0, right: 0, height: WHEEL_ROW_HEIGHT, borderTopWidth: layout.hairline, borderBottomWidth: layout.hairline, borderColor: colours.borderSubtle },
   fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, opacity: 0.72 },
   fadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, opacity: 0.72 },
