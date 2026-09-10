@@ -327,20 +327,29 @@ export default function RevealStep() {
           {/* What was chosen, and the way back to change it. Deliberately a
               line of text rather than a row or a card — it is a receipt, not
               another control competing with the toggle above it. */}
-          {isDelayed ? (
-            <Pressable
-              onPress={() => setDelaySheetOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`${delaySummary()}. Edit`}
-              hitSlop={10}
-              style={S.summary}
-            >
-              <AppText variant="bodySmall" tone="secondary">
-                {delaySummary()}
-              </AppText>
-              <PencilIcon size={13} color={colours.textSecondary} />
-            </Pressable>
-          ) : null}
+          {/*
+            The slot is always here, whether or not there is a delay to
+            report. Rendering it conditionally changed the block's height,
+            which the centring then corrected by lifting everything — the
+            collage jumped and its fades tore as it moved. A line appearing
+            in reserved space costs nothing above it.
+          */}
+          <View style={S.summarySlot}>
+            {isDelayed ? (
+              <Pressable
+                onPress={() => setDelaySheetOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel={`${delaySummary()}. Edit`}
+                hitSlop={10}
+                style={S.summary}
+              >
+                <AppText variant="bodySmall" tone="secondary">
+                  {delaySummary()}
+                </AppText>
+                <PencilIcon size={13} color={colours.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -363,6 +372,11 @@ export default function RevealStep() {
 }
 
 const S = StyleSheet.create({
+  /** Reserved whether or not a delay is set, so the block never resizes. */
+  summarySlot: {
+    height: 20,
+    justifyContent: 'center',
+  },
   summary: {
     flexDirection: 'row',
     alignItems: 'center',

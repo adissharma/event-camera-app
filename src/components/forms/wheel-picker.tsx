@@ -28,6 +28,14 @@ export interface WheelPickerProps<T extends string | number> {
    * sits in the middle, so an even count has no middle.
    */
   visibleRows?: number;
+  /**
+   * Shows the selection alone, with no neighbours and no scrolling.
+   *
+   * For a value the surrounding UI has already decided — the wheel still
+   * says what it is, and keeps its height so nothing around it moves, but
+   * stops offering alternatives it would not accept.
+   */
+  locked?: boolean;
 }
 
 /** A compact, native-feeling wheel: momentum scrolling, snapping and a quiet centre rail. */
@@ -40,12 +48,21 @@ export function WheelPicker<T extends string | number>({
   width = 96,
   fadeColor = colours.background,
   visibleRows = DEFAULT_VISIBLE_ROWS,
+  locked = false,
 }: WheelPickerProps<T>) {
   const listRef = useRef<FlatList<T>>(null);
+  const hasSettled = useRef(false);
   const edgePadding = WHEEL_ROW_HEIGHT * Math.floor(visibleRows / 2);
 
   useEffect(() => {
-    listRef.current?.scrollToOffset({ offset: selectedIndex * WHEEL_ROW_HEIGHT, animated: false });
+    // Animated after the first placement: the opening position should simply
+    // be correct, but a later change — the surrounding UI choosing a value —
+    // should be visible as the wheel moving to it.
+    listRef.current?.scrollToOffset({
+      offset: selectedIndex * WHEEL_ROW_HEIGHT,
+      animated: hasSettled.current,
+    });
+    hasSettled.current = true;
   }, [selectedIndex, values.length]);
 
   function finishScroll(offset: number) {
@@ -61,11 +78,14 @@ export function WheelPicker<T extends string | number>({
         keyExtractor={(value, index) => `${String(value)}-${index}`}
         renderItem={({ item, index }: ListRenderItemInfo<T>) => (
           <View style={styles.row}>
-            <AppText variant={index === selectedIndex ? 'titleMedium' : 'bodyLarge'} tone={index === selectedIndex ? undefined : 'secondary'} numberOfLines={1} adjustsFontSizeToFit>
-              {formatValue(item)}
-            </AppText>
+            {locked && index !== selectedIndex ? null : (
+              <AppText variant={index === selectedIndex ? 'titleMedium' : 'bodyLarge'} tone={index === selectedIndex ? undefined : 'secondary'} numberOfLines={1} adjustsFontSizeToFit>
+                {formatValue(item)}
+              </AppText>
+            )}
           </View>
         )}
+        scrollEnabled={!locked}
         showsVerticalScrollIndicator={false}
         snapToInterval={WHEEL_ROW_HEIGHT}
         decelerationRate="fast"

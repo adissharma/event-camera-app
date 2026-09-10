@@ -170,6 +170,27 @@ export function RevealDelaySheet({
     setCustomAt(composed);
   }
 
+  /**
+   * Choosing the event's close moves the wheels to it.
+   *
+   * They stay on screen, locked: the sheet's height does not change under
+   * the host's finger, and the answer is shown rather than described.
+   */
+  function selectEventEnd() {
+    setMode('at_close');
+    if (eventEndsAt) setCustomAt(ceilToStep(eventEndsAt));
+  }
+
+  /**
+   * Moving any wheel is a custom choice, whatever the pills said a moment
+   * ago — the host has just expressed a time that is not the event's close,
+   * and making them go back and say so again would be pedantry.
+   */
+  function handleWheelChange(next: Parameters<typeof setParts>[0]) {
+    setMode('custom');
+    setParts(next);
+  }
+
   function handleConfirm() {
     if (mode === 'at_close') {
       onConfirm('at_close', eventEndsAt ?? customAt);
@@ -196,7 +217,7 @@ export function RevealDelaySheet({
             <ModePill
               label="When event ends"
               selected={mode === 'at_close'}
-              onPress={() => setMode('at_close')}
+              onPress={selectEventEnd}
             />
             <ModePill
               label="Custom date"
@@ -206,39 +227,41 @@ export function RevealDelaySheet({
             />
           </View>
 
-          {/* No picker for the closing time: the app already knows it, and a
-              wheel showing a value the host cannot usefully change is chrome. */}
-          {mode === 'custom' ? (
-            <View style={S.wheels}>
+          {/* Always present, so choosing between the two never resizes the
+              sheet. On the event's close the wheels are locked: the value is
+              shown, the alternatives are not. */}
+          <View style={S.wheels}>
               <WheelPicker
                 values={days.map(formatDayOption)}
                 selectedIndex={dayIndex}
-                onChange={(index) => setParts({ day: days[index] })}
+                onChange={(index) => handleWheelChange({ day: days[index] })}
                 accessibilityLabel="Reveal date"
                 visibleRows={3}
+                locked={mode === 'at_close'}
                 width={150}
                 fadeColor={colours.surfaceRaised}
               />
               <WheelPicker
                 values={TIME_SLOTS}
                 selectedIndex={timeIndex}
-                onChange={(index) => setParts({ timeIndex: index })}
+                onChange={(index) => handleWheelChange({ timeIndex: index })}
                 accessibilityLabel="Reveal time"
                 visibleRows={3}
+                locked={mode === 'at_close'}
                 width={92}
                 fadeColor={colours.surfaceRaised}
               />
               <WheelPicker
                 values={[...MERIDIEMS]}
                 selectedIndex={meridiemIndex}
-                onChange={(index) => setParts({ meridiemIndex: index })}
+                onChange={(index) => handleWheelChange({ meridiemIndex: index })}
                 accessibilityLabel="Morning or afternoon"
                 visibleRows={3}
+                locked={mode === 'at_close'}
                 width={68}
                 fadeColor={colours.surfaceRaised}
               />
-            </View>
-          ) : null}
+          </View>
 
           <View style={S.actions}>
             <View style={S.action}>
