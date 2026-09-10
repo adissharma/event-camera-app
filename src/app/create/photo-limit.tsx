@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
-import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/text';
-import { spacing, useMotion } from '@/design';
+import { spacing } from '@/design';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { CaptureLimitPreview } from '@/features/celebrations/creation/capture-limit-preview';
 import { MOMENT_LIMIT_VALUES, MomentLimit, SteppedSlider } from '@/components/forms/stepped-slider';
@@ -38,7 +37,6 @@ export default function PhotoLimitStep() {
   const entitlements = useEventEntitlements(celebrationId ?? null);
   const unlimitedGated = Boolean(celebrationId) && !entitlements.has('unlimitedPhotos');
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const motion = useMotion();
 
   const storedCount = draft.shotLimitPerGuest;
   const selectedLimit: MomentLimit =
@@ -82,7 +80,7 @@ export default function PhotoLimitStep() {
           <AppText variant="numericLarge" align="center">
             {selectedLimit === null ? '∞' : selectedLimit}
           </AppText>
-          <LimitCopy text={limitCopy} duration={motion.duration('micro')} />
+          <LimitCopy text={limitCopy} />
           <View style={{ width: '100%', marginTop: spacing.lg }}>
             <SteppedSlider value={selectedLimit} onValueChange={selectLimit} />
           </View>
@@ -109,18 +107,12 @@ export default function PhotoLimitStep() {
   );
 }
 
-function LimitCopy({ text, duration }: { text: string; duration: number }) {
-  const opacity = useSharedValue(1);
-  useEffect(() => {
-    opacity.set(0);
-    opacity.set(withTiming(1, { duration }));
-  }, [duration, opacity, text]);
-  const style = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+function LimitCopy({ text }: { text: string }) {
   return (
-    <Animated.View style={style}>
+    <View>
       <AppText variant="bodyLarge" tone="secondary" align="center" numberOfLines={1} adjustsFontSizeToFit>
         {text}
       </AppText>
-    </Animated.View>
+    </View>
   );
 }

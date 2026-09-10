@@ -29,13 +29,15 @@ describe('stepped moments slider', () => {
 
   it('holds the active value until the fill crosses the next dot', () => {
     const secondDot = momentLimitDotProgress(1);
-    expect(momentLimitIndexAtDotProgress(secondDot - 0.001, 0)).toBe(0);
-    expect(momentLimitIndexAtDotProgress(secondDot, 0)).toBe(1);
+    const dotRadius = 0.01;
+    expect(momentLimitIndexAtDotProgress(secondDot - dotRadius - 0.001, 0, dotRadius)).toBe(0);
+    expect(momentLimitIndexAtDotProgress(secondDot - dotRadius, 0, dotRadius)).toBe(1);
   });
 
   it('changes down only after the fill reaches the current dot', () => {
     const unlimitedDot = momentLimitDotProgress(5);
-    expect(momentLimitIndexAtDotProgress(unlimitedDot + 0.001, 5)).toBe(5);
-    expect(momentLimitIndexAtDotProgress(unlimitedDot, 5)).toBe(4);
+    const dotRadius = 0.01;
+    expect(momentLimitIndexAtDotProgress(unlimitedDot + dotRadius + 0.001, 5, dotRadius)).toBe(5);
+    expect(momentLimitIndexAtDotProgress(unlimitedDot + dotRadius, 5, dotRadius)).toBe(4);
   });
 });

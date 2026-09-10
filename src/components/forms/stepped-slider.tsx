@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
+  useAnimatedReaction,
   useSharedValue,
   withSpring,
   withTiming,
@@ -31,6 +32,7 @@ export {
 } from './stepped-slider-values';
 
 const TRACK_HEIGHT = 54;
+const DOT_RADIUS = 4;
 const STEP_COUNT = MOMENT_LIMIT_VALUES.length - 1;
 
 function fillProgressForIndex(index: number): number {
@@ -75,37 +77,43 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     width: `${progress.get() * 100}%`,
   }));
 
+  useAnimatedReaction(
+    () => {
+      const width = trackWidth.get();
+      if (width <= 0) return -1;
+      return momentLimitIndexAtDotProgress(
+        progress.get(),
+        activeIndex.get(),
+        DOT_RADIUS / width,
+      );
+    },
+    (nextIndex) => {
+      if (nextIndex >= 0 && nextIndex !== activeIndex.get()) {
+        activeIndex.set(nextIndex);
+        scheduleOnRN(notifySliderSnap, nextIndex);
+      }
+    },
+  );
+
   const setFromX = (x: number, snap: boolean) => {
     'worklet';
     const width = trackWidth.get();
     if (width <= 0) return;
 
     const nextProgress = Math.max(0, Math.min(1, x / width));
-    const nextIndex = nearestMomentLimitIndex(
-      (nextProgress - momentLimitDotProgress(0))
-        / (momentLimitDotProgress(STEP_COUNT) - momentLimitDotProgress(0)),
-    );
-
     if (snap) {
+      const nextIndex = nearestMomentLimitIndex(
+        (nextProgress - momentLimitDotProgress(0))
+          / (momentLimitDotProgress(STEP_COUNT) - momentLimitDotProgress(0)),
+      );
       progress.set(withSpring(fillProgressForIndex(nextIndex), {
-            duration: 400,
-            dampingRatio: 0.8,
-          }, (finished) => {
-            if (finished && nextIndex !== activeIndex.get()) {
-              activeIndex.set(nextIndex);
-              scheduleOnRN(notifySliderSnap, nextIndex);
-            }
-          }));
+        duration: 400,
+        dampingRatio: 0.8,
+      }));
       return;
     }
 
     progress.set(nextProgress);
-
-    const committedIndex = momentLimitIndexAtDotProgress(nextProgress, activeIndex.get());
-    if (committedIndex !== activeIndex.get()) {
-      activeIndex.set(committedIndex);
-      scheduleOnRN(notifySliderSnap, committedIndex);
-    }
   };
 
   const pan = Gesture.Pan()

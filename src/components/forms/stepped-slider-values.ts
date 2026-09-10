@@ -25,17 +25,21 @@ export function momentLimitDotProgress(index: number): number {
  * from `nearestMomentLimitIndex`, which remains responsible for the slider's
  * generous snap regions on release.
  */
-export function momentLimitIndexAtDotProgress(progress: number, activeIndex: number): number {
+export function momentLimitIndexAtDotProgress(
+  progress: number,
+  activeIndex: number,
+  dotRadiusProgress = 0,
+): number {
   'worklet';
   const stepCount = MOMENT_LIMIT_VALUES.length - 1;
   let nextIndex = activeIndex;
 
-  if (nextIndex < stepCount && progress >= momentLimitDotProgress(nextIndex + 1)) {
-    while (nextIndex < stepCount && progress >= momentLimitDotProgress(nextIndex + 1)) {
+  if (nextIndex < stepCount && progress >= momentLimitDotProgress(nextIndex + 1) - dotRadiusProgress) {
+    while (nextIndex < stepCount && progress >= momentLimitDotProgress(nextIndex + 1) - dotRadiusProgress) {
       nextIndex += 1;
     }
-  } else if (nextIndex > 0 && progress <= momentLimitDotProgress(nextIndex)) {
-    while (nextIndex > 0 && progress <= momentLimitDotProgress(nextIndex)) {
+  } else if (nextIndex > 0 && progress <= momentLimitDotProgress(nextIndex) + dotRadiusProgress) {
+    while (nextIndex > 0 && progress <= momentLimitDotProgress(nextIndex) + dotRadiusProgress) {
       nextIndex -= 1;
     }
   }
