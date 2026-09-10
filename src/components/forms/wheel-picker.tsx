@@ -15,6 +15,15 @@ export interface WheelPickerProps<T extends string | number> {
   formatValue?: (value: T) => string;
   accessibilityLabel: string;
   width?: number;
+  /**
+   * What the top and bottom fades blend into.
+   *
+   * Defaults to the page canvas, which is right on a full screen. A wheel on
+   * a raised surface — a sheet — must be told, or the fades paint the darker
+   * canvas colour over the lighter surface and read as two grey blocks
+   * bracketing the selection rather than as a fade.
+   */
+  fadeColor?: string;
 }
 
 /** A compact, native-feeling wheel: momentum scrolling, snapping and a quiet centre rail. */
@@ -25,6 +34,7 @@ export function WheelPicker<T extends string | number>({
   formatValue = String,
   accessibilityLabel,
   width = 96,
+  fadeColor = colours.background,
 }: WheelPickerProps<T>) {
   const listRef = useRef<FlatList<T>>(null);
 
@@ -61,8 +71,8 @@ export function WheelPicker<T extends string | number>({
         onScrollEndDrag={(event) => finishScroll(event.nativeEvent.contentOffset.y)}
       />
       <View pointerEvents="none" style={styles.selectionRail} />
-      <View pointerEvents="none" style={styles.fadeTop} />
-      <View pointerEvents="none" style={styles.fadeBottom} />
+      <View pointerEvents="none" style={[styles.fadeTop, { backgroundColor: fadeColor }]} />
+      <View pointerEvents="none" style={[styles.fadeBottom, { backgroundColor: fadeColor }]} />
     </View>
   );
 }
@@ -71,6 +81,6 @@ const styles = StyleSheet.create({
   container: { height: WHEEL_ROW_HEIGHT * VISIBLE_ROWS, overflow: 'hidden', position: 'relative' },
   row: { alignItems: 'center', justifyContent: 'center', height: WHEEL_ROW_HEIGHT, paddingHorizontal: spacing.xs },
   selectionRail: { position: 'absolute', top: EDGE_PADDING, left: 0, right: 0, height: WHEEL_ROW_HEIGHT, borderTopWidth: layout.hairline, borderBottomWidth: layout.hairline, borderColor: colours.borderSubtle },
-  fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: EDGE_PADDING, backgroundColor: colours.background, opacity: 0.72 },
-  fadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: EDGE_PADDING, backgroundColor: colours.background, opacity: 0.72 },
+  fadeTop: { position: 'absolute', top: 0, left: 0, right: 0, height: EDGE_PADDING, opacity: 0.72 },
+  fadeBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: EDGE_PADDING, opacity: 0.72 },
 });

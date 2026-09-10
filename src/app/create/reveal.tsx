@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
-import { spacing } from '@/design';
+import { PencilIcon } from '@/components/ui/icons';
+import { AppText } from '@/components/ui/text';
+import { colours, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { RevealPreview } from '@/features/celebrations/creation/reveal-step-shared';
+import {
+  RevealDelaySheet,
+  type DelayMode,
+} from '@/features/celebrations/creation/reveal-delay-sheet';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { resolveReveal } from '@/features/celebrations/draft/types';
@@ -21,6 +27,7 @@ const MAX_REVEAL_DAYS_AFTER_CLOSE = 7;
 
 export default function RevealStep() {
   const { draft, update } = useCreationDraft();
+  const [delaySheetOpen, setDelaySheetOpen] = useState(false);
   const hostReveal = resolveReveal(
     draft.hostRevealChoice,
     draft.endsAt,
@@ -136,6 +143,52 @@ export default function RevealStep() {
         ? isoString
         : new Date(date.getTime() + activeDuration * HOUR_MS).toISOString(),
     });
+  }
+
+
+  const isDelayed = draft.hostRevealChoice !== 'during';
+
+  /**
+   * The toggle only *proposes* a delay.
+   *
+   * Turning it on opens the sheet and changes nothing else, so cancelling
+   * leaves the event exactly as it was — including a delay that was already
+   * saved, which reopening to edit must not be able to destroy.
+   */
+  function handleTimingChange(timing: 'immediately' | 'delayed') {
+    if (timing === 'immediately') {
+      handleHostChoiceChange('during');
+      return;
+    }
+    setDelaySheetOpen(true);
+  }
+
+  function handleDelayCancel() {
+    setDelaySheetOpen(false);
+    // Only fall back to immediate if there was no delay to return to.
+    if (!isDelayed) handleHostChoiceChange('during');
+  }
+
+  function handleDelayConfirm(mode: DelayMode, revealAt: Date) {
+    setDelaySheetOpen(false);
+    if (mode === 'at_close') {
+      handleHostChoiceChange('at_close');
+      return;
+    }
+    handleHostChoiceChange('custom');
+    updateHostCustomTime(clampToWindow(revealAt));
+  }
+
+  /** `Reveals when event ends` / `Reveals 12 Sep · 8:30 PM`. */
+  function delaySummary(): string {
+    if (draft.hostRevealChoice === 'at_close') return 'Reveals when event ends';
+    const at = draft.hostCustomRevealAt ? new Date(draft.hostCustomRevealAt) : null;
+    if (!at) return 'Reveals when event ends';
+    const day = at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const time = at
+      .toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })
+      .toUpperCase();
+    return `Reveals ${day} · ${time}`;
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -265,16 +318,57 @@ export default function RevealStep() {
         {/* Sits between the collage and the CTA rather than tight under the
             collage, so the space below it is not a hole. */}
         <View style={{ flex: 1, justifyContent: 'center', paddingBottom: spacing.xxl }}>
-        <RevealTimingToggle
-          value={draft.hostRevealChoice === 'during' ? 'immediately' : 'delayed'}
-          onChange={(timing) =>
-            handleHostChoiceChange(timing === 'immediately' ? 'during' : 'custom')
-          }
-        />
+        <View style={{ gap: spacing.base }}>
+          <RevealTimingToggle
+            value={isDelayed ? 'delayed' : 'immediately'}
+            onChange={handleTimingChange}
+          />
+
+          {/* What was chosen, and the way back to change it. Deliberately a
+              line of text rather than a row or a card — it is a receipt, not
+              another control competing with the toggle above it. */}
+          {isDelayed ? (
+            <Pressable
+              onPress={() => setDelaySheetOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`${delaySummary()}. Edit`}
+              hitSlop={10}
+              style={S.summary}
+            >
+              <AppText variant="bodySmall" tone="secondary">
+                {delaySummary()}
+              </AppText>
+              <PencilIcon size={13} color={colours.textSecondary} />
+            </Pressable>
+          ) : null}
+        </View>
         </View>
 
       </View>
 
+      <RevealDelaySheet
+        visible={delaySheetOpen}
+        eventEndsAt={draft.endsAt ? new Date(draft.endsAt) : null}
+        earliest={revealWindow.earliest}
+        latest={revealWindow.latest}
+        // Defaults to the event's own closing time. Only a delay that was
+        // actually saved as a custom moment opens on the wheels.
+        initialMode={
+          draft.hostRevealChoice === 'custom' && draft.hostCustomRevealAt ? 'custom' : 'at_close'
+        }
+        initialCustomAt={draft.hostCustomRevealAt ? new Date(draft.hostCustomRevealAt) : null}
+        onCancel={handleDelayCancel}
+        onConfirm={handleDelayConfirm}
+      />
     </CreationStepScreen>
   );
 }
+
+const S = StyleSheet.create({
+  summary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+  },
+});
