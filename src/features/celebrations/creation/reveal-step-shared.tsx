@@ -18,8 +18,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 const PREVIEW_IMAGES = [
   require('../../../../assets/sample-event/05.jpg'),
   require('../../../../assets/sample-event/06.jpg'),
-  require('../../../../assets/sample-event/04.jpg'),
-  require('../../../../assets/sample-event/06.jpg'),
+  require('../../../../assets/sample-event/01.jpg'),
+  require('../../../../assets/sample-event/02.jpg'),
 ] as const;
 
 const PREVIEW_MAX_WIDTH = 340;
