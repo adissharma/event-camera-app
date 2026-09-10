@@ -60,6 +60,7 @@ const SECOND_ROW_PEEK = 64;
 const JIGGLE_TRAVEL = 6;
 /** One full down-and-back. */
 const JIGGLE_CYCLE_MS = 2500;
+const FADE_EDGE_OVERDRAW = 2;
 const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
 
 export function RevealPreview({
@@ -307,10 +308,10 @@ const styles = StyleSheet.create({
   },
   bottomFade: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -FADE_EDGE_OVERDRAW,
     left: 0,
     right: 0,
-    height: SECOND_ROW_PEEK + spacing.xl,
+    height: SECOND_ROW_PEEK + spacing.xl + FADE_EDGE_OVERDRAW,
   },
   choiceTile: {
     flex: 1,
