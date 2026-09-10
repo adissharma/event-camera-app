@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
-import { SegmentedControl } from '@/components/forms/segmented-control';
 import { WheelPicker } from '@/components/forms/wheel-picker';
 import { Button } from '@/components/ui/button';
+import { CalendarIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 
@@ -190,15 +190,21 @@ export function RevealDelaySheet({
             Add a delay
           </AppText>
 
-          <SegmentedControl
-            accessibilityLabel="When should photos be revealed?"
-            value={mode}
-            onChange={setMode}
-            options={[
-              { value: 'at_close' as DelayMode, label: 'When event ends' },
-              { value: 'custom' as DelayMode, label: 'Custom date & time' },
-            ]}
-          />
+          {/* Two independent pills rather than a segmented track: there is no
+              spectrum between these, and a sliding thumb implies one. */}
+          <View style={S.pills}>
+            <ModePill
+              label="When event ends"
+              selected={mode === 'at_close'}
+              onPress={() => setMode('at_close')}
+            />
+            <ModePill
+              label="Custom date"
+              icon
+              selected={mode === 'custom'}
+              onPress={() => setMode('custom')}
+            />
+          </View>
 
           {/* No picker for the closing time: the app already knows it, and a
               wheel showing a value the host cannot usefully change is chrome. */}
@@ -209,6 +215,7 @@ export function RevealDelaySheet({
                 selectedIndex={dayIndex}
                 onChange={(index) => setParts({ day: days[index] })}
                 accessibilityLabel="Reveal date"
+                visibleRows={3}
                 width={150}
                 fadeColor={colours.surfaceRaised}
               />
@@ -217,6 +224,7 @@ export function RevealDelaySheet({
                 selectedIndex={timeIndex}
                 onChange={(index) => setParts({ timeIndex: index })}
                 accessibilityLabel="Reveal time"
+                visibleRows={3}
                 width={92}
                 fadeColor={colours.surfaceRaised}
               />
@@ -225,6 +233,7 @@ export function RevealDelaySheet({
                 selectedIndex={meridiemIndex}
                 onChange={(index) => setParts({ meridiemIndex: index })}
                 accessibilityLabel="Morning or afternoon"
+                visibleRows={3}
                 width={68}
                 fadeColor={colours.surfaceRaised}
               />
@@ -242,6 +251,53 @@ export function RevealDelaySheet({
         </View>
       </Pressable>
     </Modal>
+  );
+}
+
+
+/**
+ * One of the two answers.
+ *
+ * Selected is a solid ivory fill, unselected a hairline outline — the same
+ * primary/secondary pairing the sheet's own buttons use, so the choice reads
+ * in the same language as the actions below it.
+ */
+function ModePill({
+  label,
+  selected,
+  icon = false,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  icon?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ selected }}
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        S.pill,
+        selected ? S.pillSelected : S.pillIdle,
+        pressed && { opacity: 0.85 },
+      ]}
+    >
+      {icon ? (
+        <CalendarIcon
+          size={15}
+          color={selected ? colours.textOnBrand : colours.textSecondary}
+        />
+      ) : null}
+      <AppText
+        variant="labelLarge"
+        style={{ color: selected ? colours.textOnBrand : colours.textSecondary }}
+      >
+        {label}
+      </AppText>
+    </Pressable>
   );
 }
 
@@ -270,6 +326,27 @@ const S = StyleSheet.create({
   },
   title: {
     marginTop: spacing.xs,
+  },
+  pills: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.base,
+    minHeight: layout.minTouchTarget,
+    borderRadius: 999,
+  },
+  pillSelected: {
+    backgroundColor: colours.brandPrimary,
+  },
+  pillIdle: {
+    borderWidth: layout.hairline,
+    borderColor: colours.borderStrong,
   },
   wheels: {
     flexDirection: 'row',

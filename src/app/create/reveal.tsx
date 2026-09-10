@@ -303,7 +303,10 @@ export default function RevealStep() {
       // pinned under the collage with the empty space all below it.
       scrollable={false}
     >
-      <View style={{ gap: spacing.xxl, flex: 1 }}>
+      {/* Collage and control as one block, centred in the space between the
+          heading and the CTA — they are a single thought, and spreading them
+          to the edges made them read as two unrelated things. */}
+      <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
         <RevealPreview locked={hostReveal.mode !== 'instant'} />
 
         {/*
@@ -315,9 +318,6 @@ export default function RevealStep() {
           existing sync, which is what the removed guest control was mostly
           used to keep aligned anyway.
         */}
-        {/* Sits between the collage and the CTA rather than tight under the
-            collage, so the space below it is not a hole. */}
-        <View style={{ flex: 1, justifyContent: 'center', paddingBottom: spacing.xxl }}>
         <View style={{ gap: spacing.base }}>
           <RevealTimingToggle
             value={isDelayed ? 'delayed' : 'immediately'}
@@ -342,8 +342,6 @@ export default function RevealStep() {
             </Pressable>
           ) : null}
         </View>
-        </View>
-
       </View>
 
       <RevealDelaySheet

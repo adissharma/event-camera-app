@@ -231,10 +231,9 @@ const styles = StyleSheet.create({
   previewContainer: {
     alignItems: 'center',
     gap: spacing.md,
-    // Sits off the heading rather than tight under it — the step has one
-    // control and room to let the collage breathe.
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
+    // No margin: the step centres the collage and toggle as one block, so
+    // spacing between them is the group's gap, not this component's.
+    marginVertical: 0,
   },
   galleryPreview: {
     position: 'relative',
