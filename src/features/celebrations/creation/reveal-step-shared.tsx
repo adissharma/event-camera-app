@@ -22,6 +22,11 @@ const PREVIEW_IMAGES = [
   require('../../../../assets/images/placeholders/treatment_preview_2.png'),
 ] as const;
 
+const PREVIEW_WIDTH = 280;
+const PREVIEW_GAP = 6;
+const PREVIEW_CELL_WIDTH = (PREVIEW_WIDTH - PREVIEW_GAP) / 2;
+const PREVIEW_CELL_HEIGHT = PREVIEW_CELL_WIDTH * 1.25;
+
 export function RevealPreview({
   locked,
 }: {
@@ -199,17 +204,17 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   galleryPreview: {
-    width: 280,
-    height: 342,
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_CELL_HEIGHT * 2 + PREVIEW_GAP,
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: PREVIEW_GAP,
     position: 'relative',
     alignContent: 'flex-start',
   },
   photoTile: {
-    width: '48%',
-    aspectRatio: 4 / 5,
+    width: PREVIEW_CELL_WIDTH,
+    height: PREVIEW_CELL_HEIGHT,
     borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: colours.surfaceMuted,
