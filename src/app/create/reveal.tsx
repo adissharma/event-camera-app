@@ -17,6 +17,16 @@ import { resolveReveal } from '@/features/celebrations/draft/types';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
+const REVEAL_TIMING_INTRO_DELAY_MS = 500;
+
+/**
+ * One-shot, per in-memory creation draft.
+ *
+ * This is a first-visit cue, not durable product state: resetting the creation
+ * journey gives the draft a new `createdAt`, so a new event sees the cue, while
+ * Back/Next within the same event does not replay it.
+ */
+const revealTimingIntroPlayedDrafts = new Set<string>();
 
 /**
  * How far past the event's closing time a custom reveal may be scheduled.
@@ -28,6 +38,7 @@ const MAX_REVEAL_DAYS_AFTER_CLOSE = 7;
 export default function RevealStep() {
   const { draft, update } = useCreationDraft();
   const [delaySheetOpen, setDelaySheetOpen] = useState(false);
+  const introCueStarted = useRef(false);
 
   /**
    * The last delay this host actually chose.
@@ -198,6 +209,35 @@ export default function RevealStep() {
     handleHostChoiceChange('custom');
     if (revealAt) updateHostCustomTime(clampToWindow(revealAt));
   }
+
+  const handleHostChoiceChangeRef = useRef(handleHostChoiceChange);
+  const applyDelayRef = useRef(applyDelay);
+
+  useEffect(() => {
+    handleHostChoiceChangeRef.current = handleHostChoiceChange;
+    applyDelayRef.current = applyDelay;
+  });
+
+  useEffect(() => {
+    if (introCueStarted.current) return;
+    if (draft.editCelebrationId) return;
+    if (revealTimingIntroPlayedDrafts.has(draft.createdAt)) return;
+
+    introCueStarted.current = true;
+    revealTimingIntroPlayedDrafts.add(draft.createdAt);
+
+    const rememberedDelay = lastDelay.current;
+    handleHostChoiceChangeRef.current('during');
+
+    const timer = setTimeout(() => {
+      applyDelayRef.current(
+        rememberedDelay?.mode ?? 'at_close',
+        rememberedDelay?.at ? new Date(rememberedDelay.at) : null,
+      );
+    }, REVEAL_TIMING_INTRO_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [draft.createdAt, draft.editCelebrationId]);
 
   function handleDelayCancel() {
     setDelaySheetOpen(false);
