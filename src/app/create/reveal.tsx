@@ -2,9 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
-import { PencilIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
-import { colours, spacing } from '@/design';
+import { colours, layout, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { RevealPreview } from '@/features/celebrations/creation/reveal-step-shared';
 import {
@@ -363,23 +362,22 @@ export default function RevealStep() {
           */}
           <View style={S.summarySlot}>
             {isDelayed ? (
-              <Pressable
-                onPress={() => setDelaySheetOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Reveals ${delayValue()}. Edit`}
-                hitSlop={10}
-                style={S.summaryRow}
-              >
-                <AppText variant="bodySmall" tone="secondary">
+              <View style={S.summaryRow}>
+                <AppText variant="bodySmall">
                   Reveals{' '}
                 </AppText>
-                <View style={S.summaryValue}>
+                <Pressable
+                  onPress={() => setDelaySheetOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit reveal time, currently ${delayValue()}`}
+                  hitSlop={10}
+                  style={S.summaryValue}
+                >
                   <AppText variant="bodySmall" tone="secondary">
                     {delayValue()}
                   </AppText>
-                  <PencilIcon size={13} color={colours.textSecondary} />
-                </View>
-              </Pressable>
+                </Pressable>
+              </View>
             ) : null}
           </View>
         </View>
@@ -429,22 +427,12 @@ const S = StyleSheet.create({
     justifyContent: 'center',
     alignSelf: 'center',
   },
-  /**
-   * Only the value is underlined, and dotted rather than ruled.
-   *
-   * A border on this group rather than `textDecorationLine`, so the underline
-   * carries under the pencil too — the icon is an SVG and cannot take a text
-   * decoration, and a rule stopping short of it reads as a mistake. Dotted
-   * and in the same muted ink as the text: solid, it looked like a divider
-   * under the line rather than a mark on it.
-   */
+  /** Matched to the event-name suggestion blank: muted and underlined. */
   summaryValue: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    minWidth: 34,
     paddingBottom: 2,
-    borderBottomWidth: 1,
-    borderStyle: 'dotted',
-    borderBottomColor: colours.textSecondary,
+    borderBottomWidth: layout.hairline,
+    borderBottomColor: colours.borderStrong,
   },
 });
