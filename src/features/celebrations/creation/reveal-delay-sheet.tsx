@@ -173,8 +173,8 @@ export function RevealDelaySheet({
   /**
    * Choosing the event's close moves the wheels to it.
    *
-   * They stay on screen, locked: the sheet's height does not change under
-   * the host's finger, and the answer is shown rather than described.
+   * The wheels stay on screen so the sheet's height does not change under
+   * the host's finger. If the host spins one, the choice becomes custom.
    */
   function selectEventEnd() {
     setMode('at_close');
@@ -203,8 +203,13 @@ export function RevealDelaySheet({
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onCancel}>
       {/* The screen stays visible behind, dimmed — the host is adjusting one
           setting on it, not leaving it. */}
-      <Pressable style={S.scrim} onPress={onCancel} accessibilityLabel="Close">
-        <View style={S.sheet} onStartShouldSetResponder={() => true}>
+      <View style={S.scrim}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onCancel}
+          accessibilityLabel="Close"
+        />
+        <View style={S.sheet}>
           <View style={S.grabber} />
 
           <AppText variant="titleMedium" align="center" style={S.title}>
@@ -228,39 +233,35 @@ export function RevealDelaySheet({
           </View>
 
           {/* Always present, so choosing between the two never resizes the
-              sheet. On the event's close the wheels are locked: the value is
-              shown, the alternatives are not. */}
+              sheet. Moving any wheel makes the choice a custom date. */}
           <View style={S.wheels}>
-              <WheelPicker
-                values={days.map(formatDayOption)}
-                selectedIndex={dayIndex}
-                onChange={(index) => handleWheelChange({ day: days[index] })}
-                accessibilityLabel="Reveal date"
-                visibleRows={3}
-                locked={mode === 'at_close'}
-                width={150}
-                fadeColor={colours.surfaceRaised}
-              />
-              <WheelPicker
-                values={TIME_SLOTS}
-                selectedIndex={timeIndex}
-                onChange={(index) => handleWheelChange({ timeIndex: index })}
-                accessibilityLabel="Reveal time"
-                visibleRows={3}
-                locked={mode === 'at_close'}
-                width={92}
-                fadeColor={colours.surfaceRaised}
-              />
-              <WheelPicker
-                values={[...MERIDIEMS]}
-                selectedIndex={meridiemIndex}
-                onChange={(index) => handleWheelChange({ meridiemIndex: index })}
-                accessibilityLabel="Morning or afternoon"
-                visibleRows={3}
-                locked={mode === 'at_close'}
-                width={68}
-                fadeColor={colours.surfaceRaised}
-              />
+            <WheelPicker
+              values={days.map(formatDayOption)}
+              selectedIndex={dayIndex}
+              onChange={(index) => handleWheelChange({ day: days[index] })}
+              accessibilityLabel="Reveal date"
+              visibleRows={3}
+              width={150}
+              fadeColor={colours.surfaceRaised}
+            />
+            <WheelPicker
+              values={TIME_SLOTS}
+              selectedIndex={timeIndex}
+              onChange={(index) => handleWheelChange({ timeIndex: index })}
+              accessibilityLabel="Reveal time"
+              visibleRows={3}
+              width={92}
+              fadeColor={colours.surfaceRaised}
+            />
+            <WheelPicker
+              values={[...MERIDIEMS]}
+              selectedIndex={meridiemIndex}
+              onChange={(index) => handleWheelChange({ meridiemIndex: index })}
+              accessibilityLabel="Morning or afternoon"
+              visibleRows={3}
+              width={68}
+              fadeColor={colours.surfaceRaised}
+            />
           </View>
 
           <View style={S.actions}>
@@ -272,7 +273,7 @@ export function RevealDelaySheet({
             </View>
           </View>
         </View>
-      </Pressable>
+      </View>
     </Modal>
   );
 }
