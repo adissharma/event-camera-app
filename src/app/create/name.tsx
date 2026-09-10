@@ -13,7 +13,7 @@ import {
   type NameSuggestion,
 } from '@/features/celebrations/creation/name-suggestions';
 import { fetchMyProfile, firstNameFrom, profileKeys } from '@/services/profile';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, radii, spacing } from '@/design';
 import { copy } from '@/i18n';
 
 export default function NameStep() {
@@ -126,9 +126,9 @@ function SuggestionChip({
         paddingHorizontal: spacing.base,
         paddingVertical: spacing.sm,
         borderRadius: radii.pill,
+        // Fill alone, no outline — the same treatment secondary buttons now
+        // use, so a screen of quiet options reads as one family.
         backgroundColor: colours.surface,
-        borderWidth: layout.hairline,
-        borderColor: colours.borderStrong,
       }}
     >
       <AppText variant="bodySmall">{suggestion.label}</AppText>

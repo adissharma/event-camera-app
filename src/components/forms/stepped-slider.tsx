@@ -20,7 +20,7 @@ import {
   momentLimitDotProgress,
   momentLimitIndex,
   momentLimitIndexForTrackPosition,
-  momentLimitIndexAtDotProgress,
+  nearestMomentLimitIndex,
   type MomentLimit,
 } from './stepped-slider-values';
 
@@ -35,7 +35,6 @@ export {
 } from './stepped-slider-values';
 
 const TRACK_HEIGHT = 54;
-const DOT_RADIUS = 4;
 const STEP_COUNT = MOMENT_LIMIT_VALUES.length - 1;
 
 function fillProgressForIndex(index: number): number {
@@ -47,15 +46,25 @@ function fillProgressForIndex(index: number): number {
 export interface SteppedSliderProps {
   value: MomentLimit | undefined;
   onValueChange: (value: MomentLimit) => void;
+  /**
+   * Fired as the thumb crosses each detent, before the drag ends.
+   *
+   * For the label that should track the thumb. `onValueChange` remains the
+   * commit — anything expensive, or anything that should read as a decision
+   * rather than a scrub, belongs there.
+   */
+  onPreviewChange?: (value: MomentLimit) => void;
 }
 
 /** Six-step, thumbless slider used for a guest's photo allowance. */
-export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
+export function SteppedSlider({ value, onValueChange, onPreviewChange }: SteppedSliderProps) {
   const motion = useMotion();
   const initialIndex = momentLimitIndex(value);
   const progress = useSharedValue(fillProgressForIndex(initialIndex));
   const activeIndex = useSharedValue(initialIndex);
   const isInteracting = useSharedValue(false);
+  /** Written only by the detent reaction — see the comment there. */
+  const lastStepIndex = useSharedValue(initialIndex);
   const trackWidth = useSharedValue(0);
   const trackRef = useAnimatedRef<View>();
 
@@ -69,35 +78,55 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     void Haptics.selectionAsync().catch(() => {});
   }, []);
 
+  const notifyPreviewChange = useCallback((index: number) => {
+    const next = MOMENT_LIMIT_VALUES[index];
+    if (next !== undefined) onPreviewChange?.(next);
+  }, [onPreviewChange]);
+
   useEffect(() => {
     const index = momentLimitIndex(value);
     activeIndex.set(index);
+    lastStepIndex.set(index);
     progress.set(withTiming(fillProgressForIndex(index), {
       duration: motion.duration('micro'),
     }));
-  }, [activeIndex, motion, progress, value]);
+  }, [activeIndex, lastStepIndex, motion, progress, value]);
 
   const fillStyle = useAnimatedStyle(() => ({
     width: `${progress.get() * 100}%`,
   }));
 
+  /**
+   * The detent the thumb is currently over, while dragging.
+   *
+   * Computed from `progress` alone. It used to be derived by
+   * `momentLimitIndexAtDotProgress(progress, activeIndex, …)`, whose whole
+   * purpose is hysteresis around the index it is given — and the reaction
+   * then wrote its answer back into `activeIndex`. That closed a loop: at a
+   * dot boundary the value fell out of the detent, the changed input pulled
+   * it back in, and round it went, firing a selection tick every pass. Hold
+   * the thumb still on a dot and the haptics never stopped.
+   *
+   * `lastStepIndex` is a separate value that only this reaction writes, so
+   * nothing it sets can feed back into what it reads.
+   */
   useAnimatedReaction(
     () => {
-      const width = trackWidth.get();
-      if (width <= 0) return -1;
-      return momentLimitIndexAtDotProgress(
-        progress.get(),
-        activeIndex.get(),
-        DOT_RADIUS / width,
-      );
+      if (trackWidth.get() <= 0) return -1;
+      return nearestMomentLimitIndex(progress.get());
     },
     (nextIndex) => {
       if (!isInteracting.get()) return;
+      if (nextIndex < 0 || nextIndex === lastStepIndex.get()) return;
 
-      if (nextIndex >= 0 && nextIndex !== activeIndex.get()) {
-        activeIndex.set(nextIndex);
-        scheduleOnRN(notifySliderStep);
-      }
+      lastStepIndex.set(nextIndex);
+      activeIndex.set(nextIndex);
+      scheduleOnRN(notifySliderStep);
+      // The number above the slider follows the thumb; the phone above it
+      // does not. One is the value being chosen, the other is a preview of
+      // the choice, and animating the counter on every detent crossed made
+      // a drag look like five decisions instead of one.
+      scheduleOnRN(notifyPreviewChange, nextIndex);
     },
   );
 

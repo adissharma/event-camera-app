@@ -143,11 +143,11 @@ function variantStyle(variant: Variant): ViewStyle {
     case 'primary':
       return { backgroundColor: colours.brandPrimary, ...elevation.low };
     case 'secondary':
-      return {
-        backgroundColor: colours.surface,
-        borderWidth: layout.hairline,
-        borderColor: colours.borderStrong,
-      };
+      // No outline. On the dark canvas the surface fill already separates the
+      // button from the page, and the border only made it compete with the
+      // primary beside it — two ringed shapes reading as equals when one is
+      // meant to recede.
+      return { backgroundColor: colours.surface };
     case 'quiet':
       return { backgroundColor: 'transparent' };
     case 'destructive':

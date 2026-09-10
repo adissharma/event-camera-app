@@ -54,7 +54,17 @@ export default function PhotoLimitStep() {
     }
   }, [selectedLimit, storedCount, unlimitedGated, update]);
 
+  /**
+   * What the thumb is over right now, which is not yet what has been chosen.
+   *
+   * Cleared on commit so the label falls back to the draft — holding it would
+   * leave a stale number showing after a change from anywhere else.
+   */
+  const [previewLimit, setPreviewLimit] = useState<MomentLimit | undefined>(undefined);
+  const shownLimit = previewLimit === undefined ? selectedLimit : previewLimit;
+
   function selectLimit(value: MomentLimit) {
+    setPreviewLimit(undefined);
     if (value === null && unlimitedGated) {
       setUpgradeOpen(true);
       return;
@@ -62,7 +72,7 @@ export default function PhotoLimitStep() {
     update({ shotLimitPerGuest: value });
   }
 
-  const limitCopy = LIMIT_COPY[selectedLimit === null ? 'unlimited' : String(selectedLimit) as '5' | '10' | '16' | '24' | '36'];
+  const limitCopy = LIMIT_COPY[shownLimit === null ? 'unlimited' : String(shownLimit) as '5' | '10' | '16' | '24' | '36'];
 
   return (
     <CreationStepScreen
@@ -88,11 +98,15 @@ export default function PhotoLimitStep() {
 
         <View style={{ alignItems: 'center', gap: spacing.xs }}>
           <AppText variant="numericLarge" align="center">
-            {selectedLimit === null ? '∞' : selectedLimit}
+            {shownLimit === null ? '∞' : shownLimit}
           </AppText>
           <LimitCopy text={limitCopy} />
           <View style={{ width: '100%', marginTop: spacing.base }}>
-            <SteppedSlider value={selectedLimit} onValueChange={selectLimit} />
+            <SteppedSlider
+              value={selectedLimit}
+              onValueChange={selectLimit}
+              onPreviewChange={setPreviewLimit}
+            />
           </View>
         </View>
       </View>
