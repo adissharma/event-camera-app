@@ -25,6 +25,7 @@ const PREVIEW_IMAGES = [
 const PREVIEW_MAX_WIDTH = 340;
 const PREVIEW_GAP = 6;
 const SECOND_ROW_PEEK = 24;
+const PREVIEW_SCROLL_OFFSET = 32;
 const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
 
 export function RevealPreview({
@@ -40,32 +41,34 @@ export function RevealPreview({
   return (
     <View style={styles.previewContainer}>
       <View style={[styles.galleryPreview, { width: previewWidth, height: cellHeight + PREVIEW_GAP + SECOND_ROW_PEEK }]}>
-        {PREVIEW_IMAGES.map((imgSrc, index) => (
-          <WavePhotoTile key={index} index={index} style={{ width: cellWidth, height: cellHeight }}>
-            <Image
-              source={imgSrc}
-              style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
-              resizeMode="cover"
-              blurRadius={locked ? 20 : 0}
-            />
+        <View style={[styles.photoGrid, { width: previewWidth, transform: [{ translateY: -PREVIEW_SCROLL_OFFSET }] }]}>
+          {PREVIEW_IMAGES.map((imgSrc, index) => (
+            <WavePhotoTile key={index} index={index} style={{ width: cellWidth, height: cellHeight }}>
+              <Image
+                source={imgSrc}
+                style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+                resizeMode="cover"
+                blurRadius={locked ? 20 : 0}
+              />
 
-            {locked ? (
-              <View style={styles.lockOverlay}>
-                <View style={styles.lockCircle}>
-                  <LockIcon size={18} color="#FFFFFF" />
+              {locked ? (
+                <View style={styles.lockOverlay}>
+                  <View style={styles.lockCircle}>
+                    <LockIcon size={18} color="#FFFFFF" />
+                  </View>
                 </View>
-              </View>
-            ) : null}
+              ) : null}
 
-            {!locked ? (
-              <View style={[styles.photoNameTag, { maxWidth: Math.max(0, cellWidth - 24) }]}>
-                <AppText style={styles.photoNameText} numberOfLines={1} ellipsizeMode="tail">
-                  {PREVIEW_AUTHORS[index]}
-                </AppText>
-              </View>
-            ) : null}
-          </WavePhotoTile>
-        ))}
+              {!locked ? (
+                <View style={[styles.photoNameTag, { maxWidth: Math.max(0, cellWidth - 24) }]}>
+                  <AppText style={styles.photoNameText} numberOfLines={1} ellipsizeMode="tail">
+                    {PREVIEW_AUTHORS[index]}
+                  </AppText>
+                </View>
+              ) : null}
+            </WavePhotoTile>
+          ))}
+        </View>
         <LinearGradient
           pointerEvents="none"
           colors={[colours.background, colours.background, 'rgba(11,11,12,0)']}
@@ -219,12 +222,14 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   galleryPreview: {
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: PREVIEW_GAP,
-    position: 'relative',
     alignContent: 'flex-start',
-    overflow: 'hidden',
   },
   photoTile: {
     borderRadius: 22,
