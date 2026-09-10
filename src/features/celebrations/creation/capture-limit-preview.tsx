@@ -37,16 +37,35 @@ const ZOOM_OPTIONS = [
 
 const COUNTER_FOCUS_ORIGIN_X = VIEWFINDER_PILL_INSET + VIEWFINDER_PILL_HEIGHT / 2;
 const COUNTER_FOCUS_ORIGIN_Y = 78;
-const COUNTER_FOCUS_SCALE = 2.55;
-const COUNTER_FOCUS_TRANSLATE_X = 74;
-const COUNTER_FOCUS_TRANSLATE_Y = 24;
+/**
+ * How far the viewfinder drifts toward the shots-remaining counter.
+ *
+ * A gentle push, not a close-up: at 2.55 the counter filled the frame and the
+ * preview stopped reading as a camera at all. The translations are the scale's
+ * partners — they keep the counter in shot as the layer grows, so changing one
+ * without the other slides the subject out of frame.
+ */
+const COUNTER_FOCUS_SCALE = 1.7;
+const COUNTER_FOCUS_TRANSLATE_X = 33;
+const COUNTER_FOCUS_TRANSLATE_Y = 11;
+
+/**
+ * Three seconds, well past any motion token.
+ *
+ * The move is meant to be noticed rather than watched — slow enough that it
+ * reads as the frame settling while the host reads the question, not as an
+ * animation demanding attention. Reduce-motion still collapses it.
+ */
+const COUNTER_FOCUS_DURATION_MS = 3000;
 
 /** A cropped, inert slice of the guest camera's lower viewfinder. */
 export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewProps) {
   const motion = useMotion();
   const focusProgress = useSharedValue(0);
   const delayMs = motion.reduceMotion ? 0 : 360;
-  const focusDuration = motion.duration('emotionalSlow');
+  const focusDuration = motion.reduceMotion
+    ? motion.duration('emotionalSlow')
+    : COUNTER_FOCUS_DURATION_MS;
   const focusScale = motion.reduceMotion ? 1 : COUNTER_FOCUS_SCALE;
   const focusTranslateX = motion.translate(COUNTER_FOCUS_TRANSLATE_X);
   const focusTranslateY = motion.translate(COUNTER_FOCUS_TRANSLATE_Y);
