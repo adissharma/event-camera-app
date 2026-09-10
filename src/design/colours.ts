@@ -166,6 +166,9 @@ export type ElevationToken = keyof typeof elevation;
  */
 export const ACCENT_GRADIENT = ['#C13584', '#E1306C', '#F77737', '#FCAF45'] as const;
 
+/** Reserved for the moments allowance slider: a muted violet-to-pink fill. */
+export const MOMENTS_SLIDER_GRADIENT = ['#5B35E8', '#A329EC', '#E548CD', '#FF8A98'] as const;
+
 /** The angle the accent gradient is always drawn at: bottom-left to top-right. */
 export const ACCENT_GRADIENT_START = { x: 0, y: 1 } as const;
 export const ACCENT_GRADIENT_END = { x: 1, y: 0 } as const;
