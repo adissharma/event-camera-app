@@ -591,29 +591,21 @@ export default function HomeScreen() {
             <PersonIcon size={22} color="#FFFFFF" />
           </Pressable>
 
-          {/*
-            The Guestbook's gradient, reused rather than re-mixed — same
-            colours, same angle, same 2.2 ring — so the two most important
-            buttons in the app are visibly the same family. The ivory fill
-            and the icon are untouched; the gradient is a ring around them.
-          */}
           <LinearGradient
             colors={ACCENT_GRADIENT}
             start={ACCENT_GRADIENT_START}
             end={ACCENT_GRADIENT_END}
-            style={styles.headerPlusRing}
+            style={styles.headerPlusBtn}
           >
-            <View style={styles.headerPlusGap}>
-              <Pressable
-                onPress={() => router.push('/create')}
-                style={styles.headerPlusBtn}
-                hitSlop={6}
-                accessibilityRole="button"
-                accessibilityLabel="Create an event"
-              >
-                <PlusIcon size={24} color="#0B0B0C" />
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={() => router.push('/create')}
+              style={styles.headerPlusTouch}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Create an event"
+            >
+              <PlusIcon size={24} color={colours.textPrimary} />
+            </Pressable>
           </LinearGradient>
         </View>
       </View>
@@ -923,48 +915,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  /**
-   * The gradient ring.
-   *
-   * Height stays 52 so the control still sits on Profile's centre line; the
-   * width is intrinsic now that the button carries a word as well as a glyph.
-   * Radii are half the height at each layer, so the ends stay fully round as
-   * the button grows — a fixed radius would flatten into a lozenge.
-   */
-  headerPlusRing: {
+  headerPlusBtn: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    padding: 2.2,
+    overflow: 'hidden',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  /**
-   * The dark gap between the gradient and the ivory face, so the gradient
-   * reads as a ring rather than bleeding into the fill. Exactly what the
-   * Guestbook chip does between its own gradient and its content.
-   */
-  headerPlusGap: {
-    width: 52 - 4.4,
-    height: 52 - 4.4,
-    borderRadius: (52 - 4.4) / 2,
-    backgroundColor: '#0B0B0C',
-    padding: 2.2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerPlusBtn: {
-    width: 52 - 8.8,
-    height: 52 - 8.8,
-    borderRadius: (52 - 8.8) / 2,
-    alignItems: 'center',
-    backgroundColor: '#EFE9E0', // warm ivory, makes the create action pop
     justifyContent: 'center',
     shadowColor: '#000000',
-    shadowOpacity: 0.15,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    shadowOpacity: 0.24,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 4,
+  },
+  headerPlusTouch: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   /**
    * Secondary by construction: same footprint as Create, but a faint fill
