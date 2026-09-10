@@ -396,6 +396,7 @@ export default function RevealStep() {
         <RevealTimingToggle
           value={isDelayed ? 'delayed' : 'immediately'}
           onChange={handleTimingChange}
+          onDelayedLabelPress={() => setDelaySheetOpen(true)}
         />
       </View>
 

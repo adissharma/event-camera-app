@@ -42,9 +42,11 @@ const THUMB_TRAVEL = TRACK_WIDTH - THUMB_SIZE - THUMB_INSET * 2;
 export function RevealTimingToggle({
   value,
   onChange,
+  onDelayedLabelPress,
 }: {
   value: RevealTiming;
   onChange: (value: RevealTiming) => void;
+  onDelayedLabelPress?: () => void;
 }) {
   const motion = useMotion();
   const isDelayed = value === 'delayed';
@@ -111,7 +113,7 @@ export function RevealTimingToggle({
         text="Add delay"
         active={isDelayed}
         progress={progress}
-        onPress={() => onChange('delayed')}
+        onPress={onDelayedLabelPress ?? (() => onChange('delayed'))}
       />
     </View>
   );
