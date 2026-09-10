@@ -37,13 +37,51 @@ export function RevealPreview({
   const previewWidth = Math.min(PREVIEW_MAX_WIDTH, screenWidth - layout.gutter * 2);
   const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
   const cellHeight = cellWidth * 1.25;
+  const motion = useMotion();
+  const galleryScroll = useSharedValue(-PREVIEW_SCROLL_OFFSET);
+  const scrollTravel = motion.translate(22);
+  const scrollDuration = motion.duration('standard');
+  const scrollDelay = motion.reduceMotion ? 0 : 260;
+
+  useFocusEffect(
+    useCallback(() => {
+      galleryScroll.set(-PREVIEW_SCROLL_OFFSET);
+
+      if (motion.reduceMotion) return;
+
+      galleryScroll.set(
+        withDelay(
+          scrollDelay,
+          withSequence(
+            withTiming(-PREVIEW_SCROLL_OFFSET - scrollTravel, {
+              duration: scrollDuration,
+              easing: easing.inOut,
+            }),
+            withTiming(-PREVIEW_SCROLL_OFFSET, {
+              duration: scrollDuration,
+              easing: easing.inOut,
+            }),
+          ),
+        ),
+      );
+
+      return () => {
+        cancelAnimation(galleryScroll);
+        galleryScroll.set(-PREVIEW_SCROLL_OFFSET);
+      };
+    }, [galleryScroll, motion.reduceMotion, scrollDelay, scrollDuration, scrollTravel]),
+  );
+
+  const galleryScrollStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: galleryScroll.get() }],
+  }));
 
   return (
     <View style={styles.previewContainer}>
       <View style={[styles.galleryPreview, { width: previewWidth, height: cellHeight + PREVIEW_GAP + SECOND_ROW_PEEK }]}>
-        <View style={[styles.photoGrid, { width: previewWidth, transform: [{ translateY: -PREVIEW_SCROLL_OFFSET }] }]}>
+        <Animated.View style={[styles.photoGrid, { width: previewWidth }, galleryScrollStyle]}>
           {PREVIEW_IMAGES.map((imgSrc, index) => (
-            <WavePhotoTile key={index} index={index} style={{ width: cellWidth, height: cellHeight }}>
+            <View key={index} style={[styles.photoTile, { width: cellWidth, height: cellHeight }]}>
               <Image
                 source={imgSrc}
                 style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
@@ -66,9 +104,9 @@ export function RevealPreview({
                   </AppText>
                 </View>
               ) : null}
-            </WavePhotoTile>
+            </View>
           ))}
-        </View>
+        </Animated.View>
         <LinearGradient
           pointerEvents="none"
           colors={[colours.background, colours.background, 'rgba(11,11,12,0)']}
@@ -84,56 +122,6 @@ export function RevealPreview({
       </View>
     </View>
   );
-}
-
-function WavePhotoTile({
-  index,
-  children,
-  style,
-}: {
-  index: number;
-  children: React.ReactNode;
-  style: { width: number; height: number };
-}) {
-  const motion = useMotion();
-  const wave = useSharedValue(0);
-  const lift = motion.translate(12);
-  const scaleAmount = motion.reduceMotion ? 0 : 0.025;
-  const delayMs = motion.reduceMotion ? 0 : 360 + index * 110;
-  const riseDuration = motion.duration('micro');
-  const settleDuration = motion.duration('microSlow');
-
-  useFocusEffect(
-    useCallback(() => {
-      wave.value = 0;
-      wave.value = withDelay(
-        delayMs,
-        withSequence(
-          withTiming(1, { duration: riseDuration, easing: easing.enter }),
-          withTiming(0, { duration: settleDuration, easing: easing.standard }),
-        ),
-      );
-
-      const settle = setTimeout(() => {
-        wave.value = 0;
-      }, delayMs + riseDuration + settleDuration + 250);
-
-      return () => {
-        clearTimeout(settle);
-        cancelAnimation(wave);
-        wave.value = 0;
-      };
-    }, [delayMs, riseDuration, settleDuration, wave]),
-  );
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: -lift * wave.value },
-      { scale: 1 + scaleAmount * wave.value },
-    ],
-  }));
-
-  return <Animated.View style={[styles.photoTile, style, animatedStyle]}>{children}</Animated.View>;
 }
 
 export function ChoiceTile({
