@@ -172,3 +172,27 @@ export const MOMENTS_SLIDER_GRADIENT = ['#5B35E8', '#A329EC', '#E548CD', '#FF8A9
 /** The angle the accent gradient is always drawn at: bottom-left to top-right. */
 export const ACCENT_GRADIENT_START = { x: 0, y: 1 } as const;
 export const ACCENT_GRADIENT_END = { x: 1, y: 0 } as const;
+
+/**
+ * The reveal toggle's track when a delay is set.
+ *
+ * A cousin of `ACCENT_GRADIENT` rather than the same stops: that one runs
+ * pink through orange to amber, which is right on a small ring and turns
+ * sunset-ish across a wide track. This holds the violet-to-coral half of the
+ * same family, so the two read as related without the toggle looking like a
+ * warning.
+ *
+ * Five stops, not two — a straight blend between the ends passes through a
+ * flat middle that looks printed rather than lit.
+ */
+export const REVEAL_TRACK_GRADIENT = [
+  '#5B2A9E',
+  '#8A2BE2',
+  '#C13584',
+  '#E1306C',
+  '#F0736A',
+] as const;
+
+/** Diagonal, so the track is never a flat band of one hue. */
+export const REVEAL_TRACK_GRADIENT_START = { x: 0, y: 1 } as const;
+export const REVEAL_TRACK_GRADIENT_END = { x: 1, y: 0 } as const;

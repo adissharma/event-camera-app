@@ -5,6 +5,9 @@ export {
   ACCENT_GRADIENT_START,
   ACCENT_GRADIENT_END,
   MOMENTS_SLIDER_GRADIENT,
+  REVEAL_TRACK_GRADIENT,
+  REVEAL_TRACK_GRADIENT_START,
+  REVEAL_TRACK_GRADIENT_END,
 } from './colours';
 export type { ColourPalette, ElevationToken } from './colours';
 export { spacing, radii, layout } from './spacing';

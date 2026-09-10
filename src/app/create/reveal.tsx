@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ExpandingSection } from '@/components/feedback/expanding-section';
-import { SegmentedControl } from '@/components/forms/segmented-control';
+import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
 import { ToggleRow } from '@/components/forms/toggle-row';
 import { CalendarIcon, ChevronDownIcon, ClockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
@@ -169,6 +169,21 @@ export default function RevealStep() {
     )));
   }
 
+  /*
+   * Guest-side reveal handlers, with no control attached to them.
+   *
+   * The screen now offers one choice — now, or later — and guests follow the
+   * host through the sync in `handleHostChoiceChange`. These two are kept
+   * rather than deleted because they are the only implementation of the guest
+   * options the old control exposed: "never", "after I review", and the
+   * 1/12/24-hour delay. The draft fields they write are still read, still
+   * validated and still honoured downstream, so a guest event created before
+   * this change behaves exactly as it did.
+   *
+   * Delete them only once it is decided that those options are gone for good
+   * rather than homeless.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleGuestChoiceChange(choice: 'same' | 'review' | 'never') {
     if (choice === 'never') {
       update({
@@ -198,6 +213,7 @@ export default function RevealStep() {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleDurationChange(hours: 1 | 12 | 24) {
     update({
       guestRevealChoice: 'custom',
@@ -228,79 +244,54 @@ export default function RevealStep() {
       <View style={{ gap: spacing.xxl }}>
         <RevealPreview locked={hostReveal.mode !== 'instant'} />
 
-        <View style={{ gap: spacing.base }}>
-          <AppText variant="bodyLarge">You see photos</AppText>
-          <SegmentedControl
-            accessibilityLabel="When do you want to see new photos?"
-            value={draft.hostRevealChoice}
-            onChange={handleHostChoiceChange}
-            options={[
-              { value: 'during', label: 'Immediately' },
-              { value: 'at_close', label: 'At close' },
-              { value: 'custom', label: 'Custom' },
-            ]}
-          />
+        {/*
+          One choice: now, or later.
+          `during` and `custom` are the two ends of the existing reveal model
+          — `at_close` is still a valid stored value and still honoured
+          everywhere downstream, it simply is not offered here any more.
+          Guests stay in step with the host through `handleHostChoiceChange`'s
+          existing sync, which is what the removed guest control was mostly
+          used to keep aligned anyway.
+        */}
+        <RevealTimingToggle
+          value={draft.hostRevealChoice === 'during' ? 'immediately' : 'delayed'}
+          onChange={(timing) =>
+            handleHostChoiceChange(timing === 'immediately' ? 'during' : 'custom')
+          }
+        />
 
-          <ExpandingSection expanded={draft.hostRevealChoice === 'custom'}>
-            <View style={{ flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm }}>
-              <Pressable
-                onPress={() => setShowDatePicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Reveal date, ${formatDate(draft.hostCustomRevealAt)}`}
-                style={revealSharedStyles.selectorBtn}
-              >
-                <View style={revealSharedStyles.selectorLeft}>
-                  <CalendarIcon size={16} color={colours.textSecondary} />
-                  <AppText variant="bodySmall" style={revealSharedStyles.selectorText}>{formatDate(draft.hostCustomRevealAt)}</AppText>
-                </View>
-                <ChevronDownIcon size={16} color={colours.textSecondary} />
-              </Pressable>
+        {/* The delay's own date and time. Unchanged — this is the existing
+            scheduling path, now reached from the toggle rather than from a
+            third segment. */}
+        <ExpandingSection expanded={draft.hostRevealChoice !== 'during'}>
+          <View style={{ flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm }}>
+            <Pressable
+              onPress={() => setShowDatePicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Reveal date, ${formatDate(draft.hostCustomRevealAt)}`}
+              style={revealSharedStyles.selectorBtn}
+            >
+              <View style={revealSharedStyles.selectorLeft}>
+                <CalendarIcon size={16} color={colours.textSecondary} />
+                <AppText variant="bodySmall" style={revealSharedStyles.selectorText}>{formatDate(draft.hostCustomRevealAt)}</AppText>
+              </View>
+              <ChevronDownIcon size={16} color={colours.textSecondary} />
+            </Pressable>
 
-              <Pressable
-                onPress={() => setShowTimePicker(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`Reveal time, ${formatTime(draft.hostCustomRevealAt)}`}
-                style={revealSharedStyles.selectorBtn}
-              >
-                <View style={revealSharedStyles.selectorLeft}>
-                  <ClockIcon size={16} color={colours.textSecondary} />
-                  <AppText variant="bodySmall" style={revealSharedStyles.selectorText}>{formatTime(draft.hostCustomRevealAt)}</AppText>
-                </View>
-                <ChevronDownIcon size={16} color={colours.textSecondary} />
-              </Pressable>
-            </View>
-          </ExpandingSection>
-        </View>
-
-        <View style={{ gap: spacing.base }}>
-          <AppText variant="bodyLarge">Guests see photos</AppText>
-          <SegmentedControl
-            accessibilityLabel="When should guests see the photos?"
-            value={guestRevealSelection}
-            onChange={handleGuestChoiceChange}
-            options={[
-              { value: 'never', label: 'Never' },
-              { value: 'same', label: 'Same time' },
-              { value: 'review', label: 'After review' },
-            ]}
-          />
-
-          <ExpandingSection expanded={guestDelayEnabled}>
-            <View style={{ paddingTop: spacing.sm }}>
-              <SegmentedControl
-                accessibilityLabel="How long after you do"
-                value={activeDuration}
-                onChange={handleDurationChange}
-                options={[
-                  { value: 1, label: '1 hr after me' },
-                  { value: 12, label: '12 hrs after me' },
-                  { value: 24, label: '24 hrs after me' },
-                ]}
-              />
-            </View>
-          </ExpandingSection>
-
-        </View>
+            <Pressable
+              onPress={() => setShowTimePicker(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Reveal time, ${formatTime(draft.hostCustomRevealAt)}`}
+              style={revealSharedStyles.selectorBtn}
+            >
+              <View style={revealSharedStyles.selectorLeft}>
+                <ClockIcon size={16} color={colours.textSecondary} />
+                <AppText variant="bodySmall" style={revealSharedStyles.selectorText}>{formatTime(draft.hostCustomRevealAt)}</AppText>
+              </View>
+              <ChevronDownIcon size={16} color={colours.textSecondary} />
+            </Pressable>
+          </View>
+        </ExpandingSection>
 
         <ExpandingSection expanded={guestRevealSelection !== 'never'}>
           <View style={{ gap: spacing.base }}>
