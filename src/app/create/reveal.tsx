@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
+import { PencilIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, spacing } from '@/design';
 import { copy } from '@/i18n';
@@ -376,6 +377,7 @@ export default function RevealStep() {
                   <AppText variant="bodySmall" tone="secondary">
                     {delayValue()}
                   </AppText>
+                  <PencilIcon size={13} color={colours.textSecondary} />
                 </Pressable>
               </View>
             ) : null}
@@ -429,7 +431,9 @@ const S = StyleSheet.create({
   },
   /** Matched to the event-name suggestion blank: muted and underlined. */
   summaryValue: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: spacing.xs,
     minWidth: 34,
     paddingBottom: 2,
     borderBottomWidth: layout.hairline,
