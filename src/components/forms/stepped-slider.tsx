@@ -6,6 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
   useAnimatedReaction,
+  measure,
+  useAnimatedRef,
   useSharedValue,
   withSpring,
   withTiming,
@@ -17,8 +19,8 @@ import {
   MOMENT_LIMIT_VALUES,
   momentLimitDotProgress,
   momentLimitIndex,
+  momentLimitIndexForTrackPosition,
   momentLimitIndexAtDotProgress,
-  nearestMomentLimitIndex,
   type MomentLimit,
 } from './stepped-slider-values';
 
@@ -26,6 +28,7 @@ export {
   MOMENT_LIMIT_VALUES,
   momentLimitDotProgress,
   momentLimitIndex,
+  momentLimitIndexForTrackPosition,
   momentLimitIndexAtDotProgress,
   nearestMomentLimitIndex,
   type MomentLimit,
@@ -53,6 +56,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
   const progress = useSharedValue(fillProgressForIndex(initialIndex));
   const activeIndex = useSharedValue(initialIndex);
   const trackWidth = useSharedValue(0);
+  const trackRef = useAnimatedRef<View>();
 
   const notifyValueChange = useCallback((index: number) => {
     const next = MOMENT_LIMIT_VALUES[index];
@@ -95,17 +99,19 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     },
   );
 
-  const setFromX = (x: number, snap: boolean) => {
+  const setFromPosition = (localX: number, absoluteX: number, snap: boolean) => {
     'worklet';
-    const width = trackWidth.get();
+    const trackLayout = measure(trackRef);
+    const width = trackLayout?.width ?? trackWidth.get();
     if (width <= 0) return;
 
+    // Gesture coordinates can be relative to a wrapper on some native
+    // configurations. Deriving the point from the track's page position makes
+    // every tap resolve against the visible pill itself.
+    const x = trackLayout ? absoluteX - trackLayout.pageX : localX;
     const nextProgress = Math.max(0, Math.min(1, x / width));
     if (snap) {
-      const nextIndex = nearestMomentLimitIndex(
-        (nextProgress - momentLimitDotProgress(0))
-          / (momentLimitDotProgress(STEP_COUNT) - momentLimitDotProgress(0)),
-      );
+      const nextIndex = momentLimitIndexForTrackPosition(x, width);
       progress.set(withSpring(fillProgressForIndex(nextIndex), {
         duration: 400,
         dampingRatio: 0.8,
@@ -118,10 +124,10 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
 
   const pan = Gesture.Pan()
     .minDistance(2)
-    .onBegin((event) => setFromX(event.x, false))
-    .onUpdate((event) => setFromX(event.x, false))
-    .onEnd((event) => setFromX(event.x, true));
-  const tap = Gesture.Tap().onEnd((event) => setFromX(event.x, true));
+    .onStart((event) => setFromPosition(event.x, event.absoluteX, false))
+    .onUpdate((event) => setFromPosition(event.x, event.absoluteX, false))
+    .onEnd((event) => setFromPosition(event.x, event.absoluteX, true));
+  const tap = Gesture.Tap().onEnd((event) => setFromPosition(event.x, event.absoluteX, true));
   const gesture = Gesture.Simultaneous(pan, tap);
 
   const selectedIndex = momentLimitIndex(value);
@@ -138,6 +144,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     <View style={{ width: '100%' }}>
       <GestureDetector gesture={gesture}>
         <Animated.View
+          ref={trackRef}
           accessible
           accessibilityRole="adjustable"
           accessibilityLabel="Moments allowed per guest"

@@ -20,6 +20,18 @@ export function momentLimitDotProgress(index: number): number {
   return MOMENT_LIMIT_DOT_INSET + (index / stepCount) * (1 - MOMENT_LIMIT_DOT_INSET * 2);
 }
 
+/** Converts a physical track coordinate to its nearest supported value. */
+export function momentLimitIndexForTrackPosition(x: number, trackWidth: number): number {
+  'worklet';
+  if (trackWidth <= 0) return 0;
+
+  const progress = Math.max(0, Math.min(1, x / trackWidth));
+  return nearestMomentLimitIndex(
+    (progress - momentLimitDotProgress(0))
+      / (momentLimitDotProgress(MOMENT_LIMIT_VALUES.length - 1) - momentLimitDotProgress(0)),
+  );
+}
+
 /**
  * Selects only after the fill itself reaches a dot. This deliberately differs
  * from `nearestMomentLimitIndex`, which remains responsible for the slider's

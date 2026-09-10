@@ -2,6 +2,7 @@ import {
   MOMENT_LIMIT_VALUES,
   momentLimitDotProgress,
   momentLimitIndex,
+  momentLimitIndexForTrackPosition,
   momentLimitIndexAtDotProgress,
   nearestMomentLimitIndex,
 } from './stepped-slider-values';
@@ -25,6 +26,13 @@ describe('stepped moments slider', () => {
     expect(nearestMomentLimitIndex(0.29)).toBe(1);
     expect(nearestMomentLimitIndex(0.5)).toBe(3);
     expect(nearestMomentLimitIndex(1)).toBe(5);
+  });
+
+  it('maps taps relative to the slider track, including inset endpoints', () => {
+    const width = 300;
+    expect(momentLimitIndexForTrackPosition(width * momentLimitDotProgress(0), width)).toBe(0);
+    expect(momentLimitIndexForTrackPosition(width * momentLimitDotProgress(3), width)).toBe(3);
+    expect(momentLimitIndexForTrackPosition(width * momentLimitDotProgress(5), width)).toBe(5);
   });
 
   it('holds the active value until the fill crosses the next dot', () => {
