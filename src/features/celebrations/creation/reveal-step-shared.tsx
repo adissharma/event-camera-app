@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -47,7 +48,18 @@ const PREVIEW_GAP = 6;
  * mistake, a third of a tile looks like scroll.
  */
 const SECOND_ROW_PEEK = 64;
-const PREVIEW_SCROLL_OFFSET = 32;
+/**
+ * How far the collage drifts, and back.
+ *
+ * It used to travel 32pt upward and stay there, which parked the first row
+ * under the top fade — the thing the fade was for while it moved became a
+ * permanent crop once it stopped. Now it only breathes: a few points down and
+ * back, forever, with the frame tall enough that the top of the first row is
+ * never cut at either extreme.
+ */
+const JIGGLE_TRAVEL = 6;
+/** One full down-and-back. */
+const JIGGLE_CYCLE_MS = 2500;
 const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
 
 export function RevealPreview({
@@ -61,25 +73,28 @@ export function RevealPreview({
   const cellHeight = cellWidth * 1.25;
   const motion = useMotion();
   const galleryScroll = useSharedValue(0);
-  const scrollDuration = motion.duration('emotional');
   const scrollDelay = motion.reduceMotion ? 0 : 320;
 
   useFocusEffect(
     useCallback(() => {
       galleryScroll.set(0);
 
-      if (motion.reduceMotion) {
-        galleryScroll.set(-PREVIEW_SCROLL_OFFSET);
-        return;
-      }
+      // Nothing moves under reduce-motion: this is decoration, and it is the
+      // kind of continuous drift that reads as motion sickness to someone who
+      // asked for less of it.
+      if (motion.reduceMotion) return;
 
       galleryScroll.set(
         withDelay(
           scrollDelay,
-          withTiming(-PREVIEW_SCROLL_OFFSET, {
-            duration: scrollDuration,
-            easing: easing.inOut,
-          }),
+          withRepeat(
+            withTiming(-JIGGLE_TRAVEL, {
+              duration: JIGGLE_CYCLE_MS / 2,
+              easing: easing.inOut,
+            }),
+            -1,
+            true,
+          ),
         ),
       );
 
@@ -87,7 +102,7 @@ export function RevealPreview({
         cancelAnimation(galleryScroll);
         galleryScroll.set(0);
       };
-    }, [galleryScroll, motion.reduceMotion, scrollDelay, scrollDuration]),
+    }, [galleryScroll, motion.reduceMotion, scrollDelay]),
   );
 
   const galleryScrollStyle = useAnimatedStyle(() => ({
@@ -96,8 +111,22 @@ export function RevealPreview({
 
   return (
     <View style={styles.previewContainer}>
-      <View style={[styles.galleryPreview, { width: previewWidth, height: cellHeight + PREVIEW_GAP + SECOND_ROW_PEEK }]}>
-        <Animated.View style={[styles.photoGrid, { width: previewWidth }, galleryScrollStyle]}>
+      <View
+        style={[
+          styles.galleryPreview,
+          {
+            width: previewWidth,
+            height: cellHeight + PREVIEW_GAP + SECOND_ROW_PEEK + JIGGLE_TRAVEL,
+          },
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.photoGrid,
+            { width: previewWidth, paddingTop: JIGGLE_TRAVEL },
+            galleryScrollStyle,
+          ]}
+        >
           {(locked ? PREVIEW_IMAGES_MONO : PREVIEW_IMAGES).map((imgSrc, index) => (
             <View
               key={index}
@@ -131,12 +160,6 @@ export function RevealPreview({
             </View>
           ))}
         </Animated.View>
-        <LinearGradient
-          pointerEvents="none"
-          colors={[colours.background, colours.background, 'rgba(11,11,12,0)']}
-          locations={[0, 0.45, 1]}
-          style={styles.topFade}
-        />
         <LinearGradient
           pointerEvents="none"
           colors={['rgba(11,11,12,0)', colours.background, colours.background]}
@@ -281,13 +304,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(11, 11, 12, 0.74)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
-  },
-  topFade: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: 52,
   },
   bottomFade: {
     position: 'absolute',

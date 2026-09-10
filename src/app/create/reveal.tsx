@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
 import { PencilIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
-import { colours, spacing } from '@/design';
+import { colours, layout, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { RevealPreview } from '@/features/celebrations/creation/reveal-step-shared';
 import {
@@ -413,10 +413,22 @@ const S = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
   },
+  /**
+   * Underlined as a whole, text and pencil together.
+   *
+   * A border on the row rather than `textDecorationLine` on the text: the
+   * pencil is an SVG and cannot carry a text decoration, and an underline
+   * that stops before the icon reads as a mistake rather than as an
+   * invitation to tap the line.
+   */
   summary: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
+    alignSelf: 'center',
+    paddingBottom: 2,
+    borderBottomWidth: layout.hairline,
+    borderBottomColor: colours.textSecondary,
   },
 });
