@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
 import { PencilIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, spacing } from '@/design';
+import { colours, spacing } from '@/design';
 import { copy } from '@/i18n';
 import { RevealPreview } from '@/features/celebrations/creation/reveal-step-shared';
 import {
@@ -214,16 +214,21 @@ export default function RevealStep() {
     applyDelay(mode, revealAt);
   }
 
-  /** `Reveals when event ends` / `Reveals 12 Sep · 8:30 PM`. */
-  function delaySummary(): string {
-    if (draft.hostRevealChoice === 'at_close') return 'Reveals when event ends';
+  /**
+   * The editable half of the summary: `when event ends`, `12 Sep · 8:30 PM`.
+   *
+   * Split from the word "Reveals" because only this part is the choice. The
+   * underline marks what can be changed, and running it under the verb would
+   * offer to edit a word that is never anything else.
+   */
+  function delayValue(): string {
     const at = draft.hostCustomRevealAt ? new Date(draft.hostCustomRevealAt) : null;
-    if (!at) return 'Reveals when event ends';
+    if (draft.hostRevealChoice === 'at_close' || !at) return 'when event ends';
     const day = at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
     const time = at
       .toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true })
       .toUpperCase();
-    return `Reveals ${day} · ${time}`;
+    return `${day} · ${time}`;
   }
 
   /* ─────────────────────────────────────────────────────────────────────────
@@ -361,14 +366,19 @@ export default function RevealStep() {
               <Pressable
                 onPress={() => setDelaySheetOpen(true)}
                 accessibilityRole="button"
-                accessibilityLabel={`${delaySummary()}. Edit`}
+                accessibilityLabel={`Reveals ${delayValue()}. Edit`}
                 hitSlop={10}
-                style={S.summary}
+                style={S.summaryRow}
               >
                 <AppText variant="bodySmall" tone="secondary">
-                  {delaySummary()}
+                  Reveals{' '}
                 </AppText>
-                <PencilIcon size={13} color={colours.textSecondary} />
+                <View style={S.summaryValue}>
+                  <AppText variant="bodySmall" tone="secondary">
+                    {delayValue()}
+                  </AppText>
+                  <PencilIcon size={13} color={colours.textSecondary} />
+                </View>
               </Pressable>
             ) : null}
           </View>
@@ -413,22 +423,28 @@ const S = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
   },
-  /**
-   * Underlined as a whole, text and pencil together.
-   *
-   * A border on the row rather than `textDecorationLine` on the text: the
-   * pencil is an SVG and cannot carry a text decoration, and an underline
-   * that stops before the icon reads as a mistake rather than as an
-   * invitation to tap the line.
-   */
-  summary: {
+  summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
     alignSelf: 'center',
+  },
+  /**
+   * Only the value is underlined, and dotted rather than ruled.
+   *
+   * A border on this group rather than `textDecorationLine`, so the underline
+   * carries under the pencil too — the icon is an SVG and cannot take a text
+   * decoration, and a rule stopping short of it reads as a mistake. Dotted
+   * and in the same muted ink as the text: solid, it looked like a divider
+   * under the line rather than a mark on it.
+   */
+  summaryValue: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingBottom: 2,
-    borderBottomWidth: layout.hairline,
+    borderBottomWidth: 1,
+    borderStyle: 'dotted',
     borderBottomColor: colours.textSecondary,
   },
 });

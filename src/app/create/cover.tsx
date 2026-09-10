@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
@@ -121,21 +121,27 @@ export default function CoverStep() {
       onSave={handleSave}
       action={
         draft.editCelebrationId ? undefined : (
-          <View style={{ alignItems: 'center', gap: spacing.sm }}>
-            <Button label={copy.create.coverAddPhoto} onPress={() => setEditing(true)} haptic />
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={copy.create.coverAddLater}
-              onPress={() => router.push('/create/photo-limit')}
-              hitSlop={8}
-            >
-              <AppText
-                variant="bodySmall"
-                style={{ fontWeight: '700', textDecorationLine: 'underline' }}
-              >
-                {copy.create.coverAddLater}
-              </AppText>
-            </Pressable>
+          // Skipping is the primary action because it is what most hosts do
+          // at this point — a cover can be added any time afterwards, and
+          // burying the way forward under the optional step made the screen
+          // feel like a demand. Adding a photo keeps equal weight beside it
+          // rather than being a link a thumb has to hunt for.
+          <View style={{ flexDirection: 'row', gap: spacing.md }}>
+            <View style={{ flex: 1 }}>
+              <Button
+                label={copy.create.coverAddPhoto}
+                variant="secondary"
+                onPress={() => setEditing(true)}
+                haptic
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                label={copy.create.coverAddLater}
+                onPress={() => router.push('/create/photo-limit')}
+                haptic
+              />
+            </View>
           </View>
         )
       }
