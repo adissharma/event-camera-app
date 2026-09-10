@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -67,16 +67,22 @@ export function ViewfinderShotCounter({
   const motion = useMotion();
   const hasAnimated = useRef(false);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-  const [displayedValue, setDisplayedValue] = useState<number | '∞'>(
-    typeof value === 'number' ? Math.min(value, Math.max(0, Math.floor(rollFrom))) : value,
-  );
+  const initialValue = typeof value === 'number'
+    ? Math.min(value, Math.max(0, Math.floor(rollFrom)))
+    : value;
+  const displayedValueRef = useRef<number | '∞'>(initialValue);
+  const [displayedValue, setDisplayedValue] = useState<number | '∞'>(initialValue);
+  const setCounterValue = useCallback((next: number | '∞') => {
+    displayedValueRef.current = next;
+    setDisplayedValue(next);
+  }, []);
 
   useEffect(() => {
     timers.current.forEach(clearTimeout);
     timers.current = [];
 
     if (typeof value !== 'number') {
-      setDisplayedValue(value);
+      setCounterValue(value);
       return;
     }
 
@@ -84,15 +90,21 @@ export function ViewfinderShotCounter({
     hasAnimated.current = true;
 
     if (!shouldRoll || motion.reduceMotion || value <= 0) {
-      setDisplayedValue(value);
+      setCounterValue(value);
       if (haptics && shouldRoll) {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       }
       return;
     }
 
-    const startingValue = Math.min(value, Math.max(0, Math.floor(rollFrom)));
-    setDisplayedValue(startingValue);
+    const previousValue = displayedValueRef.current;
+    // Keep the demo continuous as its limit changes. The unlimited state has
+    // no finite number to roll from, so a newly selected finite limit begins
+    // at the supplied baseline instead.
+    const startingValue = typeof previousValue === 'number'
+      ? previousValue
+      : Math.max(0, Math.floor(rollFrom));
+    setCounterValue(startingValue);
 
     if (startingValue === value) {
       if (haptics) {
@@ -106,11 +118,12 @@ export function ViewfinderShotCounter({
     }
 
     let current = startingValue;
-    const interval = Math.max(20, Math.min(60, Math.floor(700 / value)));
+    const direction = startingValue < value ? 1 : -1;
+    const interval = Math.max(20, Math.min(60, Math.floor(700 / Math.abs(value - startingValue))));
 
     const tick = () => {
-      current += 1;
-      setDisplayedValue(current);
+      current += direction;
+      setCounterValue(current);
 
       if (current === value) {
         if (haptics) {
@@ -131,7 +144,7 @@ export function ViewfinderShotCounter({
       timers.current.forEach(clearTimeout);
       timers.current = [];
     };
-  }, [animateChanges, haptics, motion.reduceMotion, rollDelayMs, rollFrom, value]);
+  }, [animateChanges, haptics, motion.reduceMotion, rollDelayMs, rollFrom, setCounterValue, value]);
 
   return (
     <View

@@ -89,7 +89,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
             value={limit === null ? '∞' : limit}
             animateChanges={limit !== null}
             haptics={false}
-            rollFrom={1}
+            rollFrom={0}
             rollDelayMs={0}
           />
         ) : null}
