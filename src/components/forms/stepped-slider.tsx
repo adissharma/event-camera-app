@@ -55,6 +55,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
   const initialIndex = momentLimitIndex(value);
   const progress = useSharedValue(fillProgressForIndex(initialIndex));
   const activeIndex = useSharedValue(initialIndex);
+  const isInteracting = useSharedValue(false);
   const trackWidth = useSharedValue(0);
   const trackRef = useAnimatedRef<View>();
 
@@ -91,6 +92,8 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
       );
     },
     (nextIndex) => {
+      if (!isInteracting.get()) return;
+
       if (nextIndex >= 0 && nextIndex !== activeIndex.get()) {
         activeIndex.set(nextIndex);
         scheduleOnRN(notifySliderStep);
@@ -111,6 +114,8 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     const nextProgress = Math.max(0, Math.min(1, x / width));
     if (snap) {
       const nextIndex = momentLimitIndexForTrackPosition(x, width);
+      const didChange = nextIndex !== activeIndex.get();
+      activeIndex.set(nextIndex);
       progress.set(withSpring(fillProgressForIndex(nextIndex), {
         duration: 400,
         dampingRatio: 0.8,
@@ -119,6 +124,9 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
       // every intermediate spring position compete with the actual tap target,
       // so a tap could be overwritten by the leftmost value before settling.
       scheduleOnRN(notifyValueChange, nextIndex);
+      if (didChange) {
+        scheduleOnRN(notifySliderStep);
+      }
       return;
     }
 
@@ -127,10 +135,23 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
 
   const pan = Gesture.Pan()
     .minDistance(2)
-    .onStart((event) => setFromPosition(event.x, event.absoluteX, false))
+    .onStart((event) => {
+      isInteracting.set(true);
+      setFromPosition(event.x, event.absoluteX, false);
+    })
     .onUpdate((event) => setFromPosition(event.x, event.absoluteX, false))
-    .onEnd((event) => setFromPosition(event.x, event.absoluteX, true));
-  const tap = Gesture.Tap().onEnd((event) => setFromPosition(event.x, event.absoluteX, true));
+    .onEnd((event) => {
+      setFromPosition(event.x, event.absoluteX, true);
+      isInteracting.set(false);
+    })
+    .onFinalize(() => {
+      isInteracting.set(false);
+    });
+  const tap = Gesture.Tap().onEnd((event) => {
+    isInteracting.set(true);
+    setFromPosition(event.x, event.absoluteX, true);
+    isInteracting.set(false);
+  });
   const gesture = Gesture.Simultaneous(pan, tap);
 
   const selectedIndex = momentLimitIndex(value);
