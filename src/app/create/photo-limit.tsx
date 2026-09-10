@@ -62,6 +62,7 @@ export default function PhotoLimitStep() {
     <CreationStepScreen
       step="photo-limit"
       heading={copy.create.photoLimitHeading}
+      headingAlign="center"
       scrollable={false}
     >
       <View style={{ flex: 1, gap: spacing.base }}>
