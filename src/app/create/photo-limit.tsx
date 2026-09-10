@@ -21,7 +21,7 @@ const LIMIT_COPY: Record<'5' | '10' | '16' | '24' | '36' | 'unlimited', string> 
   16: 'Plenty for the best bits.',
   24: 'More moments, fewer regrets.',
   36: 'Go on, get snap-happy.',
-  unlimited: 'Snap without counting.',
+  unlimited: 'Unlimited. Snap without counting.',
 };
 
 export default function PhotoLimitStep() {

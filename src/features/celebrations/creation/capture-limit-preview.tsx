@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
+import { ColorMatrix, type Matrix as NativeMatrix } from 'react-native-color-matrix-image-filters';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -12,6 +13,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { colours, easing, layout, spacing, useMotion } from '@/design';
+import { TREATMENT_VISUALS } from '@/features/media/photo-treatment';
 import {
   ViewfinderBottomControls,
   ViewfinderCameraRollPlusIcon,
@@ -77,7 +79,12 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
       accessibilityLabel="Guest camera capture-limit preview"
     >
       <View style={S.viewfinder}>
-        <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        <ColorMatrix
+          matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
+          style={StyleSheet.absoluteFill}
+        >
+          <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        </ColorMatrix>
         <LinearGradient
           colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.45)']}
           style={StyleSheet.absoluteFill}
@@ -107,6 +114,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
         <ViewfinderBottomControls
           flashMode="off"
           gallerySource={coverSource}
+          monochromeGalleryPreview
           interactive={false}
         />
       </View>

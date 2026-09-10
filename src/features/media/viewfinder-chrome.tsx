@@ -1,8 +1,10 @@
 import { Image, Pressable, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import { ColorMatrix, type Matrix as NativeMatrix } from 'react-native-color-matrix-image-filters';
 import Svg, { Path } from 'react-native-svg';
 
 import { QrCodeIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
+import { TREATMENT_VISUALS } from '@/features/media/photo-treatment';
 
 import {
   VIEWFINDER_PILL_HEIGHT,
@@ -75,6 +77,8 @@ export interface ViewfinderBottomControlsProps {
   onInvite?: () => void;
   showGallery?: boolean;
   gallerySource?: ImageSourcePropType;
+  /** Desaturates only the camera-roll thumbnail for inert previews. */
+  monochromeGalleryPreview?: boolean;
   onGallery?: () => void;
   interactive?: boolean;
 }
@@ -93,6 +97,7 @@ export function ViewfinderBottomControls({
   onInvite,
   showGallery = true,
   gallerySource,
+  monochromeGalleryPreview = false,
   onGallery,
   interactive = true,
 }: ViewfinderBottomControlsProps) {
@@ -173,7 +178,16 @@ export function ViewfinderBottomControls({
           accessibilityLabel="Open gallery"
         >
           {gallerySource ? (
-            <Image source={gallerySource} style={S.photosBtnThumb} />
+            monochromeGalleryPreview ? (
+              <ColorMatrix
+                matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
+                style={S.photosBtnThumb}
+              >
+                <Image source={gallerySource} style={S.photosBtnThumb} />
+              </ColorMatrix>
+            ) : (
+              <Image source={gallerySource} style={S.photosBtnThumb} />
+            )
           ) : (
             <View style={S.photosBtnPlaceholder}>
               <View style={S.photosBtnPlaceholderDot} />
