@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
@@ -28,6 +28,23 @@ const MAX_REVEAL_DAYS_AFTER_CLOSE = 7;
 export default function RevealStep() {
   const { draft, update } = useCreationDraft();
   const [delaySheetOpen, setDelaySheetOpen] = useState(false);
+
+  /**
+   * The last delay this host actually chose.
+   *
+   * Toggling to Immediately clears the reveal time from the draft, so without
+   * this a host flicking the toggle to look at the difference would be asked
+   * to configure the delay again from scratch every time they came back. Seeded
+   * from the draft so a restored half-finished event is remembered too.
+   */
+  const lastDelay = useRef<{ mode: DelayMode; at: string | null } | null>(
+    draft.hostRevealChoice === 'during'
+      ? null
+      : {
+          mode: draft.hostRevealChoice === 'custom' ? 'custom' : 'at_close',
+          at: draft.hostCustomRevealAt,
+        },
+  );
   const hostReveal = resolveReveal(
     draft.hostRevealChoice,
     draft.endsAt,
@@ -149,18 +166,37 @@ export default function RevealStep() {
   const isDelayed = draft.hostRevealChoice !== 'during';
 
   /**
-   * The toggle only *proposes* a delay.
+   * The toggle asks once.
    *
-   * Turning it on opens the sheet and changes nothing else, so cancelling
-   * leaves the event exactly as it was — including a delay that was already
-   * saved, which reopening to edit must not be able to destroy.
+   * With no delay chosen yet it only *proposes* one: the sheet opens and
+   * nothing else changes, so cancelling leaves the event exactly as it was.
+   * Once a delay exists, the toggle is just a switch — flicking it back on
+   * restores what was chosen rather than reopening the sheet. The summary
+   * line and its pencil are how a host changes their mind.
    */
   function handleTimingChange(timing: 'immediately' | 'delayed') {
     if (timing === 'immediately') {
       handleHostChoiceChange('during');
       return;
     }
-    setDelaySheetOpen(true);
+
+    const remembered = lastDelay.current;
+    if (!remembered) {
+      setDelaySheetOpen(true);
+      return;
+    }
+
+    applyDelay(remembered.mode, remembered.at ? new Date(remembered.at) : null);
+  }
+
+  /** Writes a delay to the draft. The one place both paths go through. */
+  function applyDelay(mode: DelayMode, revealAt: Date | null) {
+    if (mode === 'at_close') {
+      handleHostChoiceChange('at_close');
+      return;
+    }
+    handleHostChoiceChange('custom');
+    if (revealAt) updateHostCustomTime(clampToWindow(revealAt));
   }
 
   function handleDelayCancel() {
@@ -171,12 +207,11 @@ export default function RevealStep() {
 
   function handleDelayConfirm(mode: DelayMode, revealAt: Date) {
     setDelaySheetOpen(false);
-    if (mode === 'at_close') {
-      handleHostChoiceChange('at_close');
-      return;
-    }
-    handleHostChoiceChange('custom');
-    updateHostCustomTime(clampToWindow(revealAt));
+    lastDelay.current = {
+      mode,
+      at: mode === 'custom' ? clampToWindow(revealAt).toISOString() : null,
+    };
+    applyDelay(mode, revealAt);
   }
 
   /** `Reveals when event ends` / `Reveals 12 Sep · 8:30 PM`. */
@@ -360,10 +395,10 @@ export default function RevealStep() {
         latest={revealWindow.latest}
         // Defaults to the event's own closing time. Only a delay that was
         // actually saved as a custom moment opens on the wheels.
-        initialMode={
-          draft.hostRevealChoice === 'custom' && draft.hostCustomRevealAt ? 'custom' : 'at_close'
+        initialMode={lastDelay.current?.mode ?? 'at_close'}
+        initialCustomAt={
+          lastDelay.current?.at ? new Date(lastDelay.current.at) : null
         }
-        initialCustomAt={draft.hostCustomRevealAt ? new Date(draft.hostCustomRevealAt) : null}
         onCancel={handleDelayCancel}
         onConfirm={handleDelayConfirm}
       />
