@@ -73,7 +73,7 @@ export default function PhotoLimitStep() {
       headingAlign="center"
       scrollable={false}
     >
-      <View style={{ flex: 1, gap: spacing.base }}>
+      <View style={{ flex: 1, gap: spacing.base, paddingBottom: spacing.xl }}>
         <View style={{ flex: 1, minHeight: 0, alignItems: 'center', justifyContent: 'center' }}>
           <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
         </View>

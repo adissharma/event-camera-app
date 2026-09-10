@@ -8,5 +8,6 @@ export function momentLimitIndex(value: MomentLimit | undefined): number {
 }
 
 export function nearestMomentLimitIndex(progress: number): number {
+  'worklet';
   return Math.max(0, Math.min(MOMENT_LIMIT_VALUES.length - 1, Math.round(progress * (MOMENT_LIMIT_VALUES.length - 1))));
 }
