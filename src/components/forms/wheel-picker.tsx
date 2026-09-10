@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { FlatList, StyleSheet, View, type ListRenderItemInfo } from 'react-native';
+import * as Haptics from 'expo-haptics';
+import {
+  FlatList,
+  StyleSheet,
+  View,
+  type ListRenderItemInfo,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
 
 import { AppText } from '@/components/ui/text';
 import { colours, layout, spacing } from '@/design';
@@ -52,7 +60,18 @@ export function WheelPicker<T extends string | number>({
 }: WheelPickerProps<T>) {
   const listRef = useRef<FlatList<T>>(null);
   const hasSettled = useRef(false);
+  const isUserScrolling = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastHapticIndex = useRef(selectedIndex);
   const edgePadding = WHEEL_ROW_HEIGHT * Math.floor(visibleRows / 2);
+
+  useEffect(() => {
+    lastHapticIndex.current = selectedIndex;
+  }, [selectedIndex]);
+
+  useEffect(() => () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+  }, []);
 
   useEffect(() => {
     // Animated after the first placement: the opening position should simply
@@ -68,6 +87,36 @@ export function WheelPicker<T extends string | number>({
   function finishScroll(offset: number) {
     const next = Math.max(0, Math.min(values.length - 1, Math.round(offset / WHEEL_ROW_HEIGHT)));
     if (next !== selectedIndex) onChange(next);
+  }
+
+  function beginUserScroll() {
+    if (locked) return;
+    if (settleTimer.current) {
+      clearTimeout(settleTimer.current);
+      settleTimer.current = null;
+    }
+    isUserScrolling.current = true;
+    lastHapticIndex.current = selectedIndex;
+  }
+
+  function endUserScrollSoon() {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      isUserScrolling.current = false;
+      settleTimer.current = null;
+    }, 120);
+  }
+
+  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
+    if (locked || !isUserScrolling.current) return;
+    const next = Math.max(
+      0,
+      Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / WHEEL_ROW_HEIGHT)),
+    );
+    if (next === lastHapticIndex.current) return;
+
+    lastHapticIndex.current = next;
+    void Haptics.selectionAsync().catch(() => {});
   }
 
   return (
@@ -98,11 +147,21 @@ export function WheelPicker<T extends string | number>({
         snapToInterval={WHEEL_ROW_HEIGHT}
         decelerationRate="fast"
         bounces
+        scrollEventThrottle={16}
         initialNumToRender={visibleRows + 2}
         contentContainerStyle={{ paddingVertical: edgePadding }}
         getItemLayout={(_data, index) => ({ length: WHEEL_ROW_HEIGHT, offset: WHEEL_ROW_HEIGHT * index, index })}
-        onMomentumScrollEnd={(event) => finishScroll(event.nativeEvent.contentOffset.y)}
-        onScrollEndDrag={(event) => finishScroll(event.nativeEvent.contentOffset.y)}
+        onScroll={handleScroll}
+        onScrollBeginDrag={beginUserScroll}
+        onMomentumScrollBegin={beginUserScroll}
+        onMomentumScrollEnd={(event) => {
+          finishScroll(event.nativeEvent.contentOffset.y);
+          endUserScrollSoon();
+        }}
+        onScrollEndDrag={(event) => {
+          finishScroll(event.nativeEvent.contentOffset.y);
+          endUserScrollSoon();
+        }}
       />
       <View pointerEvents="none" style={[styles.selectionRail, { top: edgePadding }]} />
       <View pointerEvents="none" style={[styles.fadeTop, { backgroundColor: fadeColor, height: edgePadding }]} />
