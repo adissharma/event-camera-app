@@ -102,6 +102,7 @@ export const enGB = {
     guestsCanViewGalleryDescription:
       'Including photos taken by other guests.',
     revealDuring: 'During the event',
+    revealHeading: 'When should your photos be revealed?',
     revealDuringDescription: 'Photos appear as guests take them.',
     revealAtClose: 'When the event closes',
     revealAtCloseDescription: 'Everything appears the moment your event ends.',

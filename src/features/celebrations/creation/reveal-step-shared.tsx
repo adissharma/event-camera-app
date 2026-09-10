@@ -13,23 +13,23 @@ import Animated, {
 import { LockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, easing, layout, radii, spacing, useMotion } from '@/design';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const PREVIEW_IMAGES = [
   require('../../../../assets/images/placeholders/christian_wedding.png'),
   require('../../../../assets/images/placeholders/hindu_wedding.png'),
   require('../../../../assets/images/placeholders/treatment_preview_1.png'),
+  require('../../../../assets/images/placeholders/treatment_preview_2.png'),
 ] as const;
 
 export function RevealPreview({
   locked,
-  message,
 }: {
   locked: boolean;
-  message: string;
 }) {
   return (
     <View style={styles.previewContainer}>
-      <View style={styles.photoRow}>
+      <View style={styles.galleryPreview}>
         {PREVIEW_IMAGES.map((imgSrc, index) => (
           <WavePhotoTile key={index} index={index}>
             <Image
@@ -48,9 +48,19 @@ export function RevealPreview({
             ) : null}
           </WavePhotoTile>
         ))}
+        <LinearGradient
+          pointerEvents="none"
+          colors={[colours.background, 'rgba(11,11,12,0)']}
+          locations={[0, 1]}
+          style={styles.topFade}
+        />
+        <LinearGradient
+          pointerEvents="none"
+          colors={['rgba(11,11,12,0)', colours.background]}
+          locations={[0, 1]}
+          style={styles.bottomFade}
+        />
       </View>
-
-      <AppText style={styles.statusText}>{message}</AppText>
     </View>
   );
 }
@@ -188,14 +198,18 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginVertical: spacing.sm,
   },
-  photoRow: {
+  galleryPreview: {
+    width: '100%',
+    maxWidth: 280,
     flexDirection: 'row',
-    gap: spacing.sm,
+    flexWrap: 'wrap',
+    gap: 6,
+    position: 'relative',
   },
   photoTile: {
-    width: 96,
-    aspectRatio: 9 / 16,
-    borderRadius: radii.xl,
+    width: '48%',
+    aspectRatio: 4 / 5,
+    borderRadius: 22,
     overflow: 'hidden',
     backgroundColor: colours.surfaceMuted,
   },
@@ -215,10 +229,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
   },
-  statusText: {
-    color: colours.textSecondary,
-    textAlign: 'center',
-    maxWidth: 280,
+  topFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 48,
+  },
+  bottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 48,
   },
   choiceTile: {
     flex: 1,

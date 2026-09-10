@@ -8,6 +8,7 @@ import { ToggleRow } from '@/components/forms/toggle-row';
 import { CalendarIcon, ChevronDownIcon, ClockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, spacing } from '@/design';
+import { copy } from '@/i18n';
 import {
   PickerModal,
   RevealPreview,
@@ -31,7 +32,6 @@ export default function RevealStep() {
   const { draft, update } = useCreationDraft();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [now] = useState(() => Date.now());
 
   const hostReveal = resolveReveal(
     draft.hostRevealChoice,
@@ -219,35 +219,14 @@ export default function RevealStep() {
     });
   }
 
-  function getUnlockTimeText() {
-    if (hostReveal.mode === 'instant') return 'Photos will be revealed instantly';
-    if (!hostReveal.revealAt) return 'Photos will be revealed when the event closes';
-
-    const revealDate = new Date(hostReveal.revealAt);
-    const difference = revealDate.getTime() - now;
-    if (difference <= 0) return 'Photos will be revealed shortly';
-
-    const hours = Math.ceil(difference / HOUR_MS);
-    if (hours < 24) {
-      return `Photos will be revealed in ${hours} hour${hours > 1 ? 's' : ''}`;
-    }
-    if (draft.hostRevealChoice === 'custom') {
-      const day = revealDate.toLocaleDateString(undefined, { weekday: 'long' });
-      const time = revealDate.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
-      return `Photos will be revealed on ${day} at ${time}`;
-    }
-    const days = Math.ceil(hours / 24);
-    return `Photos will be revealed in ${days} day${days > 1 ? 's' : ''}`;
-  }
-
   return (
     <CreationStepScreen
       step="reveal"
-      heading="The Big Reveal"
-      supporting="When photos appear."
+      heading={copy.create.revealHeading}
+      headingAlign="center"
     >
       <View style={{ gap: spacing.xxl }}>
-        <RevealPreview locked={hostReveal.mode !== 'instant'} message={getUnlockTimeText()} />
+        <RevealPreview locked={hostReveal.mode !== 'instant'} />
 
         <View style={{ gap: spacing.base }}>
           <AppText variant="bodyLarge">You see photos</AppText>
