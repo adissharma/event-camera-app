@@ -231,5 +231,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 44,
     height: 44,
+    borderRadius: 22,
+    backgroundColor: colours.surfaceRaised,
   },
 });
