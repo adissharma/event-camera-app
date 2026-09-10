@@ -8,7 +8,6 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 
@@ -36,90 +35,94 @@ const ZOOM_OPTIONS = [
   { label: '2.5', value: 'telephoto' },
 ] as const;
 
+const COUNTER_FOCUS_ORIGIN_X = VIEWFINDER_PILL_INSET + VIEWFINDER_PILL_HEIGHT / 2;
+const COUNTER_FOCUS_ORIGIN_Y = 78;
+const COUNTER_FOCUS_SCALE = 2.55;
+const COUNTER_FOCUS_TRANSLATE_X = 74;
+const COUNTER_FOCUS_TRANSLATE_Y = 24;
+
 /** A cropped, inert slice of the guest camera's lower viewfinder. */
 export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewProps) {
   const motion = useMotion();
-  const shake = useSharedValue(0);
-  const travel = motion.translate(6);
+  const focusProgress = useSharedValue(0);
   const delayMs = motion.reduceMotion ? 0 : 360;
-  const stepDuration = motion.duration('microFast');
+  const focusDuration = motion.duration('emotionalSlow');
+  const focusScale = motion.reduceMotion ? 1 : COUNTER_FOCUS_SCALE;
+  const focusTranslateX = motion.translate(COUNTER_FOCUS_TRANSLATE_X);
+  const focusTranslateY = motion.translate(COUNTER_FOCUS_TRANSLATE_Y);
 
   useFocusEffect(
     useCallback(() => {
-      shake.value = 0;
-      shake.value = withDelay(
+      focusProgress.set(0);
+      focusProgress.set(withDelay(
         delayMs,
-        withSequence(
-          withTiming(-1, { duration: stepDuration, easing: easing.inOut }),
-          withTiming(0.8, { duration: stepDuration, easing: easing.inOut }),
-          withTiming(-0.45, { duration: stepDuration, easing: easing.inOut }),
-          withTiming(0, { duration: stepDuration, easing: easing.standard }),
-        ),
-      );
-
-      const settle = setTimeout(() => {
-        shake.value = 0;
-      }, delayMs + stepDuration * 4 + 250);
+        withTiming(1, { duration: focusDuration, easing: easing.inOut }),
+      ));
 
       return () => {
-        clearTimeout(settle);
-        cancelAnimation(shake);
-        shake.value = 0;
+        cancelAnimation(focusProgress);
+        focusProgress.set(0);
       };
-    }, [delayMs, shake, stepDuration]),
+    }, [delayMs, focusDuration, focusProgress]),
   );
 
-  const shakeStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: travel * shake.value }],
+  const focusStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: focusTranslateX * focusProgress.get() },
+      { translateY: focusTranslateY * focusProgress.get() },
+      { scale: 1 + (focusScale - 1) * focusProgress.get() },
+    ],
   }));
 
   return (
     <Animated.View
-      style={[S.frame, shakeStyle]}
+      style={S.frame}
       accessibilityLabel="Guest camera capture-limit preview"
     >
-      <View style={S.viewfinder}>
-        <ColorMatrix
-          matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
-          style={StyleSheet.absoluteFill}
-        >
-          <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
-        </ColorMatrix>
-        <LinearGradient
-          colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.45)']}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-
-        {limit !== undefined ? (
-          <ViewfinderShotCounter
-            value={limit === null ? '∞' : limit}
-            animateChanges={limit !== null}
-            haptics={false}
-            rollFrom={0}
-            rollDelayMs={0}
+      <Animated.View style={[S.zoomLayer, focusStyle]}>
+        <View style={S.viewfinder}>
+          <ColorMatrix
+            matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
+            style={StyleSheet.absoluteFill}
+          >
+            <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          </ColorMatrix>
+          <LinearGradient
+            colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.45)']}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
           />
-        ) : null}
 
-        <View style={S.zoomPill}>
-          <ViewfinderZoomPill options={ZOOM_OPTIONS} activeLabel="1x" />
+          {limit !== undefined ? (
+            <ViewfinderShotCounter
+              value={limit === null ? '∞' : limit}
+              animateChanges={limit !== null}
+              haptics={false}
+              rollFrom={0}
+              rollDelayMs={0}
+            />
+          ) : null}
+
+          <View style={S.zoomPill}>
+            <ViewfinderZoomPill options={ZOOM_OPTIONS} activeLabel="1x" />
+          </View>
+
+          <View style={S.cameraRollTag}>
+            <ViewfinderCameraRollPlusIcon size={20} />
+          </View>
         </View>
 
-        <View style={S.cameraRollTag}>
-          <ViewfinderCameraRollPlusIcon size={20} />
+        <View style={S.bottomPanel}>
+          <ViewfinderBottomControls
+            flashMode="off"
+            gallerySource={coverSource}
+            monochromeGalleryPreview
+            interactive={false}
+          />
         </View>
-      </View>
 
-      <View style={S.bottomPanel}>
-        <ViewfinderBottomControls
-          flashMode="off"
-          gallerySource={coverSource}
-          monochromeGalleryPreview
-          interactive={false}
-        />
-      </View>
-
-      <View style={S.lowerEdge} pointerEvents="none" />
+        <View style={S.lowerEdge} pointerEvents="none" />
+      </Animated.View>
       <LinearGradient
         colors={[colours.background, 'rgba(11,11,12,0.72)', 'rgba(11,11,12,0)']}
         locations={[0, 0.36, 1]}
@@ -145,6 +148,10 @@ const S = StyleSheet.create({
     borderBottomRightRadius: 48,
     overflow: 'hidden',
     backgroundColor: '#000000',
+  },
+  zoomLayer: {
+    flex: 1,
+    transformOrigin: `${COUNTER_FOCUS_ORIGIN_X}px ${COUNTER_FOCUS_ORIGIN_Y}px`,
   },
   topFade: {
     position: 'absolute',
