@@ -199,12 +199,13 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   galleryPreview: {
-    width: '100%',
-    maxWidth: 280,
+    width: 280,
+    height: 342,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
     position: 'relative',
+    alignContent: 'flex-start',
   },
   photoTile: {
     width: '48%',
