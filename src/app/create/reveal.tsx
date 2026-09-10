@@ -342,32 +342,19 @@ export default function RevealStep() {
           heading and the CTA — they are a single thought, and spreading them
           to the edges made them read as two unrelated things. */}
       <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-        <RevealPreview locked={hostReveal.mode !== 'instant'} />
+        <View style={{ gap: spacing.md }}>
+          <RevealPreview locked={hostReveal.mode !== 'instant'} />
 
-        {/*
-          One choice: now, or later.
-          `during` and `custom` are the two ends of the existing reveal model
-          — `at_close` is still a valid stored value and still honoured
-          everywhere downstream, it simply is not offered here any more.
-          Guests stay in step with the host through `handleHostChoiceChange`'s
-          existing sync, which is what the removed guest control was mostly
-          used to keep aligned anyway.
-        */}
-        <View style={{ gap: spacing.base }}>
-          <RevealTimingToggle
-            value={isDelayed ? 'delayed' : 'immediately'}
-            onChange={handleTimingChange}
-          />
-
-          {/* What was chosen, and the way back to change it. Deliberately a
-              line of text rather than a row or a card — it is a receipt, not
-              another control competing with the toggle above it. */}
           {/*
+            What was chosen, sitting with the photos it describes rather than
+            under the control that set it — it says when *these* are revealed.
+            A line of text, not a row or a card: it is a receipt, not another
+            control.
+
             The slot is always here, whether or not there is a delay to
             report. Rendering it conditionally changed the block's height,
             which the centring then corrected by lifting everything — the
-            collage jumped and its fades tore as it moved. A line appearing
-            in reserved space costs nothing above it.
+            collage jumped and its fades tore as it moved.
           */}
           <View style={S.summarySlot}>
             {isDelayed ? (
@@ -386,6 +373,20 @@ export default function RevealStep() {
             ) : null}
           </View>
         </View>
+
+        {/*
+          One choice: now, or later.
+          `during` and `custom` are the two ends of the existing reveal model
+          — `at_close` is still a valid stored value and still honoured
+          everywhere downstream, it simply is not offered here any more.
+          Guests stay in step with the host through `handleHostChoiceChange`'s
+          existing sync, which is what the removed guest control was mostly
+          used to keep aligned anyway.
+        */}
+        <RevealTimingToggle
+          value={isDelayed ? 'delayed' : 'immediately'}
+          onChange={handleTimingChange}
+        />
       </View>
 
       <RevealDelaySheet
