@@ -40,7 +40,7 @@ export function RevealPreview({
   const motion = useMotion();
   const galleryScroll = useSharedValue(-PREVIEW_SCROLL_OFFSET);
   const scrollTravel = motion.translate(22);
-  const scrollDuration = motion.duration('standard');
+  const scrollDuration = motion.duration('standardSlow');
   const scrollDelay = motion.reduceMotion ? 0 : 260;
 
   useFocusEffect(
