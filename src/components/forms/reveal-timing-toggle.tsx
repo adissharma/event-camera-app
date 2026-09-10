@@ -181,8 +181,6 @@ const S = StyleSheet.create({
     height: TRACK_HEIGHT,
     borderRadius: TRACK_HEIGHT / 2,
     backgroundColor: colours.surfaceRaised,
-    borderWidth: layout.hairline,
-    borderColor: colours.borderStrong,
     justifyContent: 'center',
     padding: THUMB_INSET,
     // Keeps the gradient inside the pill rather than square at its corners.

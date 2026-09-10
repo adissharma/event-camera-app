@@ -1,19 +1,10 @@
-import DateTimePicker from '@react-native-community/datetimepicker';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { useCallback, useEffect, useMemo } from 'react';
+import { View } from 'react-native';
 
-import { ExpandingSection } from '@/components/feedback/expanding-section';
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
-import { ToggleRow } from '@/components/forms/toggle-row';
-import { CalendarIcon, ChevronDownIcon, ClockIcon } from '@/components/ui/icons';
-import { AppText } from '@/components/ui/text';
-import { colours, spacing } from '@/design';
+import { spacing } from '@/design';
 import { copy } from '@/i18n';
-import {
-  PickerModal,
-  RevealPreview,
-  revealSharedStyles,
-} from '@/features/celebrations/creation/reveal-step-shared';
+import { RevealPreview } from '@/features/celebrations/creation/reveal-step-shared';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { resolveReveal } from '@/features/celebrations/draft/types';
@@ -30,9 +21,6 @@ const MAX_REVEAL_DAYS_AFTER_CLOSE = 7;
 
 export default function RevealStep() {
   const { draft, update } = useCreationDraft();
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-
   const hostReveal = resolveReveal(
     draft.hostRevealChoice,
     draft.endsAt,
@@ -150,6 +138,23 @@ export default function RevealStep() {
     });
   }
 
+  /* ─────────────────────────────────────────────────────────────────────────
+   * Retained for the guest settings screen.
+   *
+   * The controls that called these have moved off this step, which now asks
+   * one question: now, or later. Everything below is the working
+   * implementation behind the options that went with them — composing a
+   * custom reveal date and time, clamping it into the allowed window, the
+   * guest-side choices, and the display formatters.
+   *
+   * Kept rather than deleted because the next screen needs exactly this, and
+   * because the draft fields they write are still read, resolved and
+   * validated everywhere downstream: an event created before this change
+   * behaves the same as it did. Move them out when that screen lands; delete
+   * them only if those options are dropped for good.
+   * ──────────────────────────────────────────────────────────────────────── */
+
+  /* eslint-disable @typescript-eslint/no-unused-vars */
   function handleDateSelect(date: Date) {
     const current = getCustomRevealDate();
     updateHostCustomTime(clampToWindow(new Date(
@@ -183,7 +188,6 @@ export default function RevealStep() {
    * Delete them only once it is decided that those options are gone for good
    * rather than homeless.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleGuestChoiceChange(choice: 'same' | 'review' | 'never') {
     if (choice === 'never') {
       update({
@@ -213,7 +217,6 @@ export default function RevealStep() {
     });
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   function handleDurationChange(hours: 1 | 12 | 24) {
     update({
       guestRevealChoice: 'custom',
@@ -234,14 +237,20 @@ export default function RevealStep() {
       hour: '2-digit', minute: '2-digit', hour12: true,
     });
   }
+  /* eslint-enable @typescript-eslint/no-unused-vars */
 
   return (
     <CreationStepScreen
       step="reveal"
       heading={copy.create.revealHeading}
       headingAlign="center"
+      // Not scrollable: there is a collage and one control, and the control is
+      // positioned by the space left over. Inside a scroll view `flex: 1`
+      // measures the content rather than the screen, so the toggle would stay
+      // pinned under the collage with the empty space all below it.
+      scrollable={false}
     >
-      <View style={{ gap: spacing.xxl }}>
+      <View style={{ gap: spacing.xxl, flex: 1 }}>
         <RevealPreview locked={hostReveal.mode !== 'instant'} />
 
         {/*
@@ -253,82 +262,19 @@ export default function RevealStep() {
           existing sync, which is what the removed guest control was mostly
           used to keep aligned anyway.
         */}
+        {/* Sits between the collage and the CTA rather than tight under the
+            collage, so the space below it is not a hole. */}
+        <View style={{ flex: 1, justifyContent: 'center', paddingBottom: spacing.xxl }}>
         <RevealTimingToggle
           value={draft.hostRevealChoice === 'during' ? 'immediately' : 'delayed'}
           onChange={(timing) =>
             handleHostChoiceChange(timing === 'immediately' ? 'during' : 'custom')
           }
         />
+        </View>
 
-        {/* The delay's own date and time. Unchanged — this is the existing
-            scheduling path, now reached from the toggle rather than from a
-            third segment. */}
-        <ExpandingSection expanded={draft.hostRevealChoice !== 'during'}>
-          <View style={{ flexDirection: 'row', gap: spacing.sm, paddingTop: spacing.sm }}>
-            <Pressable
-              onPress={() => setShowDatePicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Reveal date, ${formatDate(draft.hostCustomRevealAt)}`}
-              style={revealSharedStyles.selectorBtn}
-            >
-              <View style={revealSharedStyles.selectorLeft}>
-                <CalendarIcon size={16} color={colours.textSecondary} />
-                <AppText variant="bodySmall" style={revealSharedStyles.selectorText}>{formatDate(draft.hostCustomRevealAt)}</AppText>
-              </View>
-              <ChevronDownIcon size={16} color={colours.textSecondary} />
-            </Pressable>
-
-            <Pressable
-              onPress={() => setShowTimePicker(true)}
-              accessibilityRole="button"
-              accessibilityLabel={`Reveal time, ${formatTime(draft.hostCustomRevealAt)}`}
-              style={revealSharedStyles.selectorBtn}
-            >
-              <View style={revealSharedStyles.selectorLeft}>
-                <ClockIcon size={16} color={colours.textSecondary} />
-                <AppText variant="bodySmall" style={revealSharedStyles.selectorText}>{formatTime(draft.hostCustomRevealAt)}</AppText>
-              </View>
-              <ChevronDownIcon size={16} color={colours.textSecondary} />
-            </Pressable>
-          </View>
-        </ExpandingSection>
-
-        <ExpandingSection expanded={guestRevealSelection !== 'never'}>
-          <View style={{ gap: spacing.base }}>
-            <AppText variant="bodyLarge">Let guests view photos taken by others</AppText>
-            <ToggleRow
-              label="Let guests view photos taken by others"
-              hideLabel
-              value={draft.galleryVisibility === 'all_guests'}
-              onValueChange={(allowed) =>
-                update({ galleryVisibility: allowed ? 'all_guests' : 'own_only' })
-              }
-            />
-          </View>
-        </ExpandingSection>
       </View>
 
-      <PickerModal visible={showDatePicker} onClose={() => setShowDatePicker(false)}>
-        <DateTimePicker
-          value={getCustomRevealDate()}
-          mode="date"
-          display="spinner"
-          themeVariant="dark"
-          minimumDate={revealWindow.earliest}
-          maximumDate={revealWindow.latest ?? undefined}
-          onChange={(_event, date) => { if (date) handleDateSelect(date); }}
-        />
-      </PickerModal>
-      <PickerModal visible={showTimePicker} onClose={() => setShowTimePicker(false)}>
-        <DateTimePicker
-          value={getCustomRevealDate()}
-          mode="time"
-          display="spinner"
-          themeVariant="dark"
-          is24Hour={false}
-          onChange={(_event, time) => { if (time) handleTimeSelect(time); }}
-        />
-      </PickerModal>
     </CreationStepScreen>
   );
 }
