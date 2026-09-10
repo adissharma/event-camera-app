@@ -174,6 +174,6 @@ const S = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     justifyContent: 'center',
-    backgroundColor: '#0B0B0C',
+    backgroundColor: '#141417',
   },
 });
