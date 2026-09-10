@@ -21,9 +21,32 @@ const PREVIEW_IMAGES = [
   require('../../../../assets/sample-event/02.jpg'),
 ] as const;
 
+/**
+ * The same four frames, desaturated ahead of time.
+ *
+ * Not a runtime filter: React Native gates `filter: [{ grayscale }]` on iOS
+ * behind `enableSwiftUIBasedFilters`, which is off by default, so the style
+ * is accepted and silently does nothing. These are bundled assets and there
+ * are four of them, so converting them once at build time is both certain to
+ * work and free at render.
+ */
+const PREVIEW_IMAGES_MONO = [
+  require('../../../../assets/sample-event/mono/05.jpg'),
+  require('../../../../assets/sample-event/mono/06.jpg'),
+  require('../../../../assets/sample-event/mono/01.jpg'),
+  require('../../../../assets/sample-event/mono/02.jpg'),
+] as const;
+
 const PREVIEW_MAX_WIDTH = 340;
 const PREVIEW_GAP = 6;
-const SECOND_ROW_PEEK = 24;
+/**
+ * How much of the second row sits below the fold.
+ *
+ * Enough that it reads as a gallery continuing past the frame rather than as
+ * two rows that happen to be clipped — a sliver looks like a rendering
+ * mistake, a third of a tile looks like scroll.
+ */
+const SECOND_ROW_PEEK = 64;
 const PREVIEW_SCROLL_OFFSET = 32;
 const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
 
@@ -75,8 +98,14 @@ export function RevealPreview({
     <View style={styles.previewContainer}>
       <View style={[styles.galleryPreview, { width: previewWidth, height: cellHeight + PREVIEW_GAP + SECOND_ROW_PEEK }]}>
         <Animated.View style={[styles.photoGrid, { width: previewWidth }, galleryScrollStyle]}>
-          {PREVIEW_IMAGES.map((imgSrc, index) => (
-            <View key={index} style={[styles.photoTile, { width: cellWidth, height: cellHeight }]}>
+          {(locked ? PREVIEW_IMAGES_MONO : PREVIEW_IMAGES).map((imgSrc, index) => (
+            <View
+              key={index}
+              style={[
+                styles.photoTile,
+                { width: cellWidth, height: cellHeight },
+              ]}
+            >
               <Image
                 source={imgSrc}
                 style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
