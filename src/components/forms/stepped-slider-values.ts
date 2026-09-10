@@ -1,5 +1,6 @@
 export const MOMENT_LIMIT_VALUES = [5, 10, 16, 24, 36, null] as const;
 export type MomentLimit = (typeof MOMENT_LIMIT_VALUES)[number];
+export const MOMENT_LIMIT_DOT_INSET = 0.07;
 
 export function momentLimitIndex(value: MomentLimit | undefined): number {
   if (value === undefined || value === null) return MOMENT_LIMIT_VALUES.length - 1;
@@ -10,4 +11,34 @@ export function momentLimitIndex(value: MomentLimit | undefined): number {
 export function nearestMomentLimitIndex(progress: number): number {
   'worklet';
   return Math.max(0, Math.min(MOMENT_LIMIT_VALUES.length - 1, Math.round(progress * (MOMENT_LIMIT_VALUES.length - 1))));
+}
+
+/** Physical track position of a value's dot, from 0 to 1. */
+export function momentLimitDotProgress(index: number): number {
+  'worklet';
+  const stepCount = MOMENT_LIMIT_VALUES.length - 1;
+  return MOMENT_LIMIT_DOT_INSET + (index / stepCount) * (1 - MOMENT_LIMIT_DOT_INSET * 2);
+}
+
+/**
+ * Selects only after the fill itself reaches a dot. This deliberately differs
+ * from `nearestMomentLimitIndex`, which remains responsible for the slider's
+ * generous snap regions on release.
+ */
+export function momentLimitIndexAtDotProgress(progress: number, activeIndex: number): number {
+  'worklet';
+  const stepCount = MOMENT_LIMIT_VALUES.length - 1;
+  let nextIndex = activeIndex;
+
+  if (nextIndex < stepCount && progress >= momentLimitDotProgress(nextIndex + 1)) {
+    while (nextIndex < stepCount && progress >= momentLimitDotProgress(nextIndex + 1)) {
+      nextIndex += 1;
+    }
+  } else if (nextIndex > 0 && progress <= momentLimitDotProgress(nextIndex)) {
+    while (nextIndex > 0 && progress <= momentLimitDotProgress(nextIndex)) {
+      nextIndex -= 1;
+    }
+  }
+
+  return nextIndex;
 }

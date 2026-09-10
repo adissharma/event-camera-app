@@ -14,27 +14,29 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { colours, MOMENTS_SLIDER_GRADIENT, useMotion } from '@/design';
 import {
   MOMENT_LIMIT_VALUES,
+  momentLimitDotProgress,
   momentLimitIndex,
+  momentLimitIndexAtDotProgress,
   nearestMomentLimitIndex,
   type MomentLimit,
 } from './stepped-slider-values';
 
-export { MOMENT_LIMIT_VALUES, momentLimitIndex, nearestMomentLimitIndex, type MomentLimit } from './stepped-slider-values';
+export {
+  MOMENT_LIMIT_VALUES,
+  momentLimitDotProgress,
+  momentLimitIndex,
+  momentLimitIndexAtDotProgress,
+  nearestMomentLimitIndex,
+  type MomentLimit,
+} from './stepped-slider-values';
 
 const TRACK_HEIGHT = 54;
-const DOT_INSET_PERCENT = 7;
-const DOT_INSET = DOT_INSET_PERCENT / 100;
 const STEP_COUNT = MOMENT_LIMIT_VALUES.length - 1;
-
-function dotProgressForIndex(index: number): number {
-  'worklet';
-  return DOT_INSET + (index / STEP_COUNT) * (1 - DOT_INSET * 2);
-}
 
 function fillProgressForIndex(index: number): number {
   'worklet';
   // Unlimited intentionally fills through the rounded end of the track.
-  return index === STEP_COUNT ? 1 : dotProgressForIndex(index);
+  return index === STEP_COUNT ? 1 : momentLimitDotProgress(index);
 }
 
 export interface SteppedSliderProps {
@@ -79,19 +81,30 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
     if (width <= 0) return;
 
     const nextProgress = Math.max(0, Math.min(1, x / width));
-    const nextIndex = nearestMomentLimitIndex((nextProgress - DOT_INSET) / (1 - DOT_INSET * 2));
-    progress.set(
-      snap
-        ? withSpring(fillProgressForIndex(nextIndex), {
-            duration: 400,
-            dampingRatio: 0.8,
-          })
-        : nextProgress,
+    const nextIndex = nearestMomentLimitIndex(
+      (nextProgress - momentLimitDotProgress(0))
+        / (momentLimitDotProgress(STEP_COUNT) - momentLimitDotProgress(0)),
     );
 
-    if (nextIndex !== activeIndex.get()) {
-      activeIndex.set(nextIndex);
-      scheduleOnRN(notifySliderSnap, nextIndex);
+    if (snap) {
+      progress.set(withSpring(fillProgressForIndex(nextIndex), {
+            duration: 400,
+            dampingRatio: 0.8,
+          }, (finished) => {
+            if (finished && nextIndex !== activeIndex.get()) {
+              activeIndex.set(nextIndex);
+              scheduleOnRN(notifySliderSnap, nextIndex);
+            }
+          }));
+      return;
+    }
+
+    progress.set(nextProgress);
+
+    const committedIndex = momentLimitIndexAtDotProgress(nextProgress, activeIndex.get());
+    if (committedIndex !== activeIndex.get()) {
+      activeIndex.set(committedIndex);
+      scheduleOnRN(notifySliderSnap, committedIndex);
     }
   };
 
@@ -142,7 +155,7 @@ export function SteppedSlider({ value, onValueChange }: SteppedSliderProps) {
                 pointerEvents="none"
                 style={{
                   position: 'absolute',
-                  left: `${dotProgressForIndex(index) * 100}%`,
+                  left: `${momentLimitDotProgress(index) * 100}%`,
                   marginLeft: -4,
                   width: 8,
                   height: 8,
