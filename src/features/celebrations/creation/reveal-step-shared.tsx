@@ -16,10 +16,10 @@ import { colours, easing, fontFamilies, layout, radii, spacing, useMotion } from
 import { LinearGradient } from 'expo-linear-gradient';
 
 const PREVIEW_IMAGES = [
-  require('../../../../assets/images/placeholders/christian_wedding.png'),
-  require('../../../../assets/images/placeholders/hindu_wedding.png'),
-  require('../../../../assets/images/placeholders/treatment_preview_1.png'),
-  require('../../../../assets/images/placeholders/treatment_preview_2.png'),
+  require('../../../../assets/sample-event/02.jpg'),
+  require('../../../../assets/sample-event/01.jpg'),
+  require('../../../../assets/sample-event/04.jpg'),
+  require('../../../../assets/sample-event/06.jpg'),
 ] as const;
 
 const PREVIEW_MAX_WIDTH = 340;
@@ -68,14 +68,14 @@ export function RevealPreview({
         ))}
         <LinearGradient
           pointerEvents="none"
-          colors={[colours.background, 'rgba(11,11,12,0)']}
-          locations={[0, 1]}
+          colors={[colours.background, colours.background, 'rgba(11,11,12,0)']}
+          locations={[0, 0.45, 1]}
           style={styles.topFade}
         />
         <LinearGradient
           pointerEvents="none"
-          colors={['rgba(11,11,12,0)', colours.background]}
-          locations={[0, 1]}
+          colors={['rgba(11,11,12,0)', colours.background, colours.background]}
+          locations={[0, 0.55, 1]}
           style={styles.bottomFade}
         />
       </View>
@@ -268,14 +268,14 @@ const styles = StyleSheet.create({
     top: 0,
     left: 0,
     right: 0,
-    height: 40,
+    height: 52,
   },
   bottomFade: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: SECOND_ROW_PEEK + spacing.sm,
+    height: SECOND_ROW_PEEK + spacing.xl,
   },
   choiceTile: {
     flex: 1,
