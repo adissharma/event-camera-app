@@ -114,7 +114,6 @@ export const enGB = {
 
     // Step 9
     treatmentHeading: 'Photo look',
-    treatmentSupporting: 'Originals are always kept.',
     treatmentOriginal: 'Original',
     treatmentDisposable: 'Disposable',
     treatmentBlackAndWhite: 'Monochrome',
