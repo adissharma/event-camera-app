@@ -1,6 +1,14 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, StyleSheet, View } from 'react-native';
+import { Animated as NativeAnimated, Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/text';
 import {
@@ -43,10 +51,12 @@ export function RevealTimingToggle({
   value,
   onChange,
   onDelayedLabelPress,
+  wiggle = false,
 }: {
   value: RevealTiming;
   onChange: (value: RevealTiming) => void;
   onDelayedLabelPress?: () => void;
+  wiggle?: boolean;
 }) {
   const motion = useMotion();
   const isDelayed = value === 'delayed';
@@ -54,15 +64,33 @@ export function RevealTimingToggle({
   // One driver for everything: thumb position, gradient opacity and the two
   // labels' emphasis all read from it, so they can never disagree about which
   // state is showing mid-animation.
-  const progress = useRef(new Animated.Value(isDelayed ? 1 : 0)).current;
+  const progress = useRef(new NativeAnimated.Value(isDelayed ? 1 : 0)).current;
+  const wiggleX = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(progress, {
+    NativeAnimated.timing(progress, {
       toValue: isDelayed ? 1 : 0,
       duration: motion.duration('standardFast'),
       useNativeDriver: true,
     }).start();
   }, [isDelayed, motion, progress]);
+
+  useEffect(() => {
+    if (!wiggle || motion.reduceMotion) return;
+
+    const step = (toValue: number) =>
+      withTiming(toValue, {
+        duration: 55,
+        easing: Easing.inOut(Easing.quad),
+        reduceMotion: ReduceMotion.System,
+      });
+
+    wiggleX.set(withSequence(step(-4), step(4), step(-3), step(3), step(0)));
+  }, [motion.reduceMotion, wiggle, wiggleX]);
+
+  const wiggleStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: wiggleX.get() }],
+  }));
 
   const thumbStyle = {
     transform: [
@@ -95,18 +123,20 @@ export function RevealTimingToggle({
         // the 44pt minimum in both axes with room to spare.
         hitSlop={10}
       >
-        <View style={S.track}>
-          <Animated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
-            <LinearGradient
-              colors={REVEAL_TRACK_GRADIENT}
-              start={REVEAL_TRACK_GRADIENT_START}
-              end={REVEAL_TRACK_GRADIENT_END}
-              style={StyleSheet.absoluteFill}
-            />
-          </Animated.View>
+        <Animated.View style={wiggleStyle}>
+          <View style={S.track}>
+            <NativeAnimated.View style={[StyleSheet.absoluteFill, { opacity: progress }]}>
+              <LinearGradient
+                colors={REVEAL_TRACK_GRADIENT}
+                start={REVEAL_TRACK_GRADIENT_START}
+                end={REVEAL_TRACK_GRADIENT_END}
+                style={StyleSheet.absoluteFill}
+              />
+            </NativeAnimated.View>
 
-          <Animated.View style={[S.thumb, thumbStyle]} />
-        </View>
+            <NativeAnimated.View style={[S.thumb, thumbStyle]} />
+          </View>
+        </Animated.View>
       </Pressable>
 
       <Label
@@ -135,7 +165,7 @@ function Label({
 }: {
   text: string;
   active: boolean;
-  progress: Animated.Value;
+  progress: NativeAnimated.Value;
   invert?: boolean;
   onPress: () => void;
 }) {
@@ -153,9 +183,9 @@ function Label({
       hitSlop={8}
       style={S.labelHit}
     >
-      <Animated.View style={{ opacity }}>
+      <NativeAnimated.View style={{ opacity }}>
         <AppText style={S.label}>{text}</AppText>
-      </Animated.View>
+      </NativeAnimated.View>
     </Pressable>
   );
 }

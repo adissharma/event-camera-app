@@ -17,8 +17,6 @@ import { resolveReveal } from '@/features/celebrations/draft/types';
 
 const HOUR_MS = 3_600_000;
 const DAY_MS = 86_400_000;
-const REVEAL_TIMING_INTRO_DELAY_MS = 500;
-
 /**
  * One-shot, per in-memory creation draft.
  *
@@ -210,13 +208,7 @@ export default function RevealStep() {
     if (revealAt) updateHostCustomTime(clampToWindow(revealAt));
   }
 
-  const handleHostChoiceChangeRef = useRef(handleHostChoiceChange);
-  const applyDelayRef = useRef(applyDelay);
-
-  useEffect(() => {
-    handleHostChoiceChangeRef.current = handleHostChoiceChange;
-    applyDelayRef.current = applyDelay;
-  });
+  const [shouldWiggleToggle, setShouldWiggleToggle] = useState(false);
 
   useEffect(() => {
     if (introCueStarted.current) return;
@@ -225,18 +217,7 @@ export default function RevealStep() {
 
     introCueStarted.current = true;
     revealTimingIntroPlayedDrafts.add(draft.createdAt);
-
-    const rememberedDelay = lastDelay.current;
-    handleHostChoiceChangeRef.current('during');
-
-    const timer = setTimeout(() => {
-      applyDelayRef.current(
-        rememberedDelay?.mode ?? 'at_close',
-        rememberedDelay?.at ? new Date(rememberedDelay.at) : null,
-      );
-    }, REVEAL_TIMING_INTRO_DELAY_MS);
-
-    return () => clearTimeout(timer);
+    setShouldWiggleToggle(true);
   }, [draft.createdAt, draft.editCelebrationId]);
 
   function handleDelayCancel() {
@@ -437,6 +418,7 @@ export default function RevealStep() {
           value={isDelayed ? 'delayed' : 'immediately'}
           onChange={handleTimingChange}
           onDelayedLabelPress={() => setDelaySheetOpen(true)}
+          wiggle={shouldWiggleToggle}
         />
       </View>
 
