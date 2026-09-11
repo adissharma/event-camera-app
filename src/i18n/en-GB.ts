@@ -69,7 +69,7 @@ export const enGB = {
     // Step 3
     coverHeading: 'Add a cover photo',
     coverAddPhoto: 'Add photo',
-    coverAddLater: 'Skip, add later',
+    coverAddLater: 'Add later',
     choosePhoto: 'Choose a photo',
     takePhoto: 'Take a photo',
     removePhoto: 'Remove',
