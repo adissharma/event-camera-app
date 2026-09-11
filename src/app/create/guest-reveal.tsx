@@ -4,9 +4,13 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
 import { PencilIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, spacing } from '@/design';
+import { colours, fontFamilies, layout, spacing } from '@/design';
 import { GuestRevealDelaySheet } from '@/features/celebrations/creation/guest-reveal-delay-sheet';
-import { RevealPreview } from '@/features/celebrations/creation/reveal-step-shared';
+import {
+  RevealPreview,
+  useRevealPreviewHeight,
+} from '@/features/celebrations/creation/reveal-step-shared';
+import { WORDMARK } from '@/features/onboarding/still-intro';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
@@ -20,6 +24,7 @@ const guestRevealDefaultsAppliedDrafts = new Set<string>();
 export default function GuestRevealStep() {
   const { draft, update } = useCreationDraft();
   const [sheetOpen, setSheetOpen] = useState(false);
+  const previewHeight = useRevealPreviewHeight();
   const isAfterMe = draft.guestRevealChoice !== 'never';
 
   /**
@@ -132,7 +137,23 @@ export default function GuestRevealStep() {
     >
       <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
         <View style={{ gap: spacing.md }}>
-          <RevealPreview locked={isLocked} />
+          {/*
+            With guests never seeing the gallery there is nothing to preview,
+            and a locked collage would promise photos that are never coming.
+            The wordmark and a thank-you stand in its place — the guest's
+            side of this choice is that they contribute and go, so the screen
+            shows what they are left with.
+          */}
+          {isAfterMe ? (
+            <RevealPreview locked={isLocked} />
+          ) : (
+            <View style={[S.neverState, { height: previewHeight }]}>
+              <AppText style={S.neverWordmark}>{WORDMARK}</AppText>
+              <AppText variant="bodySmall" tone="secondary" align="center">
+                Thanks for helping capture the day 🤍
+              </AppText>
+            </View>
+          )}
 
           <View style={S.summarySlot}>
             {summaryText() ? (
@@ -180,6 +201,22 @@ export default function GuestRevealStep() {
 }
 
 const S = StyleSheet.create({
+  /**
+   * Stands in for the collage, at its height, so the block does not resize
+   * when the toggle flips and the centring does not shove the screen around.
+   */
+  neverState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  neverWordmark: {
+    fontFamily: fontFamilies.display,
+    color: colours.textPrimary,
+    fontSize: 32,
+    lineHeight: 38,
+    letterSpacing: -0.4,
+  },
   summarySlot: {
     height: 20,
     justifyContent: 'center',

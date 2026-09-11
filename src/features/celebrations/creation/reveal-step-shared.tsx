@@ -41,6 +41,20 @@ const SECOND_ROW_PEEK = 64;
 const FADE_EDGE_OVERDRAW = 2;
 const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
 
+/**
+ * The collage's rendered height.
+ *
+ * Exported so a screen that swaps something else into its place can match it
+ * and keep the surrounding layout still. Derived, not a constant: the cell
+ * height follows the screen width.
+ */
+export function useRevealPreviewHeight(): number {
+  const { width: screenWidth } = useWindowDimensions();
+  const previewWidth = Math.min(PREVIEW_MAX_WIDTH, screenWidth - layout.gutter * 2);
+  const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
+  return cellWidth * 1.25 + PREVIEW_GAP + SECOND_ROW_PEEK;
+}
+
 export function RevealPreview({
   locked,
 }: {
