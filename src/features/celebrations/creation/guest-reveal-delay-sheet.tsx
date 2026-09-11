@@ -65,7 +65,7 @@ export function GuestRevealDelaySheet({
               onChange={(index) => setSelectedDelayHours(GUEST_DELAY_OPTIONS[index] ?? 0)}
               formatValue={labelForHour}
               accessibilityLabel="Guest photo reveal delay"
-              visibleRows={5}
+              visibleRows={3}
               width={260}
               fadeColor={colours.surfaceRaised}
             />
@@ -111,7 +111,7 @@ const S = StyleSheet.create({
     marginTop: spacing.xs,
   },
   wheelSlot: {
-    minHeight: 240,
+    minHeight: 144,
     alignItems: 'center',
     justifyContent: 'center',
   },
