@@ -117,7 +117,7 @@ function PlusIcon({ size = 22, color = '#0B0B0C' }) {
       <Path 
         d="M12 5v14M5 12h14" 
         stroke={color} 
-        strokeWidth={3} 
+        strokeWidth={2.75}
         strokeLinecap="round" 
         strokeLinejoin="round" 
       />
