@@ -9,7 +9,7 @@ import { DeviceFrame } from '@/components/media/device-frame';
 import { GuestCoverPreview, parseCoverTheme } from '@/features/celebrations/creation/guest-cover-preview';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
-import { resolveReveal, type CreationStep } from '@/features/celebrations/draft/types';
+import { resolveGuestReveal, resolveReveal, type CreationStep } from '@/features/celebrations/draft/types';
 import { canPublish, validateStep } from '@/features/celebrations/draft/validation';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { publishDraft, PublicationError } from '@/services/publication';
@@ -77,7 +77,7 @@ export default function ReviewStep() {
       : 'Not set';
 
   const hostReveal = resolveReveal(draft.hostRevealChoice, draft.endsAt, draft.hostCustomRevealAt);
-  const guestReveal = resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
+  const guestReveal = resolveGuestReveal(draft);
 
   const rows: { step: CreationStep; label: string; value: string }[] = [
     { step: 'name', label: 'Cover title', value: draft.title.trim() || 'Not set' },
@@ -105,7 +105,7 @@ export default function ReviewStep() {
             : date(hostReveal.revealAt),
     },
     {
-      step: 'reveal',
+      step: 'guest-reveal',
       label: 'Guests’ access',
       value:
         guestReveal.mode === 'instant'

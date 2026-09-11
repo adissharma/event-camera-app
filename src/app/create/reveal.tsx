@@ -59,19 +59,8 @@ export default function RevealStep() {
     draft.endsAt,
     draft.hostCustomRevealAt,
   );
-  const guestReveal =
-    draft.guestRevealChoice === 'never'
-      ? { mode: 'manual' as const, revealAt: null }
-      : resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
   const guestDelayEnabled =
-    draft.guestRevealChoice !== 'never' &&
-    (hostReveal.mode !== guestReveal.mode || hostReveal.revealAt !== guestReveal.revealAt);
-  const guestRevealSelection =
-    draft.guestRevealChoice === 'never'
-      ? 'never'
-      : draft.guestRevealChoice === 'custom' && guestDelayEnabled
-        ? 'review'
-        : 'same';
+    draft.guestRevealChoice !== 'never' && draft.guestRevealDelayHours !== null;
 
   const getBaseTime = useCallback(() => {
     if (draft.hostRevealChoice === 'custom' && draft.hostCustomRevealAt) {
@@ -81,28 +70,7 @@ export default function RevealStep() {
     return new Date();
   }, [draft.endsAt, draft.hostCustomRevealAt, draft.hostRevealChoice]);
 
-  const getActiveDuration = () => {
-    if (!draft.guestCustomRevealAt) return 12;
-    const difference = Math.round(
-      (new Date(draft.guestCustomRevealAt).getTime() - getBaseTime().getTime()) / HOUR_MS,
-    );
-    return [1, 12, 24].includes(difference) ? (difference as 1 | 12 | 24) : 12;
-  };
-  const activeDuration = getActiveDuration();
-
-  useEffect(() => {
-    if (!guestDelayEnabled) return;
-    const nextTime = new Date(getBaseTime().getTime() + activeDuration * HOUR_MS).toISOString();
-    if (draft.guestCustomRevealAt !== nextTime) {
-      update({ guestRevealChoice: 'custom', guestCustomRevealAt: nextTime });
-    }
-  }, [activeDuration, draft.guestCustomRevealAt, getBaseTime, guestDelayEnabled, update]);
-
-  useEffect(() => {
-    if (guestRevealSelection !== 'never' && draft.galleryVisibility === 'hosts_only') {
-      update({ galleryVisibility: 'all_guests' });
-    }
-  }, [draft.galleryVisibility, guestRevealSelection, update]);
+  const activeDuration = draft.guestRevealDelayHours ?? 12;
 
   function handleHostChoiceChange(choice: 'during' | 'at_close' | 'custom') {
     let customTime = draft.hostCustomRevealAt;
@@ -116,6 +84,7 @@ export default function RevealStep() {
       hostRevealChoice: choice,
       hostCustomRevealAt: choice === 'custom' ? customTime : null,
       guestRevealChoice: syncGuest ? choice : draft.guestRevealChoice,
+      guestRevealDelayHours: syncGuest ? null : draft.guestRevealDelayHours,
       guestCustomRevealAt: syncGuest
         ? (choice === 'custom' ? customTime : null)
         : draft.guestCustomRevealAt,

@@ -79,10 +79,28 @@ describe('buildEditPatch', () => {
       ).toEqual({ revealMode: 'scheduled', revealAt: endsAt, galleryVisibility: 'all_guests' });
     });
 
+    it('saves the guest reveal step from the relative guest timing', () => {
+      expect(
+        buildEditPatch(
+          'guest-reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: '2027-08-15T20:00:00.000Z',
+            guestRevealChoice: 'custom',
+            guestRevealDelayHours: 12,
+          }),
+        ),
+      ).toEqual({
+        revealMode: 'scheduled',
+        revealAt: '2027-08-16T08:00:00.000Z',
+        galleryVisibility: 'all_guests',
+      });
+    });
+
     it('saves host-only reveal visibility when guests should never see photos', () => {
       expect(
         buildEditPatch(
-          'reveal',
+          'guest-reveal',
           draftWith({ guestRevealChoice: 'never', galleryVisibility: 'hosts_only' }),
         ),
       ).toEqual({ revealMode: 'manual', revealAt: null, galleryVisibility: 'hosts_only' });

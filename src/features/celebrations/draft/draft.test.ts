@@ -1,4 +1,9 @@
-import { createEmptyDraft, resolveReveal, type CreationDraft } from './types';
+import {
+  createEmptyDraft,
+  resolveGuestReveal,
+  resolveReveal,
+  type CreationDraft,
+} from './types';
 import { canPublish, incompleteSteps, validateStep } from './validation';
 
 const TZ = 'Europe/London';
@@ -107,43 +112,49 @@ describe('step validation', () => {
     it('accepts "during" for both me and guests', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({ hostRevealChoice: 'during', guestRevealChoice: 'during' }),
         ),
       ).toBeNull();
     });
 
-    it('rejects when guest is during but host is at close', () => {
+    it('accepts same-time guests by following the host reveal choice', () => {
       expect(
         validateStep(
-          'reveal',
-          draftWith({ hostRevealChoice: 'at_close', guestRevealChoice: 'during' }),
-        ),
-      ).toMatch(/Guests cannot view photos before you/);
-    });
-
-    it('rejects when host is custom but guest is not custom', () => {
-      expect(
-        validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
-            hostRevealChoice: 'custom',
-            hostCustomRevealAt: new Date(Date.now() + 3600000).toISOString(),
+            hostRevealChoice: 'at_close',
             guestRevealChoice: 'at_close',
+            guestRevealDelayHours: null,
+            endsAt: CLOSE,
           }),
         ),
-      ).toMatch(/Guests must have a custom reveal/);
+      ).toBeNull();
     });
 
-    it('rejects a custom reveal with null times', () => {
+    it('rejects a custom host reveal with no host time', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: null,
             guestRevealChoice: 'custom',
-            guestCustomRevealAt: null,
+            guestRevealDelayHours: null,
+          }),
+        ),
+      ).toMatch(/Choose a day and time/);
+    });
+
+    it('rejects a delayed guest reveal when the host base time is missing', () => {
+      expect(
+        validateStep(
+          'guest-reveal',
+          draftWith({
+            hostRevealChoice: 'custom',
+            hostCustomRevealAt: null,
+            guestRevealChoice: 'custom',
+            guestRevealDelayHours: 12,
           }),
         ),
       ).toMatch(/Choose a day and time/);
@@ -156,7 +167,7 @@ describe('step validation', () => {
       // custom time into an immediate reveal instead.
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: '2020-01-01T00:00:00.000Z',
@@ -167,33 +178,16 @@ describe('step validation', () => {
       ).toBeNull();
     });
 
-    it('rejects when guest custom reveal is before host custom reveal', () => {
-      const hostTime = new Date(Date.now() + 86_400_000);
-      const guestTime = new Date(hostTime.getTime() - 3600_000); // 1 hour earlier
-      expect(
-        validateStep(
-          'reveal',
-          draftWith({
-            hostRevealChoice: 'custom',
-            hostCustomRevealAt: hostTime.toISOString(),
-            guestRevealChoice: 'custom',
-            guestCustomRevealAt: guestTime.toISOString(),
-          }),
-        ),
-      ).toMatch(/Guests cannot view photos before you do/);
-    });
-
     it('accepts future custom reveals where guest is at or after host', () => {
       const hostTime = new Date(Date.now() + 86_400_000);
-      const guestTime = new Date(hostTime.getTime() + 3600_000); // 1 hour later
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: hostTime.toISOString(),
             guestRevealChoice: 'custom',
-            guestCustomRevealAt: guestTime.toISOString(),
+            guestRevealDelayHours: 1,
           }),
         ),
       ).toBeNull();
@@ -202,7 +196,7 @@ describe('step validation', () => {
     it('accepts never as a host-only guest access choice', () => {
       expect(
         validateStep(
-          'reveal',
+          'guest-reveal',
           draftWith({
             hostRevealChoice: 'custom',
             hostCustomRevealAt: new Date(Date.now() + 86_400_000).toISOString(),
@@ -212,6 +206,39 @@ describe('step validation', () => {
           }),
         ),
       ).toBeNull();
+    });
+  });
+
+  it('keeps guest timing relative to the host reveal', () => {
+    const firstHostTime = '2027-08-15T20:00:00.000Z';
+    const secondHostTime = '2027-08-16T10:00:00.000Z';
+
+    expect(
+      resolveGuestReveal(
+        draftWith({
+          hostRevealChoice: 'custom',
+          hostCustomRevealAt: firstHostTime,
+          guestRevealChoice: 'custom',
+          guestRevealDelayHours: 12,
+        }),
+      ),
+    ).toEqual({
+      mode: 'scheduled',
+      revealAt: '2027-08-16T08:00:00.000Z',
+    });
+
+    expect(
+      resolveGuestReveal(
+        draftWith({
+          hostRevealChoice: 'custom',
+          hostCustomRevealAt: secondHostTime,
+          guestRevealChoice: 'custom',
+          guestRevealDelayHours: 12,
+        }),
+      ),
+    ).toEqual({
+      mode: 'scheduled',
+      revealAt: '2027-08-16T22:00:00.000Z',
     });
   });
 
@@ -273,6 +300,7 @@ describe('empty draft defaults', () => {
     expect(draft.galleryVisibility).toBe('all_guests');
     expect(draft.hostRevealChoice).toBe('at_close');
     expect(draft.guestRevealChoice).toBe('at_close');
+    expect(draft.guestRevealDelayHours).toBeNull();
     expect(draft.photoTreatment).toBe('original');
   });
 

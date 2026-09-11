@@ -29,6 +29,7 @@ export const CREATION_STEPS = [
   'cover',
   'photo-limit',
   'reveal',
+  'guest-reveal',
   'treatment',
   'package',
 ] as const;
@@ -116,6 +117,16 @@ export interface CreationDraft {
   hostRevealChoice: RevealChoice;
   hostCustomRevealAt: string | null;
   guestRevealChoice: GuestRevealChoice;
+  /**
+   * Guest reveal relationship to the host reveal.
+   *
+   * `null` means guests reveal at the same time as the host. A number means
+   * "host reveal + N hours". The database still receives an absolute reveal
+   * timestamp at publish/save time, but the creation draft keeps the relative
+   * intent so changing the host reveal later automatically carries guests
+   * with it.
+   */
+  guestRevealDelayHours: number | null;
   guestCustomRevealAt: string | null;
 
   // Step 9
@@ -132,8 +143,8 @@ export interface CreationDraft {
   editSessionId?: string | null;
 }
 
-// 6: added hostRevealChoice, hostCustomRevealAt, guestRevealChoice, guestCustomRevealAt
-export const DRAFT_VERSION = 7;
+// 8: added guest-reveal step and relative guestRevealDelayHours
+export const DRAFT_VERSION = 8;
 
 export function createEmptyDraft(userId: string | null, timezone: string): CreationDraft {
   const now = new Date().toISOString();
@@ -176,6 +187,7 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
     hostRevealChoice: 'at_close',
     hostCustomRevealAt: null,
     guestRevealChoice: 'at_close',
+    guestRevealDelayHours: null,
     guestCustomRevealAt: null,
 
     photoTreatment: 'original',
@@ -245,6 +257,54 @@ export function resolveReveal(
     case 'never':
       return { mode: 'manual', revealAt: null };
   }
+}
+
+export function getHostRevealBaseTime(draft: CreationDraft): Date | null {
+  if (draft.hostRevealChoice === 'custom') {
+    if (!draft.hostCustomRevealAt) return null;
+    const custom = new Date(draft.hostCustomRevealAt);
+    return Number.isFinite(custom.getTime()) ? custom : null;
+  }
+  if (draft.hostRevealChoice === 'at_close' && draft.endsAt) {
+    const close = new Date(draft.endsAt);
+    return Number.isFinite(close.getTime()) ? close : null;
+  }
+  return new Date();
+}
+
+export function deriveGuestRevealFields(draft: CreationDraft): {
+  guestRevealChoice: GuestRevealChoice;
+  guestCustomRevealAt: string | null;
+} {
+  if (draft.guestRevealChoice === 'never') {
+    return { guestRevealChoice: 'never', guestCustomRevealAt: null };
+  }
+
+  if (draft.guestRevealDelayHours === null) {
+    return {
+      guestRevealChoice: draft.hostRevealChoice,
+      guestCustomRevealAt:
+        draft.hostRevealChoice === 'custom' ? draft.hostCustomRevealAt : null,
+    };
+  }
+
+  const base = getHostRevealBaseTime(draft);
+  if (!base) return { guestRevealChoice: 'custom', guestCustomRevealAt: null };
+
+  return {
+    guestRevealChoice: 'custom',
+    guestCustomRevealAt: new Date(
+      base.getTime() + draft.guestRevealDelayHours * 60 * 60 * 1000,
+    ).toISOString(),
+  };
+}
+
+export function resolveGuestReveal(draft: CreationDraft): {
+  mode: RevealMode;
+  revealAt: string | null;
+} {
+  const guest = deriveGuestRevealFields(draft);
+  return resolveReveal(guest.guestRevealChoice, draft.endsAt, guest.guestCustomRevealAt);
 }
 
 /**

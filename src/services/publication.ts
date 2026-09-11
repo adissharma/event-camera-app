@@ -10,7 +10,7 @@ import { getPaymentProvider } from '@/features/payments';
 import type { PaymentProvider, PurchaseReceipt } from '@/features/payments/types';
 import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchase-verification';
 import { isFreePlanKey } from '@/features/payments/plan-catalogue';
-import { resolveReveal, type CreationDraft } from '@/features/celebrations/draft/types';
+import { resolveGuestReveal, type CreationDraft } from '@/features/celebrations/draft/types';
 import { assertCreatedCelebration } from '@/types/database';
 
 export interface PublishedEvent {
@@ -174,7 +174,7 @@ export async function publishDraft(
       throw new Error('Supabase not configured');
     }
     const client = requireSupabase();
-    const reveal = resolveReveal(draft.guestRevealChoice, draft.endsAt, draft.guestCustomRevealAt);
+    const reveal = resolveGuestReveal(draft);
     const themeId = await resolveThemeId(draft.themeSlug);
     const allowedMediaTypes = resolveDraftAllowedMediaTypes(draft);
 

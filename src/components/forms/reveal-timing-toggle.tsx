@@ -51,11 +51,17 @@ export function RevealTimingToggle({
   value,
   onChange,
   onDelayedLabelPress,
+  immediateLabel = 'Immediately',
+  delayedLabel = 'Add delay',
+  accessibilityLabel = 'Add a delay before photos are revealed',
   wiggle = false,
 }: {
   value: RevealTiming;
   onChange: (value: RevealTiming) => void;
   onDelayedLabelPress?: () => void;
+  immediateLabel?: string;
+  delayedLabel?: string;
+  accessibilityLabel?: string;
   wiggle?: boolean;
 }) {
   const motion = useMotion();
@@ -106,7 +112,7 @@ export function RevealTimingToggle({
   return (
     <View style={S.row}>
       <Label
-        text="Immediately"
+        text={immediateLabel}
         active={!isDelayed}
         progress={progress}
         // Emphasis runs opposite to `progress` for the left label.
@@ -116,7 +122,7 @@ export function RevealTimingToggle({
 
       <Pressable
         accessibilityRole="switch"
-        accessibilityLabel="Add a delay before photos are revealed"
+        accessibilityLabel={accessibilityLabel}
         accessibilityState={{ checked: isDelayed }}
         onPress={() => onChange(isDelayed ? 'immediately' : 'delayed')}
         // The control is 46pt tall; the slop brings the tappable area up to
@@ -140,7 +146,7 @@ export function RevealTimingToggle({
       </Pressable>
 
       <Label
-        text="Add delay"
+        text={delayedLabel}
         active={isDelayed}
         progress={progress}
         onPress={onDelayedLabelPress ?? (() => onChange('delayed'))}

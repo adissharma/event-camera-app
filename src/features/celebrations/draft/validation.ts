@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { CREATION_STEPS, type CreationDraft, type CreationStep } from './types';
+import {
+  CREATION_STEPS,
+  deriveGuestRevealFields,
+  type CreationDraft,
+  type CreationStep,
+} from './types';
 import { getClosingDateBounds, startOfDay } from '@/components/forms/month-calendar';
 
 /**
@@ -171,6 +176,7 @@ export const guestRevealSchema = z
     hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
     hostCustomRevealAt: z.string().nullable(),
     guestRevealChoice: z.enum(['during', 'at_close', 'custom', 'never']),
+    guestRevealDelayHours: z.number().int().min(1).max(24).nullable(),
     guestCustomRevealAt: z.string().nullable(),
     galleryVisibility: z.enum(['all_guests', 'own_only', 'hosts_only']),
   })
@@ -253,14 +259,24 @@ const STEP_VALIDATORS: Record<CreationStep, (draft: CreationDraft) => string | n
     firstError(photoLimitSchema.safeParse({ shotLimitPerGuest: d.shotLimitPerGuest })),
   reveal: (d) =>
     firstError(
+      hostRevealSchema.safeParse({
+        hostRevealChoice: d.hostRevealChoice,
+        hostCustomRevealAt: d.hostCustomRevealAt,
+      }),
+    ),
+  'guest-reveal': (d) => {
+    const guest = deriveGuestRevealFields(d);
+    return firstError(
       guestRevealSchema.safeParse({
         hostRevealChoice: d.hostRevealChoice,
         hostCustomRevealAt: d.hostCustomRevealAt,
-        guestRevealChoice: d.guestRevealChoice,
-        guestCustomRevealAt: d.guestCustomRevealAt,
+        guestRevealChoice: guest.guestRevealChoice,
+        guestRevealDelayHours: d.guestRevealDelayHours,
+        guestCustomRevealAt: guest.guestCustomRevealAt,
         galleryVisibility: d.galleryVisibility,
       }),
-    ),
+    );
+  },
   treatment: () => null,
   package: (d) => firstError(packageSchema.safeParse({ planKey: d.planKey ?? '' })),
 };
