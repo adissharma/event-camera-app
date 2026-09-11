@@ -3,21 +3,14 @@ import { Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { WheelPicker } from '@/components/forms/wheel-picker';
 import { Button } from '@/components/ui/button';
-import { ClockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 
-export type GuestDelayMode = 'same' | 'custom';
-
-const HOURS = Array.from({ length: 24 }, (_, index) => index + 1);
+const GUEST_DELAY_OPTIONS = [0, ...Array.from({ length: 24 }, (_, index) => index + 1)];
 
 function labelForHour(hour: number): string {
+  if (hour === 0) return 'Same time as me';
   return `${hour} ${hour === 1 ? 'hour' : 'hours'} after me`;
-}
-
-function modeFromDelay(delayHours: number | null): GuestDelayMode {
-  if (delayHours === null || delayHours === 0) return 'same';
-  return 'custom';
 }
 
 export function GuestRevealDelaySheet({
@@ -31,26 +24,23 @@ export function GuestRevealDelaySheet({
   onCancel: () => void;
   onConfirm: (delayHours: number | null) => void;
 }) {
-  const [mode, setMode] = useState<GuestDelayMode>(() => modeFromDelay(initialDelayHours));
-  const [customHours, setCustomHours] = useState(() => Math.max(1, initialDelayHours ?? 12));
+  const [selectedDelayHours, setSelectedDelayHours] = useState(() => initialDelayHours ?? 0);
 
   useEffect(() => {
     if (!visible) return;
-    setMode(modeFromDelay(initialDelayHours));
-    setCustomHours(Math.max(1, initialDelayHours ?? 12));
+    setSelectedDelayHours(initialDelayHours ?? 0);
   }, [initialDelayHours, visible]);
 
   const selectedHourIndex = useMemo(
-    () => Math.max(0, Math.min(HOURS.length - 1, customHours - 1)),
-    [customHours],
+    () => {
+      const index = GUEST_DELAY_OPTIONS.indexOf(selectedDelayHours);
+      return index >= 0 ? index : 0;
+    },
+    [selectedDelayHours],
   );
 
   function handleConfirm() {
-    if (mode === 'same') {
-      onConfirm(0);
-      return;
-    }
-    onConfirm(customHours);
+    onConfirm(selectedDelayHours);
   }
 
   return (
@@ -68,38 +58,17 @@ export function GuestRevealDelaySheet({
             Set time for guests to see photos
           </AppText>
 
-          <View style={S.pills}>
-            <ModePill
-              label="Same time as me"
-              selected={mode === 'same'}
-              onPress={() => setMode('same')}
-            />
-            <ModePill
-              label="Custom"
-              icon
-              selected={mode === 'custom'}
-              onPress={() => setMode('custom')}
-            />
-          </View>
-
           <View style={S.wheelSlot}>
-            {mode === 'custom' ? (
-              <View style={S.customWheel}>
-                <WheelPicker
-                  values={HOURS}
-                  selectedIndex={selectedHourIndex}
-                  onChange={(index) => {
-                    setMode('custom');
-                    setCustomHours(HOURS[index]);
-                  }}
-                  formatValue={labelForHour}
-                  accessibilityLabel="Hours after you"
-                  visibleRows={3}
-                  width={210}
-                  fadeColor={colours.surfaceRaised}
-                />
-              </View>
-            ) : null}
+            <WheelPicker
+              values={GUEST_DELAY_OPTIONS}
+              selectedIndex={selectedHourIndex}
+              onChange={(index) => setSelectedDelayHours(GUEST_DELAY_OPTIONS[index] ?? 0)}
+              formatValue={labelForHour}
+              accessibilityLabel="Guest photo reveal delay"
+              visibleRows={5}
+              width={260}
+              fadeColor={colours.surfaceRaised}
+            />
           </View>
 
           <View style={S.actions}>
@@ -113,43 +82,6 @@ export function GuestRevealDelaySheet({
         </View>
       </View>
     </Modal>
-  );
-}
-
-function ModePill({
-  label,
-  selected,
-  icon = false,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  icon?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="radio"
-      accessibilityState={{ selected }}
-      accessibilityLabel={label}
-      style={({ pressed }) => [
-        S.pill,
-        selected ? S.pillSelected : S.pillIdle,
-        pressed && { opacity: 0.85 },
-      ]}
-    >
-      {icon ? (
-        <ClockIcon size={15} color={selected ? colours.textOnBrand : colours.textSecondary} />
-      ) : null}
-      <AppText
-        variant="labelLarge"
-        align="center"
-        style={{ color: selected ? colours.textOnBrand : colours.textSecondary }}
-      >
-        {label}
-      </AppText>
-    </Pressable>
   );
 }
 
@@ -178,37 +110,10 @@ const S = StyleSheet.create({
   title: {
     marginTop: spacing.xs,
   },
-  pills: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  pill: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    minHeight: layout.minTouchTarget,
-    paddingHorizontal: spacing.sm,
-    borderRadius: 999,
-  },
-  pillSelected: {
-    backgroundColor: colours.brandPrimary,
-  },
-  pillIdle: {
-    borderWidth: layout.hairline,
-    borderColor: colours.borderStrong,
-  },
   wheelSlot: {
-    minHeight: 150,
+    minHeight: 240,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  customWheel: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
   },
   actions: {
     flexDirection: 'row',

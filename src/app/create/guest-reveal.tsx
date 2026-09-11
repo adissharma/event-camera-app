@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
@@ -15,6 +15,8 @@ import {
 } from '@/features/celebrations/draft/types';
 import { copy } from '@/i18n';
 
+const guestRevealDefaultsAppliedDrafts = new Set<string>();
+
 export default function GuestRevealStep() {
   const { draft, update } = useCreationDraft();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -22,6 +24,29 @@ export default function GuestRevealStep() {
 
   const guestReveal = useMemo(() => resolveGuestReveal(draft), [draft]);
   const isLocked = draft.guestRevealChoice === 'never' || guestReveal.mode !== 'instant';
+
+  useEffect(() => {
+    if (guestRevealDefaultsAppliedDrafts.has(draft.createdAt)) return;
+    guestRevealDefaultsAppliedDrafts.add(draft.createdAt);
+
+    if (draft.guestRevealChoice !== 'never') return;
+
+    update({
+      guestRevealChoice: draft.hostRevealChoice,
+      guestRevealDelayHours: 0,
+      guestCustomRevealAt:
+        draft.hostRevealChoice === 'custom' ? draft.hostCustomRevealAt : null,
+      galleryVisibility:
+        draft.galleryVisibility === 'hosts_only' ? 'all_guests' : draft.galleryVisibility,
+    });
+  }, [
+    draft.createdAt,
+    draft.galleryVisibility,
+    draft.guestRevealChoice,
+    draft.hostCustomRevealAt,
+    draft.hostRevealChoice,
+    update,
+  ]);
 
   function applyGuestTiming(delayHours: number | null) {
     if (delayHours === null || delayHours === 0) {
