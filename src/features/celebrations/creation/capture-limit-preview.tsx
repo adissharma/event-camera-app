@@ -61,6 +61,7 @@ const COUNTER_FOCUS_DURATION_MS = 3000;
 
 /** A cropped, inert slice of the guest camera's lower viewfinder. */
 export function CaptureLimitPreview({ limit }: CaptureLimitPreviewProps) {
+  const previewSource = STATIC_PREVIEW_SOURCE;
   const motion = useMotion();
   const focusProgress = useSharedValue(0);
   const delayMs = motion.reduceMotion ? 0 : 360;
@@ -103,9 +104,9 @@ export function CaptureLimitPreview({ limit }: CaptureLimitPreviewProps) {
         <View style={S.viewfinder}>
           <ColorMatrix
             matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
-            style={StyleSheet.absoluteFill}
+            style={S.absoluteFill}
           >
-            <Image source={STATIC_PREVIEW_SOURCE} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <Image source={previewSource} style={S.viewfinderImage} resizeMode="cover" />
           </ColorMatrix>
           <LinearGradient
             colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.45)']}
@@ -135,7 +136,7 @@ export function CaptureLimitPreview({ limit }: CaptureLimitPreviewProps) {
         <View style={S.bottomPanel}>
           <ViewfinderBottomControls
             flashMode="off"
-            gallerySource={STATIC_PREVIEW_SOURCE}
+            gallerySource={previewSource}
             monochromeGalleryPreview
             interactive={false}
           />
@@ -201,6 +202,17 @@ const S = StyleSheet.create({
     zIndex: 40,
   },
   viewfinder: { flex: 1, position: 'relative', backgroundColor: '#000000' },
+  absoluteFill: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+  },
+  viewfinderImage: {
+    width: '100%',
+    height: '100%',
+  },
   zoomPill: {
     position: 'absolute',
     bottom: VIEWFINDER_PILL_INSET,
