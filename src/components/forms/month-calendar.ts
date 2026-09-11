@@ -30,6 +30,36 @@ export function startOfDay(date: Date): Date {
   return copy;
 }
 
+/** The creation window is tomorrow through the same calendar day next year. */
+export function getClosingDateBounds(now = new Date()): { minimum: Date; maximum: Date } {
+  const minimum = startOfDay(now);
+  minimum.setDate(minimum.getDate() + 1);
+
+  const maximum = startOfDay(now);
+  maximum.setFullYear(maximum.getFullYear() + 1);
+
+  return { minimum, maximum };
+}
+
+export function isClosingDateAllowed(date: Date, now = new Date()): boolean {
+  if (!Number.isFinite(date.getTime())) return false;
+  const { minimum, maximum } = getClosingDateBounds(now);
+  const day = startOfDay(date).getTime();
+  return day >= minimum.getTime() && day <= maximum.getTime();
+}
+
+/** Keeps the time while moving an out-of-range draft onto the nearest valid day. */
+export function clampClosingDate(date: Date, now = new Date()): Date {
+  const { minimum, maximum } = getClosingDateBounds(now);
+  if (!Number.isFinite(date.getTime())) {
+    return combineDateAndTime(minimum, DEFAULT_CLOSING_HOURS, DEFAULT_CLOSING_MINUTES);
+  }
+  const day = startOfDay(date).getTime();
+  const boundary = day < minimum.getTime() ? minimum : day > maximum.getTime() ? maximum : date;
+
+  return combineDateAndTime(boundary, date.getHours(), date.getMinutes());
+}
+
 export function isSameDay(a: Date | null, b: Date | null): boolean {
   if (!a || !b) return false;
   return (

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { CREATION_STEPS, type CreationDraft, type CreationStep } from './types';
+import { getClosingDateBounds, startOfDay } from '@/components/forms/month-calendar';
 
 /**
  * Per-step validation.
@@ -27,9 +28,24 @@ export const closingSchema = z
     timezone: z.string().min(1),
   })
   .refine(
-    (value) => new Date(value.endsAt).getTime() > Date.now(),
+    (value) => {
+      const selected = new Date(value.endsAt);
+      if (!Number.isFinite(selected.getTime())) return false;
+      return startOfDay(selected).getTime() >= getClosingDateBounds().minimum.getTime();
+    },
     {
-      message: 'Choose a closing time in the future',
+      message: 'Choose a closing day in the future',
+      path: ['endsAt'],
+    },
+  )
+  .refine(
+    (value) => {
+      const selected = new Date(value.endsAt);
+      if (!Number.isFinite(selected.getTime())) return true;
+      return startOfDay(selected).getTime() <= getClosingDateBounds().maximum.getTime();
+    },
+    {
+      message: 'Choose a closing day within the next year',
       path: ['endsAt'],
     },
   );

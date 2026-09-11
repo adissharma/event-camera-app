@@ -80,6 +80,23 @@ describe('step validation', () => {
       );
     });
 
+    it('rejects today even when the selected time is still ahead', () => {
+      const laterToday = new Date();
+      laterToday.setHours(23, 59, 0, 0);
+      expect(validateStep('closing', draftWith({ endsAt: laterToday.toISOString() }))).toMatch(
+        /future/,
+      );
+    });
+
+    it('rejects a day more than one calendar year away', () => {
+      const tooFar = new Date();
+      tooFar.setFullYear(tooFar.getFullYear() + 1);
+      tooFar.setDate(tooFar.getDate() + 1);
+      expect(validateStep('closing', draftWith({ endsAt: tooFar.toISOString() }))).toMatch(
+        /within the next year/,
+      );
+    });
+
     it('accepts a future time', () => {
       const future = new Date(Date.now() + 86_400_000).toISOString();
       expect(validateStep('closing', draftWith({ endsAt: future }))).toBeNull();

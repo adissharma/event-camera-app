@@ -1,13 +1,39 @@
 import {
   buildMonth,
   buildMonths,
+  clampClosingDate,
   combineDateAndTime,
   formatOrdinalDay,
   formatSelectedDate,
   formatTime12h,
+  getClosingDateBounds,
+  isClosingDateAllowed,
   isSameDay,
   startOfDay,
 } from './month-calendar';
+
+describe('closing date window', () => {
+  const now = new Date(2026, 8, 11, 14, 30);
+
+  it('starts tomorrow and ends on the same date next year', () => {
+    const { minimum, maximum } = getClosingDateBounds(now);
+    expect(minimum).toEqual(new Date(2026, 8, 12));
+    expect(maximum).toEqual(new Date(2027, 8, 11));
+  });
+
+  it('rejects today and dates beyond one year', () => {
+    expect(isClosingDateAllowed(new Date(2026, 8, 11, 23, 59), now)).toBe(false);
+    expect(isClosingDateAllowed(new Date(2026, 8, 12), now)).toBe(true);
+    expect(isClosingDateAllowed(new Date(2027, 8, 11), now)).toBe(true);
+    expect(isClosingDateAllowed(new Date(2027, 8, 12), now)).toBe(false);
+  });
+
+  it('clamps an out-of-range date while retaining its time', () => {
+    expect(clampClosingDate(new Date(2028, 0, 1, 18, 45), now)).toEqual(
+      new Date(2027, 8, 11, 18, 45),
+    );
+  });
+});
 
 describe('month construction', () => {
   it('places the 1st on the correct weekday, Monday-first', () => {
