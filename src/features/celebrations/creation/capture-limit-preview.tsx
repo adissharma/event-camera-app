@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { Image, StyleSheet, View, type ImageSourcePropType } from 'react-native';
+import { Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
 import { ColorMatrix, type Matrix as NativeMatrix } from 'react-native-color-matrix-image-filters';
@@ -26,8 +26,9 @@ import {
 
 export interface CaptureLimitPreviewProps {
   limit: number | null | undefined;
-  coverSource: ImageSourcePropType;
 }
+
+const STATIC_PREVIEW_SOURCE = require('../../../../assets/sample-event/07.jpg');
 
 const ZOOM_OPTIONS = [
   { label: '0.5', value: 'wide' },
@@ -59,7 +60,7 @@ const COUNTER_FOCUS_TRANSLATE_Y = 11;
 const COUNTER_FOCUS_DURATION_MS = 3000;
 
 /** A cropped, inert slice of the guest camera's lower viewfinder. */
-export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewProps) {
+export function CaptureLimitPreview({ limit }: CaptureLimitPreviewProps) {
   const motion = useMotion();
   const focusProgress = useSharedValue(0);
   const delayMs = motion.reduceMotion ? 0 : 360;
@@ -104,7 +105,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
             matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
             style={StyleSheet.absoluteFill}
           >
-            <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <Image source={STATIC_PREVIEW_SOURCE} style={StyleSheet.absoluteFill} resizeMode="cover" />
           </ColorMatrix>
           <LinearGradient
             colors={['rgba(0,0,0,0.08)', 'rgba(0,0,0,0.45)']}
@@ -134,7 +135,7 @@ export function CaptureLimitPreview({ limit, coverSource }: CaptureLimitPreviewP
         <View style={S.bottomPanel}>
           <ViewfinderBottomControls
             flashMode="off"
-            gallerySource={coverSource}
+            gallerySource={STATIC_PREVIEW_SOURCE}
             monochromeGalleryPreview
             interactive={false}
           />

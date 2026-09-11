@@ -7,7 +7,6 @@ import { spacing } from '@/design';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { CaptureLimitPreview } from '@/features/celebrations/creation/capture-limit-preview';
 import { MOMENT_LIMIT_VALUES, MomentLimit, SteppedSlider } from '@/components/forms/stepped-slider';
-import { useCoverSource } from '@/features/celebrations/cover-source';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { copy } from '@/i18n';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
@@ -25,7 +24,6 @@ const LIMIT_COPY: Record<'5' | '10' | '16' | '24' | '36' | 'unlimited', string> 
 
 export default function PhotoLimitStep() {
   const { draft, update } = useCreationDraft();
-  const coverSource = useCoverSource(draft.coverLocalUri ?? draft.coverStoragePath);
 
   /*
    * Present only when this step was opened from Manage Event, i.e. the event
@@ -93,7 +91,7 @@ export default function PhotoLimitStep() {
         }}
       >
         <View style={{ alignItems: 'center' }}>
-          <CaptureLimitPreview limit={storedCount} coverSource={coverSource} />
+          <CaptureLimitPreview limit={storedCount} />
         </View>
 
         <View style={{ alignItems: 'center', gap: spacing.xs }}>
