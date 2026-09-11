@@ -5,15 +5,27 @@ import {
   StyleSheet,
   View,
   type ListRenderItemInfo,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from 'react-native';
+import Animated, {
+  Extrapolation,
+  interpolate,
+  type SharedValue,
+  useAnimatedReaction,
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 
 import { AppText } from '@/components/ui/text';
 import { colours, layout, spacing } from '@/design';
 
 export const WHEEL_ROW_HEIGHT = 48;
 const DEFAULT_VISIBLE_ROWS = 5;
+
+function triggerWheelHaptic() {
+  void Haptics.selectionAsync().catch(() => {});
+}
 
 export interface WheelPickerProps<T extends string | number> {
   values: T[];
@@ -60,14 +72,15 @@ export function WheelPicker<T extends string | number>({
 }: WheelPickerProps<T>) {
   const listRef = useRef<FlatList<T>>(null);
   const hasSettled = useRef(false);
-  const isUserScrolling = useRef(false);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastHapticIndex = useRef(selectedIndex);
   const edgePadding = WHEEL_ROW_HEIGHT * Math.floor(visibleRows / 2);
+  const scrollOffset = useSharedValue(selectedIndex * WHEEL_ROW_HEIGHT);
+  const isUserScrolling = useSharedValue(false);
+  const lastHapticIndex = useSharedValue(selectedIndex);
 
   useEffect(() => {
-    lastHapticIndex.current = selectedIndex;
-  }, [selectedIndex]);
+    lastHapticIndex.set(selectedIndex);
+  }, [lastHapticIndex, selectedIndex]);
 
   useEffect(() => () => {
     if (settleTimer.current) clearTimeout(settleTimer.current);
@@ -81,8 +94,31 @@ export function WheelPicker<T extends string | number>({
       offset: selectedIndex * WHEEL_ROW_HEIGHT,
       animated: hasSettled.current,
     });
+    if (!hasSettled.current) scrollOffset.set(selectedIndex * WHEEL_ROW_HEIGHT);
     hasSettled.current = true;
-  }, [selectedIndex, values.length]);
+  }, [scrollOffset, selectedIndex, values.length]);
+
+  const animatedScrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollOffset.set(event.contentOffset.y);
+    },
+  });
+
+  useAnimatedReaction(
+    () =>
+      Math.max(
+        0,
+        Math.min(
+          values.length - 1,
+          Math.round(scrollOffset.get() / WHEEL_ROW_HEIGHT),
+        ),
+      ),
+    (nextIndex) => {
+      if (!isUserScrolling.get() || nextIndex === lastHapticIndex.get()) return;
+      lastHapticIndex.set(nextIndex);
+      scheduleOnRN(triggerWheelHaptic);
+    },
+  );
 
   function finishScroll(offset: number) {
     const next = Math.max(0, Math.min(values.length - 1, Math.round(offset / WHEEL_ROW_HEIGHT)));
@@ -95,52 +131,32 @@ export function WheelPicker<T extends string | number>({
       clearTimeout(settleTimer.current);
       settleTimer.current = null;
     }
-    isUserScrolling.current = true;
-    lastHapticIndex.current = selectedIndex;
+    isUserScrolling.set(true);
+    lastHapticIndex.set(selectedIndex);
   }
 
   function endUserScrollSoon() {
     if (settleTimer.current) clearTimeout(settleTimer.current);
     settleTimer.current = setTimeout(() => {
-      isUserScrolling.current = false;
+      isUserScrolling.set(false);
       settleTimer.current = null;
     }, 120);
   }
 
-  function handleScroll(event: NativeSyntheticEvent<NativeScrollEvent>) {
-    if (locked || !isUserScrolling.current) return;
-    const next = Math.max(
-      0,
-      Math.min(values.length - 1, Math.round(event.nativeEvent.contentOffset.y / WHEEL_ROW_HEIGHT)),
-    );
-    if (next === lastHapticIndex.current) return;
-
-    lastHapticIndex.current = next;
-    void Haptics.selectionAsync().catch(() => {});
-  }
-
   return (
     <View accessible accessibilityRole="adjustable" accessibilityLabel={accessibilityLabel} style={[styles.container, { width, height: WHEEL_ROW_HEIGHT * visibleRows }]}>
-      <FlatList
+      <Animated.FlatList
         ref={listRef}
         data={values}
         keyExtractor={(value, index) => `${String(value)}-${index}`}
         extraData={selectedIndex}
         renderItem={({ item, index }: ListRenderItemInfo<T>) => (
-          <View style={styles.row}>
-            {locked && index !== selectedIndex ? null : (
-              <AppText
-                variant={index === selectedIndex ? 'titleMedium' : 'bodyLarge'}
-                tone={index === selectedIndex ? undefined : 'secondary'}
-                align="center"
-                numberOfLines={1}
-                maxFontSizeMultiplier={1.25}
-                style={styles.value}
-              >
-                {formatValue(item)}
-              </AppText>
-            )}
-          </View>
+          <WheelRow
+            index={index}
+            hidden={locked && index !== selectedIndex}
+            scrollOffset={scrollOffset}
+            value={formatValue(item)}
+          />
         )}
         scrollEnabled={!locked}
         showsVerticalScrollIndicator={false}
@@ -151,7 +167,7 @@ export function WheelPicker<T extends string | number>({
         initialNumToRender={visibleRows + 2}
         contentContainerStyle={{ paddingVertical: edgePadding }}
         getItemLayout={(_data, index) => ({ length: WHEEL_ROW_HEIGHT, offset: WHEEL_ROW_HEIGHT * index, index })}
-        onScroll={handleScroll}
+        onScroll={animatedScrollHandler}
         onScrollBeginDrag={beginUserScroll}
         onMomentumScrollBegin={beginUserScroll}
         onMomentumScrollEnd={(event) => {
@@ -166,6 +182,58 @@ export function WheelPicker<T extends string | number>({
       <View pointerEvents="none" style={[styles.selectionRail, { top: edgePadding }]} />
       <View pointerEvents="none" style={[styles.fadeTop, { backgroundColor: fadeColor, height: edgePadding }]} />
       <View pointerEvents="none" style={[styles.fadeBottom, { backgroundColor: fadeColor, height: edgePadding }]} />
+    </View>
+  );
+}
+
+function WheelRow({
+  index,
+  hidden,
+  scrollOffset,
+  value,
+}: {
+  index: number;
+  hidden: boolean;
+  scrollOffset: SharedValue<number>;
+  value: string;
+}) {
+  const animatedStyle = useAnimatedStyle(() => {
+    const distance = Math.abs(scrollOffset.get() - index * WHEEL_ROW_HEIGHT);
+    return {
+      opacity: interpolate(
+        distance,
+        [0, WHEEL_ROW_HEIGHT * 2],
+        [1, 0.45],
+        Extrapolation.CLAMP,
+      ),
+      transform: [
+        {
+          scale: interpolate(
+            distance,
+            [0, WHEEL_ROW_HEIGHT * 2],
+            [1, 0.82],
+            Extrapolation.CLAMP,
+          ),
+        },
+      ],
+    };
+  });
+
+  return (
+    <View style={styles.row}>
+      {hidden ? null : (
+        <Animated.View style={[styles.value, animatedStyle]}>
+          <AppText
+            variant="titleMedium"
+            align="center"
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.25}
+            style={styles.value}
+          >
+            {value}
+          </AppText>
+        </Animated.View>
+      )}
     </View>
   );
 }
