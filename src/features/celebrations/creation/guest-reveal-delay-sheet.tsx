@@ -7,7 +7,7 @@ import { ClockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 
-export type GuestDelayMode = 'same' | 'day' | 'custom';
+export type GuestDelayMode = 'same' | 'custom';
 
 const HOURS = Array.from({ length: 24 }, (_, index) => index + 1);
 
@@ -16,8 +16,7 @@ function labelForHour(hour: number): string {
 }
 
 function modeFromDelay(delayHours: number | null): GuestDelayMode {
-  if (delayHours === null) return 'same';
-  if (delayHours === 24) return 'day';
+  if (delayHours === null || delayHours === 0) return 'same';
   return 'custom';
 }
 
@@ -33,12 +32,12 @@ export function GuestRevealDelaySheet({
   onConfirm: (delayHours: number | null) => void;
 }) {
   const [mode, setMode] = useState<GuestDelayMode>(() => modeFromDelay(initialDelayHours));
-  const [customHours, setCustomHours] = useState(() => initialDelayHours ?? 12);
+  const [customHours, setCustomHours] = useState(() => Math.max(1, initialDelayHours ?? 12));
 
   useEffect(() => {
     if (!visible) return;
     setMode(modeFromDelay(initialDelayHours));
-    setCustomHours(initialDelayHours ?? 12);
+    setCustomHours(Math.max(1, initialDelayHours ?? 12));
   }, [initialDelayHours, visible]);
 
   const selectedHourIndex = useMemo(
@@ -48,11 +47,7 @@ export function GuestRevealDelaySheet({
 
   function handleConfirm() {
     if (mode === 'same') {
-      onConfirm(null);
-      return;
-    }
-    if (mode === 'day') {
-      onConfirm(24);
+      onConfirm(0);
       return;
     }
     onConfirm(customHours);
@@ -70,7 +65,7 @@ export function GuestRevealDelaySheet({
           <View style={S.grabber} />
 
           <AppText variant="titleMedium" align="center" style={S.title}>
-            When should guests see them?
+            Set time for guests to see photos
           </AppText>
 
           <View style={S.pills}>
@@ -80,12 +75,8 @@ export function GuestRevealDelaySheet({
               onPress={() => setMode('same')}
             />
             <ModePill
-              label="1 day later"
-              selected={mode === 'day'}
-              onPress={() => setMode('day')}
-            />
-            <ModePill
               label="Custom"
+              icon
               selected={mode === 'custom'}
               onPress={() => setMode('custom')}
             />
@@ -94,12 +85,6 @@ export function GuestRevealDelaySheet({
           <View style={S.wheelSlot}>
             {mode === 'custom' ? (
               <View style={S.customWheel}>
-                <View style={S.wheelLabel}>
-                  <ClockIcon size={18} color={colours.textSecondary} />
-                  <AppText variant="bodySmall" tone="secondary">
-                    Hours after you
-                  </AppText>
-                </View>
                 <WheelPicker
                   values={HOURS}
                   selectedIndex={selectedHourIndex}
@@ -134,10 +119,12 @@ export function GuestRevealDelaySheet({
 function ModePill({
   label,
   selected,
+  icon = false,
   onPress,
 }: {
   label: string;
   selected: boolean;
+  icon?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -152,6 +139,9 @@ function ModePill({
         pressed && { opacity: 0.85 },
       ]}
     >
+      {icon ? (
+        <ClockIcon size={15} color={selected ? colours.textOnBrand : colours.textSecondary} />
+      ) : null}
       <AppText
         variant="labelLarge"
         align="center"
@@ -195,8 +185,10 @@ const S = StyleSheet.create({
   },
   pill: {
     flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
     minHeight: layout.minTouchTarget,
     paddingHorizontal: spacing.sm,
     borderRadius: 999,
@@ -217,11 +209,6 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-  },
-  wheelLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
   },
   actions: {
     flexDirection: 'row',

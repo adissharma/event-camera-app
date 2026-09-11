@@ -140,7 +140,7 @@ export default function EditEventScreen() {
       hostRevealChoice: revealChoice,
       hostCustomRevealAt: customRevealAt,
       guestRevealChoice,
-      guestRevealDelayHours: null,
+      guestRevealDelayHours: 0,
       guestCustomRevealAt: guestRevealChoice === 'never' ? null : customRevealAt,
       photoTreatment: primarySession.photo_treatment || 'original',
       editCelebrationId: celebration.id, // Mark that we are editing this event!

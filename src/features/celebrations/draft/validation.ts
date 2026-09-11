@@ -176,7 +176,7 @@ export const guestRevealSchema = z
     hostRevealChoice: z.enum(['during', 'at_close', 'custom']),
     hostCustomRevealAt: z.string().nullable(),
     guestRevealChoice: z.enum(['during', 'at_close', 'custom', 'never']),
-    guestRevealDelayHours: z.number().int().min(1).max(24).nullable(),
+    guestRevealDelayHours: z.number().int().min(0).max(24).nullable(),
     guestCustomRevealAt: z.string().nullable(),
     galleryVisibility: z.enum(['all_guests', 'own_only', 'hosts_only']),
   })

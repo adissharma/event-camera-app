@@ -24,10 +24,10 @@ export default function GuestRevealStep() {
   const isLocked = draft.guestRevealChoice === 'never' || guestReveal.mode !== 'instant';
 
   function applyGuestTiming(delayHours: number | null) {
-    if (delayHours === null) {
+    if (delayHours === null || delayHours === 0) {
       update({
         guestRevealChoice: draft.hostRevealChoice,
-        guestRevealDelayHours: null,
+        guestRevealDelayHours: 0,
         guestCustomRevealAt:
           draft.hostRevealChoice === 'custom' ? draft.hostCustomRevealAt : null,
         galleryVisibility:
@@ -71,9 +71,11 @@ export default function GuestRevealStep() {
 
   function summaryText(): string | null {
     if (!isAfterMe) return null;
-    if (draft.guestRevealDelayHours === null) return 'Guests see photos when you do';
-    if (draft.guestRevealDelayHours === 24) return 'Guests see photos 1 day after you';
-    return `Guests see photos ${draft.guestRevealDelayHours} hours after you`;
+    if (draft.guestRevealDelayHours === null || draft.guestRevealDelayHours === 0) {
+      return 'when you do';
+    }
+    if (draft.guestRevealDelayHours === 24) return '1 day after you';
+    return `${draft.guestRevealDelayHours} hours after you`;
   }
 
   return (
@@ -89,18 +91,21 @@ export default function GuestRevealStep() {
 
           <View style={S.summarySlot}>
             {summaryText() ? (
-              <Pressable
-                onPress={() => setSheetOpen(true)}
-                accessibilityRole="button"
-                accessibilityLabel={`${summaryText()}. Edit guest reveal timing.`}
-                hitSlop={10}
-                style={S.summaryValue}
-              >
-                <AppText variant="bodySmall" tone="secondary">
-                  {summaryText()}
-                </AppText>
-                <PencilIcon size={13} color={colours.textSecondary} />
-              </Pressable>
+              <View style={S.summaryRow}>
+                <AppText variant="bodySmall">Guests see photos </AppText>
+                <Pressable
+                  onPress={() => setSheetOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit guest reveal timing, currently ${summaryText()}`}
+                  hitSlop={10}
+                  style={S.summaryValue}
+                >
+                  <AppText variant="bodySmall" tone="secondary">
+                    {summaryText()}
+                  </AppText>
+                  <PencilIcon size={13} color={colours.textSecondary} />
+                </Pressable>
+              </View>
             ) : null}
           </View>
         </View>
@@ -110,7 +115,7 @@ export default function GuestRevealStep() {
           onChange={handleTimingChange}
           onDelayedLabelPress={() => setSheetOpen(true)}
           immediateLabel="Never"
-          delayedLabel="After me"
+          delayedLabel="Set time"
           accessibilityLabel="Choose when guests can see photos"
         />
       </View>
@@ -130,6 +135,12 @@ const S = StyleSheet.create({
     height: 20,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'center',
   },
   summaryValue: {
     flexDirection: 'row',

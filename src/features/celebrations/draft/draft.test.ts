@@ -125,7 +125,7 @@ describe('step validation', () => {
           draftWith({
             hostRevealChoice: 'at_close',
             guestRevealChoice: 'at_close',
-            guestRevealDelayHours: null,
+            guestRevealDelayHours: 0,
             endsAt: CLOSE,
           }),
         ),
@@ -242,6 +242,22 @@ describe('step validation', () => {
     });
   });
 
+  it('stores same-time guest reveal as zero hours after the host', () => {
+    expect(
+      resolveGuestReveal(
+        draftWith({
+          endsAt: CLOSE,
+          hostRevealChoice: 'at_close',
+          guestRevealChoice: 'at_close',
+          guestRevealDelayHours: 0,
+        }),
+      ),
+    ).toEqual({
+      mode: 'scheduled',
+      revealAt: CLOSE,
+    });
+  });
+
   describe('photo limit', () => {
     it('treats null as unlimited rather than missing', () => {
       expect(validateStep('photo-limit', draftWith({ shotLimitPerGuest: null }))).toBeNull();
@@ -300,7 +316,7 @@ describe('empty draft defaults', () => {
     expect(draft.galleryVisibility).toBe('all_guests');
     expect(draft.hostRevealChoice).toBe('at_close');
     expect(draft.guestRevealChoice).toBe('at_close');
-    expect(draft.guestRevealDelayHours).toBeNull();
+    expect(draft.guestRevealDelayHours).toBe(0);
     expect(draft.photoTreatment).toBe('original');
   });
 

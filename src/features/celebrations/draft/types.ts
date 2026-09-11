@@ -120,11 +120,11 @@ export interface CreationDraft {
   /**
    * Guest reveal relationship to the host reveal.
    *
-   * `null` means guests reveal at the same time as the host. A number means
-   * "host reveal + N hours". The database still receives an absolute reveal
-   * timestamp at publish/save time, but the creation draft keeps the relative
-   * intent so changing the host reveal later automatically carries guests
-   * with it.
+   * `0` means guests reveal at the same time as the host. `null` is tolerated
+   * for restored defaults from older drafts. Any positive number means "host
+   * reveal + N hours". The database still receives an absolute reveal timestamp
+   * at publish/save time, but the creation draft keeps the relative intent so
+   * changing the host reveal later automatically carries guests with it.
    */
   guestRevealDelayHours: number | null;
   guestCustomRevealAt: string | null;
@@ -187,7 +187,7 @@ export function createEmptyDraft(userId: string | null, timezone: string): Creat
     hostRevealChoice: 'at_close',
     hostCustomRevealAt: null,
     guestRevealChoice: 'at_close',
-    guestRevealDelayHours: null,
+    guestRevealDelayHours: 0,
     guestCustomRevealAt: null,
 
     photoTreatment: 'original',
@@ -280,7 +280,7 @@ export function deriveGuestRevealFields(draft: CreationDraft): {
     return { guestRevealChoice: 'never', guestCustomRevealAt: null };
   }
 
-  if (draft.guestRevealDelayHours === null) {
+  if (draft.guestRevealDelayHours === null || draft.guestRevealDelayHours === 0) {
     return {
       guestRevealChoice: draft.hostRevealChoice,
       guestCustomRevealAt:
