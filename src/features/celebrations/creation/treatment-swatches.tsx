@@ -1,9 +1,17 @@
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 
 import { DisposablePhoto } from '@/components/media/disposable-photo';
 import { AppText } from '@/components/ui/text';
-import { colours, layout, spacing } from '@/design';
+import {
+  colours,
+  layout,
+  spacing,
+  REVEAL_TRACK_GRADIENT,
+  REVEAL_TRACK_GRADIENT_START,
+  REVEAL_TRACK_GRADIENT_END,
+} from '@/design';
 import {
   PHOTO_TREATMENT_OPTIONS,
   type SupportedPhotoTreatment,
@@ -68,15 +76,34 @@ function Swatch({
       style={({ pressed }) => [S.swatch, pressed && { opacity: 0.85 }]}
     >
       {/*
-        The ring sits outside the image rather than on it, so selecting does
-        not crop the photograph — and the gap is what makes the ring read as
-        a ring rather than as a border the picture happens to have.
+        The selection ring carries the accent gradient — the same stops, angle
+        and 3pt width as the reveal toggle's track, so the one coloured thing
+        on a dark screen always means "this is the choice you have made".
+
+        It sits outside the image rather than on it, so selecting does not
+        crop the photograph, and the gap is what makes it read as a ring
+        rather than as a border the picture happens to have. The unselected
+        state keeps the same footprint in a transparent ring, so nothing
+        shifts when the selection moves.
       */}
-      <View style={[S.ring, selected ? S.ringSelected : S.ringIdle]}>
-        <View style={S.clip}>
-          <TreatedSwatchImage treatment={treatment} />
+      {selected ? (
+        <LinearGradient
+          colors={REVEAL_TRACK_GRADIENT}
+          start={REVEAL_TRACK_GRADIENT_START}
+          end={REVEAL_TRACK_GRADIENT_END}
+          style={S.ring}
+        >
+          <View style={S.clip}>
+            <TreatedSwatchImage treatment={treatment} />
+          </View>
+        </LinearGradient>
+      ) : (
+        <View style={S.ring}>
+          <View style={S.clip}>
+            <TreatedSwatchImage treatment={treatment} />
+          </View>
         </View>
-      </View>
+      )}
 
       <AppText
         variant="bodySmall"
@@ -130,16 +157,9 @@ const S = StyleSheet.create({
     width: SWATCH_SIZE,
     height: SWATCH_SIZE,
     borderRadius: SWATCH_SIZE / 2,
+    // The ring's width. Unselected this is empty space, which is what keeps
+    // the image the same size in both states.
     padding: 3,
-  },
-  ringSelected: {
-    borderWidth: 2,
-    borderColor: colours.textPrimary,
-  },
-  /** A transparent border of the same width, so nothing shifts on selection. */
-  ringIdle: {
-    borderWidth: 2,
-    borderColor: 'transparent',
   },
   clip: {
     flex: 1,
