@@ -7,7 +7,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 const PREVIEW_IMAGES = [
   require('../../../../assets/sample-event/05.jpg'),
-  require('../../../../assets/sample-event/06.jpg'),
+  require('../../../../assets/sample-event/07.jpg'),
   require('../../../../assets/sample-event/01.jpg'),
   require('../../../../assets/sample-event/02.jpg'),
 ] as const;
@@ -23,7 +23,7 @@ const PREVIEW_IMAGES = [
  */
 const PREVIEW_IMAGES_MONO = [
   require('../../../../assets/sample-event/mono/05.jpg'),
-  require('../../../../assets/sample-event/mono/06.jpg'),
+  require('../../../../assets/sample-event/mono/07.jpg'),
   require('../../../../assets/sample-event/mono/01.jpg'),
   require('../../../../assets/sample-event/mono/02.jpg'),
 ] as const;
