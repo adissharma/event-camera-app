@@ -7,7 +7,6 @@ import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   DEFAULT_CLOSING_HOURS,
   DEFAULT_CLOSING_MINUTES,
-  clampClosingDate,
   combineDateAndTime,
   getClosingDateBounds,
 } from '@/components/forms/month-calendar';
@@ -33,26 +32,36 @@ export default function ClosingStep() {
   const { draft, update } = useCreationDraft();
   const now = useMemo(() => new Date(), []);
   const bounds = useMemo(() => getClosingDateBounds(now), [now]);
+  /**
+   * Whatever the host has chosen, valid or not.
+   *
+   * Deliberately unclamped. Correcting the date as they scroll moves the
+   * wheel under their finger and never says why; the step's own validator
+   * refuses a past date and explains it above Next, which is where a
+   * rejection can actually be read.
+   */
   const selected = useMemo(
-    () => clampClosingDate(draft.endsAt ? new Date(draft.endsAt) : nextDefaultDate(), now),
-    [draft.endsAt, now],
+    () => (draft.endsAt ? new Date(draft.endsAt) : nextDefaultDate()),
+    [draft.endsAt],
   );
+
+  /**
+   * Every day and every month, unfiltered.
+   *
+   * A wheel that silently omits the first half of the year leaves the host
+   * scrolling for a value that is not there, with nothing to say it was
+   * removed or why. Showing everything and validating the answer is the
+   * honest arrangement: the choice is refusable, not invisible.
+   */
   const years = Array.from(
     { length: bounds.maximum.getFullYear() - bounds.minimum.getFullYear() + 1 },
     (_, index) => bounds.minimum.getFullYear() + index,
   );
-  const months = Array.from({ length: 12 }, (_, month) => month).filter((month) => {
-    const monthStart = new Date(selected.getFullYear(), month, 1);
-    const monthEnd = new Date(selected.getFullYear(), month + 1, 0);
-    return monthEnd >= bounds.minimum && monthStart <= bounds.maximum;
-  });
+  const months = Array.from({ length: 12 }, (_, month) => month);
   const days = Array.from(
     { length: daysInMonth(selected.getFullYear(), selected.getMonth()) },
     (_, i) => i + 1,
-  ).filter((day) => {
-    const candidate = new Date(selected.getFullYear(), selected.getMonth(), day);
-    return candidate >= bounds.minimum && candidate <= bounds.maximum;
-  });
+  );
 
   useEffect(() => {
     if (draft.endsAt !== selected.toISOString()) update({ endsAt: selected.toISOString() });
@@ -62,13 +71,10 @@ export default function ClosingStep() {
     const nextYear = part === 'year' ? value : selected.getFullYear();
     const nextMonth = part === 'month' ? value : selected.getMonth();
     const nextDay = Math.min(part === 'day' ? value : selected.getDate(), daysInMonth(nextYear, nextMonth));
-    const next = clampClosingDate(
-      combineDateAndTime(
-        new Date(nextYear, nextMonth, nextDay),
-        selected.getHours(),
-        selected.getMinutes(),
-      ),
-      now,
+    const next = combineDateAndTime(
+      new Date(nextYear, nextMonth, nextDay),
+      selected.getHours(),
+      selected.getMinutes(),
     );
     update({ endsAt: next.toISOString() });
   }

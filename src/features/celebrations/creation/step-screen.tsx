@@ -175,6 +175,24 @@ export function CreationStepScreen({
       stickyAction={
         action ?? (
           <View style={{ gap: spacing.sm }}>
+            {/*
+              Why Next is unavailable, in the open.
+              `disabledReason` alone reaches a screen reader and nobody else,
+              which leaves a sighted host tapping a dead button with no idea
+              what is wrong — and on the closing step the wheels now let a
+              past date be chosen, so this is the only thing that says so.
+            */}
+            {blockingError ? (
+              <AppText
+                variant="caption"
+                tone="warning"
+                align="center"
+                accessibilityLiveRegion="polite"
+              >
+                {blockingError}
+              </AppText>
+            ) : null}
+
             <Button
               label={isEditing ? 'Save' : (nextLabel ?? copy.common.next)}
               disabled={blockingError !== null}
