@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 
 import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
@@ -21,6 +21,19 @@ export default function GuestRevealStep() {
   const { draft, update } = useCreationDraft();
   const [sheetOpen, setSheetOpen] = useState(false);
   const isAfterMe = draft.guestRevealChoice !== 'never';
+
+  /**
+   * The last delay this host chose for guests.
+   *
+   * Turning the toggle off clears the delay from the draft, so without this a
+   * host flicking it to compare would be asked to pick the delay again every
+   * time they turned it back on. `undefined` means "never chosen" — distinct
+   * from `0`, which is a real answer meaning "at the same time as you".
+   * Seeded from the draft so a half-finished event is remembered too.
+   */
+  const lastDelayHours = useRef<number | null | undefined>(
+    draft.guestRevealChoice === 'never' ? undefined : (draft.guestRevealDelayHours ?? 0),
+  );
 
   const guestReveal = useMemo(() => resolveGuestReveal(draft), [draft]);
   const isLocked = draft.guestRevealChoice === 'never' || guestReveal.mode !== 'instant';
@@ -86,11 +99,18 @@ export default function GuestRevealStep() {
       });
       return;
     }
+    // The toggle asks once. After that it is a switch, and the summary line
+    // and its pencil are how a host changes the delay.
+    if (lastDelayHours.current !== undefined) {
+      applyGuestTiming(lastDelayHours.current);
+      return;
+    }
     setSheetOpen(true);
   }
 
   function handleSheetConfirm(delayHours: number | null) {
     setSheetOpen(false);
+    lastDelayHours.current = delayHours;
     applyGuestTiming(delayHours);
   }
 
@@ -147,7 +167,11 @@ export default function GuestRevealStep() {
 
       <GuestRevealDelaySheet
         visible={sheetOpen}
-        initialDelayHours={draft.guestRevealDelayHours}
+        initialDelayHours={
+          lastDelayHours.current === undefined
+            ? draft.guestRevealDelayHours
+            : lastDelayHours.current
+        }
         onCancel={() => setSheetOpen(false)}
         onConfirm={handleSheetConfirm}
       />
