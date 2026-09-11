@@ -8,7 +8,7 @@ import { ProgressThread } from '@/components/feedback/progress-thread';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { colours, easing, layout, spacing } from '@/design';
+import { colours, easing, layout, spacing, typography } from '@/design';
 import { copy } from '@/i18n';
 import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
@@ -33,6 +33,17 @@ export interface CreationStepScreenProps {
    * Set false when the step contains its own scrolling list.
    */
   scrollable?: boolean;
+  /**
+   * Floor for the heading's height, in lines.
+   *
+   * Headings wrap to whatever they need, so a one-line title leaves a taller
+   * content area starting higher up — and anything centred in it lands
+   * somewhere different from the same element on the next step. Consecutive
+   * steps that share a visual (the photo collage) set this to the longest of
+   * their headings, so the shared thing holds its position as the host moves
+   * between them.
+   */
+  headingMinLines?: number;
   /** Custom save operation for edit mode. */
   onSave?: () => Promise<void>;
 }
@@ -74,6 +85,7 @@ export function CreationStepScreen({
   nextLabel,
   action,
   scrollable = true,
+  headingMinLines,
   onSave,
 }: CreationStepScreenProps) {
   const router = useRouter();
@@ -187,7 +199,15 @@ export function CreationStepScreen({
               alignSelf: headingAlign === 'center' ? 'center' : undefined,
             }}
           >
-            <AppText variant="displayLarge" align={headingAlign}>
+            <AppText
+              variant="displayLarge"
+              align={headingAlign}
+              style={
+                headingMinLines
+                  ? { minHeight: (typography.displayLarge.lineHeight ?? 41) * headingMinLines }
+                  : undefined
+              }
+            >
               {heading}
             </AppText>
             {supporting ? (

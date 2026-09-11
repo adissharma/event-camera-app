@@ -327,6 +327,9 @@ export default function RevealStep() {
       step="reveal"
       heading={copy.create.revealHeading}
       headingAlign="center"
+      // The three photo steps share a collage; a common heading floor keeps
+      // it in the same place as the host moves between them.
+      headingMinLines={2}
       // Not scrollable: there is a collage and one control, and the control is
       // positioned by the space left over. Inside a scroll view `flex: 1`
       // measures the content rather than the screen, so the toggle would stay

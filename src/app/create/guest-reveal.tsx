@@ -133,6 +133,9 @@ export default function GuestRevealStep() {
       step="guest-reveal"
       heading={copy.create.guestRevealHeading}
       headingAlign="center"
+      // The three photo steps share a collage; a common heading floor keeps
+      // it in the same place as the host moves between them.
+      headingMinLines={2}
       scrollable={false}
     >
       <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>

@@ -20,6 +20,9 @@ export default function TreatmentStep() {
       step="treatment"
       heading={copy.create.treatmentHeading}
       headingAlign="center"
+      // The three photo steps share a collage; a common heading floor keeps
+      // it in the same place as the host moves between them.
+      headingMinLines={2}
       scrollable={false}
     >
       {/* The same block the reveal steps use — collage, then the control —
