@@ -12,7 +12,7 @@ export type GuestDelayMode = 'same' | 'custom';
 const HOURS = Array.from({ length: 24 }, (_, index) => index + 1);
 
 function labelForHour(hour: number): string {
-  return `${hour} ${hour === 1 ? 'hour' : 'hours'}`;
+  return `${hour} ${hour === 1 ? 'hour' : 'hours'} after me`;
 }
 
 function modeFromDelay(delayHours: number | null): GuestDelayMode {
@@ -95,7 +95,7 @@ export function GuestRevealDelaySheet({
                   formatValue={labelForHour}
                   accessibilityLabel="Hours after you"
                   visibleRows={3}
-                  width={150}
+                  width={210}
                   fadeColor={colours.surfaceRaised}
                 />
               </View>
