@@ -6,7 +6,6 @@ import { DisposablePhoto } from '@/components/media/disposable-photo';
 import { AppText } from '@/components/ui/text';
 import {
   colours,
-  layout,
   spacing,
   REVEAL_TRACK_GRADIENT,
   REVEAL_TRACK_GRADIENT_START,
@@ -93,14 +92,18 @@ function Swatch({
           end={REVEAL_TRACK_GRADIENT_END}
           style={S.ring}
         >
-          <View style={S.clip}>
-            <TreatedSwatchImage treatment={treatment} />
+          <View style={S.gap}>
+            <View style={S.clip}>
+              <TreatedSwatchImage treatment={treatment} />
+            </View>
           </View>
         </LinearGradient>
       ) : (
         <View style={S.ring}>
-          <View style={S.clip}>
-            <TreatedSwatchImage treatment={treatment} />
+          <View style={S.gap}>
+            <View style={S.clip}>
+              <TreatedSwatchImage treatment={treatment} />
+            </View>
           </View>
         </View>
       )}
@@ -161,13 +164,25 @@ const S = StyleSheet.create({
     // the image the same size in both states.
     padding: 3,
   },
+  /**
+   * The dark gap between the gradient and the photograph.
+   *
+   * Without it the ring bleeds into whatever the image happens to be doing at
+   * its edge and stops reading as a ring — the same reason the Create button
+   * puts black between its gradient and its face. Present unselected too, so
+   * the photograph is the same size in both states.
+   */
+  gap: {
+    flex: 1,
+    borderRadius: SWATCH_SIZE / 2,
+    backgroundColor: colours.background,
+    padding: 3,
+  },
   clip: {
     flex: 1,
     borderRadius: SWATCH_SIZE / 2,
     overflow: 'hidden',
     backgroundColor: colours.surface,
-    borderWidth: layout.hairline,
-    borderColor: colours.borderSubtle,
   },
   image: {
     width: '100%',
