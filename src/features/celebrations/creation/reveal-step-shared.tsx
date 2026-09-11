@@ -1,8 +1,10 @@
 import { Image, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 
+import { DisposablePhoto } from '@/components/media/disposable-photo';
 import { LockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, fontFamilies, layout, radii, spacing } from '@/design';
+import type { SupportedPhotoTreatment } from '@/features/media/photo-treatment';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const PREVIEW_IMAGES = [
@@ -57,13 +59,30 @@ export function useRevealPreviewHeight(): number {
 
 export function RevealPreview({
   locked,
+  treatment = 'original',
 }: {
   locked: boolean;
+  /**
+   * Applies the chosen photo look to the collage.
+   *
+   * So the photo-look step answers its own question with the photographs the
+   * host is about to have, rather than with swatches beside an untreated
+   * preview. Defaults to `original`, which is what every other step wants.
+   */
+  treatment?: SupportedPhotoTreatment;
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const previewWidth = Math.min(PREVIEW_MAX_WIDTH, screenWidth - layout.gutter * 2);
   const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
   const cellHeight = cellWidth * 1.25;
+
+  // Locked wins: while photos are being withheld the collage is monochrome
+  // whatever look was chosen, because that state is about the photos being
+  // held back rather than about how they will look.
+  const showDisposable = !locked && treatment === 'disposable';
+  const sources =
+    locked || treatment === 'black_and_white' ? PREVIEW_IMAGES_MONO : PREVIEW_IMAGES;
+
   return (
     <View style={styles.previewContainer}>
       <View
@@ -81,7 +100,7 @@ export function RevealPreview({
             { width: previewWidth },
           ]}
         >
-          {(locked ? PREVIEW_IMAGES_MONO : PREVIEW_IMAGES).map((imgSrc, index) => (
+          {sources.map((imgSrc, index) => (
             <View
               key={index}
               style={[
@@ -89,12 +108,26 @@ export function RevealPreview({
                 { width: cellWidth, height: cellHeight },
               ]}
             >
-              <Image
-                source={imgSrc}
-                style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
-                resizeMode="cover"
-                blurRadius={locked ? 20 : 0}
-              />
+              {/* Disposable is a renderer, not a file — grain, flash and a
+                  date stamp — so it replaces the plain image rather than
+                  filtering it. Monochrome is served from pre-desaturated
+                  copies for the reason `PREVIEW_IMAGES_MONO` explains. */}
+              {showDisposable ? (
+                <DisposablePhoto
+                  source={imgSrc}
+                  seedKey={`preview-${index}`}
+                  dateStampEnabled
+                  style={StyleSheet.absoluteFill as never}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={imgSrc}
+                  style={[StyleSheet.absoluteFill, { width: '100%', height: '100%' }]}
+                  resizeMode="cover"
+                  blurRadius={locked ? 20 : 0}
+                />
+              )}
 
               {locked ? (
                 <View style={styles.lockOverlay}>

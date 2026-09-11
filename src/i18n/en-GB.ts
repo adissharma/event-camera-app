@@ -113,7 +113,7 @@ export const enGB = {
     revealReturnAt: 'Come back at {time}',
 
     // Step 9
-    treatmentHeading: 'Photo look',
+    treatmentHeading: 'Add magic to your photos',
     treatmentOriginal: 'Original',
     treatmentDisposable: 'Disposable',
     treatmentBlackAndWhite: 'Monochrome',

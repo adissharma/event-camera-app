@@ -1,5 +1,4 @@
 import { Image, Pressable, StyleSheet, View } from 'react-native';
-import { ColorMatrix, type Matrix as NativeMatrix } from 'react-native-color-matrix-image-filters';
 import * as Haptics from 'expo-haptics';
 
 import { DisposablePhoto } from '@/components/media/disposable-photo';
@@ -7,7 +6,6 @@ import { AppText } from '@/components/ui/text';
 import { colours, layout, spacing } from '@/design';
 import {
   PHOTO_TREATMENT_OPTIONS,
-  TREATMENT_VISUALS,
   type SupportedPhotoTreatment,
 } from '@/features/media/photo-treatment';
 
@@ -19,7 +17,9 @@ import {
  * subjects instead. It is one of the collage's own frames, so the swatches
  * and the preview above them are visibly the same event.
  */
-const SWATCH_SOURCE = require('../../../../assets/sample-event/01.jpg');
+const SWATCH_SOURCE = require('../../../../assets/sample-event/07.jpg');
+/** Pre-desaturated, for the reason the collage's mono set documents. */
+const SWATCH_SOURCE_MONO = require('../../../../assets/sample-event/mono/07.jpg');
 
 const SWATCH_SIZE = 92;
 
@@ -110,14 +110,7 @@ function TreatedSwatchImage({ treatment }: { treatment: SupportedPhotoTreatment 
   }
 
   if (treatment === 'black_and_white') {
-    return (
-      <ColorMatrix
-        matrix={TREATMENT_VISUALS.black_and_white.colorMatrix as unknown as NativeMatrix}
-        style={S.image}
-      >
-        <Image source={SWATCH_SOURCE} style={S.image} resizeMode="cover" />
-      </ColorMatrix>
-    );
+    return <Image source={SWATCH_SOURCE_MONO} style={S.image} resizeMode="cover" />;
   }
 
   return <Image source={SWATCH_SOURCE} style={S.image} resizeMode="cover" />;

@@ -10,6 +10,7 @@ import { copy } from '@/i18n';
 
 export default function TreatmentStep() {
   const { draft, update } = useCreationDraft();
+  const treatment = normalisePhotoTreatment(draft.photoTreatment);
 
   return (
     <CreationStepScreen
@@ -22,10 +23,10 @@ export default function TreatmentStep() {
           so three consecutive steps put the photographs in one place and the
           choice beneath them rather than rearranging the screen each time. */}
       <View style={{ flex: 1, justifyContent: 'center', gap: spacing.xl }}>
-        <RevealPreview locked={false} />
+        <RevealPreview locked={false} treatment={treatment} />
 
         <TreatmentSwatches
-          selected={normalisePhotoTreatment(draft.photoTreatment)}
+          selected={treatment}
           onSelect={(photoTreatment) => {
             update({
               photoTreatment,
