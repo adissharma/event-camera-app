@@ -35,7 +35,15 @@ import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import Svg, { Path, Circle, Rect } from 'react-native-svg';
+import Svg, {
+  Path,
+  Circle,
+  Rect,
+  Defs,
+  LinearGradient as SvgLinearGradient,
+  RadialGradient as SvgRadialGradient,
+  Stop,
+} from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
 import { isPermanentQueryError } from '@/lib/query-client';
@@ -202,15 +210,15 @@ const CHALLENGE_GRADIENTS = [
   ['#0B4D65', '#293F9D', '#7421B8'],
   ['#C53B5C', '#9621C7', '#F67B3D'],
 ] as const;
-// Slightly uneven contour ratios make the circles feel hand-shaped while
-// retaining an identical square footprint for the horizontal strip.
-const CHALLENGE_CIRCLE_CONTOURS = [
-  [0.56, 0.46, 0.53, 0.49],
-  [0.48, 0.57, 0.45, 0.54],
-  [0.54, 0.5, 0.57, 0.44],
-  [0.47, 0.55, 0.51, 0.58],
-  [0.58, 0.47, 0.54, 0.5],
-  [0.51, 0.56, 0.46, 0.55],
+// A consistent footprint, with individually shaped Bezier edges that give
+// each tile a subtle, floating blob silhouette.
+const CHALLENGE_BLOB_PATHS = [
+  'M50 1C69 -1 90 9 98 28C105 46 97 69 82 86C66 103 43 101 24 92C6 83 -2 64 3 44C7 25 27 3 50 1Z',
+  'M49 2C70 -1 91 12 98 31C104 50 95 72 77 89C60 103 38 98 21 89C4 79 -1 58 5 39C11 20 28 4 49 2Z',
+  'M51 0C72 1 94 13 99 34C104 54 91 77 74 92C56 106 32 99 16 84C1 70 0 48 9 29C18 10 32 -1 51 0Z',
+  'M48 2C68 -2 91 8 99 27C108 46 97 69 80 86C63 102 40 104 22 93C3 81 -3 60 4 40C11 20 29 4 48 2Z',
+  'M50 0C71 2 93 14 98 34C104 53 93 75 76 91C58 106 35 100 18 87C2 74 -1 51 7 31C15 11 31 -1 50 0Z',
+  'M50 2C70 0 91 11 98 30C106 49 96 72 79 89C62 105 39 101 20 90C3 79 -2 57 5 38C12 19 30 3 50 2Z',
 ] as const;
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
@@ -915,37 +923,30 @@ function ChallengeGradientCircle({
   children: ReactNode;
 }) {
   const colors = CHALLENGE_GRADIENTS[index % CHALLENGE_GRADIENTS.length]!;
-  const contour = CHALLENGE_CIRCLE_CONTOURS[index % CHALLENGE_CIRCLE_CONTOURS.length]!;
+  const blobPath = CHALLENGE_BLOB_PATHS[index % CHALLENGE_BLOB_PATHS.length]!;
+  const baseGradientId = `challenge-gradient-${index}`;
+  const highlightGradientId = `challenge-highlight-${index}`;
 
   return (
-    <LinearGradient
-      colors={colors}
-      start={{ x: 0.08, y: 0.08 }}
-      end={{ x: 0.92, y: 0.92 }}
-      style={[
-        S.challengeGradientCircle,
-        {
-          width: size,
-          height: size,
-          borderTopLeftRadius: size * contour[0],
-          borderTopRightRadius: size * contour[1],
-          borderBottomRightRadius: size * contour[2],
-          borderBottomLeftRadius: size * contour[3],
-        },
-      ]}
-    >
-      {/* A second, soft colour field keeps the small tile closer to Still's
-          shader treatment than a flat two-stop gradient. */}
-      <LinearGradient
-        pointerEvents="none"
-        colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)', 'rgba(8,4,24,0.2)']}
-        locations={[0, 0.48, 1]}
-        start={{ x: 0.08, y: 0.02 }}
-        end={{ x: 0.88, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      {children}
-    </LinearGradient>
+    <View style={[S.challengeGradientCircle, { width: size, height: size }]}>
+      <Svg width={size} height={size} viewBox="0 0 100 100" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <SvgLinearGradient id={baseGradientId} x1="8%" y1="8%" x2="92%" y2="92%">
+            <Stop offset="0" stopColor={colors[0]} />
+            <Stop offset="0.52" stopColor={colors[1]} />
+            <Stop offset="1" stopColor={colors[2]} />
+          </SvgLinearGradient>
+          <SvgRadialGradient id={highlightGradientId} cx="22%" cy="14%" r="88%">
+            <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.24} />
+            <Stop offset="0.48" stopColor="#FFFFFF" stopOpacity={0} />
+            <Stop offset="1" stopColor="#080418" stopOpacity={0.22} />
+          </SvgRadialGradient>
+        </Defs>
+        <Path d={blobPath} fill={`url(#${baseGradientId})`} />
+        <Path d={blobPath} fill={`url(#${highlightGradientId})`} />
+      </Svg>
+      <View style={S.challengeGradientIcon}>{children}</View>
+    </View>
   );
 }
 
@@ -5724,7 +5725,12 @@ const S = StyleSheet.create({
   challengeGradientCircle: {
     width: CHIP_D,
     height: CHIP_D,
-    overflow: 'hidden',
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  challengeGradientIcon: {
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
   },
