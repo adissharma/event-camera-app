@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image as ExpoImage } from 'expo-image';
 
 import { DashboardShaderBackground } from '@/components/ui/dashboard-shader-background';
 import { LoadingState } from '@/components/feedback/loading-state';
@@ -26,7 +27,6 @@ import { Button } from '@/components/ui/button';
 import { ClockIcon, PersonIcon } from '@/components/ui/icons';
 import { SlideToConfirm } from '@/components/forms/slide-to-confirm';
 import { useAuth } from '@/features/auth/context';
-import { WORDMARK } from '@/features/onboarding/still-intro';
 import { resetToUnauthenticatedRoot } from '@/lib/navigation/session-root';
 import {
   celebrationKeys,
@@ -558,16 +558,13 @@ export default function HomeScreen() {
 
       {/* 1. Header Toolbar (Separator border line removed) */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        {/*
-          A stand-in wordmark until the real asset arrives.
-
-          Set in the display face rather than approximated in the UI sans, and
-          reading its text from the same constant the intro's logo is built
-          from — the two are the same mark, and a reader moving between them
-          should not be able to tell they are drawn by different code, nor
-          find them disagreeing about the name after a rename.
-        */}
-        <AppText style={styles.wordmark}>{WORDMARK}</AppText>
+        <ExpoImage
+          source={require('../../assets/brand/dashboard-logo.png')}
+          style={styles.dashboardLogo}
+          contentFit="contain"
+          accessible
+          accessibilityLabel="Stills"
+        />
 
         {/*
           Profile and Create, in the corner the header's `space-between` puts
@@ -948,14 +945,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  /** The stand-in wordmark, at roughly the ink height the logo asset had. */
-  wordmark: {
-    fontFamily: fontFamilies.display,
-    color: colours.textPrimary,
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.4,
-  },
+  dashboardLogo: { width: 80, height: 32 },
 
 
   /** Centred on the screen, so the button sits on the midline regardless of
