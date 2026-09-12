@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
+import { ImageIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { ThemeCarousel } from '@/features/celebrations/creation/theme-carousel';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
@@ -108,6 +109,11 @@ export default function CoverStep() {
                 <Button
                   label={draft.coverLocalUri ? 'Change photo' : copy.create.coverAddPhoto}
                   variant="secondary"
+                  leading={
+                    draft.coverLocalUri ? (
+                      <ImageIcon size={16} color={colours.brandPrimary} />
+                    ) : undefined
+                  }
                   onPress={() => void pickImage()}
                   haptic
                 />
