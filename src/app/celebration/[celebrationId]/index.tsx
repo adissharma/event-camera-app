@@ -5,7 +5,7 @@
  * Inspired by Leica, Kinfolk Magazine, Apple Photos, and luxury wedding albums.
  */
 
-import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, type ReactNode } from 'react';
 import {
   Animated,
   ActivityIndicator,
@@ -80,11 +80,7 @@ import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal'
 import { serverNow } from '@/services/server-time';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { BRAND_CONFIG } from '@/config/brand';
-import { colours, fontFamilies, radii, spacing, layout,
-  ACCENT_GRADIENT,
-  ACCENT_GRADIENT_START,
-  ACCENT_GRADIENT_END,
-} from '@/design';
+import { colours, fontFamilies, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
 import {
   resolveChallengeBrief,
@@ -198,15 +194,13 @@ const CHIP_R = 12;
 const CHIP_GAP = 12;
 const CHIP_PEEK = 18;
 const GALLERY_STRIP_GAP = 12;
-const CHALLENGE_TILE_ROTATIONS = [
-  '-3.5deg',
-  '2.75deg',
-  '-2deg',
-  '3.25deg',
-  '-2.75deg',
-  '3.5deg',
-  '-1.5deg',
-  '2.25deg',
+const CHALLENGE_GRADIENTS = [
+  ['#210839', '#6C145D', '#A62E62'],
+  ['#062550', '#34206E', '#8E1D62'],
+  ['#1B0A3D', '#50145C', '#76254F'],
+  ['#54112F', '#491277', '#24105B'],
+  ['#073F50', '#153E76', '#45206D'],
+  ['#4D132A', '#8D1D58', '#38146B'],
 ] as const;
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
@@ -897,6 +891,40 @@ function GuestbookIcon({ size = 24, color = '#EFE9E0' }) {
         strokeLinecap="round"
       />
     </Svg>
+  );
+}
+
+/** Shared visual shell for the event screen's Guestbook and Challenge tiles. */
+function ChallengeGradientCircle({
+  index,
+  size,
+  children,
+}: {
+  index: number;
+  size: number;
+  children: ReactNode;
+}) {
+  const colors = CHALLENGE_GRADIENTS[index % CHALLENGE_GRADIENTS.length]!;
+
+  return (
+    <LinearGradient
+      colors={colors}
+      start={{ x: 0.08, y: 0.08 }}
+      end={{ x: 0.92, y: 0.92 }}
+      style={[S.challengeGradientCircle, { width: size, height: size, borderRadius: size / 2 }]}
+    >
+      {/* A second, soft colour field keeps the small tile closer to Still's
+          shader treatment than a flat two-stop gradient. */}
+      <LinearGradient
+        pointerEvents="none"
+        colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0)', 'rgba(8,4,24,0.34)']}
+        locations={[0, 0.48, 1]}
+        start={{ x: 0.08, y: 0.02 }}
+        end={{ x: 0.88, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {children}
+    </LinearGradient>
   );
 }
 
@@ -4314,32 +4342,9 @@ export function EventDetailView({
                 accessibilityRole="button"
                 accessibilityLabel={guestbookUnlocked ? 'Guestbook' : 'Guestbook, upgrade required'}
               >
-                <LinearGradient
-                  colors={ACCENT_GRADIENT}
-                  start={ACCENT_GRADIENT_START}
-                  end={ACCENT_GRADIENT_END}
-                  style={[
-                    S.instagramGradientOuter,
-                    {
-                      width: selectorTileSize,
-                      height: selectorTileSize,
-                      borderRadius: CHIP_R,
-                    },
-                    { transform: [{ rotate: CHALLENGE_TILE_ROTATIONS[0] }] },
-                  ]}
-                >
-                  <View style={[S.instagramInnerTile, {
-                    width: selectorTileSize - 4.4,
-                    height: selectorTileSize - 4.4,
-                  }]}>
-                    <View style={[S.instagramContentTile, {
-                      width: selectorTileSize - 8.8,
-                      height: selectorTileSize - 8.8,
-                    }]}>
-                      <GuestbookIcon size={24} color="#EFE9E0" />
-                    </View>
-                  </View>
-                </LinearGradient>
+                <ChallengeGradientCircle index={0} size={selectorTileSize}>
+                  <GuestbookIcon size={22} color="#FFFFFF" />
+                </ChallengeGradientCircle>
                 <AppText style={S.chipLabel} numberOfLines={2}>Guestbook</AppText>
                 {!guestbookUnlocked ? <LockedBadge /> : null}
               </Pressable>
@@ -4359,13 +4364,7 @@ export function EventDetailView({
               </View>
             )}
 
-            {challenges.map((challenge, index) => {
-              const rotation =
-                CHALLENGE_TILE_ROTATIONS[
-                  (index + (showGuestbook ? 1 : 0)) % CHALLENGE_TILE_ROTATIONS.length
-                ];
-
-              return (
+            {challenges.map((challenge, index) => (
                 <Pressable
                   key={challenge.id}
                   style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
@@ -4375,38 +4374,14 @@ export function EventDetailView({
                   hitSlop={18}
                   pressRetentionOffset={18}
                 >
-                  <View style={[S.chipOuter, {
-                    width: selectorTileSize,
-                    height: selectorTileSize,
-                    borderRadius: CHIP_R,
-                    transform: [{ rotate: rotation }],
-                  }]}>
-                    {challenge.photo ? (
-                      <Image
-                        source={{ uri: challenge.photo }}
-                        style={[S.chipPhoto, {
-                          width: selectorTileSize,
-                          height: selectorTileSize,
-                          borderRadius: CHIP_R - 2,
-                        }]}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[S.chipIconBg, {
-                        width: selectorTileSize,
-                        height: selectorTileSize,
-                        borderRadius: CHIP_R,
-                      }]}>
-                        <SharedChallengeIconSVG type={challenge.icon} size={28} />
-                      </View>
-                    )}
-                  </View>
+                  <ChallengeGradientCircle index={index + 1} size={selectorTileSize}>
+                    <SharedChallengeIconSVG type={challenge.icon} size={22} />
+                  </ChallengeGradientCircle>
                   <AppText style={S.chipLabel} numberOfLines={2}>
                     {challenge.label}
                   </AppText>
                 </Pressable>
-              );
-            })}
+            ))}
           </ScrollView>
           {/*
             One line, only when something in the strip is locked, and only for
@@ -5725,30 +5700,13 @@ const S = StyleSheet.create({
     marginTop: -2,
   },
 
-  // Challenge selector tile
-  chipOuter: {
+  challengeGradientCircle: {
     width: CHIP_D,
     height: CHIP_D,
-    borderRadius: CHIP_R,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.32)',
+    borderRadius: CHIP_D / 2,
     overflow: 'hidden',
-    backgroundColor: '#151515',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  chipPhoto: {
-    width: CHIP_D,
-    height: CHIP_D,
-    borderRadius: CHIP_R - 2,
-  },
-  chipIconBg: {
-    width: CHIP_D,
-    height: CHIP_D,
-    borderRadius: CHIP_R,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#151515',
   },
   /** A locked feature is quieter, not disabled — it is two taps from working. */
   chipLocked: { opacity: 0.42 },
@@ -5774,31 +5732,6 @@ const S = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
     lineHeight: 14,
-  },
-  instagramGradientOuter: {
-    width: CHIP_D,
-    height: CHIP_D,
-    borderRadius: CHIP_R,
-    padding: 2.2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  instagramInnerTile: {
-    width: CHIP_D - 4.4,
-    height: CHIP_D - 4.4,
-    borderRadius: CHIP_R - 2,
-    backgroundColor: '#0B0B0C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 2.2,
-  },
-  instagramContentTile: {
-    width: CHIP_D - 8.8,
-    height: CHIP_D - 8.8,
-    borderRadius: CHIP_R - 4,
-    backgroundColor: 'rgba(28,27,25,0.95)',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
 
   // ── Gallery stats ──
