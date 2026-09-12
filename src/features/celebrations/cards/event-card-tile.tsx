@@ -84,13 +84,6 @@ export function EventCardTile({
   const resolvedCover = useCoverSource(celebration.coverStoragePath);
   const coverSource = celebration.isSample ? SAMPLE_COVER : resolvedCover;
 
-  // Resolve theme design tokens
-  const theme = (themes ?? []).find(
-    (t: ThemeRow) => t.id === celebration.defaultThemeId || t.slug === celebration.defaultThemeId,
-  );
-  const accentColor =
-    (theme?.design_tokens as Record<string, string> | null)?.accent || colours.textPrimary;
-
   const statusLabel = eyebrowOverride !== undefined ? eyebrowOverride : getEventStatusLabel(celebration);
   const isCompleted = !getEventStatusLabel(celebration);
 
@@ -151,7 +144,7 @@ export function EventCardTile({
           ) : null}
           <AppText
             variant="titleMedium"
-            style={[S.cardTitle, { color: accentColor }]}
+            style={S.cardTitle}
             numberOfLines={3}
           >
             {celebration.title}
@@ -206,6 +199,7 @@ const S = StyleSheet.create({
     fontWeight: '700',
   },
   cardTitle: {
+    color: '#FFFFFF',
     fontFamily: fontFamilies.display,
     fontSize: 18,
     lineHeight: 22,

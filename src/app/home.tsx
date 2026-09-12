@@ -200,12 +200,6 @@ function HomeUpcomingEventCard({
   const cardHeight = Math.round(cardWidth * 1.25);
   const coverHeight = Math.round(galleryHeroImageHeight(screenHeight) * (cardWidth / screenWidth));
 
-  const theme = (themes ?? []).find(
-    (item) => item.id === celebration.defaultThemeId || item.slug === celebration.defaultThemeId,
-  );
-  const accentColor =
-    (theme?.design_tokens as Record<string, string> | null)?.accent || colours.textPrimary;
-
   return (
     <Pressable
       accessibilityRole="button"
@@ -237,7 +231,7 @@ function HomeUpcomingEventCard({
       <View style={styles.upcomingHeroContent}>
         <AppText
           variant="displayLarge"
-          style={[styles.upcomingHeroTitle, { color: accentColor }]}
+          style={styles.upcomingHeroTitle}
           numberOfLines={3}
         >
           {celebration.title}
@@ -1013,6 +1007,7 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   upcomingHeroTitle: {
+    color: '#FFFFFF',
     textShadowColor: 'rgba(0,0,0,0.35)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
