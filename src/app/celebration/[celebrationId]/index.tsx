@@ -195,12 +195,12 @@ const CHIP_GAP = 12;
 const CHIP_PEEK = 18;
 const GALLERY_STRIP_GAP = 12;
 const CHALLENGE_GRADIENTS = [
-  ['#210839', '#6C145D', '#A62E62'],
-  ['#062550', '#34206E', '#8E1D62'],
-  ['#1B0A3D', '#50145C', '#76254F'],
-  ['#54112F', '#491277', '#24105B'],
-  ['#073F50', '#153E76', '#45206D'],
-  ['#4D132A', '#8D1D58', '#38146B'],
+  ['#1A0A42', '#5A2FC7', '#FF6A55'],
+  ['#082B74', '#2860C8', '#E53C96'],
+  ['#230A4F', '#5A21A8', '#D03B85'],
+  ['#8C184E', '#8C1EC1', '#351674'],
+  ['#0B4D65', '#293F9D', '#7421B8'],
+  ['#C53B5C', '#9621C7', '#F67B3D'],
 ] as const;
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
@@ -917,7 +917,7 @@ function ChallengeGradientCircle({
           shader treatment than a flat two-stop gradient. */}
       <LinearGradient
         pointerEvents="none"
-        colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0)', 'rgba(8,4,24,0.34)']}
+        colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)', 'rgba(8,4,24,0.2)']}
         locations={[0, 0.48, 1]}
         start={{ x: 0.08, y: 0.02 }}
         end={{ x: 0.88, y: 1 }}
