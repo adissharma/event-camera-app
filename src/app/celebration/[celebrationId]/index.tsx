@@ -202,6 +202,16 @@ const CHALLENGE_GRADIENTS = [
   ['#0B4D65', '#293F9D', '#7421B8'],
   ['#C53B5C', '#9621C7', '#F67B3D'],
 ] as const;
+// Slightly uneven contour ratios make the circles feel hand-shaped while
+// retaining an identical square footprint for the horizontal strip.
+const CHALLENGE_CIRCLE_CONTOURS = [
+  [0.56, 0.46, 0.53, 0.49],
+  [0.48, 0.57, 0.45, 0.54],
+  [0.54, 0.5, 0.57, 0.44],
+  [0.47, 0.55, 0.51, 0.58],
+  [0.58, 0.47, 0.54, 0.5],
+  [0.51, 0.56, 0.46, 0.55],
+] as const;
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
   return (
@@ -905,13 +915,24 @@ function ChallengeGradientCircle({
   children: ReactNode;
 }) {
   const colors = CHALLENGE_GRADIENTS[index % CHALLENGE_GRADIENTS.length]!;
+  const contour = CHALLENGE_CIRCLE_CONTOURS[index % CHALLENGE_CIRCLE_CONTOURS.length]!;
 
   return (
     <LinearGradient
       colors={colors}
       start={{ x: 0.08, y: 0.08 }}
       end={{ x: 0.92, y: 0.92 }}
-      style={[S.challengeGradientCircle, { width: size, height: size, borderRadius: size / 2 }]}
+      style={[
+        S.challengeGradientCircle,
+        {
+          width: size,
+          height: size,
+          borderTopLeftRadius: size * contour[0],
+          borderTopRightRadius: size * contour[1],
+          borderBottomRightRadius: size * contour[2],
+          borderBottomLeftRadius: size * contour[3],
+        },
+      ]}
     >
       {/* A second, soft colour field keeps the small tile closer to Still's
           shader treatment than a flat two-stop gradient. */}
@@ -5703,7 +5724,6 @@ const S = StyleSheet.create({
   challengeGradientCircle: {
     width: CHIP_D,
     height: CHIP_D,
-    borderRadius: CHIP_D / 2,
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
