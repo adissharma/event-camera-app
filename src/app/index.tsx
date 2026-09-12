@@ -40,6 +40,7 @@ import {
 } from '@/features/onboarding/still-intro';
 import { fontFamilies, layout, radii, spacing, useMotion } from '@/design';
 import { copy } from '@/i18n';
+import { VideoSplash } from '@/features/onboarding/video-splash';
 
 /**
  * Welcome — the first screen on a cold start, and on the very first launch,
@@ -164,7 +165,19 @@ function Wordmark({
   );
 }
 
-export default function WelcomeScreen() {
+function LegacyWelcomeScreen({
+  disableIntro = false,
+  hideWordmark = false,
+  showAuthControls = true,
+  transparent = false,
+  onControlsTopLayout,
+}: {
+  disableIntro?: boolean;
+  hideWordmark?: boolean;
+  showAuthControls?: boolean;
+  transparent?: boolean;
+  onControlsTopLayout?: (top: number) => void;
+}) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const motion = useMotion();
@@ -277,6 +290,15 @@ export default function WelcomeScreen() {
   const [controlsTop, setControlsTop] = useState<number | null>(null);
 
   useEffect(() => {
+    if (disableIntro) {
+      setIntroEnabled(false);
+      reveals[FINAL_STEP]!.setValue(1);
+      morph.setValue(1);
+      stopIn.setValue(1);
+      morphStarted.current = true;
+      setStep(Infinity);
+      return;
+    }
     let cancelled = false;
     void hasSeenStillIntro().then((seen) => {
       if (cancelled) return;
@@ -294,7 +316,24 @@ export default function WelcomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [morph, controlsIn, stopIn, reveals]);
+  }, [disableIntro, morph, controlsIn, stopIn, reveals]);
+
+  // The video splash owns the brand reveal. When it is active, the welcome
+  // controls remain mounted behind it but are only allowed to arrive once the
+  // original video has settled as the full stop.
+  useEffect(() => {
+    if (!disableIntro) return;
+    if (!showAuthControls) {
+      controlsIn.setValue(0);
+      return;
+    }
+    Animated.timing(controlsIn, {
+      toValue: 1,
+      duration: 420,
+      easing: EASE,
+      useNativeDriver: true,
+    }).start();
+  }, [disableIntro, showAuthControls, controlsIn]);
 
   const ms = useCallback(
     (value: number) => (motion.reduceMotion ? Math.round(value * 0.45) : value),
@@ -536,11 +575,11 @@ export default function WelcomeScreen() {
   useEffect(() => {
     // A restored session does not get to cut the intro off mid-sentence — but
     // it does get to redirect the moment the intro is over.
-    if (!introComplete) return;
+    if (!introComplete || !showAuthControls) return;
     if (!isRestoring && isSignedIn) {
       void handlePostSignIn();
     }
-  }, [handlePostSignIn, isSignedIn, isRestoring, introComplete]);
+  }, [handlePostSignIn, isSignedIn, isRestoring, introComplete, showAuthControls]);
 
   async function handleAppleSignIn() {
     setError(undefined);
@@ -633,7 +672,7 @@ export default function WelcomeScreen() {
   });
 
   return (
-    <View style={S.screen}>
+    <View style={[S.screen, transparent && { backgroundColor: 'transparent' }]}>
       {introRunning ? (
         <Animated.View
           style={[S.progress, { top: insets.top + spacing.md, opacity: chromeOut }]}
@@ -819,7 +858,7 @@ export default function WelcomeScreen() {
         transform during the intro; on a cold open it buys a visible jump and
         nothing else.
       */}
-      {showIntro && !introEnabled && controlsTop !== null ? (
+      {showIntro && !introEnabled && controlsTop !== null && !hideWordmark ? (
         <View
           style={[S.settledMark, { top: insets.top, height: controlsTop - insets.top }]}
           pointerEvents="none"
@@ -848,12 +887,13 @@ export default function WelcomeScreen() {
       */}
       <Animated.View
         style={[S.controls, { paddingBottom: insets.bottom + spacing.base, opacity: controlsIn }]}
-        pointerEvents={introRunning ? 'none' : 'box-none'}
+        pointerEvents={introRunning || !showAuthControls ? 'none' : 'box-none'}
         // Fires whether or not the block is visible, so the wordmark knows
         // where to sit long before the controls fade in.
         onLayout={(event) => {
           const { y } = event.nativeEvent.layout;
           setControlsTop((current) => (current !== null && Math.abs(current - y) < 0.5 ? current : y));
+          onControlsTopLayout?.(y);
         }}
       >
         {error ? (
@@ -1018,3 +1058,59 @@ const S = StyleSheet.create({
   },
   errorText: { color: '#F87171' },
 });
+
+/**
+ * Launch entry point. The original prose presentation above is intentionally
+ * retained as `LegacyWelcomeScreen` and can be restored by changing this
+ * wrapper; only the video mark is active today.
+ */
+export default function WelcomeScreen() {
+  const [showVideoSplash, setShowVideoSplash] = useState<boolean | null>(null);
+  const [videoSucceeded, setVideoSucceeded] = useState<boolean | null>(null);
+  const [authVisible, setAuthVisible] = useState(false);
+  const [controlsTop, setControlsTop] = useState<number | null>(null);
+  const insets = useSafeAreaInsets();
+  const logoCenterY = controlsTop === null ? null : (controlsTop + insets.top) / 2;
+
+  useEffect(() => {
+    let cancelled = false;
+    void hasSeenStillIntro().then((seen) => {
+      if (!cancelled) setShowVideoSplash(!seen);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleVideoSettled = useCallback((played: boolean) => {
+    setVideoSucceeded(played);
+    setAuthVisible(true);
+    if (played) void markStillIntroSeen();
+  }, []);
+
+  if (showVideoSplash === true) {
+    return (
+      <View style={{ flex: 1, backgroundColor: BLACK }}>
+        <VideoSplash onSettled={handleVideoSettled} logoCenterY={logoCenterY} />
+        <LegacyWelcomeScreen
+          disableIntro
+          transparent
+          hideWordmark={videoSucceeded !== false}
+          showAuthControls={authVisible}
+          onControlsTopLayout={setControlsTop}
+        />
+      </View>
+    );
+  }
+
+  // Keep the native launch canvas quiet while the first-run flag resolves;
+  // rendering the welcome controls here would create a visible flash before
+  // the video splash on a cold start.
+  if (showVideoSplash === null) {
+    return <View style={{ flex: 1, backgroundColor: BLACK }} />;
+  }
+
+  // Keep the established welcome/authentication UI and signed-in redirect
+  // behaviour, while explicitly suppressing the legacy prose intro.
+  return <LegacyWelcomeScreen disableIntro />;
+}
