@@ -5837,12 +5837,13 @@ const S = StyleSheet.create({
   // ── Gallery ──
   gallery: {
     flexDirection: 'row',
-    marginTop: spacing.sm,
+    // Keep the photo grid distinct from the Guestbook/Challenges strip above.
+    marginTop: spacing.lg,
     paddingHorizontal: GALLERY_EDGE_INSET,
   },
   galleryTabsSticky: {
     backgroundColor: colours.background,
-    paddingTop: GALLERY_STRIP_GAP,
+    paddingTop: spacing.lg,
     zIndex: 30,
     elevation: 30,
   },
