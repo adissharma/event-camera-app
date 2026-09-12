@@ -195,12 +195,12 @@ const CHIP_GAP = 12;
 const CHIP_PEEK = 18;
 const GALLERY_STRIP_GAP = 12;
 const CHALLENGE_GRADIENTS = [
-  ['#210839', '#6C145D', '#A62E62'],
-  ['#062550', '#34206E', '#8E1D62'],
-  ['#1B0A3D', '#50145C', '#76254F'],
-  ['#54112F', '#491277', '#24105B'],
-  ['#073F50', '#153E76', '#45206D'],
-  ['#4D132A', '#8D1D58', '#38146B'],
+  ['#D9F2FF', '#A5D8F8', '#5A48CC'],
+  ['#D8F8D6', '#9FE5B9', '#3F7FC6'],
+  ['#EAD6FF', '#B78FE9', '#B33E7A'],
+  ['#D4F0FF', '#96BDEA', '#5542B6'],
+  ['#D5F7EC', '#7FCFC0', '#406CC5'],
+  ['#F1D5F3', '#CA91D9', '#7C4AB1'],
 ] as const;
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
