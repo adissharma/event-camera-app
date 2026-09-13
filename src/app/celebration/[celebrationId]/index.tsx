@@ -304,7 +304,7 @@ function CheckIcon({ size = 18, color = '#FFFFFF' }) {
  * `undefined`, so every view styled with it was laid out at zero size — which
  * is why the story viewer's touch overlay received no taps or swipes at all.
  */
-/** The event navigation mark stays at the existing visual height. */
+/** Keep the event navigation mark subtle within the top-left navigation slot. */
 const EVENT_NAV_MARK = require('../../../../assets/brand/event-nav-mark.png');
 const EVENT_NAV_MARK_ASPECT_RATIO = 1230 / 1278;
 
@@ -5632,7 +5632,7 @@ const S = StyleSheet.create({
   },
   /** Preserve the artwork's natural proportions within the existing nav height. */
   navBrandMark: {
-    height: 26,
+    height: 18,
     aspectRatio: EVENT_NAV_MARK_ASPECT_RATIO,
     opacity: 0.9,
   },

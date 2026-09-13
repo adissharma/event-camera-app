@@ -552,7 +552,7 @@ const S = StyleSheet.create({
    * Sits where a back button would, at the leading edge of the header row and
    * opposite the share pill. The 38pt box matches a nav button's footprint so
    * the mark carries the same padding as the share control on the far side;
-   * the mark itself is 26pt, the height the wordmark used to be.
+   * the mark itself is a subtle 18pt visual within that touch-sized footprint.
    */
   headerLogoSlot: {
     width: 38,
@@ -561,7 +561,7 @@ const S = StyleSheet.create({
     justifyContent: 'center',
   },
   headerLogo: {
-    height: 26,
+    height: 18,
     aspectRatio: EVENT_HEADER_ICON_ASPECT_RATIO,
     opacity: 0.92,
   },
