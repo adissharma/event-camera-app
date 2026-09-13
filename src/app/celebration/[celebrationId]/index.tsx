@@ -5653,8 +5653,8 @@ const S = StyleSheet.create({
   },
   heroTitle: {
     color: colours.textPrimary,
-    fontSize: 40,
-    lineHeight: 44,
+    fontSize: 42,
+    lineHeight: 46,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
