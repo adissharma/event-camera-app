@@ -220,6 +220,9 @@ const CHALLENGE_BLOB_PATHS = [
   'M50 0C71 2 93 14 98 34C104 53 93 75 76 91C58 106 35 100 18 87C2 74 -1 51 7 31C15 11 31 -1 50 0Z',
   'M50 2C70 0 91 11 98 30C106 49 96 72 79 89C62 105 39 101 20 90C3 79 -2 57 5 38C12 19 30 3 50 2Z',
 ] as const;
+// Rotate each organic silhouette independently so their subtle bulges do not
+// all lean in the same direction. Icons remain upright above the shape.
+const CHALLENGE_BLOB_ROTATIONS = [0, 172, 86, -92, 138, -142] as const;
 
 function CloseXIcon({ size = 18, color = '#FFFFFF' }) {
   return (
@@ -924,6 +927,8 @@ function ChallengeGradientCircle({
 }) {
   const colors = CHALLENGE_GRADIENTS[index % CHALLENGE_GRADIENTS.length]!;
   const blobPath = CHALLENGE_BLOB_PATHS[index % CHALLENGE_BLOB_PATHS.length]!;
+  const blobRotation = CHALLENGE_BLOB_ROTATIONS[index % CHALLENGE_BLOB_ROTATIONS.length]!;
+  const blobTransform = `rotate(${blobRotation} 50 50)`;
   const baseGradientId = `challenge-gradient-${index}`;
   const highlightGradientId = `challenge-highlight-${index}`;
 
@@ -942,8 +947,8 @@ function ChallengeGradientCircle({
             <Stop offset="1" stopColor="#080418" stopOpacity={0.22} />
           </SvgRadialGradient>
         </Defs>
-        <Path d={blobPath} fill={`url(#${baseGradientId})`} />
-        <Path d={blobPath} fill={`url(#${highlightGradientId})`} />
+        <Path d={blobPath} fill={`url(#${baseGradientId})`} transform={blobTransform} />
+        <Path d={blobPath} fill={`url(#${highlightGradientId})`} transform={blobTransform} />
       </Svg>
       <View style={S.challengeGradientIcon}>{children}</View>
     </View>
