@@ -115,10 +115,10 @@ function DownloadTrayIcon({ size = 22, color = '#FFFFFF' }) {
 
 // Helper to resolve preset photo images
 function getPhotoSource(uri: string) {
-  if (uri === 'preset_1') return require('../../../../../assets/images/placeholders/christian_wedding.png');
-  if (uri === 'preset_2') return require('../../../../../assets/images/placeholders/hindu_wedding.png');
-  if (uri === 'preset_3') return require('../../../../../assets/images/placeholders/treatment_preview_1.png');
-  if (uri === 'preset_4') return require('../../../../../assets/images/placeholders/treatment_preview_2.png');
+  if (uri === 'preset_1') return require('../../../../../assets/sample-event/05.jpg');
+  if (uri === 'preset_2') return require('../../../../../assets/sample-event/07.jpg');
+  if (uri === 'preset_3') return require('../../../../../assets/sample-event/01.jpg');
+  if (uri === 'preset_4') return require('../../../../../assets/sample-event/02.jpg');
   return { uri };
 }
 

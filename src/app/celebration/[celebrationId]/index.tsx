@@ -388,10 +388,12 @@ export function formatEventHeroDate(
 }
 
 const GALLERY_PRESETS = [
-  { id: 'preset_1', source: require('../../../../assets/images/placeholders/christian_wedding.png') },
-  { id: 'preset_2', source: require('../../../../assets/images/placeholders/hindu_wedding.png') },
-  { id: 'preset_3', source: require('../../../../assets/images/placeholders/treatment_preview_1.png') },
-  { id: 'preset_4', source: require('../../../../assets/images/placeholders/treatment_preview_2.png') },
+  // Kept in the same order as the creation-flow reveal collage, so the
+  // pre-paywall event preview is a continuation of that gallery.
+  { id: 'preset_1', source: require('../../../../assets/sample-event/05.jpg') },
+  { id: 'preset_2', source: require('../../../../assets/sample-event/07.jpg') },
+  { id: 'preset_3', source: require('../../../../assets/sample-event/01.jpg') },
+  { id: 'preset_4', source: require('../../../../assets/sample-event/02.jpg') },
 ];
 
 // ─── Challenge data ───────────────────────────────────────────────────────────
