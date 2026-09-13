@@ -243,19 +243,19 @@ function HomeUpcomingEventCard({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <LinearGradient
-        colors={MOMENTS_SLIDER_GRADIENT}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={styles.upcomingHeroCountdownPill}
-        pointerEvents="none"
-      >
-        <FilledClockIcon size={16} />
-        <AppText style={styles.upcomingHeroCountdown} numberOfLines={1}>
-          {formatUpcomingTimeLeft(celebration)}
-        </AppText>
-      </LinearGradient>
       <View style={styles.upcomingHeroContent}>
+        <LinearGradient
+          colors={MOMENTS_SLIDER_GRADIENT}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.upcomingHeroCountdownPill}
+          pointerEvents="none"
+        >
+          <FilledClockIcon size={16} />
+          <AppText style={styles.upcomingHeroCountdown} numberOfLines={1}>
+            {formatUpcomingTimeLeft(celebration)}
+          </AppText>
+        </LinearGradient>
         <AppText
           variant="displayLarge"
           style={styles.upcomingHeroTitle}
@@ -1037,6 +1037,7 @@ const styles = StyleSheet.create({
     // The display font carries a little descent below its visible glyphs;
     // this tighter inset makes the title read as genuinely card-anchored.
     bottom: 22,
+    gap: 12,
   },
   upcomingHeroTitle: {
     color: '#FFFFFF',
@@ -1045,9 +1046,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 12,
   },
   upcomingHeroCountdownPill: {
-    position: 'absolute',
-    top: 22,
-    left: 22,
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
