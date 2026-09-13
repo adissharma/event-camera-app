@@ -4210,7 +4210,14 @@ export function EventDetailView({
               collapsable={false}
               style={S.heroIdentity}
             >
-              <AppText variant="displayHero" align="center" style={S.heroTitle} numberOfLines={3}>
+              <AppText
+                variant="displayLarge"
+                align="left"
+                style={S.heroTitle}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.84}
+              >
                 {celebration.title}
               </AppText>
             </View>
@@ -5629,18 +5636,18 @@ const S = StyleSheet.create({
     bottom: 14,                       // Sits gracefully at the base of the cover image
     left: layout.gutter,
     right: layout.gutter,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
   },
-  /** Centered title block, measured for the creation reveal. */
+  /** Left-aligned title block, measured for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 2,
   },
   heroTitle: {
     color: colours.textPrimary,
-    textAlign: 'center',
+    textAlign: 'left',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
@@ -5727,7 +5734,7 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 24,
     alignSelf: 'stretch',
   },
