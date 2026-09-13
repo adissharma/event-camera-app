@@ -5784,7 +5784,7 @@ const S = StyleSheet.create({
   },
   galleryTabsSticky: {
     backgroundColor: colours.background,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     zIndex: 30,
     elevation: 30,
   },
