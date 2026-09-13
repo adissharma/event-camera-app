@@ -24,7 +24,7 @@ import { DashboardShaderBackground } from '@/components/ui/dashboard-shader-back
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { ClockIcon, PersonIcon } from '@/components/ui/icons';
+import { PersonIcon } from '@/components/ui/icons';
 import { SlideToConfirm } from '@/components/forms/slide-to-confirm';
 import { useAuth } from '@/features/auth/context';
 import { resetToUnauthenticatedRoot } from '@/lib/navigation/session-root';
@@ -120,6 +120,22 @@ function PlusIcon({ size = 22, color = '#0B0B0C' }) {
         strokeWidth={2.75}
         strokeLinecap="round" 
         strokeLinejoin="round" 
+      />
+    </Svg>
+  );
+}
+
+/** A solid clock face so the countdown reads as an accent, not another line icon. */
+function FilledClockIcon({ size = 16 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z" fill="#FFFFFF" />
+      <Path
+        d="M12 6.75v5.5l3.75 2.25"
+        stroke="#8D3CE4"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </Svg>
   );
@@ -234,7 +250,7 @@ function HomeUpcomingEventCard({
         style={styles.upcomingHeroCountdownPill}
         pointerEvents="none"
       >
-        <ClockIcon size={16} color="#FFFFFF" />
+        <FilledClockIcon size={16} />
         <AppText style={styles.upcomingHeroCountdown} numberOfLines={1}>
           {formatUpcomingTimeLeft(celebration)}
         </AppText>
