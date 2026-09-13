@@ -38,6 +38,7 @@ import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 
 const EVENT_HEADER_ICON = require('../../../../assets/brand/event-nav-mark.png');
 const EVENT_HEADER_ICON_ASPECT_RATIO = 1230 / 1278;
+const EVENT_HEADER_ICON_HEIGHT = 18;
 
 export default function GuestGalleryScreen() {
   const { eventCode } = useLocalSearchParams<{ eventCode: string }>();
@@ -561,8 +562,8 @@ const S = StyleSheet.create({
     justifyContent: 'center',
   },
   headerLogo: {
-    height: 18,
-    aspectRatio: EVENT_HEADER_ICON_ASPECT_RATIO,
+    width: EVENT_HEADER_ICON_HEIGHT * EVENT_HEADER_ICON_ASPECT_RATIO,
+    height: EVENT_HEADER_ICON_HEIGHT,
     opacity: 0.92,
   },
   title: {

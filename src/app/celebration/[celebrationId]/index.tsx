@@ -307,6 +307,7 @@ function CheckIcon({ size = 18, color = '#FFFFFF' }) {
 /** Keep the event navigation mark subtle within the top-left navigation slot. */
 const EVENT_NAV_MARK = require('../../../../assets/brand/event-nav-mark.png');
 const EVENT_NAV_MARK_ASPECT_RATIO = 1230 / 1278;
+const EVENT_NAV_MARK_HEIGHT = 18;
 
 const ABSOLUTE_FILL = {
   position: 'absolute',
@@ -5632,8 +5633,8 @@ const S = StyleSheet.create({
   },
   /** Preserve the artwork's natural proportions within the existing nav height. */
   navBrandMark: {
-    height: 18,
-    aspectRatio: EVENT_NAV_MARK_ASPECT_RATIO,
+    width: EVENT_NAV_MARK_HEIGHT * EVENT_NAV_MARK_ASPECT_RATIO,
+    height: EVENT_NAV_MARK_HEIGHT,
     opacity: 0.9,
   },
 
