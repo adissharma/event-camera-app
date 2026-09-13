@@ -1,5 +1,5 @@
 import { Image, Pressable, StyleSheet, View, type ImageSourcePropType } from 'react-native';
-import { ColorMatrix, type Matrix as NativeMatrix } from 'react-native-color-matrix-image-filters';
+import { ColorMatrix, type Matrix as NativeMatrix } from '@/features/media/color-matrix';
 import Svg, { Path } from 'react-native-svg';
 
 import { QrCodeIcon } from '@/components/ui/icons';
