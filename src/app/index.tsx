@@ -1066,11 +1066,7 @@ const S = StyleSheet.create({
  */
 export default function WelcomeScreen() {
   const [showVideoSplash, setShowVideoSplash] = useState<boolean | null>(null);
-  const [videoSucceeded, setVideoSucceeded] = useState<boolean | null>(null);
   const [authVisible, setAuthVisible] = useState(false);
-  const [controlsTop, setControlsTop] = useState<number | null>(null);
-  const insets = useSafeAreaInsets();
-  const logoCenterY = controlsTop === null ? null : (controlsTop + insets.top) / 2;
 
   useEffect(() => {
     let cancelled = false;
@@ -1083,7 +1079,6 @@ export default function WelcomeScreen() {
   }, []);
 
   const handleVideoSettled = useCallback((played: boolean) => {
-    setVideoSucceeded(played);
     setAuthVisible(true);
     if (played) void markStillIntroSeen();
   }, []);
@@ -1091,13 +1086,12 @@ export default function WelcomeScreen() {
   if (showVideoSplash === true) {
     return (
       <View style={{ flex: 1, backgroundColor: BLACK }}>
-        <VideoSplash onSettled={handleVideoSettled} logoCenterY={logoCenterY} />
+        <VideoSplash onSettled={handleVideoSettled} />
         <LegacyWelcomeScreen
           disableIntro
           transparent
-          hideWordmark={videoSucceeded !== false}
+          hideWordmark
           showAuthControls={authVisible}
-          onControlsTopLayout={setControlsTop}
         />
       </View>
     );
