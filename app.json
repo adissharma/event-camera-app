@@ -13,6 +13,7 @@
       "appleTeamId": "AL3AF36W3B",
       "supportsTablet": false,
       "associatedDomains": [
+        "applinks:stills.events",
         "applinks:withstills.com",
         "applinks:event-camera-app-navy.vercel.app"
       ],
@@ -40,6 +41,21 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.potoevents.eventcamera",
       "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "stills.events",
+              "pathPrefix": "/j"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        },
         {
           "action": "VIEW",
           "autoVerify": true,

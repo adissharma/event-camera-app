@@ -32,6 +32,7 @@ module.exports = (config) => ({
     // would stop those opening the Clip, exactly as it would for the parent
     // app's `applinks:`. Kept in step with `app.json`'s associatedDomains.
     'com.apple.developer.associated-domains': [
+      'appclips:stills.events',
       'appclips:withstills.com',
       'appclips:event-camera-app-navy.vercel.app',
     ],

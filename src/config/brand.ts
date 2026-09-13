@@ -24,7 +24,7 @@ export const BRAND_CONFIG = {
    *
    * Must match the Universal Link / App Link domain in `app.json`.
    */
-  guestDomain: 'https://withstills.com',
+  guestDomain: 'https://stills.events',
 } as const;
 
 /**
@@ -42,6 +42,7 @@ export const BRAND_CONFIG = {
  * willing to break every link that used it.
  */
 export const LEGACY_GUEST_DOMAINS = [
+  'https://withstills.com',
   'https://event-camera-app-navy.vercel.app',
 ] as const;
 

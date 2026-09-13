@@ -1,8 +1,9 @@
 import { joinRouteFor, parseJoinInput, parseJoinUrl } from './join-link';
 
-const HOST = 'https://withstills.com';
-/** A domain we have retired but whose QR codes are still in the world. */
+const HOST = 'https://stills.events';
+/** Domains we have retired but whose QR codes are still in the world. */
 const LEGACY_HOST = 'https://event-camera-app-navy.vercel.app';
+const RETIRED_PRIMARY_HOST = 'https://withstills.com';
 
 describe('links we mint', () => {
   it('reads a plain share link', () => {
@@ -37,9 +38,9 @@ describe('links that are not ours', () => {
   // is a destination the scanner must refuse to send a guest to.
   it.each([
     ['another host entirely', 'https://evil.example.com/j/abc123'],
-    ['our path on a lookalike host', 'https://withstills.com.evil.com/j/abc123'],
+    ['our path on a lookalike host', 'https://stills.events.evil.com/j/abc123'],
     ['a lookalike of the retired host', 'https://event-camera-app-navy.vercel.app.evil.com/j/abc123'],
-    ['a near-miss on the canonical host', 'https://with-stills.com/j/abc123'],
+    ['a near-miss on the canonical host', 'https://stills-events.com/j/abc123'],
     ['a javascript: payload', 'javascript:alert(1)//j/abc'],
     ['a data: payload', 'data:text/html,<script>alert(1)</script>'],
     ['a file: path', 'file:///etc/passwd'],
@@ -103,6 +104,13 @@ describe('links minted before the domain moved', () => {
     expect(parseJoinUrl(`${LEGACY_HOST}/j/abc123#t=tok_1`)).toEqual({
       code: 'abc123',
       token: 'tok_1',
+    });
+  });
+
+  it('still reads an invitation on the previous primary host', () => {
+    expect(parseJoinUrl(`${RETIRED_PRIMARY_HOST}/j/abc123`)).toEqual({
+      code: 'abc123',
+      token: null,
     });
   });
 
