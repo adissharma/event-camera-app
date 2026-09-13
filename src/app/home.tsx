@@ -1005,7 +1005,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 30,
     right: 24,
-    bottom: 32,
+    // The display font carries a little descent below its visible glyphs;
+    // this tighter inset makes the title read as genuinely card-anchored.
+    bottom: 22,
   },
   upcomingHeroTitle: {
     color: '#FFFFFF',
