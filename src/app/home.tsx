@@ -767,6 +767,19 @@ export default function HomeScreen() {
                 <View style={styles.profileSeparator} />
 
                 <ProfileSettingsRow
+                  title="Privacy Policy"
+                  value="How we handle your data"
+                  onPress={() => {
+                    // The hosted policy URL will be connected here once it is
+                    // published. Keeping the row active makes the destination
+                    // discoverable without introducing a dead external link.
+                    Alert.alert('Privacy Policy', 'Our privacy policy will be available here soon.');
+                  }}
+                />
+
+                <View style={styles.profileSeparator} />
+
+                <ProfileSettingsRow
                   title="Trash"
                   value="Restore recently deleted events"
                   onPress={() => {
@@ -1121,6 +1134,7 @@ const styles = StyleSheet.create({
   profileDrawerSheet: {
     gap: spacing.base,
     paddingBottom: spacing.xxl,
+    borderTopWidth: 0,
   },
   drawerHandle: {
     width: 40,
@@ -1144,8 +1158,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colours.surface,
-    borderWidth: layout.hairline,
-    borderColor: colours.borderStrong,
   },
   profileAvatarInitial: {
     color: colours.textPrimary,
@@ -1169,11 +1181,9 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.xs,
   },
   profileSettingsCard: {
-    backgroundColor: colours.surface,
-    borderRadius: radii.xl,
-    overflow: 'hidden',
-    borderWidth: layout.hairline,
-    borderColor: colours.borderStrong,
+    // Rows sit directly on the sheet rather than inside outlined cards. The
+    // remaining separators provide rhythm without making the panel feel boxed.
+    backgroundColor: 'transparent',
   },
   profileActionRow: {
     flexDirection: 'row',
