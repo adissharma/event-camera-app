@@ -2,14 +2,13 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
+import Svg, { Path } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
-import { CloseIcon } from '@/components/ui/icons';
 import {
   planAccessibilityLabel,
-  planFeatureRows,
   planGuestSubtitle,
   type PaywallPlan,
 } from '@/features/payments/plan-catalogue';
@@ -17,7 +16,28 @@ import { upgradePriceLabel } from '@/features/payments/upgrade-catalogue';
 import { UpgradeError, eventPlanKeys, upgradeEventPlan } from '@/services/event-plan';
 import { celebrationKeys } from '@/services/celebrations';
 import { upgradeSummary } from './event-entitlements';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design';
+
+const UPGRADE_SHADER = [
+  REVEAL_TRACK_GRADIENT[4],
+  REVEAL_TRACK_GRADIENT[3],
+  REVEAL_TRACK_GRADIENT[2],
+  REVEAL_TRACK_GRADIENT[1],
+  REVEAL_TRACK_GRADIENT[0],
+] as const;
+const UPGRADE_SHADER_START = { x: 0, y: 0 } as const;
+const UPGRADE_SHADER_END = { x: 1, y: 0 } as const;
+
+function StarIcon({ size = 10 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.6L12 17.6 6.1 20.7l1.2-6.6L2.5 9.5l6.6-.9z"
+        fill="#FFFFFF"
+      />
+    </Svg>
+  );
+}
 
 /**
  * The one upgrade surface.
@@ -73,6 +93,14 @@ export function UpgradeSheet({
   const [error, setError] = useState<string | null>(null);
 
   const selected = options.find((plan) => plan.id === selectedId) ?? options[0] ?? null;
+  const isSingleOption = options.length === 1;
+  const isStillsPlus = selected?.isRecommended ?? false;
+  const heading = isStillsPlus ? 'Upgrade to Stills+' : `Upgrade to ${selected?.displayName ?? ''}`;
+  const supportingCopy = isStillsPlus
+    ? 'Unlock premium features for your event.'
+    : selected
+      ? upgradeSummary(currentPlan, selected)
+      : title;
 
   const buy = useCallback(async () => {
     if (!selected || busy) return;
@@ -111,46 +139,63 @@ export function UpgradeSheet({
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
 
         <View style={[S.sheet, { paddingBottom: insets.bottom + spacing.base }]}>
-          <View style={S.header}>
-            <AppText variant="heading" style={S.title}>
-              {title}
+          <View style={S.sheetHandle} />
+          <View style={S.copy}>
+            <AppText variant="titleLarge" style={S.title}>
+              {heading}
             </AppText>
-            <Pressable
-              onPress={onClose}
-              disabled={busy}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <CloseIcon size={16} color={colours.textSecondary} />
-            </Pressable>
+            {selected ? (
+              <AppText variant="bodyLarge" style={S.summary}>
+                {supportingCopy}
+              </AppText>
+            ) : null}
           </View>
-
-          {/* Built from the two plans' real entitlements, so it cannot promise
-              something the tier does not actually grant. */}
-          {selected ? (
-            <AppText variant="bodySmall" tone="secondary" style={S.summary}>
-              {upgradeSummary(currentPlan, selected)}
-            </AppText>
-          ) : null}
 
           <ScrollView style={S.scroll} showsVerticalScrollIndicator={false}>
             <View style={S.cards}>
               {options.map((plan) => {
                 const isSelected = plan.id === selected?.id;
+                const isPremium = plan.isRecommended;
                 return (
                   <Pressable
                     key={plan.id}
                     onPress={() => setSelectedId(plan.id)}
-                    disabled={busy}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: isSelected, disabled: busy }}
+                    disabled={busy || isSingleOption}
+                    accessibilityRole={isSingleOption ? undefined : 'radio'}
+                    accessibilityState={{ selected: isSelected, disabled: busy || isSingleOption }}
                     accessibilityLabel={planAccessibilityLabel(plan)}
-                    style={[S.card, isSelected ? S.cardSelected : S.cardIdle]}
+                    style={[S.card, isPremium && S.cardPremium]}
                   >
-                    <View style={[S.radio, isSelected && S.radioSelected]}>
-                      {isSelected && <View style={S.radioDot} />}
-                    </View>
+                    {isPremium ? (
+                      <LinearGradient
+                        colors={UPGRADE_SHADER}
+                        start={UPGRADE_SHADER_START}
+                        end={UPGRADE_SHADER_END}
+                        style={S.cardBorder}
+                        pointerEvents="none"
+                      >
+                        <View style={S.cardBorderInset} />
+                      </LinearGradient>
+                    ) : null}
+                    {isPremium ? (
+                      <LinearGradient
+                        colors={UPGRADE_SHADER}
+                        start={UPGRADE_SHADER_START}
+                        end={UPGRADE_SHADER_END}
+                        style={S.badge}
+                        pointerEvents="none"
+                      >
+                        <StarIcon />
+                        <AppText variant="eyebrow" style={S.badgeText}>
+                          Most popular
+                        </AppText>
+                      </LinearGradient>
+                    ) : null}
+                    {!isSingleOption ? (
+                      <View style={[S.radio, isSelected && S.radioSelected]}>
+                        {isSelected && <View style={S.radioDot} />}
+                      </View>
+                    ) : null}
                     <View style={S.cardCopy}>
                       <AppText variant="heading" style={S.cardName} numberOfLines={1}>
                         {plan.displayName}
@@ -168,18 +213,6 @@ export function UpgradeSheet({
                 );
               })}
             </View>
-
-            {selected ? (
-              <View style={S.features}>
-                {planFeatureRows(selected)
-                  .filter((row) => row.included)
-                  .map((row) => (
-                    <AppText key={row.key} variant="bodySmall" tone="secondary">
-                      {row.label}
-                    </AppText>
-                  ))}
-              </View>
-            ) : null}
           </ScrollView>
 
           {error ? (
@@ -188,14 +221,33 @@ export function UpgradeSheet({
             </AppText>
           ) : null}
 
-          <Button
-            label={busy ? 'Upgrading…' : `Upgrade to ${selected?.displayName ?? ''}`}
-            fullWidth
-            haptic
-            disabled={busy || !selected}
+          <Pressable
             onPress={() => void buy()}
-            leading={busy ? <ActivityIndicator size="small" color={colours.textOnBrand} /> : undefined}
-          />
+            disabled={busy || !selected}
+            accessibilityRole="button"
+            accessibilityLabel="Upgrade now"
+            accessibilityState={{ disabled: busy || !selected, busy }}
+            style={({ pressed }) => [S.upgradeButton, pressed && !busy && { opacity: 0.88 }]}
+          >
+            {busy ? (
+              <ActivityIndicator color={colours.textOnBrand} />
+            ) : (
+              <AppText variant="button" style={S.upgradeButtonText}>
+                Upgrade now
+              </AppText>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={onClose}
+            disabled={busy}
+            accessibilityRole="button"
+            accessibilityLabel="Maybe later"
+            style={({ pressed }) => [S.maybeLater, pressed && !busy && { opacity: 0.7 }]}
+          >
+            <AppText variant="bodySmall" style={S.maybeLaterText}>
+              Maybe later
+            </AppText>
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -203,19 +255,26 @@ export function UpgradeSheet({
 }
 
 const S = StyleSheet.create({
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' },
   sheet: {
-    backgroundColor: colours.background,
-    borderTopLeftRadius: radii.xl,
-    borderTopRightRadius: radii.xl,
+    backgroundColor: '#0D0D0F',
+    borderTopLeftRadius: radii.xxl,
+    borderTopRightRadius: radii.xxl,
     paddingHorizontal: layout.gutter,
-    paddingTop: spacing.lg,
+    paddingTop: spacing.md,
     gap: spacing.md,
-    maxHeight: '86%',
+    maxHeight: '72%',
   },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { color: colours.textPrimary, flex: 1 },
-  summary: { lineHeight: 20 },
+  sheetHandle: {
+    width: 38,
+    height: 4,
+    borderRadius: radii.pill,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignSelf: 'center',
+  },
+  copy: { gap: spacing.sm },
+  title: { color: '#FFFFFF' },
+  summary: { color: '#9A9A9F', lineHeight: 23 },
   scroll: { flexGrow: 0 },
   cards: { gap: spacing.sm },
   card: {
@@ -225,24 +284,61 @@ const S = StyleSheet.create({
     paddingHorizontal: spacing.base,
     minHeight: 68,
     borderRadius: radii.lg,
-    borderWidth: layout.hairline,
+    backgroundColor: '#151517',
+    overflow: 'visible',
   },
-  cardIdle: { borderColor: colours.borderSubtle, backgroundColor: colours.surfaceMuted },
-  cardSelected: { borderColor: colours.textPrimary, borderWidth: 1.5 },
+  cardPremium: { marginTop: spacing.sm },
+  cardBorder: { ...StyleSheet.absoluteFill, borderRadius: radii.lg },
+  cardBorderInset: {
+    ...StyleSheet.absoluteFill,
+    top: 2,
+    right: 2,
+    bottom: 2,
+    left: 2,
+    borderRadius: radii.md + 2,
+    backgroundColor: '#151517',
+  },
+  badge: {
+    position: 'absolute',
+    top: -10,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderRadius: radii.pill,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    zIndex: 2,
+  },
+  badgeText: { color: '#FFFFFF', fontSize: 9, lineHeight: 12, letterSpacing: 1 },
   radio: {
     width: 20,
     height: 20,
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: colours.borderStrong,
+    borderColor: 'rgba(255,255,255,0.42)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioSelected: { borderColor: colours.textPrimary },
-  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colours.textPrimary },
+  radioSelected: { borderColor: '#FFFFFF' },
+  radioDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FFFFFF' },
   cardCopy: { flex: 1, gap: 2 },
-  cardName: { color: colours.textPrimary },
-  cardPrice: { color: colours.textPrimary },
-  features: { gap: 4, paddingTop: spacing.md },
+  cardName: { color: '#FFFFFF' },
+  cardPrice: { color: '#FFFFFF' },
   error: { color: colours.error },
+  upgradeButton: {
+    minHeight: 54,
+    borderRadius: radii.lg,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upgradeButtonText: { color: colours.textOnBrand },
+  maybeLater: {
+    minHeight: 32,
+    alignSelf: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+  },
+  maybeLaterText: { color: '#9A9A9F' },
 });
