@@ -464,8 +464,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: layout.gutter,
     paddingVertical: spacing.md,
-    borderBottomWidth: layout.hairline,
-    borderBottomColor: colours.borderSubtle,
   },
   backButton: {
     paddingVertical: spacing.xs,
@@ -490,11 +488,9 @@ const styles = StyleSheet.create({
     paddingLeft: spacing.xs,
   },
   card: {
-    backgroundColor: colours.surface,
-    borderRadius: radii.xl,
-    overflow: 'hidden',
-    borderWidth: layout.hairline,
-    borderColor: colours.borderStrong,
+    // Match the flatter profile menu: settings are organised by quiet row
+    // separators rather than boxed into an outlined card.
+    backgroundColor: 'transparent',
   },
   row: {
     flexDirection: 'row',
