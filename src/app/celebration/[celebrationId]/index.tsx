@@ -1967,11 +1967,13 @@ export function EventDetailView({
     extrapolate: 'clamp',
   });
 
+  const heroDate = formatEventHeroDate(celebration.ends_at, celebration.timezone);
 
   // ── Hero identity geometry, for the creation reveal ──
   //
   // Reported in window coordinates rather than computed by the reveal, so the
-  // title it animates starts from wherever this screen actually draws it.
+  // date and title it animates start from wherever this screen actually draws
+  // them.
   // Use `measureInWindow` rather than the `onLayout` rect because that rect
   // is relative to `heroInfo`, which is itself absolutely positioned inside
   // the hero — the reveal needs the number on screen, not the offset within a
@@ -4202,7 +4204,7 @@ export function EventDetailView({
                 : null,
             ]}
           >
-            {/* The title remains measured for the creation reveal. */}
+            {/* Date and title remain measured together for the creation reveal. */}
             <View
               ref={heroIdentityRef}
               onLayout={reportHeroIdentityRect}
@@ -4219,6 +4221,11 @@ export function EventDetailView({
               >
                 {celebration.title}
               </AppText>
+              {heroDate ? (
+                <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
+                  {heroDate}
+                </AppText>
+              ) : null}
             </View>
 
             <View style={S.galleryStatsRow}>
@@ -5646,10 +5653,17 @@ const S = StyleSheet.create({
   },
   heroTitle: {
     color: colours.textPrimary,
+    fontSize: 40,
+    lineHeight: 44,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
+  },
+  heroDate: {
+    alignSelf: 'stretch',
+    fontSize: 12,
+    lineHeight: 15,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
