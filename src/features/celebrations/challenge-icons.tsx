@@ -387,8 +387,13 @@ export function ChallengeIconSVG({
         style={[
           S.emoji,
           {
-            fontSize: Math.max(12, Math.round(size * 0.78)),
-            lineHeight: Math.max(14, Math.round(size * 0.92)),
+            // The prior OpenMoji Black face renders these as fine line art.
+            // Let the system emoji font render the same source values instead:
+            // every challenge now uses its filled glyph on tiles and in the
+            // creation library, while the `color` remains a readable fallback
+            // for any platform that lacks a specific emoji.
+            fontSize: Math.max(12, Math.round(size * 0.86)),
+            lineHeight: Math.max(14, Math.round(size)),
             color,
           },
         ]}
@@ -406,7 +411,6 @@ const S = StyleSheet.create({
     overflow: 'visible',
   },
   emoji: {
-    fontFamily: 'OpenMojiBlack',
     includeFontPadding: false,
     textAlign: 'center',
     textAlignVertical: 'center',
