@@ -65,7 +65,16 @@ import {
 import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { SegmentedControl } from '@/components/forms/segmented-control';
-import { CloseIcon, LockIcon, PhotoGridIcon, PinIcon, VideoTabIcon } from '@/components/ui/icons';
+import {
+  CameraIcon,
+  ClockIcon,
+  CloseIcon,
+  LockIcon,
+  PersonIcon,
+  PhotoGridIcon,
+  PinIcon,
+  VideoTabIcon,
+} from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import {
   archiveCelebration,
@@ -4208,15 +4217,9 @@ export function EventDetailView({
 
             <View style={S.galleryStatsRow}>
               <View style={S.galleryStatItem}>
-                <AppText variant="titleMedium" style={S.galleryStatValue}>
-                  {photos.length}
-                </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="center">
-                  Moments
-                </AppText>
+                <CameraIcon size={17} color="rgba(255,255,255,0.72)" />
+                <AppText variant="titleMedium" style={S.galleryStatValue}>{photos.length}</AppText>
               </View>
-
-              <AppText style={S.galleryStatDot}>•</AppText>
 
               <Pressable
                 onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
@@ -4229,23 +4232,13 @@ export function EventDetailView({
                   pressed && S.galleryStatPressed,
                 ]}
               >
-                <AppText variant="titleMedium" style={S.galleryStatValue}>
-                  {guestsJoined}
-                </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="center">
-                  Joined
-                </AppText>
+                <PersonIcon size={17} color="rgba(255,255,255,0.72)" />
+                <AppText variant="titleMedium" style={S.galleryStatValue}>{guestsJoined}</AppText>
               </Pressable>
 
-              <AppText style={S.galleryStatDot}>•</AppText>
-
               <View style={S.galleryStatItem}>
-                <AppText variant="titleMedium" style={S.galleryStatValue}>
-                  {timeLeftValue}
-                </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="center">
-                  Time left
-                </AppText>
+                <ClockIcon size={17} color="rgba(255,255,255,0.72)" />
+                <AppText variant="titleMedium" style={S.galleryStatValue}>{timeLeftValue}</AppText>
               </View>
             </View>
           </Animated.View>
@@ -5735,18 +5728,20 @@ const S = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
+    gap: 24,
     alignSelf: 'stretch',
   },
   galleryStatItem: {
-    gap: 2,
-    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 7,
     alignItems: 'center',
   },
   galleryStatPressable: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
+    flexDirection: 'row',
+    gap: 7,
     alignItems: 'center',
     marginVertical: -spacing.xs,
   },
@@ -5756,11 +5751,6 @@ const S = StyleSheet.create({
   galleryStatValue: {
     color: colours.textPrimary,
     textAlign: 'center',
-  },
-  galleryStatDot: {
-    color: 'rgba(255,255,255,0.24)',
-    fontSize: 12,
-    marginHorizontal: 2,
   },
 
   // ── Gallery ──
