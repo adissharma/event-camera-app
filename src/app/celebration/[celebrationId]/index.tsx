@@ -1469,9 +1469,6 @@ export function EventDetailView({
   const showGuestbook = isHost
     ? detail.hasAudioGuestbook !== false || !guestbookUnlocked
     : guestbookUnlocked && detail.hasAudioGuestbook !== false;
-  /** True when the host is being shown something they cannot yet use. */
-  const showingLockedFeatures = isHost && (!guestbookUnlocked || !challengesUnlocked);
-
   // Closing an event is just closing a screen.
   //
   // This used to clear the stored guest session and ask "Leave this event?"
@@ -4410,17 +4407,6 @@ export function EventDetailView({
                 </Pressable>
             ))}
           </ScrollView>
-          {/*
-            One line, only when something in the strip is locked, and only for
-            the host. It answers the question a host would otherwise ask — "are
-            my guests seeing a padlock?" — without a banner explaining the
-            packaging, which is what the upgrade sheet is for.
-          */}
-          {showingLockedFeatures ? (
-            <AppText variant="caption" style={S.hostOnlyNote}>
-              Only you can see these
-            </AppText>
-          ) : null}
           </Animated.View>
         ) : null}
         </View>
@@ -5741,11 +5727,6 @@ const S = StyleSheet.create({
   },
   /** A locked feature is quieter, not disabled — it is two taps from working. */
   chipLocked: { opacity: 0.42 },
-  hostOnlyNote: {
-    color: colours.textSecondary,
-    paddingHorizontal: GALLERY_PADDING,
-    paddingTop: spacing.xs,
-  },
   lockedBadge: {
     position: 'absolute',
     top: 2,
