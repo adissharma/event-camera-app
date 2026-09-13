@@ -210,7 +210,6 @@ const CHIP_D = 60;
 const CHIP_R = 12;
 const CHIP_GAP = 12;
 const CHIP_PEEK = 18;
-const GALLERY_STRIP_GAP = 12;
 const CHALLENGE_GRADIENTS = [
   ['#1A0A42', '#5A2FC7', '#FF6A55'],
   ['#082B74', '#2860C8', '#E53C96'],
@@ -4212,7 +4211,7 @@ export function EventDetailView({
             >
               <AppText
                 variant="displayLarge"
-                align="left"
+                align="center"
                 style={S.heroTitle}
                 numberOfLines={1}
                 adjustsFontSizeToFit
@@ -5636,25 +5635,27 @@ const S = StyleSheet.create({
     bottom: 14,                       // Sits gracefully at the base of the cover image
     left: layout.gutter,
     right: layout.gutter,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 8,
   },
-  /** Left-aligned title block, measured for the creation reveal. */
+  /** Centered title block, measured for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 2,
   },
   heroTitle: {
     color: colours.textPrimary,
-    textAlign: 'left',
+    textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
-    marginTop: GALLERY_STRIP_GAP,
+    // With the hero's 14pt bottom inset and the strip's 6pt internal top
+    // padding, this creates the same 20pt visual gap as tiles → gallery.
+    marginTop: 0,
     overflow: 'visible',
   },
   challengesEmptyBannerWrap: {
@@ -5734,7 +5735,7 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     gap: 24,
     alignSelf: 'stretch',
   },
