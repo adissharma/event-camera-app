@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
@@ -117,21 +117,35 @@ const FEATURE_OFF_TEXT = 'rgba(255, 255, 255, 0.46)';
 
 const FEATURE_FADE_MS = 190;
 
-function TickIcon({ size = 18 }: { size?: number }) {
+function TickIcon({ premium = false, size = 18 }: { premium?: boolean; size?: number }) {
+  const resolvedSize = premium ? 20 : size;
+
+  if (premium) {
+    return (
+      <LinearGradient
+        colors={PAYWALL_SHADER}
+        start={PAYWALL_SHADER_START}
+        end={PAYWALL_SHADER_END}
+        style={[S.premiumTick, { width: resolvedSize, height: resolvedSize, borderRadius: resolvedSize / 2 }]}
+      >
+        <Svg width={resolvedSize} height={resolvedSize} viewBox="0 0 24 24" fill="none">
+          <Path
+            d="M4.5 12.6l5 5L19.5 6.9"
+            stroke="#FFFFFF"
+            strokeWidth={2.6}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </Svg>
+      </LinearGradient>
+    );
+  }
+
   return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Defs>
-        <SvgLinearGradient id="paywall-feature-tick" x1="0" y1="0" x2="24" y2="0">
-          <Stop offset="0" stopColor={PAYWALL_SHADER[0]} />
-          <Stop offset="0.25" stopColor={PAYWALL_SHADER[1]} />
-          <Stop offset="0.5" stopColor={PAYWALL_SHADER[2]} />
-          <Stop offset="0.75" stopColor={PAYWALL_SHADER[3]} />
-          <Stop offset="1" stopColor={PAYWALL_SHADER[4]} />
-        </SvgLinearGradient>
-      </Defs>
+    <Svg width={resolvedSize} height={resolvedSize} viewBox="0 0 24 24" fill="none">
       <Path
         d="M4.5 12.6l5 5L19.5 6.9"
-        stroke="url(#paywall-feature-tick)"
+        stroke={colours.success}
         strokeWidth={2.6}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -249,7 +263,7 @@ function HeroFeatures({
               },
             ]}
           >
-            {row.included ? <TickIcon /> : <CrossIcon />}
+            {row.included ? <TickIcon premium={shown.id === RECOMMENDED_PLAN_ID} /> : <CrossIcon />}
             <AppText
               variant="labelLarge"
               style={[S.featureLabel, !row.included && { color: FEATURE_OFF_TEXT }]}
@@ -1172,6 +1186,7 @@ const S = StyleSheet.create({
     textShadowRadius: 12,
   },
   featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  premiumTick: { alignItems: 'center', justifyContent: 'center' },
   featureLabel: { color: '#FFFFFF', flexShrink: 1 },
 
   backRow: {
