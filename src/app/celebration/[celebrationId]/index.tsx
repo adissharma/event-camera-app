@@ -4231,7 +4231,7 @@ export function EventDetailView({
             <View style={S.galleryStatsRow}>
               <View style={S.galleryStatItem}>
                 <CameraIcon size={17} color="rgba(255,255,255,0.72)" />
-                <AppText variant="titleMedium" style={S.galleryStatValue}>{photos.length}</AppText>
+                <AppText variant="heading" style={S.galleryStatValue}>{photos.length}</AppText>
               </View>
 
               <Pressable
@@ -4246,12 +4246,12 @@ export function EventDetailView({
                 ]}
               >
                 <PersonIcon size={17} color="rgba(255,255,255,0.72)" />
-                <AppText variant="titleMedium" style={S.galleryStatValue}>{guestsJoined}</AppText>
+                <AppText variant="heading" style={S.galleryStatValue}>{guestsJoined}</AppText>
               </Pressable>
 
               <View style={S.galleryStatItem}>
                 <ClockIcon size={17} color="rgba(255,255,255,0.72)" />
-                <AppText variant="titleMedium" style={S.galleryStatValue}>{timeLeftValue}</AppText>
+                <AppText variant="heading" style={S.galleryStatValue}>{timeLeftValue}</AppText>
               </View>
             </View>
           </Animated.View>
