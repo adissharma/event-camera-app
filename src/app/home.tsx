@@ -156,16 +156,15 @@ function formatUpcomingTimeLeft(celebration: CelebrationSummary) {
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) return 'Ended';
 
   const totalHours = Math.floor(remainingMs / (60 * 60 * 1000));
-  if (totalHours < 1) return 'Less than 1 hour left';
+  if (totalHours < 1) return 'Less than 1 hour to go!';
 
   const days = Math.floor(totalHours / 24);
-  const hours = totalHours % 24;
   const dayCopy = days === 1 ? '1 day' : `${days} days`;
-  const hourCopy = hours === 1 ? '1 hour' : `${hours} hours`;
 
-  if (days <= 0) return `${hourCopy} left`;
-  if (hours <= 0) return `${dayCopy} left`;
-  return `${dayCopy} ${hourCopy} left`;
+  // The card is an at-a-glance invitation rather than a timer. Keeping the
+  // most meaningful unit makes the pill quieter and leaves the cover to lead.
+  if (days > 0) return `${dayCopy} to go!`;
+  return `${totalHours === 1 ? '1 hour' : `${totalHours} hours`} to go!`;
 }
 
 function HomeUpcomingEventCard({
@@ -223,11 +222,23 @@ function HomeUpcomingEventCard({
         resizeMode="cover"
       />
       <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.48)', 'rgba(0,0,0,0.92)']}
-        locations={[0.12, 0.58, 1]}
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.26)', 'rgba(0,0,0,0.88)']}
+        locations={[0.18, 0.62, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
+      <LinearGradient
+        colors={MOMENTS_SLIDER_GRADIENT}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={styles.upcomingHeroCountdownPill}
+        pointerEvents="none"
+      >
+        <ClockIcon size={16} color="#FFFFFF" />
+        <AppText style={styles.upcomingHeroCountdown} numberOfLines={1}>
+          {formatUpcomingTimeLeft(celebration)}
+        </AppText>
+      </LinearGradient>
       <View style={styles.upcomingHeroContent}>
         <AppText
           variant="displayLarge"
@@ -236,12 +247,6 @@ function HomeUpcomingEventCard({
         >
           {celebration.title}
         </AppText>
-        <View style={styles.upcomingHeroCountdownRow}>
-          <ClockIcon size={14} color="rgba(239, 233, 224, 0.82)" />
-          <AppText style={styles.upcomingHeroCountdown} numberOfLines={1} adjustsFontSizeToFit>
-            {formatUpcomingTimeLeft(celebration)}
-          </AppText>
-        </View>
       </View>
     </Pressable>
   );
@@ -998,13 +1003,9 @@ const styles = StyleSheet.create({
   },
   upcomingHeroContent: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    paddingTop: spacing.xxl,
-    gap: spacing.xs,
+    left: 30,
+    right: 24,
+    bottom: 32,
   },
   upcomingHeroTitle: {
     color: '#FFFFFF',
@@ -1012,21 +1013,24 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
-  upcomingHeroCountdownRow: {
+  upcomingHeroCountdownPill: {
+    position: 'absolute',
+    top: 22,
+    left: 22,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    alignSelf: 'flex-start',
+    gap: 7,
+    borderRadius: radii.pill,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
   },
   upcomingHeroCountdown: {
-    flexShrink: 1,
-    color: 'rgba(239, 233, 224, 0.82)',
+    color: '#FFFFFF',
     fontFamily: fontFamilies.textMedium,
     fontSize: 16,
     lineHeight: 20,
     letterSpacing: 0,
-    textShadowColor: 'rgba(0,0,0,0.35)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 8,
   },
   completedCarouselContent: {
     paddingHorizontal: layout.gutter,
