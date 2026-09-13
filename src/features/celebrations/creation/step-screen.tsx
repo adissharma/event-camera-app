@@ -29,6 +29,8 @@ export interface CreationStepScreenProps {
   nextLabel?: string;
   /** Replaces the default Next button entirely (used by review). */
   action?: ReactNode;
+  /** Optional control shown immediately above the standard save/next action. */
+  secondaryAction?: ReactNode;
   /**
    * Set false when the step contains its own scrolling list.
    */
@@ -84,6 +86,7 @@ export function CreationStepScreen({
   nextHref,
   nextLabel,
   action,
+  secondaryAction,
   scrollable = true,
   headingMinLines,
   onSave,
@@ -184,6 +187,7 @@ export function CreationStepScreen({
       stickyAction={
         action ?? (
           <View style={{ gap: spacing.sm }}>
+            {secondaryAction}
             {/*
               No visible warning. The dimmed Next is the message — a caption
               appearing under the host's thumb as they spin a wheel reads as

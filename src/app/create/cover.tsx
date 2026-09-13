@@ -96,6 +96,17 @@ export default function CoverStep() {
       // The carousel scrolls horizontally and fills the remaining height.
       scrollable={false}
       onSave={handleSave}
+      secondaryAction={
+        draft.editCelebrationId ? (
+          <Button
+            label="Change photo"
+            variant="secondary"
+            leading={<ImageIcon size={16} color={colours.brandPrimary} />}
+            onPress={() => void pickImage()}
+            haptic
+          />
+        ) : undefined
+      }
       action={
         draft.editCelebrationId ? undefined : (
           // Skipping is the primary action because it is what most hosts do
