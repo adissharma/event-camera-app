@@ -36,7 +36,8 @@ import {
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 
-const GALLERY_HEADER_ICON = require('../../../../assets/brand/gallery-icon.png');
+const EVENT_HEADER_ICON = require('../../../../assets/brand/event-nav-mark.png');
+const EVENT_HEADER_ICON_ASPECT_RATIO = 1230 / 1278;
 
 export default function GuestGalleryScreen() {
   const { eventCode } = useLocalSearchParams<{ eventCode: string }>();
@@ -339,7 +340,7 @@ export default function GuestGalleryScreen() {
           <View style={S.headerIdentity}>
             <View style={S.headerLogoSlot}>
               <Image
-                source={GALLERY_HEADER_ICON}
+                source={EVENT_HEADER_ICON}
                 accessibilityRole="image"
                 accessibilityLabel={BRAND_CONFIG.appName}
                 resizeMode="contain"
@@ -560,8 +561,8 @@ const S = StyleSheet.create({
     justifyContent: 'center',
   },
   headerLogo: {
-    width: 26,
     height: 26,
+    aspectRatio: EVENT_HEADER_ICON_ASPECT_RATIO,
     opacity: 0.92,
   },
   title: {

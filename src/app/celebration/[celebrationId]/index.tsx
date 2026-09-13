@@ -304,8 +304,9 @@ function CheckIcon({ size = 18, color = '#FFFFFF' }) {
  * `undefined`, so every view styled with it was laid out at zero size — which
  * is why the story viewer's touch overlay received no taps or swipes at all.
  */
-/** The square brand mark. The wordmark is too wide for the nav's left slot. */
-const GALLERY_NAV_MARK = require('../../../../assets/brand/gallery-icon.png');
+/** The event navigation mark stays at the existing visual height. */
+const EVENT_NAV_MARK = require('../../../../assets/brand/event-nav-mark.png');
+const EVENT_NAV_MARK_ASPECT_RATIO = 1230 / 1278;
 
 const ABSOLUTE_FILL = {
   position: 'absolute',
@@ -4166,7 +4167,7 @@ export function EventDetailView({
                 </Pressable>
               )}
               <Image
-                source={GALLERY_NAV_MARK}
+                source={EVENT_NAV_MARK}
                 accessibilityRole="image"
                 accessibilityLabel={BRAND_CONFIG.appName}
                 resizeMode="contain"
@@ -5629,10 +5630,10 @@ const S = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  /** Square, so it keeps the wordmark's height without its width. */
+  /** Preserve the artwork's natural proportions within the existing nav height. */
   navBrandMark: {
-    width: 26,
     height: 26,
+    aspectRatio: EVENT_NAV_MARK_ASPECT_RATIO,
     opacity: 0.9,
   },
 
