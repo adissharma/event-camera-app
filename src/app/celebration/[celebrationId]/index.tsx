@@ -1959,13 +1959,12 @@ export function EventDetailView({
     extrapolate: 'clamp',
   });
 
-  const heroDate = formatEventHeroDate(celebration.ends_at, celebration.timezone);
 
   // ── Hero identity geometry, for the creation reveal ──
   //
   // Reported in window coordinates rather than computed by the reveal, so the
-  // date and title it animates start from wherever this screen actually draws
-  // them. `measureInWindow` rather than the `onLayout` rect because that rect
+  // title it animates starts from wherever this screen actually draws it.
+  // Use `measureInWindow` rather than the `onLayout` rect because that rect
   // is relative to `heroInfo`, which is itself absolutely positioned inside
   // the hero — the reveal needs the number on screen, not the offset within a
   // parent it knows nothing about.
@@ -4195,21 +4194,16 @@ export function EventDetailView({
                 : null,
             ]}
           >
-            {/* Date and title remain one measured event-information group. */}
+            {/* The title remains measured for the creation reveal. */}
             <View
               ref={heroIdentityRef}
               onLayout={reportHeroIdentityRect}
               collapsable={false}
               style={S.heroIdentity}
             >
-              <AppText variant="displayHero" align="left" style={S.heroTitle} numberOfLines={3}>
+              <AppText variant="displayHero" align="center" style={S.heroTitle} numberOfLines={3}>
                 {celebration.title}
               </AppText>
-              {heroDate ? (
-                <AppText variant="eyebrow" tone="secondary" align="left" style={S.heroDate}>
-                  {heroDate}
-                </AppText>
-              ) : null}
             </View>
 
             <View style={S.galleryStatsRow}>
@@ -4217,7 +4211,7 @@ export function EventDetailView({
                 <AppText variant="titleMedium" style={S.galleryStatValue}>
                   {photos.length}
                 </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="left">
+                <AppText variant="eyebrow" tone="secondary" align="center">
                   Moments
                 </AppText>
               </View>
@@ -4238,7 +4232,7 @@ export function EventDetailView({
                 <AppText variant="titleMedium" style={S.galleryStatValue}>
                   {guestsJoined}
                 </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="left">
+                <AppText variant="eyebrow" tone="secondary" align="center">
                   Joined
                 </AppText>
               </Pressable>
@@ -4249,7 +4243,7 @@ export function EventDetailView({
                 <AppText variant="titleMedium" style={S.galleryStatValue}>
                   {timeLeftValue}
                 </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="left">
+                <AppText variant="eyebrow" tone="secondary" align="center">
                   Time left
                 </AppText>
               </View>
@@ -5642,26 +5636,21 @@ const S = StyleSheet.create({
     bottom: 14,                       // Sits gracefully at the base of the cover image
     left: layout.gutter,
     right: layout.gutter,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 8,
   },
-  /** Title + date as one left-aligned block, measured together for the creation reveal. */
+  /** Centered title block, measured for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 2,
   },
   heroTitle: {
     color: colours.textPrimary,
-    textAlign: 'left',
+    textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
-  },
-  heroDate: {
-    alignSelf: 'stretch',
-    fontSize: 12,
-    lineHeight: 15,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
@@ -5745,20 +5734,20 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
     gap: 12,
     alignSelf: 'stretch',
   },
   galleryStatItem: {
     gap: 2,
     justifyContent: 'center',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   galleryStatPressable: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginVertical: -spacing.xs,
   },
   galleryStatPressed: {
@@ -5766,7 +5755,7 @@ const S = StyleSheet.create({
   },
   galleryStatValue: {
     color: colours.textPrimary,
-    textAlign: 'left',
+    textAlign: 'center',
   },
   galleryStatDot: {
     color: 'rgba(255,255,255,0.24)',
