@@ -73,6 +73,10 @@ export function WheelPicker<T extends string | number>({
   const listRef = useRef<FlatList<T>>(null);
   const hasSettled = useRef(false);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // `scrollToOffset` also emits the normal FlatList completion callbacks.
+  // Keep a JS-side gesture flag so positioning a wheel from surrounding state
+  // never masquerades as a host changing that wheel.
+  const userScrollInProgress = useRef(false);
   const edgePadding = WHEEL_ROW_HEIGHT * Math.floor(visibleRows / 2);
   const scrollOffset = useSharedValue(selectedIndex * WHEEL_ROW_HEIGHT);
   const isUserScrolling = useSharedValue(false);
@@ -121,12 +125,14 @@ export function WheelPicker<T extends string | number>({
   );
 
   function finishScroll(offset: number) {
+    if (!userScrollInProgress.current) return;
     const next = Math.max(0, Math.min(values.length - 1, Math.round(offset / WHEEL_ROW_HEIGHT)));
     if (next !== selectedIndex) onChange(next);
   }
 
   function beginUserScroll() {
     if (locked) return;
+    userScrollInProgress.current = true;
     if (settleTimer.current) {
       clearTimeout(settleTimer.current);
       settleTimer.current = null;
@@ -139,6 +145,7 @@ export function WheelPicker<T extends string | number>({
     if (settleTimer.current) clearTimeout(settleTimer.current);
     settleTimer.current = setTimeout(() => {
       isUserScrolling.set(false);
+      userScrollInProgress.current = false;
       settleTimer.current = null;
     }, 120);
   }
@@ -169,7 +176,6 @@ export function WheelPicker<T extends string | number>({
         getItemLayout={(_data, index) => ({ length: WHEEL_ROW_HEIGHT, offset: WHEEL_ROW_HEIGHT * index, index })}
         onScroll={animatedScrollHandler}
         onScrollBeginDrag={beginUserScroll}
-        onMomentumScrollBegin={beginUserScroll}
         onMomentumScrollEnd={(event) => {
           finishScroll(event.nativeEvent.contentOffset.y);
           endUserScrollSoon();
