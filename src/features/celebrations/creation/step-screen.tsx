@@ -176,23 +176,12 @@ export function CreationStepScreen({
         action ?? (
           <View style={{ gap: spacing.sm }}>
             {/*
-              Why Next is unavailable, in the open.
-              `disabledReason` alone reaches a screen reader and nobody else,
-              which leaves a sighted host tapping a dead button with no idea
-              what is wrong — and on the closing step the wheels now let a
-              past date be chosen, so this is the only thing that says so.
+              No visible warning. The dimmed Next is the message — a caption
+              appearing under the host's thumb as they spin a wheel reads as
+              an error they have made rather than a step they have not
+              finished. `disabledReason` still carries it to screen readers,
+              which have no equivalent of "the button looks unavailable".
             */}
-            {blockingError ? (
-              <AppText
-                variant="caption"
-                tone="warning"
-                align="center"
-                accessibilityLiveRegion="polite"
-              >
-                {blockingError}
-              </AppText>
-            ) : null}
-
             <Button
               label={isEditing ? 'Save' : (nextLabel ?? copy.common.next)}
               disabled={blockingError !== null}

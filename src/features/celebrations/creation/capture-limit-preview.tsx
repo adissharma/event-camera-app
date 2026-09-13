@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect } from 'expo-router';
-import { ColorMatrix, type Matrix as NativeMatrix } from 'react-native-color-matrix-image-filters';
+import { ColorMatrix, type Matrix as NativeMatrix } from '@/features/media/color-matrix';
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { colours, easing, layout, spacing, useMotion } from '@/design';
+import { FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { TREATMENT_VISUALS } from '@/features/media/photo-treatment';
 import {
   ViewfinderBottomControls,
@@ -28,7 +29,15 @@ export interface CaptureLimitPreviewProps {
   limit: number | null | undefined;
 }
 
-const STATIC_PREVIEW_SOURCE = require('../../../../assets/sample-event/07.jpg');
+/**
+ * The same default cover the rest of the product falls back to.
+ *
+ * This preview stands in for a guest's camera, and the host has not taken a
+ * photograph yet — so the frame should show the image the app already uses
+ * when there is nothing of the host's own, not a stock frame from the sample
+ * event that appears nowhere else in their flow.
+ */
+const STATIC_PREVIEW_SOURCE = FALLBACK_COVER;
 
 const ZOOM_OPTIONS = [
   { label: '0.5', value: 'wide' },
