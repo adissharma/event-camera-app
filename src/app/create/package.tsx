@@ -15,7 +15,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Defs, LinearGradient as SvgLinearGradient, Path, Stop } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
@@ -57,7 +57,7 @@ import {
   type PaywallPlan,
   type PaywallPlanId,
 } from '@/features/payments/plan-catalogue';
-import { colours, layout, radii, spacing } from '@/design';
+import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design';
 
 /**
  * The paywall hero is exactly as tall as the event screen's hero.
@@ -99,11 +99,19 @@ const HERO_GUTTER = 22;
 const REPLAY_REVEAL_ON_EVERY_VISIT = true;
 
 const INK = '#0B0B0C';
-const SHEET_BG = '#FBF9F6';
-const CARD_BORDER = 'rgba(11, 11, 12, 0.10)';
-const SUBTITLE_GREY = '#6E6862';
-/** Warm and low-chroma on purpose — a tick, not a highlight. */
-const GOLD = '#C9A227';
+const SHEET_BG = '#0D0D0F';
+const CARD_BG = '#151517';
+const SUBTITLE_GREY = '#9A9A9F';
+/** The existing reveal accent, reversed so this screen travels pink → purple. */
+const PAYWALL_SHADER = [
+  REVEAL_TRACK_GRADIENT[4],
+  REVEAL_TRACK_GRADIENT[3],
+  REVEAL_TRACK_GRADIENT[2],
+  REVEAL_TRACK_GRADIENT[1],
+  REVEAL_TRACK_GRADIENT[0],
+] as const;
+const PAYWALL_SHADER_START = { x: 0, y: 0 } as const;
+const PAYWALL_SHADER_END = { x: 1, y: 0 } as const;
 const CROSS_GREY = 'rgba(255, 255, 255, 0.34)';
 const FEATURE_OFF_TEXT = 'rgba(255, 255, 255, 0.46)';
 
@@ -112,9 +120,18 @@ const FEATURE_FADE_MS = 190;
 function TickIcon({ size = 18 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Defs>
+        <SvgLinearGradient id="paywall-feature-tick" x1="0" y1="0" x2="24" y2="0">
+          <Stop offset="0" stopColor={PAYWALL_SHADER[0]} />
+          <Stop offset="0.25" stopColor={PAYWALL_SHADER[1]} />
+          <Stop offset="0.5" stopColor={PAYWALL_SHADER[2]} />
+          <Stop offset="0.75" stopColor={PAYWALL_SHADER[3]} />
+          <Stop offset="1" stopColor={PAYWALL_SHADER[4]} />
+        </SvgLinearGradient>
+      </Defs>
       <Path
         d="M4.5 12.6l5 5L19.5 6.9"
-        stroke={GOLD}
+        stroke="url(#paywall-feature-tick)"
         strokeWidth={2.6}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -873,24 +890,41 @@ export default function PackageScreen() {
                 accessibilityLabel={planAccessibilityLabel(plan)}
                 style={[
                   S.card,
-                  selected ? S.cardSelected : S.cardIdle,
+                  selected && S.cardSelected,
                   // Room for the badge, which overhangs this card's top edge
                   // and would otherwise sit on the card above it.
                   plan.isRecommended && { marginTop: 8 },
                 ]}
               >
+                {plan.isRecommended ? (
+                  <LinearGradient
+                    colors={PAYWALL_SHADER}
+                    start={PAYWALL_SHADER_START}
+                    end={PAYWALL_SHADER_END}
+                    style={S.recommendedBorder}
+                    pointerEvents="none"
+                  >
+                    <View style={S.recommendedBorderInset} />
+                  </LinearGradient>
+                ) : null}
                 {/*
                   Stays on Stills+ whichever plan is selected — it marks the
                   recommendation, not the selection. The two are told apart by
                   the border and the filled radio, which follow the tap.
                 */}
                 {plan.isRecommended && (
-                  <View style={S.badge} pointerEvents="none">
+                  <LinearGradient
+                    colors={PAYWALL_SHADER}
+                    start={PAYWALL_SHADER_START}
+                    end={PAYWALL_SHADER_END}
+                    style={S.badge}
+                    pointerEvents="none"
+                  >
                     <StarIcon />
                     <AppText variant="eyebrow" style={S.badgeText}>
                       Most popular
                     </AppText>
-                  </View>
+                  </LinearGradient>
                 )}
 
                 <View style={[S.radio, selected && S.radioSelected]}>
@@ -949,7 +983,7 @@ export default function PackageScreen() {
           style={({ pressed }) => [S.continueButton, pressed && !locked && { opacity: 0.86 }]}
         >
           {isPublishing ? (
-            <ActivityIndicator color="#FFFFFF" />
+            <ActivityIndicator color={INK} />
           ) : (
             <AppText variant="button" style={S.continueLabel}>
               Continue
@@ -1175,12 +1209,23 @@ const S = StyleSheet.create({
     minHeight: 68,
     maxHeight: 104,
     borderRadius: 16,
-    borderWidth: 1.5,
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: CARD_BG,
   },
-  cardIdle: { borderColor: CARD_BORDER },
-  cardSelected: { borderColor: INK },
+  cardSelected: { backgroundColor: CARD_BG },
+  recommendedBorder: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 16,
+  },
+  recommendedBorderInset: {
+    ...StyleSheet.absoluteFill,
+    top: 2,
+    right: 2,
+    bottom: 2,
+    left: 2,
+    borderRadius: 14,
+    backgroundColor: CARD_BG,
+  },
 
   badge: {
     position: 'absolute',
@@ -1189,7 +1234,6 @@ const S = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: INK,
     borderRadius: radii.pill,
     paddingHorizontal: 9,
     paddingVertical: 3.5,
@@ -1202,17 +1246,17 @@ const S = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: 'rgba(11, 11, 12, 0.24)',
+    borderColor: 'rgba(255, 255, 255, 0.42)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  radioSelected: { borderColor: INK },
-  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: INK },
+  radioSelected: { borderColor: '#FFFFFF' },
+  radioDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: '#FFFFFF' },
 
   cardCopy: { flex: 1, gap: 1 },
-  cardName: { color: INK },
+  cardName: { color: '#FFFFFF' },
   cardSubtitle: { color: SUBTITLE_GREY },
-  cardPrice: { color: INK, fontSize: 26, lineHeight: 31 },
+  cardPrice: { color: '#FFFFFF', fontSize: 26, lineHeight: 31 },
 
   freeCta: {
     alignSelf: 'center',
@@ -1221,18 +1265,18 @@ const S = StyleSheet.create({
     minHeight: layout.minTouchTarget,
     justifyContent: 'center',
   },
-  freeCtaText: { color: INK, textDecorationLine: 'underline' },
+  freeCtaText: { color: '#FFFFFF', textDecorationLine: 'underline' },
 
   errorText: { marginBottom: 8 },
 
   continueButton: {
-    backgroundColor: INK,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     minHeight: 54,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  continueLabel: { color: '#FFFFFF' },
+  continueLabel: { color: INK },
 
   modalOverlay: {
     flex: 1,
@@ -1254,11 +1298,11 @@ const S = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(11, 11, 12, 0.22)',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
     alignSelf: 'center',
   },
   confirmCopy: { gap: spacing.sm },
-  confirmTitle: { color: INK },
+  confirmTitle: { color: '#FFFFFF' },
   confirmSubtitle: { color: SUBTITLE_GREY },
   confirmSecondary: {
     alignSelf: 'center',
