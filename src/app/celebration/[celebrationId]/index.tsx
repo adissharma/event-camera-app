@@ -5649,7 +5649,7 @@ const S = StyleSheet.create({
   heroIdentity: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
   },
   heroTitle: {
     color: colours.textPrimary,
