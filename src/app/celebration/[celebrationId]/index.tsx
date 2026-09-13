@@ -4195,23 +4195,18 @@ export function EventDetailView({
                 : null,
             ]}
           >
-            {/*
-              Date and title are one group, and are wrapped as one so the
-              creation reveal can measure and carry them together — they read
-              as a single piece of event information, not as two labels that
-              happen to be stacked.
-            */}
+            {/* Date and title remain one measured event-information group. */}
             <View
               ref={heroIdentityRef}
               onLayout={reportHeroIdentityRect}
               collapsable={false}
               style={S.heroIdentity}
             >
-              <AppText variant="displayHero" align="center" style={S.heroTitle} numberOfLines={3}>
+              <AppText variant="displayHero" align="left" style={S.heroTitle} numberOfLines={3}>
                 {celebration.title}
               </AppText>
               {heroDate ? (
-                <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
+                <AppText variant="eyebrow" tone="secondary" align="left" style={S.heroDate}>
                   {heroDate}
                 </AppText>
               ) : null}
@@ -4222,7 +4217,7 @@ export function EventDetailView({
                 <AppText variant="titleMedium" style={S.galleryStatValue}>
                   {photos.length}
                 </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="center">
+                <AppText variant="eyebrow" tone="secondary" align="left">
                   Moments
                 </AppText>
               </View>
@@ -4243,7 +4238,7 @@ export function EventDetailView({
                 <AppText variant="titleMedium" style={S.galleryStatValue}>
                   {guestsJoined}
                 </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="center">
+                <AppText variant="eyebrow" tone="secondary" align="left">
                   Joined
                 </AppText>
               </Pressable>
@@ -4254,7 +4249,7 @@ export function EventDetailView({
                 <AppText variant="titleMedium" style={S.galleryStatValue}>
                   {timeLeftValue}
                 </AppText>
-                <AppText variant="eyebrow" tone="secondary" align="center">
+                <AppText variant="eyebrow" tone="secondary" align="left">
                   Time left
                 </AppText>
               </View>
@@ -5647,18 +5642,18 @@ const S = StyleSheet.create({
     bottom: 14,                       // Sits gracefully at the base of the cover image
     left: layout.gutter,
     right: layout.gutter,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
   },
-  /** Title + date as one centered block, measured together for the creation reveal. */
+  /** Title + date as one left-aligned block, measured together for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 2,
   },
   heroTitle: {
     color: colours.textPrimary,
-    textAlign: 'center',
+    textAlign: 'left',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
@@ -5750,20 +5745,20 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 12,
     alignSelf: 'stretch',
   },
   galleryStatItem: {
     gap: 2,
     justifyContent: 'center',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   galleryStatPressable: {
     borderRadius: radii.md,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.xs,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginVertical: -spacing.xs,
   },
   galleryStatPressed: {
@@ -5771,7 +5766,7 @@ const S = StyleSheet.create({
   },
   galleryStatValue: {
     color: colours.textPrimary,
-    textAlign: 'center',
+    textAlign: 'left',
   },
   galleryStatDot: {
     color: 'rgba(255,255,255,0.24)',
