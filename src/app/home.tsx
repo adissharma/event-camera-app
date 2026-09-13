@@ -1043,8 +1043,8 @@ const styles = StyleSheet.create({
   upcomingHeroCountdown: {
     color: '#FFFFFF',
     fontFamily: fontFamilies.textMedium,
-    fontSize: 16,
-    lineHeight: 20,
+    fontSize: 17,
+    lineHeight: 21,
     letterSpacing: 0,
   },
   completedCarouselContent: {
