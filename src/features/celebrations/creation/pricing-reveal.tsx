@@ -1,8 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, View } from 'react-native';
+import { useEvent } from 'expo';
+import { LinearGradient } from 'expo-linear-gradient';
+import { VideoView, useVideoPlayer } from 'expo-video';
 
 import { AppText } from '@/components/ui/text';
-import { colours, radii, spacing, useMotion } from '@/design';
+import {
+  colours,
+  radii,
+  REVEAL_TRACK_GRADIENT,
+  REVEAL_TRACK_GRADIENT_END,
+  REVEAL_TRACK_GRADIENT_START,
+  spacing,
+  useMotion,
+} from '@/design';
 
 /**
  * The creation reveal: a single coordinated sequence that carries the host
@@ -248,7 +259,7 @@ export function useRevealSequence({
   );
 }
 
-const BRAND_MARK = require('../../../../assets/brand/logo.png');
+const CREATING_BLOB = require('../../../../assets/video/welcome-blob.mov');
 const GRAIN = require('../../../../assets/images/textures/dust-1.png');
 
 /**
@@ -266,6 +277,21 @@ export function CreatingOverlay({ visible }: { visible: boolean }) {
   const pulse = useRef(new Animated.Value(0)).current;
   const progress = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(true);
+  const player = useVideoPlayer(CREATING_BLOB, (instance) => {
+    instance.loop = true;
+    instance.muted = true;
+    instance.audioMixingMode = 'mixWithOthers';
+  });
+  const { status } = useEvent(player, 'statusChange', { status: player.status });
+
+  useEffect(() => {
+    if (status !== 'readyToPlay') return;
+    if (motion.reduceMotion) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  }, [motion.reduceMotion, player, status]);
 
   useEffect(() => {
     if (visible) return;
@@ -280,7 +306,7 @@ export function CreatingOverlay({ visible }: { visible: boolean }) {
   useEffect(() => {
     if (motion.reduceMotion) return;
 
-    // A slow breath on the mark and the status line, rather than a spinner.
+    // A slow breath on the animation rather than a spinner.
     // A spinner says "this may take a while"; this says "something is being
     // made", which is the impression the stage is for.
     const loop = Animated.loop(
@@ -328,7 +354,15 @@ export function CreatingOverlay({ visible }: { visible: boolean }) {
           opacity: motion.reduceMotion ? 1 : pulse.interpolate({ inputRange: [0, 1], outputRange: [0.72, 1] }),
         }}
       >
-        <Image source={BRAND_MARK} style={S.brandMark} resizeMode="contain" accessibilityIgnoresInvertColors />
+        <View style={S.videoMark}>
+          <VideoView
+            player={player}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            nativeControls={false}
+            allowsPictureInPicture={false}
+          />
+        </View>
       </Animated.View>
 
       <View style={S.creatingCopy}>
@@ -340,7 +374,6 @@ export function CreatingOverlay({ visible }: { visible: boolean }) {
           accessibilityRole="progressbar"
         >
           Creating your event
-          <Ellipsis />
         </AppText>
 
         <View style={S.progressTrack}>
@@ -349,32 +382,18 @@ export function CreatingOverlay({ visible }: { visible: boolean }) {
               S.progressFill,
               { transform: [{ scaleX: progress.interpolate({ inputRange: [0, 1], outputRange: [0.04, 1] }) }] },
             ]}
-          />
+          >
+            <LinearGradient
+              colors={REVEAL_TRACK_GRADIENT}
+              start={REVEAL_TRACK_GRADIENT_START}
+              end={REVEAL_TRACK_GRADIENT_END}
+              style={StyleSheet.absoluteFill}
+            />
+          </Animated.View>
         </View>
       </View>
     </Animated.View>
   );
-}
-
-/**
- * The three dots, animated as text rather than as three views.
- *
- * Held in a child component so its once-a-second re-render does not drag the
- * rest of the overlay — including the looping pulse — through React with it.
- */
-function Ellipsis() {
-  const motion = useMotion();
-  const [count, setCount] = useState(3);
-
-  useEffect(() => {
-    if (motion.reduceMotion) return;
-    const timer = setInterval(() => setCount((value) => (value % 3) + 1), 420);
-    return () => clearInterval(timer);
-  }, [motion.reduceMotion]);
-
-  // Non-breaking spaces hold the width so the line does not shuffle sideways
-  // as dots come and go.
-  return <>{'.'.repeat(count) + ' '.repeat(3 - count)}</>;
 }
 
 const S = StyleSheet.create({
@@ -385,7 +404,12 @@ const S = StyleSheet.create({
     gap: spacing.xl,
   },
   grain: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0.05 },
-  brandMark: { width: 132, height: 44, opacity: 0.92 },
+  videoMark: {
+    width: 112,
+    height: 112,
+    borderRadius: radii.pill,
+    overflow: 'hidden',
+  },
   creatingCopy: { alignItems: 'center', gap: spacing.lg },
   creatingText: { color: 'rgba(255, 255, 255, 0.86)' },
   progressTrack: {
@@ -399,7 +423,7 @@ const S = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+    overflow: 'hidden',
     transformOrigin: 'left center',
   },
 
