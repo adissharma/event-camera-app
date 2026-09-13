@@ -125,6 +125,15 @@ export function CreationStepScreen({
 
   const handlePress = async () => {
     if (isEditing) {
+      // Reveal editing is deliberately a two-part decision: choose the host's
+      // reveal first, then decide when guests follow. Keep both answers in
+      // the draft and persist once from the guest step, so backing out of the
+      // second screen cannot leave a half-updated event behind.
+      if (step === 'reveal') {
+        router.replace('/create/guest-reveal');
+        return;
+      }
+
       setSaving(true);
       try {
         if (onSave) {
