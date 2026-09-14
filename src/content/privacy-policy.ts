@@ -4,26 +4,16 @@
  * Kept out of the screen so that revising a clause is a content change rather
  * than a component change, and so the same text can be rendered in-app later
  * without being transcribed a second time and drifting.
- *
- * ─────────────────────────────────────────────────────────────────────────────
- * THREE VALUES BELOW ARE NOT YET REAL.
- *
- * `LEGAL_ENTITY`, `REGISTERED_ADDRESS` and `PRIVACY_EMAIL` are placeholders.
- * They are deliberately left obviously unfilled rather than guessed: a policy
- * that names the wrong company, or points a data-subject request at an address
- * nobody reads, is worse than one that visibly still needs finishing. Fill them
- * in before this page is linked from the App Store listing.
- * ─────────────────────────────────────────────────────────────────────────────
  */
 
-/** Registered company name, or the trading name if there is no company. */
-const LEGAL_ENTITY = '[Legal company name]';
-
-/** Registered address. Set to `null` if there is genuinely no registered address. */
-const REGISTERED_ADDRESS: string | null = '[Registered address]';
-
-/** A monitored inbox. Rights requests and child-data reports arrive here. */
-const PRIVACY_EMAIL = '[privacy email]';
+/**
+ * The inbox named in the policy. Rights requests, deletion requests and reports
+ * about a child's data all arrive here, so it has to be one somebody reads.
+ *
+ * Named once. It appears three times in the text below, and a policy that
+ * offers two different addresses is a policy nobody trusts.
+ */
+const PRIVACY_EMAIL = 'contact@stills.events';
 
 /** Shown under the title. Update whenever the text below changes materially. */
 export const PRIVACY_LAST_UPDATED = '14 September 2026';
@@ -202,11 +192,6 @@ export const PRIVACY_POLICY: PolicyBlock[] = [
   { kind: 'section', text: '11. Contact Us' },
   {
     kind: 'address',
-    lines: [
-      LEGAL_ENTITY,
-      ...(REGISTERED_ADDRESS ? [REGISTERED_ADDRESS] : []),
-      `Email: ${PRIVACY_EMAIL}`,
-      'Website: stills.events',
-    ],
+    lines: [`Email: ${PRIVACY_EMAIL}`, 'Website: stills.events'],
   },
 ];

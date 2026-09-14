@@ -5,7 +5,7 @@ import { Link } from 'expo-router';
 import { AppText } from '@/components/ui/text';
 import { colours, fontFamilies, layout, spacing } from '@/design';
 import { BRAND_CONFIG } from '@/config/brand';
-import { WORDMARK } from '@/features/onboarding/still-intro';
+import { StillsLockup } from '@/components/brand/stills-lockup';
 import {
   PRIVACY_POLICY,
   PRIVACY_LAST_UPDATED,
@@ -35,7 +35,7 @@ export default function PrivacyPolicyScreen() {
       <View style={S.inner}>
         <Link href="/" asChild>
           <Pressable accessibilityRole="link" style={S.brandLink}>
-            <AppText style={S.wordmark}>{WORDMARK}</AppText>
+            <StillsLockup size={30} />
           </Pressable>
         </Link>
 
@@ -139,13 +139,6 @@ const S = StyleSheet.create({
   brandLink: {
     alignSelf: 'flex-start',
     marginBottom: spacing.xxl,
-  },
-  wordmark: {
-    fontFamily: fontFamilies.display,
-    color: colours.textPrimary,
-    fontSize: 28,
-    lineHeight: 34,
-    letterSpacing: -0.4,
   },
   title: {
     fontFamily: fontFamilies.display,

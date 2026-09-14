@@ -2,8 +2,8 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Link } from 'expo-router';
 
 import { AppText } from '@/components/ui/text';
-import { colours, fontFamilies, spacing } from '@/design';
-import { WORDMARK } from '@/features/onboarding/still-intro';
+import { StillsLockup } from '@/components/brand/stills-lockup';
+import { colours, spacing } from '@/design';
 
 /**
  * The public homepage.
@@ -15,7 +15,7 @@ import { WORDMARK } from '@/features/onboarding/still-intro';
  * printed QR code's domain, or from the App Store listing, should meet the
  * product's name, not its first-run flow.
  *
- * Deliberately almost nothing: the wordmark, and the one link the App Store
+ * Deliberately almost nothing: the logo, and the one link the App Store
  * requires a public home for. Marketing copy can arrive when there is some.
  *
  * Platform-suffixed rather than branched inside `index.tsx`: the native entry
@@ -25,12 +25,7 @@ export default function WebHome() {
   return (
     <View style={S.page}>
       <View style={S.centre}>
-        <AppText style={S.wordmark} accessibilityRole="header">
-          {WORDMARK}
-        </AppText>
-        <AppText variant="bodySmall" tone="secondary" style={S.tagline}>
-          Every guest. Every angle.
-        </AppText>
+        <StillsLockup size={76} />
       </View>
 
       <View style={S.footer}>
@@ -62,18 +57,6 @@ const S = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: spacing.md,
-  },
-  wordmark: {
-    fontFamily: fontFamilies.display,
-    color: colours.textPrimary,
-    fontSize: 72,
-    lineHeight: 84,
-    letterSpacing: -1,
-    textAlign: 'center',
-  },
-  tagline: {
-    letterSpacing: 0.4,
-    textAlign: 'center',
   },
   footer: {
     paddingBottom: spacing.xxl,
