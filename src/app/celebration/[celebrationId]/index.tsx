@@ -210,6 +210,10 @@ const CHIP_D = 60;
 const CHIP_R = 12;
 const CHIP_GAP = 12;
 const CHIP_PEEK = 18;
+// The organic paths deliberately extend a few units past a conventional
+// 0–100 square. Give their SVG canvas breathing room instead of clipping the
+// interesting part of the silhouette at its boundary.
+const CHALLENGE_BLOB_BLEED = 4;
 const CHALLENGE_GRADIENTS = [
   ['#1A0A42', '#5A2FC7', '#FF6A55'],
   ['#082B74', '#2860C8', '#E53C96'],
@@ -943,10 +947,19 @@ function ChallengeGradientCircle({
   const blobTransform = `rotate(${blobRotation} 50 50)`;
   const baseGradientId = `challenge-gradient-${index}`;
   const highlightGradientId = `challenge-highlight-${index}`;
+  const blobCanvasSize = size + CHALLENGE_BLOB_BLEED * 2;
 
   return (
     <View style={[S.challengeGradientCircle, { width: size, height: size }]}>
-      <Svg width={size} height={size} viewBox="0 0 100 100" style={StyleSheet.absoluteFill}>
+      <Svg
+        width={blobCanvasSize}
+        height={blobCanvasSize}
+        // Rotation can push a rounded Bezier edge farther than its unrotated
+        // bounds, so this is intentionally more generous than the raw path.
+        viewBox="-16 -16 132 132"
+        style={{ position: 'absolute', left: -CHALLENGE_BLOB_BLEED, top: -CHALLENGE_BLOB_BLEED }}
+        pointerEvents="none"
+      >
         <Defs>
           <SvgLinearGradient id={baseGradientId} x1="8%" y1="8%" x2="92%" y2="92%">
             <Stop offset="0" stopColor={colors[0]} />
