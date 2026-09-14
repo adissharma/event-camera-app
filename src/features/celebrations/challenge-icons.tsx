@@ -1,5 +1,6 @@
-import { StyleSheet, View } from 'react-native';
-import Svg, { Circle, Path, Rect } from 'react-native-svg';
+import { StyleSheet, Text, View } from 'react-native';
+
+import { colours } from '@/design';
 
 type OpenMojiRawEntry = {
   emoji: string;
@@ -369,129 +370,38 @@ export function resolveChallengeBrief(value: string) {
 export function ChallengeIconSVG({
   type,
   size = 24,
-  color = '#FFFFFF',
+  color = colours.textPrimary,
 }: {
   type: string;
   size?: number;
   color?: string;
 }) {
-  const kind = resolveFilledIconKind(normalizeChallengeIconValue(type));
-
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       style={[S.frame, { width: size, height: size }]}
     >
-      <FilledChallengeGlyph kind={kind} size={size} color={color} />
+      <Text
+        allowFontScaling={false}
+        style={[
+          S.emoji,
+          {
+            // The prior OpenMoji Black face renders these as fine line art.
+            // Let the system emoji font render the same source values instead:
+            // every challenge now uses its filled glyph on tiles and in the
+            // creation library, while the `color` remains a readable fallback
+            // for any platform that lacks a specific emoji.
+            fontSize: Math.max(12, Math.round(size * 0.86)),
+            lineHeight: Math.max(14, Math.round(size)),
+            color,
+          },
+        ]}
+      >
+        {resolveChallengeEmoji(type)}
+      </Text>
     </View>
   );
-}
-
-type FilledChallengeIconKind =
-  | 'celebration'
-  | 'gift'
-  | 'heart'
-  | 'star'
-  | 'flame'
-  | 'camera'
-  | 'music'
-  | 'people'
-  | 'drink'
-  | 'cake'
-  | 'flower'
-  | 'home'
-  | 'travel'
-  | 'game'
-  | 'pet'
-  | 'sun';
-
-const FILLED_ICON_KINDS: Record<string, FilledChallengeIconKind> = {
-  '1F389': 'celebration', '1F38A': 'celebration', '1F9E8': 'celebration', '1F386': 'celebration', '1F387': 'celebration',
-  '1F381': 'gift', '1F380': 'gift', '1F48D': 'gift',
-  '1F493': 'heart', '1F48B': 'heart', '1F970': 'heart', '1F60D': 'heart',
-  '2B50': 'star', '1F31F': 'star', '1F929': 'star', '1F4AF': 'star',
-  '1F525': 'flame', '1F56F-FE0F': 'flame',
-  '1F4F7': 'camera', '1F933': 'camera',
-  '1F3A4': 'music', '1F3B5': 'music', '1F3A7': 'music', '1F941': 'music',
-  '1F465': 'people', '1F91D': 'people', '1F483': 'people', '1F44F': 'people', '1F64C': 'people', '1F973': 'people',
-  '1F37E': 'drink', '1F378': 'drink', '1F379': 'drink', '1F37A': 'drink', '2615': 'drink',
-  '1F382': 'cake', '1F370': 'cake', '1F9C1': 'cake', '1F36D': 'cake', '1F36A': 'cake', '1F36B': 'cake', '1F36C': 'cake', '1F36E': 'cake',
-  '1F490': 'flower', '1F305': 'sun', '1F31E': 'sun', '1F3D6': 'sun',
-  '1F3E0': 'home', '1F393': 'home',
-  '2708-FE0F': 'travel', '1F3CA': 'travel', '1F6A0': 'travel',
-  '1F3B2': 'game', '1F3C5': 'game', '1F3C6': 'game', '1F4AA': 'game',
-  '1F436': 'pet', '1F9D2': 'people', '1F476': 'people',
-};
-
-function resolveFilledIconKind(value: string): FilledChallengeIconKind {
-  return FILLED_ICON_KINDS[value] ?? 'star';
-}
-
-function FilledChallengeGlyph({
-  kind,
-  size,
-  color,
-}: {
-  kind: FilledChallengeIconKind;
-  size: number;
-  color: string;
-}) {
-  const fill = color;
-  let glyph: React.ReactNode;
-
-  switch (kind) {
-    case 'celebration':
-      glyph = <><Path fill={fill} d="M3 21 10.4 3l3.2 7.4L21 13.6 3 21Z" /><Circle cx={18.2} cy={5.8} r={1.6} fill={fill} /><Circle cx={6.1} cy={5.2} r={1.1} fill={fill} /></>;
-      break;
-    case 'gift':
-      glyph = <><Rect x={3} y={9} width={18} height={12} rx={2} fill={fill} /><Rect x={2} y={5} width={20} height={5} rx={2} fill={fill} /><Rect x={10.5} y={5} width={3} height={16} fill="rgba(0,0,0,0.25)" /></>;
-      break;
-    case 'heart':
-      glyph = <Path fill={fill} d="M12 21.1 3.2 12.5A5.4 5.4 0 0 1 11 5l1 1 1-1a5.4 5.4 0 0 1 7.8 7.5L12 21.1Z" />;
-      break;
-    case 'flame':
-      glyph = <Path fill={fill} d="M12 22a7 7 0 0 1-6.6-4.6C3.5 12.2 8.8 9.1 10 2c4.4 3 6.1 6.3 5.2 9.2 1.3-.4 2.3-1.3 2.9-2.5 3.2 6.8.8 13.3-6.1 13.3Z" />;
-      break;
-    case 'camera':
-      glyph = <><Path fill={fill} d="M2 7h4.6l1.8-3h7.2l1.8 3H22v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7Z" /><Circle cx={12} cy={14} r={4.1} fill="rgba(0,0,0,0.3)" /></>;
-      break;
-    case 'music':
-      glyph = <><Path fill={fill} d="M14 3v12.5a4 4 0 1 1-2-3.46V5.7l8-2V14.5a4 4 0 1 1-2-3.46V3l-4 1Z" /></>;
-      break;
-    case 'people':
-      glyph = <><Circle cx={12} cy={7} r={3.2} fill={fill} /><Circle cx={5.5} cy={9} r={2.3} fill={fill} /><Circle cx={18.5} cy={9} r={2.3} fill={fill} /><Path fill={fill} d="M5 21c0-4.2 2.9-6.7 7-6.7s7 2.5 7 6.7H5Z" /></>;
-      break;
-    case 'drink':
-      glyph = <><Path fill={fill} d="M5 3h14l-5.1 8.4V17H17v3H7v-3h3.1v-5.6L5 3Z" /><Circle cx={9} cy={6} r={1.2} fill="rgba(0,0,0,0.25)" /><Circle cx={14} cy={8} r={1} fill="rgba(0,0,0,0.25)" /></>;
-      break;
-    case 'cake':
-      glyph = <><Rect x={3} y={10} width={18} height={10} rx={2} fill={fill} /><Rect x={6} y={6} width={12} height={5} rx={1.5} fill={fill} /><Rect x={11} y={2} width={2} height={4} rx={1} fill={fill} /></>;
-      break;
-    case 'flower':
-      glyph = <><Circle cx={12} cy={8} r={3.2} fill={fill} /><Circle cx={7.4} cy={8} r={2.6} fill={fill} /><Circle cx={16.6} cy={8} r={2.6} fill={fill} /><Circle cx={9.2} cy={4.2} r={2.6} fill={fill} /><Circle cx={14.8} cy={4.2} r={2.6} fill={fill} /><Path fill={fill} d="M11 10h2v11h-2z" /></>;
-      break;
-    case 'home':
-      glyph = <Path fill={fill} d="m2 11 10-9 10 9v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V11Zm8 12v-7h4v7h-4Z" />;
-      break;
-    case 'travel':
-      glyph = <Path fill={fill} d="M21.6 12.4 13.8 10V4.8c0-1.3-.8-2.2-1.8-2.2s-1.8.9-1.8 2.2V10l-7.8 2.4v1.8l7.8-.6v4.6l-2.4 1.5V21l4.2-1.2 4.2 1.2v-1.3l-2.4-1.5v-4.6l7.8.6v-1.8Z" />;
-      break;
-    case 'game':
-      glyph = <Path fill={fill} d="M7.1 7h9.8A5.1 5.1 0 0 1 22 12.1v4.2c0 2.7-3.1 4.2-5.1 2.5l-2.3-2H9.4l-2.3 2c-2 1.7-5.1.2-5.1-2.5v-4.2A5.1 5.1 0 0 1 7.1 7Zm-1.4 5v2h2v2h2v-2h2v-2h-2v-2h-2v2h-2Z" />;
-      break;
-    case 'pet':
-      glyph = <><Circle cx={12} cy={14} r={5} fill={fill} /><Circle cx={6.4} cy={8} r={2.4} fill={fill} /><Circle cx={17.6} cy={8} r={2.4} fill={fill} /><Circle cx={9.1} cy={5.2} r={2.1} fill={fill} /><Circle cx={14.9} cy={5.2} r={2.1} fill={fill} /></>;
-      break;
-    case 'sun':
-      glyph = <><Circle cx={12} cy={12} r={5} fill={fill} /><Path fill={fill} d="M11 1h2v4h-2zM11 19h2v4h-2zM1 11h4v2H1zM19 11h4v2h-4zM3.5 4.9l1.4-1.4 2.8 2.8-1.4 1.4zM16.3 17.7l1.4-1.4 2.8 2.8-1.4 1.4zM17.7 3.5l2.8 2.8-1.4 1.4-2.8-2.8zM4.9 16.3l2.8 2.8-1.4 1.4-2.8-2.8z" /></>;
-      break;
-    case 'star':
-    default:
-      glyph = <Path fill={fill} d="m12 2.2 2.9 5.9 6.5.9-4.7 4.6 1.1 6.5-5.8-3.1-5.8 3.1 1.1-6.5L2.6 9l6.5-.9L12 2.2Z" />;
-  }
-
-  return <Svg width={size} height={size} viewBox="0 0 24 24">{glyph}</Svg>;
 }
 
 const S = StyleSheet.create({
@@ -499,5 +409,10 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
+  },
+  emoji: {
+    includeFontPadding: false,
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
 });
