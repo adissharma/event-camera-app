@@ -15,6 +15,17 @@
         "EXPO_PUBLIC_ENABLE_REAL_PURCHASES": "true"
       }
     },
+    "simulator": {
+      "developmentClient": false,
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://hzmyhrzshtzmyfrmvevw.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_DR6NlQSFhXpOwvW6l1gvQA_Tv_NiN27",
+        "EXPO_PUBLIC_ENABLE_REAL_PURCHASES": "false"
+      }
+    },
     "staging": {
       "autoIncrement": true,
       "ios": {
