@@ -164,8 +164,10 @@ const HERO_MEDIA_FILL_BLUR = 45;
  */
 const HERO_CAPTION_VISIBLE_MS = 1200;
 
-const GRID_GAP = 6;
-const ROW_GAP = 6;
+// A little more air between cells keeps the gallery from reading as one
+// continuous image while preserving the existing two-column structure.
+const GRID_GAP = 10;
+const ROW_GAP = 10;
 /**
  * Columns in the gallery grid.
  *
