@@ -313,10 +313,6 @@ function HomeUpcomingEventCard({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <OrganicCountdownPill
-        label={formatUpcomingTimeLeft(celebration)}
-        gradientId={`upcoming-countdown-${celebration.id}`}
-      />
       <View style={styles.upcomingHeroContent}>
         <AppText
           variant="displayLarge"
@@ -325,6 +321,10 @@ function HomeUpcomingEventCard({
         >
           {celebration.title}
         </AppText>
+        <OrganicCountdownPill
+          label={formatUpcomingTimeLeft(celebration)}
+          gradientId={`upcoming-countdown-${celebration.id}`}
+        />
       </View>
     </Pressable>
   );
@@ -1107,9 +1107,6 @@ const styles = StyleSheet.create({
     textShadowRadius: 12,
   },
   upcomingHeroCountdownPill: {
-    position: 'absolute',
-    top: 22,
-    left: 22,
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
