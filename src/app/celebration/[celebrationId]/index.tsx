@@ -4225,7 +4225,7 @@ export function EventDetailView({
                 variant="displayLarge"
                 align="center"
                 style={S.heroTitle}
-                numberOfLines={1}
+                numberOfLines={2}
                 adjustsFontSizeToFit
                 minimumFontScale={0.84}
               >
@@ -5656,8 +5656,8 @@ const S = StyleSheet.create({
   },
   heroTitle: {
     color: colours.textPrimary,
-    fontSize: 42,
-    lineHeight: 46,
+    fontSize: 46,
+    lineHeight: 50,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
