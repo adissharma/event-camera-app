@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
     // The display font carries a little descent below its visible glyphs;
     // this tighter inset makes the title read as genuinely card-anchored.
     bottom: 22,
-    gap: 12,
+    gap: 6,
   },
   upcomingHeroTitle: {
     color: '#FFFFFF',
