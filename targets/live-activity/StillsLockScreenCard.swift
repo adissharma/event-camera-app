@@ -381,7 +381,10 @@ struct StillsRemainingFooter: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
-        .foregroundColor(onGradient ? Ink.textPrimary : Ink.textSecondary)
+        // White in both positions. The label steps off the gradient precisely
+        // when there is least colour left to read it against, so dimming it
+        // there would quiet the message exactly when it matters most.
+        .foregroundColor(Ink.textPrimary)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label)
     }
