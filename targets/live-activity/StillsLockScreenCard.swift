@@ -27,9 +27,13 @@ enum Ink {
     static let surfaceWhite = Color.white
     static let textOnWhite = Color.black
 
-    /// The unfilled remainder of the footer. Light enough to separate from the
-    /// card behind it, dark enough never to compete with the gradient.
-    static let footerTrack = Color(red: 26 / 255, green: 26 / 255, blue: 29 / 255) // #1A1A1D
+    /// The unfilled remainder of the footer — the card's own colour.
+    ///
+    /// A distinct charcoal read as a component sitting on the card rather than
+    /// as part of it, which is exactly what this footer is not meant to be.
+    /// Matching the background means what is left to shoot is the only thing
+    /// drawn, and it simply runs out.
+    static let footerTrack = background
 
     /// Mirrors `REVEAL_TRACK_GRADIENT` in `src/design/colours.ts` — the same
     /// stops the reveal toggle and the treatment swatches use, so the one
@@ -297,7 +301,7 @@ struct OrganicTopEdge: Shape {
 struct StillsRemainingFooter: View {
     let photosLeft: Int
     let allowance: Int?
-    var height: CGFloat = 58
+    var height: CGFloat = 50
     var labelSize: CGFloat = 15
 
     /// Breathing room between the end of the label and the end of the gradient.
@@ -411,10 +415,13 @@ struct StillsLockScreenCard: View {
                     StillsMark()
 
                     Text(eventName)
-                        .font(Type.display(34))
+                        // Set large and allowed to shrink, rather than set safe
+                        // and never filling the card: a short name should use
+                        // the space it has, and only a long one pay for it.
+                        .font(Type.display(40))
                         .foregroundColor(Ink.textPrimary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.6)
+                        .minimumScaleFactor(0.45)
                         // Newsreader sits higher in its line box than the face
                         // this replaced, so the mark needs the gap restating
                         // or it reads as touching the ascenders.

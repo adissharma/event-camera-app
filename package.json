@@ -87,7 +87,7 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "ios:device": "expo run:ios --device",
+    "ios:device": "./scripts/ios-device.sh",
     "la:preview": "./scripts/live-activity-preview.sh",
     "build:ios:local": "eas build --platform ios --profile development --local",
     "web": "expo start --web",
