@@ -300,7 +300,12 @@ struct StillsFooterShape: Shape {
         let bottom = rect.maxY
         let width = max(0, full * CGFloat(min(1, max(0, fraction))))
 
-        func edgeY(atX x: CGFloat) -> CGFloat {
+        // How far before the cap the edge starts rising to meet it. Long
+        // enough that the rise is a slope rather than a bump, short enough that
+        // the wave still reads as a wave for most of the bar's length.
+        let blendLength: CGFloat = 64
+
+        func waveY(atX x: CGFloat) -> CGFloat {
             guard full > 0 else { return baseline }
             return baseline + footerEdgeOffset(at: Double(x / full), amplitude: amplitude)
         }
@@ -309,13 +314,27 @@ struct StillsFooterShape: Shape {
         // The radius depends on the edge's height and the height depends on
         // where the cap starts, so it is estimated once and then refined —
         // the curve is shallow enough that one pass settles it.
-        var capRadius: CGFloat = 0
-        var capCentreX = width
-        if capped && width > 0 {
-            let guess = max(rect.minX, width - (bottom - baseline) / 2)
-            capRadius = max(0, (bottom - edgeY(atX: guess)) / 2)
-            capCentreX = max(rect.minX, width - capRadius)
-            capRadius = max(0, (bottom - edgeY(atX: capCentreX)) / 2)
+        // The cap is always the same size, and always full thickness.
+        //
+        // Deriving the radius from the edge's height wherever the fill happened
+        // to stop made the bulge a lottery: end on a crest and it was round and
+        // generous, end in a trough and it was a stub. The edge instead eases up
+        // to its highest point over the last stretch before the cap, so the end
+        // of the bar reads the same at every count.
+        let crestY = baseline - amplitude
+        let capRadius: CGFloat = capped ? max(0, (bottom - crestY) / 2) : 0
+        let capCentreX = max(rect.minX, width - capRadius)
+
+        func edgeY(atX x: CGFloat) -> CGFloat {
+            let wave = waveY(atX: x)
+            guard capped, blendLength > 0 else { return wave }
+            let start = capCentreX - blendLength
+            guard x > start else { return wave }
+            // Smoothstep, so the rise leaves the wave and arrives at the crest
+            // with no slope of its own — a linear blend would kink at both ends.
+            let t = min(1, max(0, (x - start) / blendLength))
+            let eased = t * t * (3 - 2 * t)
+            return wave + (crestY - wave) * eased
         }
 
         let edgeEnd = capped ? capCentreX : width
