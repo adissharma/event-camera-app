@@ -74,13 +74,25 @@ export function LiveActivitySyncManager() {
           const remaining =
             limit === null || limit === undefined ? -1 : Math.max(0, limit - takenCount);
 
+          // The widget's footer draws remaining as a fraction of the whole, so
+          // it needs the allowance as well as the count. -1 is the same
+          // unlimited sentinel `remaining` already uses, kept identical so the
+          // two fields can never disagree about whether an event is capped.
+          const allowance = limit === null || limit === undefined ? -1 : limit;
+
           if (!activeActivitiesRef.current.has(event.id)) {
             console.log(`[LiveActivitySync] Starting Live Activity for "${event.title}" with remaining count = ${remaining}`);
-            LiveActivityModule.startActivity(event.title, event.id, remaining, endsAtMs);
+            LiveActivityModule.startActivity(
+              event.title,
+              event.id,
+              remaining,
+              allowance,
+              endsAtMs,
+            );
             activeActivitiesRef.current.add(event.id);
           } else {
             console.log(`[LiveActivitySync] Updating Live Activity for "${event.title}" with remaining count = ${remaining}`);
-            LiveActivityModule.updateActivity(event.id, remaining, endsAtMs);
+            LiveActivityModule.updateActivity(event.id, remaining, allowance, endsAtMs);
           }
         }
       }

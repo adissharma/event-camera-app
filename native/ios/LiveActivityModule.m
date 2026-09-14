@@ -5,10 +5,12 @@
 RCT_EXTERN_METHOD(startActivity:(NSString *)eventName
                   celebrationId:(NSString *)celebrationId
                   photosLeft:(NSInteger)photosLeft
+                  photoAllowance:(NSInteger)photoAllowance
                   endTimeMs:(double)endTimeMs)
 
 RCT_EXTERN_METHOD(updateActivity:(NSString *)celebrationId
                   photosLeft:(NSInteger)photosLeft
+                  photoAllowance:(NSInteger)photoAllowance
                   endTimeMs:(double)endTimeMs)
 
 RCT_EXTERN_METHOD(endActivity:(NSString *)celebrationId)

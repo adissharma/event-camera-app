@@ -4,14 +4,21 @@ import ActivityKit
 @objc(LiveActivityModule)
 class LiveActivityModule: NSObject {
   
-  @objc(startActivity:celebrationId:photosLeft:endTimeMs:)
-  func startActivity(eventName: String, celebrationId: String, photosLeft: Int, endTimeMs: Double) {
+  @objc(startActivity:celebrationId:photosLeft:photoAllowance:endTimeMs:)
+  func startActivity(
+    eventName: String,
+    celebrationId: String,
+    photosLeft: Int,
+    photoAllowance: Int,
+    endTimeMs: Double
+  ) {
     guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
     
     let targetDate = Date(timeIntervalSince1970: endTimeMs / 1000.0)
     let contentState = EventLiveActivityAttributes.ContentState(
       photosLeft: photosLeft,
-      endTime: targetDate
+      endTime: targetDate,
+      photoAllowance: photoAllowance
     )
     
     Task { @MainActor in
@@ -39,12 +46,18 @@ class LiveActivityModule: NSObject {
     }
   }
   
-  @objc(updateActivity:photosLeft:endTimeMs:)
-  func updateActivity(celebrationId: String, photosLeft: Int, endTimeMs: Double) {
+  @objc(updateActivity:photosLeft:photoAllowance:endTimeMs:)
+  func updateActivity(
+    celebrationId: String,
+    photosLeft: Int,
+    photoAllowance: Int,
+    endTimeMs: Double
+  ) {
     let targetDate = Date(timeIntervalSince1970: endTimeMs / 1000.0)
     let updatedContentState = EventLiveActivityAttributes.ContentState(
       photosLeft: photosLeft,
-      endTime: targetDate
+      endTime: targetDate,
+      photoAllowance: photoAllowance
     )
     
     Task { @MainActor in
