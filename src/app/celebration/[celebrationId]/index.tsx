@@ -310,11 +310,6 @@ function CheckIcon({ size = 18, color = '#FFFFFF' }) {
  * `undefined`, so every view styled with it was laid out at zero size — which
  * is why the story viewer's touch overlay received no taps or swipes at all.
  */
-/** Keep the event navigation mark subtle within the top-left navigation slot. */
-const EVENT_NAV_MARK = require('../../../../assets/brand/event-nav-mark.png');
-const EVENT_NAV_MARK_ASPECT_RATIO = 1230 / 1278;
-const EVENT_NAV_MARK_HEIGHT = 18;
-
 const ABSOLUTE_FILL = {
   position: 'absolute',
   top: 0,
@@ -4187,13 +4182,6 @@ export function EventDetailView({
                   <CloseIcon size={20} color="#FFFFFF" />
                 </Pressable>
               )}
-              <Image
-                source={EVENT_NAV_MARK}
-                accessibilityRole="image"
-                accessibilityLabel={BRAND_CONFIG.appName}
-                resizeMode="contain"
-                style={S.navBrandMark}
-              />
             </View>
             <View style={{ flexDirection: 'row', gap: 12 }}>
               <Pressable
@@ -5651,13 +5639,6 @@ const S = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  /** Preserve the artwork's natural proportions within the existing nav height. */
-  navBrandMark: {
-    width: EVENT_NAV_MARK_HEIGHT * EVENT_NAV_MARK_ASPECT_RATIO,
-    height: EVENT_NAV_MARK_HEIGHT,
-    opacity: 0.9,
-  },
-
   // ── Hero info (overlaid on gradient) ──
   heroInfo: {
     position: 'absolute',
