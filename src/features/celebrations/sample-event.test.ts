@@ -23,7 +23,7 @@ describe('the example album', () => {
 
   it('leads the gallery with the selected wedding moments', () => {
     expect(SAMPLE_PHOTOS.slice(0, 2).map((photo) => photo.id)).toEqual([
-      'sample-photo-5',
+      'sample-photo-8',
       'sample-photo-7',
     ]);
   });

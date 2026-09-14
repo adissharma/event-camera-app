@@ -1556,10 +1556,10 @@ export function EventDetailView({
 
   const SCRIM_LOCATIONS = [
     0,
-    0.30 * SCRIM_SOLID_AT,
-    0.48 * SCRIM_SOLID_AT,
-    0.64 * SCRIM_SOLID_AT,
-    0.82 * SCRIM_SOLID_AT,
+    0.58 * SCRIM_SOLID_AT,
+    0.70 * SCRIM_SOLID_AT,
+    0.80 * SCRIM_SOLID_AT,
+    0.90 * SCRIM_SOLID_AT,
     SCRIM_SOLID_AT,
     1,
   ] as const;

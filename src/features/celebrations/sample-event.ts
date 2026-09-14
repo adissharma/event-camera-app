@@ -116,9 +116,9 @@ export const SAMPLE_CHALLENGE_IDS = {
  */
 export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
   {
-    id: 'sample-photo-5',
-    source: require('../../../assets/sample-event/05.jpg'),
-    displayName: 'Priya',
+    id: 'sample-photo-8',
+    source: require('../../../assets/sample-event/08.png'),
+    displayName: 'Amelia',
     minutesIntoDay: 40,
   },
   {
@@ -128,42 +128,48 @@ export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
     minutesIntoDay: 125,
   },
   {
+    id: 'sample-photo-5',
+    source: require('../../../assets/sample-event/05.jpg'),
+    displayName: 'Priya',
+    minutesIntoDay: 315,
+  },
+  {
     id: 'sample-photo-1',
     source: require('../../../assets/sample-event/01.jpg'),
     displayName: 'Rosie',
-    minutesIntoDay: 315,
+    minutesIntoDay: 332,
     challengeId: SAMPLE_CHALLENGE_IDS.unexpectedStar,
   },
   {
     id: 'sample-photo-2',
     source: require('../../../assets/sample-event/02.jpg'),
     displayName: 'Tom',
-    minutesIntoDay: 332,
+    minutesIntoDay: 408,
     challengeId: SAMPLE_CHALLENGE_IDS.tinyGuest,
   },
   {
     id: 'sample-photo-3',
     source: require('../../../assets/sample-event/03.jpg'),
     displayName: 'Priya',
-    minutesIntoDay: 408,
+    minutesIntoDay: 440,
     challengeId: SAMPLE_CHALLENGE_IDS.happyTears,
   },
   {
     id: 'sample-photo-4',
     source: require('../../../assets/sample-event/04.jpg'),
     displayName: 'Dan',
-    minutesIntoDay: 440,
+    minutesIntoDay: 485,
   },
   {
     id: 'sample-photo-6',
     source: require('../../../assets/sample-event/06.jpg'),
     displayName: 'Marcus',
-    minutesIntoDay: 485,
+    minutesIntoDay: 520,
     challengeId: SAMPLE_CHALLENGE_IDS.danceFloor,
   },
 ] as const;
 
-export const SAMPLE_COVER = require('../../../assets/sample-event/cover.jpg');
+export const SAMPLE_COVER = require('../../../assets/sample-event/10.png');
 
 export interface SampleChallenge {
   id: string;
