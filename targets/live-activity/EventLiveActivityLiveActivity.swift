@@ -28,6 +28,10 @@ struct EventLiveActivityLiveActivity: Widget {
             // The gradient retreats rather than jumping when a shot is taken.
             // Restrained on purpose: a spring here would read as a game.
             .animation(.easeInOut(duration: 0.45), value: context.state.photosLeft)
+            // An opaque layer of our own, edge to edge, as well as the tint.
+            // The tint alone leaves the system's container material showing at
+            // the edges, which reads as a pale rim around the card.
+            .background(Ink.background)
             .activityBackgroundTint(Ink.background)
             .activitySystemActionForegroundColor(Ink.textPrimary)
 

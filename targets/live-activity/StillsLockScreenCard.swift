@@ -249,44 +249,102 @@ struct CameraCTA: View {
 
 // MARK: - The footer
 
-/// The footer's top edge.
+/// Where the footer's top edge sits at a given point across its width.
 ///
-/// A shallow wave rather than a rule, so the filled area reads as part of the
-/// same imperfect family as the blob mark rather than as a progress bar someone
-/// dropped in. Deliberately restrained: the amplitude is a few points across
-/// the whole width, which registers as "not quite straight" without ever
-/// becoming a decorative flourish.
+/// Two gentle harmonics rather than one, so the line never settles into the
+/// regular rhythm that would read as a sine wave. Expressed as a function of
+/// the fraction across the full footer — not of absolute points — so the same
+/// curve is drawn whatever the Live Activity's width, and so the filled and
+/// unfilled parts always agree about where the edge is.
 ///
-/// The control points are fractions of the width, so the wave keeps its shape at
-/// any Live Activity size instead of stretching out of proportion.
-struct OrganicTopEdge: Shape {
-    /// How far the crest sits above the trough, in points.
+/// It has to be a function, not a sequence of curve segments: the trailing cap
+/// starts wherever the fill happens to end, and the path can only meet it
+/// smoothly if the height at that exact point is knowable.
+func footerEdgeOffset(at fraction: Double, amplitude: CGFloat) -> CGFloat {
+    let t = min(1, max(0, fraction))
+    let first = sin(t * 2 * .pi * 0.9 + 0.7)
+    let second = sin(t * 2 * .pi * 2.1 + 2.3)
+    return amplitude * CGFloat(0.55 * first + 0.45 * second)
+}
+
+/// The footer's filled area, as a single path.
+///
+/// Built as one shape rather than a wavy rectangle behind a rounded-rectangle
+/// mask. The mask's corner arc began at the *rectangle's* top edge while the
+/// wave sat below it, so the arc was cut off partway and met the wave at a
+/// visible step — a rounded corner that abruptly became a straight line.
+///
+/// Here the top edge is walked to the point where the cap begins, and the cap
+/// is a half-circle springing from that exact height. A circle's tangent at its
+/// topmost point is horizontal and the wave is shallow there, so the two meet
+/// without a corner.
+struct StillsFooterShape: Shape {
+    /// How much of the width is filled, 0...1. A full-width shape (the track)
+    /// passes 1 and no cap.
+    var fraction: Double = 1
+    /// Whether the trailing end is rounded. The track runs to the card's edge
+    /// and lets the card's own corner finish it.
+    var capped: Bool = true
     var amplitude: CGFloat = 5
+
+    var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        let w = rect.width
-        let top = rect.minY + amplitude
 
-        path.move(to: CGPoint(x: rect.minX, y: top))
+        let full = rect.width
+        let baseline = rect.minY + amplitude
+        let bottom = rect.maxY
+        let width = max(0, full * CGFloat(min(1, max(0, fraction))))
 
-        // Three gentle arcs. The middle one dips, the outer two rise, which
-        // avoids the regular rhythm that would read as a sine wave.
-        path.addQuadCurve(
-            to: CGPoint(x: w * 0.34, y: top - amplitude * 0.45),
-            control: CGPoint(x: w * 0.17, y: top + amplitude * 0.55)
-        )
-        path.addQuadCurve(
-            to: CGPoint(x: w * 0.68, y: top + amplitude * 0.2),
-            control: CGPoint(x: w * 0.51, y: top - amplitude * 0.95)
-        )
-        path.addQuadCurve(
-            to: CGPoint(x: w, y: top - amplitude * 0.5),
-            control: CGPoint(x: w * 0.85, y: top + amplitude * 0.5)
-        )
+        func edgeY(atX x: CGFloat) -> CGFloat {
+            guard full > 0 else { return baseline }
+            return baseline + footerEdgeOffset(at: Double(x / full), amplitude: amplitude)
+        }
 
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        // Where the straight run of the top edge stops and the cap takes over.
+        // The radius depends on the edge's height and the height depends on
+        // where the cap starts, so it is estimated once and then refined —
+        // the curve is shallow enough that one pass settles it.
+        var capRadius: CGFloat = 0
+        var capCentreX = width
+        if capped && width > 0 {
+            let guess = max(rect.minX, width - (bottom - baseline) / 2)
+            capRadius = max(0, (bottom - edgeY(atX: guess)) / 2)
+            capCentreX = max(rect.minX, width - capRadius)
+            capRadius = max(0, (bottom - edgeY(atX: capCentreX)) / 2)
+        }
+
+        let edgeEnd = capped ? capCentreX : width
+        guard edgeEnd >= rect.minX else { return path }
+
+        // The top edge, sampled. Enough steps that the curve is smooth at any
+        // width a Live Activity is given, few enough to stay cheap.
+        let steps = 48
+        path.move(to: CGPoint(x: rect.minX, y: edgeY(atX: rect.minX)))
+        if edgeEnd > rect.minX {
+            for step in 1...steps {
+                let x = rect.minX + (edgeEnd - rect.minX) * CGFloat(step) / CGFloat(steps)
+                path.addLine(to: CGPoint(x: x, y: edgeY(atX: x)))
+            }
+        }
+
+        if capped && capRadius > 0 {
+            path.addArc(
+                center: CGPoint(x: capCentreX, y: bottom - capRadius),
+                radius: capRadius,
+                startAngle: .degrees(-90),
+                endAngle: .degrees(90),
+                clockwise: false
+            )
+        } else {
+            path.addLine(to: CGPoint(x: edgeEnd, y: bottom))
+        }
+
+        path.addLine(to: CGPoint(x: rect.minX, y: bottom))
         path.closeSubpath()
 
         return path
@@ -336,23 +394,14 @@ struct StillsRemainingFooter: View {
             let fitsInside = fill >= labelWidth + trailingPad + minLeadIn
 
             ZStack(alignment: .leading) {
-                OrganicTopEdge()
+                StillsFooterShape(fraction: 1, capped: false)
                     .fill(Ink.footerTrack)
 
-                // Drawn at full width and masked, so the wave along the top of
-                // the gradient is the same curve as the track's. Cutting the
-                // shape to the fill width instead would compress the wave and
-                // the two edges would visibly disagree.
-                OrganicTopEdge()
+                // The same edge function as the track, evaluated over the same
+                // full width, so the two never disagree about where the top of
+                // the footer is — the colour simply stops earlier.
+                StillsFooterShape(fraction: fraction, capped: true)
                     .fill(Ink.accent(completingAt: fraction))
-                    .mask(alignment: .leading) {
-                        // Rounded at the trailing end only: the leading rounding
-                        // is pushed off the left edge, and the card's own corner
-                        // takes care of that side.
-                        RoundedRectangle(cornerRadius: height / 2, style: .continuous)
-                            .frame(width: max(0, fill) + height)
-                            .offset(x: -height)
-                    }
 
                 if fill > 0.5 {
                     // Padding before the frame, never after: a trailing pad
