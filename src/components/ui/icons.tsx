@@ -1,4 +1,4 @@
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 import { colours } from '@/design';
 
@@ -241,6 +241,19 @@ export function CameraIcon({ size = 16, color = colours.textPrimary }: IconProps
   );
 }
 
+/** A solid camera silhouette for compact metric displays. */
+export function FilledCameraIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M21 6h-4l-2-3H9L7 6H3a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2zM12 18a5 5 0 1 1 0-10 5 5 0 0 1 0 10z"
+        fill={color}
+        fillRule="evenodd"
+      />
+    </Svg>
+  );
+}
+
 /**
  * Camera with a sparkle, for the guest's join action.
  *
@@ -325,6 +338,22 @@ export function ClockIcon({ size = 16, color = colours.textPrimary }: IconProps)
   );
 }
 
+/** A filled clock face with a dark hand cut-out for compact metric displays. */
+export function FilledClockIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={10} fill={color} />
+      <Path
+        d="M12 6v6l4 2"
+        stroke={colours.background}
+        strokeWidth={2.1}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function PersonIcon({ size = 16, color = colours.textPrimary }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -341,6 +370,19 @@ export function PersonIcon({ size = 16, color = colours.textPrimary }: IconProps
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+/** A filled person silhouette for compact metric displays. */
+export function FilledPersonIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={7.25} r={4.25} fill={color} />
+      <Path
+        d="M4 21v-1.75C4 15.8 7.58 13 12 13s8 2.8 8 6.25V21H4z"
+        fill={color}
       />
     </Svg>
   );

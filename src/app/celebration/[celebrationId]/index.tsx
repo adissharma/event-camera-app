@@ -66,11 +66,11 @@ import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { SegmentedControl } from '@/components/forms/segmented-control';
 import {
-  CameraIcon,
-  ClockIcon,
+  FilledCameraIcon,
+  FilledClockIcon,
   CloseIcon,
   LockIcon,
-  PersonIcon,
+  FilledPersonIcon,
   PhotoGridIcon,
   PinIcon,
   VideoTabIcon,
@@ -4247,7 +4247,7 @@ export function EventDetailView({
 
             <View style={S.galleryStatsRow}>
               <View style={S.galleryStatItem}>
-                <CameraIcon size={17} color="rgba(255,255,255,0.72)" />
+                <FilledCameraIcon size={17} color="rgba(255,255,255,0.72)" />
                 <AppText variant="heading" style={S.galleryStatValue}>{photos.length}</AppText>
               </View>
 
@@ -4262,12 +4262,12 @@ export function EventDetailView({
                   pressed && S.galleryStatPressed,
                 ]}
               >
-                <PersonIcon size={17} color="rgba(255,255,255,0.72)" />
+                <FilledPersonIcon size={17} color="rgba(255,255,255,0.72)" />
                 <AppText variant="heading" style={S.galleryStatValue}>{guestsJoined}</AppText>
               </Pressable>
 
               <View style={S.galleryStatItem}>
-                <ClockIcon size={17} color="rgba(255,255,255,0.72)" />
+                <FilledClockIcon size={17} color="rgba(255,255,255,0.72)" />
                 <AppText variant="heading" style={S.galleryStatValue}>{timeLeftValue}</AppText>
               </View>
             </View>
