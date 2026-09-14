@@ -21,6 +21,13 @@ describe('the example album', () => {
     expect(new Set(SAMPLE_PHOTOS.map((photo) => photo.id)).size).toBe(SAMPLE_PHOTOS.length);
   });
 
+  it('leads the gallery with the selected wedding moments', () => {
+    expect(SAMPLE_PHOTOS.slice(0, 2).map((photo) => photo.id)).toEqual([
+      'sample-photo-5',
+      'sample-photo-7',
+    ]);
+  });
+
   it('reads as one evening, in order', () => {
     const times = SAMPLE_PHOTOS.map((photo) => photo.minutesIntoDay);
     expect(times).toEqual([...times].sort((a, b) => a - b));

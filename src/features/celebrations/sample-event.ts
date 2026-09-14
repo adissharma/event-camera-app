@@ -107,60 +107,59 @@ export const SAMPLE_CHALLENGE_IDS = {
 /**
  * The reception, in the order it happened.
  *
- * Sequenced by the light in each frame rather than by category: afternoon sun
- * on the flagstones, then low gold across the grass, then candles, then the
- * dark and the string lights. A gallery that jumps between noon and midnight
- * reads as a folder; this reads as an evening.
+ * Curated to lead with the two most immediately celebratory frames, then
+ * continue through the reception in a natural order. A gallery that jumps
+ * between noon and midnight reads as a folder; this reads as an evening.
  *
  * The count here IS the count shown in the UI. Adding a photo adds one to the
  * gallery and nowhere else needs telling.
  */
 export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
   {
+    id: 'sample-photo-5',
+    source: require('../../../assets/sample-event/05.jpg'),
+    displayName: 'Priya',
+    minutesIntoDay: 40,
+  },
+  {
+    id: 'sample-photo-7',
+    source: require('../../../assets/sample-event/07.jpg'),
+    displayName: 'Ellie',
+    minutesIntoDay: 125,
+  },
+  {
     id: 'sample-photo-1',
     source: require('../../../assets/sample-event/01.jpg'),
     displayName: 'Rosie',
-    minutesIntoDay: 40,
+    minutesIntoDay: 315,
     challengeId: SAMPLE_CHALLENGE_IDS.unexpectedStar,
   },
   {
     id: 'sample-photo-2',
     source: require('../../../assets/sample-event/02.jpg'),
     displayName: 'Tom',
-    minutesIntoDay: 125,
+    minutesIntoDay: 332,
     challengeId: SAMPLE_CHALLENGE_IDS.tinyGuest,
   },
   {
     id: 'sample-photo-3',
     source: require('../../../assets/sample-event/03.jpg'),
     displayName: 'Priya',
-    minutesIntoDay: 315,
+    minutesIntoDay: 408,
     challengeId: SAMPLE_CHALLENGE_IDS.happyTears,
   },
   {
     id: 'sample-photo-4',
     source: require('../../../assets/sample-event/04.jpg'),
     displayName: 'Dan',
-    minutesIntoDay: 332,
-  },
-  {
-    id: 'sample-photo-5',
-    source: require('../../../assets/sample-event/05.jpg'),
-    displayName: 'Priya',
-    minutesIntoDay: 408,
+    minutesIntoDay: 440,
   },
   {
     id: 'sample-photo-6',
     source: require('../../../assets/sample-event/06.jpg'),
     displayName: 'Marcus',
-    minutesIntoDay: 440,
-    challengeId: SAMPLE_CHALLENGE_IDS.danceFloor,
-  },
-  {
-    id: 'sample-photo-7',
-    source: require('../../../assets/sample-event/07.jpg'),
-    displayName: 'Ellie',
     minutesIntoDay: 485,
+    challengeId: SAMPLE_CHALLENGE_IDS.danceFloor,
   },
 ] as const;
 
@@ -221,7 +220,7 @@ export const SAMPLE_CHALLENGES: readonly SampleChallenge[] = [
 
 export const SAMPLE_EVENT = {
   id: SAMPLE_CELEBRATION_ID,
-  title: 'Amelia & James',
+  title: 'Amelia and James Wedding Day',
   celebrationType: 'wedding' as const,
   /** See `sampleEventEndsAt` — always a month ago. */
   get endsAt() {
