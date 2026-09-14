@@ -5789,6 +5789,7 @@ const S = StyleSheet.create({
   },
   galleryStatValue: {
     color: colours.textPrimary,
+    fontFamily: fontFamilies.textMedium,
     textAlign: 'center',
   },
 

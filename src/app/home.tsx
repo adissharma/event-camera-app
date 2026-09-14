@@ -153,17 +153,19 @@ function organicPillPath(width: number, height: number) {
   const start = Math.max(middle, 13);
   const end = Math.max(start, width - middle);
 
-  // The top and bottom use slightly different control points. The result is
-  // still a compact capsule, but it has the hand-shaped softness of the live
-  // activity progress fill rather than a mechanically perfect rounded rect.
+  // The top and bottom deliberately swell and dip at different points. It is
+  // still compact enough to read as a pill, but has the looser, hand-shaped
+  // edge of the live activity progress fill rather than a rounded rectangle.
   return [
-    `M ${start} 1.4`,
-    `C ${width * 0.3} 0.1 ${width * 0.67} 2.1 ${end} 1`,
-    `C ${right - 2.2} 1.3 ${right} ${middle * 0.48} ${right - 0.5} ${middle}`,
-    `C ${right - 0.9} ${height * 0.76} ${right - 3.3} ${height - 1.2} ${end} ${height - 1.1}`,
-    `C ${width * 0.66} ${height - 0.1} ${width * 0.31} ${height - 2.1} ${start} ${height - 1}`,
-    `C ${left + 3} ${height - 1.3} ${left + 0.3} ${height * 0.74} ${left + 0.7} ${middle}`,
-    `C ${left + 0.5} ${height * 0.29} ${left + 3.6} 2.2 ${start} 1.4 Z`,
+    `M ${start} 2.6`,
+    `C ${width * 0.23} 0.15 ${width * 0.36} 3.7 ${width * 0.54} 1.25`,
+    `C ${width * 0.68} -0.15 ${width * 0.82} 2.8 ${end} 2.05`,
+    `C ${right - 1.4} 1.4 ${right + 0.15} ${middle * 0.43} ${right - 0.4} ${middle * 0.71}`,
+    `C ${right - 0.8} ${height * 0.86} ${right - 4.4} ${height - 0.35} ${end - 1.2} ${height - 2.25}`,
+    `C ${width * 0.73} ${height - 0.4} ${width * 0.57} ${height - 3.2} ${width * 0.4} ${height - 1.15}`,
+    `C ${width * 0.28} ${height + 0.05} ${width * 0.17} ${height - 2.4} ${start - 0.6} ${height - 1.55}`,
+    `C ${left + 2.1} ${height - 1.05} ${left + 0.05} ${height * 0.72} ${left + 0.85} ${middle * 1.08}`,
+    `C ${left + 0.2} ${height * 0.32} ${left + 4.2} 1.25 ${start} 2.6 Z`,
   ].join(' ');
 }
 
