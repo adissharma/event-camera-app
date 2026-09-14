@@ -16,7 +16,12 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, {
+  Defs,
+  Path,
+  LinearGradient as SvgLinearGradient,
+  Stop,
+} from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 
@@ -141,6 +146,69 @@ function FilledClockIcon({ size = 16 }: { size?: number }) {
   );
 }
 
+function organicPillPath(width: number, height: number) {
+  const middle = height / 2;
+  const left = 1;
+  const right = width - 1;
+  const start = Math.max(middle, 13);
+  const end = Math.max(start, width - middle);
+
+  // The top and bottom use slightly different control points. The result is
+  // still a compact capsule, but it has the hand-shaped softness of the live
+  // activity progress fill rather than a mechanically perfect rounded rect.
+  return [
+    `M ${start} 1.4`,
+    `C ${width * 0.3} 0.1 ${width * 0.67} 2.1 ${end} 1`,
+    `C ${right - 2.2} 1.3 ${right} ${middle * 0.48} ${right - 0.5} ${middle}`,
+    `C ${right - 0.9} ${height * 0.76} ${right - 3.3} ${height - 1.2} ${end} ${height - 1.1}`,
+    `C ${width * 0.66} ${height - 0.1} ${width * 0.31} ${height - 2.1} ${start} ${height - 1}`,
+    `C ${left + 3} ${height - 1.3} ${left + 0.3} ${height * 0.74} ${left + 0.7} ${middle}`,
+    `C ${left + 0.5} ${height * 0.29} ${left + 3.6} 2.2 ${start} 1.4 Z`,
+  ].join(' ');
+}
+
+function OrganicCountdownPill({ label, gradientId }: { label: string; gradientId: string }) {
+  const [bounds, setBounds] = useState<{ width: number; height: number } | null>(null);
+
+  return (
+    <View
+      style={styles.upcomingHeroCountdownPill}
+      pointerEvents="none"
+      onLayout={({ nativeEvent: { layout: next } }) => {
+        setBounds((current) =>
+          current && current.width === next.width && current.height === next.height
+            ? current
+            : { width: next.width, height: next.height },
+        );
+      }}
+    >
+      {bounds ? (
+        <Svg
+          width={bounds.width}
+          height={bounds.height}
+          viewBox={`0 0 ${bounds.width} ${bounds.height}`}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        >
+          <Defs>
+            <SvgLinearGradient id={gradientId} x1="0%" y1="50%" x2="100%" y2="50%">
+              <Stop offset="0" stopColor={MOMENTS_SLIDER_GRADIENT[0]} />
+              <Stop offset="0.36" stopColor={MOMENTS_SLIDER_GRADIENT[1]} />
+              <Stop offset="0.7" stopColor={MOMENTS_SLIDER_GRADIENT[2]} />
+              <Stop offset="1" stopColor={MOMENTS_SLIDER_GRADIENT[3]} />
+            </SvgLinearGradient>
+          </Defs>
+          <Path d={organicPillPath(bounds.width, bounds.height)} fill={`url(#${gradientId})`} />
+        </Svg>
+      ) : null}
+      <FilledClockIcon size={16} />
+      <AppText style={styles.upcomingHeroCountdown} numberOfLines={1}>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
 function ChevronRightIcon({ size = 16, color = colours.textSecondary }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
@@ -243,18 +311,10 @@ function HomeUpcomingEventCard({
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <LinearGradient
-        colors={MOMENTS_SLIDER_GRADIENT}
-        start={{ x: 0, y: 0.5 }}
-        end={{ x: 1, y: 0.5 }}
-        style={styles.upcomingHeroCountdownPill}
-        pointerEvents="none"
-      >
-        <FilledClockIcon size={16} />
-        <AppText style={styles.upcomingHeroCountdown} numberOfLines={1}>
-          {formatUpcomingTimeLeft(celebration)}
-        </AppText>
-      </LinearGradient>
+      <OrganicCountdownPill
+        label={formatUpcomingTimeLeft(celebration)}
+        gradientId={`upcoming-countdown-${celebration.id}`}
+      />
       <View style={styles.upcomingHeroContent}>
         <AppText
           variant="displayLarge"
@@ -1052,9 +1112,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     gap: 7,
-    borderRadius: radii.pill,
     paddingHorizontal: 13,
     paddingVertical: 9,
+    overflow: 'visible',
   },
   upcomingHeroCountdown: {
     color: '#FFFFFF',
