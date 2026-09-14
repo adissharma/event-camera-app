@@ -926,7 +926,6 @@ const styles = StyleSheet.create({
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
   },
   profileActionIcon: {
     width: 28,
