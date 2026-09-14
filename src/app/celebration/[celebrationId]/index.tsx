@@ -1630,7 +1630,10 @@ export function EventDetailView({
     () => visibleGalleryItems.filter((p) => p.mediaType === 'video'),
     [visibleGalleryItems],
   );
-  const showMediaTabs = heroVideosOnly.length > 0 && heroPhotosOnly.length > 0;
+  // Keep the Video tab discoverable for every event while video availability
+  // is being opened up. The future entitlement check belongs here, rather
+  // than in the tab rendering, when premium-only visibility returns.
+  const showMediaTabs = true;
   /**
    * Which of the two lists above the hero viewer is currently paging
    * through. Set once, when a photo is tapped open (see `handlePhotoPress`),
