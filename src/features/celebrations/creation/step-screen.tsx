@@ -27,6 +27,10 @@ export interface CreationStepScreenProps {
   /** Route to advance to. Defaults to the next step in order. */
   nextHref?: string;
   nextLabel?: string;
+  /** Edit-only route to advance to before saving the final edit step. */
+  editNextHref?: string;
+  /** Edit-only destination after a successful save. */
+  editDismissTo?: string;
   /** Replaces the default Next button entirely (used by review). */
   action?: ReactNode;
   /** Optional control shown immediately above the standard save/next action. */
@@ -85,6 +89,8 @@ export function CreationStepScreen({
   children,
   nextHref,
   nextLabel,
+  editNextHref,
+  editDismissTo,
   action,
   secondaryAction,
   scrollable = true,
@@ -128,6 +134,14 @@ export function CreationStepScreen({
 
   const handlePress = async () => {
     if (isEditing) {
+      // Editing an event's end date is intentionally a two-step sequence:
+      // retain the creation journey's date and time wheels, but postpone the
+      // write until the host has confirmed both values.
+      if (editNextHref) {
+        router.push(editNextHref as never);
+        return;
+      }
+
       // Reveal editing is deliberately a two-part decision: choose the host's
       // reveal first, then decide when guests follow. Keep both answers in
       // the draft and persist once from the guest step, so backing out of the
@@ -148,7 +162,11 @@ export function CreationStepScreen({
           queryKey: celebrationDetailKeys.detail(draft.editCelebrationId!),
         });
         await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
-        navigation.goBack();
+        if (editDismissTo) {
+          router.dismissTo(editDismissTo as never);
+        } else {
+          navigation.goBack();
+        }
       } catch (e: any) {
         Alert.alert('Error', e.message || 'Failed to save changes.');
       } finally {
@@ -196,7 +214,7 @@ export function CreationStepScreen({
               which have no equivalent of "the button looks unavailable".
             */}
             <Button
-              label={isEditing ? 'Save' : (nextLabel ?? copy.common.next)}
+              label={isEditing && !editNextHref ? 'Save' : (nextLabel ?? copy.common.next)}
               disabled={blockingError !== null}
               disabledReason={blockingError ?? undefined}
               loading={saving}

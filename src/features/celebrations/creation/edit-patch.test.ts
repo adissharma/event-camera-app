@@ -70,6 +70,7 @@ describe('buildEditPatch', () => {
     it('saves the closing time', () => {
       const endsAt = '2026-09-01T18:00:00.000Z';
       expect(buildEditPatch('closing', draftWith({ endsAt }))).toEqual({ endsAt });
+      expect(buildEditPatch('closing-time', draftWith({ endsAt }))).toEqual({ endsAt });
     });
 
     it('resolves the reveal into a mode and a timestamp', () => {

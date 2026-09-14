@@ -234,10 +234,12 @@ export default function EditEventScreen() {
   };
 
   const formattedEndDate = celebration.ends_at
-    ? new Date(celebration.ends_at).toLocaleDateString(undefined, {
+    ? new Date(celebration.ends_at).toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
       })
     : 'Not set';
 
@@ -274,7 +276,7 @@ export default function EditEventScreen() {
 
             <Pressable onPress={() => handleEditField('closing')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
-                <AppText variant="labelLarge" style={styles.rowLabel}>End Date</AppText>
+                <AppText variant="labelLarge" style={styles.rowLabel}>End Date and Time</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>{formattedEndDate}</AppText>
               </View>
               <ChevronRightIcon />
@@ -329,8 +331,15 @@ export default function EditEventScreen() {
               <ChevronRightIcon />
             </Pressable>
 
-            <View style={styles.separator} />
+          </View>
+        </View>
 
+        <View style={[styles.section, styles.photoSettingsSection]}>
+          <AppText variant="eyebrow" tone="secondary" style={styles.sectionHeader}>
+            Photo settings
+          </AppText>
+
+          <View style={styles.card}>
             <Pressable onPress={() => handleEditField('reveal')} style={styles.row}>
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Reveal Delay</AppText>
@@ -483,6 +492,9 @@ const styles = StyleSheet.create({
   },
   section: {
     gap: spacing.xs,
+  },
+  photoSettingsSection: {
+    marginTop: spacing.xl,
   },
   sectionHeader: {
     paddingLeft: spacing.xs,

@@ -80,7 +80,13 @@ export default function ClosingStep() {
   }
 
   return (
-    <CreationStepScreen step="closing" heading={copy.create.closingHeading} headingAlign="center" scrollable={false}>
+    <CreationStepScreen
+      step="closing"
+      heading={copy.create.closingHeading}
+      headingAlign="center"
+      scrollable={false}
+      editNextHref="/create/closing-time"
+    >
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
           <WheelPicker values={days} selectedIndex={Math.max(0, days.indexOf(selected.getDate()))} onChange={(index) => selectPart('day', days[index])} accessibilityLabel="Event end day" width={76} />

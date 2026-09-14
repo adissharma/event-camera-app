@@ -24,6 +24,7 @@ export function buildEditPatch(step: CreationStep, draft: CreationDraft): EventS
       return { title: draft.title };
 
     case 'closing':
+    case 'closing-time':
       return { endsAt: draft.endsAt };
 
     case 'photo-limit':

@@ -27,7 +27,13 @@ export default function ClosingTimeStep() {
   }
 
   return (
-    <CreationStepScreen step="closing-time" heading={copy.create.closingTimeHeading} headingAlign="center" scrollable={false}>
+    <CreationStepScreen
+      step="closing-time"
+      heading={copy.create.closingTimeHeading}
+      headingAlign="center"
+      scrollable={false}
+      editDismissTo={draft.editCelebrationId ? `/celebration/${draft.editCelebrationId}/edit` : undefined}
+    >
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.xs }}>
           <WheelPicker values={HOURS} selectedIndex={hourIndex} onChange={(index) => selectTime(HOURS[index], MINUTES[minuteIndex], periodIndex)} accessibilityLabel="Event end hour" width={68} />
