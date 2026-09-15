@@ -116,6 +116,20 @@ function UserIcon({ size = 20, color = colours.textPrimary }) {
   );
 }
 
+function PlusIcon({ size = 22, color = '#FFFFFF' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M12 5v14M5 12h14"
+        stroke={color}
+        strokeWidth={2.25}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** A solid clock face so the countdown reads as an accent, not another line icon. */
 function FilledClockIcon({ size = 16 }: { size?: number }) {
   return (
@@ -661,6 +675,7 @@ export default function HomeScreen() {
               style={styles.headerPlusImage}
               contentFit="contain"
             />
+            <PlusIcon size={24} />
           </Pressable>
         </View>
       </View>
@@ -994,6 +1009,7 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   headerPlusImage: {
+    position: 'absolute',
     width: 52,
     height: 52,
   },
