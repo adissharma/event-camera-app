@@ -331,6 +331,55 @@ function HomeUpcomingEventCard({
 }
 
 /**
+ * Keeps the dashboard's hero footprint for a new host without inventing a
+ * second surface. Once an event exists this is replaced by the real carousel
+ * card in exactly the same position.
+ */
+function HomeUpcomingEventsEmptyState({
+  width,
+  onCreate,
+}: {
+  width: number;
+  onCreate: () => void;
+}) {
+  return (
+    <View style={[styles.upcomingEmptyState, { width, height: Math.round(width * 1.25) }]}>
+      <ExpoImage
+        source={require('../../assets/images/empty-events-illustration.png')}
+        style={styles.upcomingEmptyIllustration}
+        contentFit="contain"
+        accessibilityLabel="Friends celebrating and capturing an event together"
+      />
+
+      <View style={styles.upcomingEmptyCopy}>
+        <AppText variant="heading" align="center" style={styles.upcomingEmptyTitle}>
+          Your first event starts here
+        </AppText>
+        <AppText variant="bodySmall" tone="secondary" align="center" style={styles.upcomingEmptyBody}>
+          Bring everyone&apos;s photos and videos together in one place.
+        </AppText>
+      </View>
+
+      <Pressable
+        onPress={onCreate}
+        accessibilityRole="button"
+        accessibilityLabel="Create event"
+        style={({ pressed }) => [styles.upcomingEmptyCreateButton, pressed && styles.cardPressed]}
+      >
+        <LinearGradient
+          colors={MOMENTS_SLIDER_GRADIENT}
+          start={{ x: 0, y: 0.5 }}
+          end={{ x: 1, y: 0.5 }}
+          style={styles.upcomingEmptyCreateGradient}
+        >
+          <AppText variant="button" tone="onBrand">Create event</AppText>
+        </LinearGradient>
+      </Pressable>
+    </View>
+  );
+}
+
+/**
  * Page dots for the upcoming-events carousel.
  *
  * Driven straight off the scroll offset rather than off an index in state, so
@@ -694,7 +743,7 @@ export default function HomeScreen() {
             label="Loading your events"
             detail="Getting your celebrations ready."
           />
-        ) : list.length > 0 ? (
+        ) : (
           <>
             {upcomingEvents.length > 0 ? (
               <View style={styles.dashboardSection}>
@@ -740,21 +789,16 @@ export default function HomeScreen() {
                   </>
                 )}
               </View>
-            ) : null}
+            ) : (
+              <View style={styles.dashboardSection}>
+                <HomeUpcomingEventsEmptyState
+                  width={upcomingHeroWidth}
+                  onCreate={() => router.push('/create')}
+                />
+              </View>
+            )}
 
             {albumsSection}
-          </>
-        ) : (
-          <>
-            {albumsSection}
-          <View style={styles.emptyContainer}>
-            <AppText variant="heading" tone="secondary" style={styles.emptyText}>
-              No events found
-            </AppText>
-            <AppText variant="bodySmall" tone="secondary" align="center">
-              Tap the button below to capture the memories of your first celebration.
-            </AppText>
-          </View>
           </>
         )}
       </ScrollView>
@@ -1126,13 +1170,36 @@ const styles = StyleSheet.create({
   completedCardWrap: {
     overflow: 'visible',
   },
-  emptyContainer: {
+  upcomingEmptyState: {
     alignItems: 'center',
-    paddingVertical: spacing.giant,
-    gap: spacing.sm,
+    justifyContent: 'center',
+    gap: spacing.md,
   },
-  emptyText: {
-    color: colours.textSecondary,
+  upcomingEmptyIllustration: {
+    width: '74%',
+    aspectRatio: 1374 / 1145,
+  },
+  upcomingEmptyCopy: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+  },
+  upcomingEmptyTitle: {
+    color: colours.textPrimary,
+  },
+  upcomingEmptyBody: {
+    maxWidth: 270,
+  },
+  upcomingEmptyCreateButton: {
+    alignSelf: 'stretch',
+    marginHorizontal: spacing.xl,
+    borderRadius: radii.pill,
+    overflow: 'hidden',
+  },
+  upcomingEmptyCreateGradient: {
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   floatingMenuContainer: {
     position: 'absolute',
