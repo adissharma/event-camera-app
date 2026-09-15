@@ -352,10 +352,10 @@ function HomeUpcomingEventsEmptyState({
 
       <View style={styles.upcomingEmptyCopy}>
         <AppText variant="titleLarge" align="center" style={styles.upcomingEmptyTitle}>
-          Your first event starts here
+          Make a little magic together
         </AppText>
         <AppText variant="bodySmall" tone="secondary" align="center" style={styles.upcomingEmptyBody}>
-          Bring everyone&apos;s photos and videos together in one place.
+          Collect every photo in one place.
         </AppText>
       </View>
 
