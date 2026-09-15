@@ -89,6 +89,11 @@ import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
 import { TreatedPhoto } from '@/components/media/treated-photo';
+import { DisposablePhoto } from '@/components/media/disposable-photo';
+import {
+  CREATION_GALLERY_PREVIEW_IMAGES,
+  CREATION_GALLERY_PREVIEW_MONO_IMAGES,
+} from '@/features/celebrations/creation/gallery-preview-assets';
 import { loadSourceImage } from '@/features/media/disposable-cache';
 import { renderDisposablePhotoToFile } from '@/features/media/disposable-render';
 import { normalisePhotoTreatment } from '@/features/media/photo-treatment';
@@ -389,12 +394,32 @@ export function formatEventHeroDate(
 }
 
 const GALLERY_PRESETS = [
-  // Kept in the same order as the creation-flow reveal collage, so the
-  // pre-paywall event preview is a continuation of that gallery.
-  { id: 'preset_1', source: require('../../../../assets/sample-event/05.jpg') },
-  { id: 'preset_2', source: require('../../../../assets/sample-event/07.jpg') },
-  { id: 'preset_3', source: require('../../../../assets/sample-event/01.jpg') },
-  { id: 'preset_4', source: require('../../../../assets/sample-event/02.jpg') },
+  // Kept in the same order as the creation treatment collage. Monochrome
+  // uses a pre-rendered equivalent rather than ColorMatrix so the pre-paywall
+  // grid preserves the exact same crop as the collage on every platform.
+  {
+    id: 'preset_1',
+    source: CREATION_GALLERY_PREVIEW_IMAGES[0],
+    monochromeSource: CREATION_GALLERY_PREVIEW_MONO_IMAGES[0],
+  },
+  {
+    id: 'preset_2',
+    source: CREATION_GALLERY_PREVIEW_IMAGES[1],
+    monochromeSource: CREATION_GALLERY_PREVIEW_MONO_IMAGES[1],
+  },
+  // The live screen's existing offline fallback still includes these two
+  // assets. They are not used by the creation preview, but remain resolvable
+  // for sample/offline gallery data.
+  {
+    id: 'preset_3',
+    source: require('../../../../assets/sample-event/01.jpg'),
+    monochromeSource: require('../../../../assets/sample-event/mono/01.jpg'),
+  },
+  {
+    id: 'preset_4',
+    source: require('../../../../assets/sample-event/02.jpg'),
+    monochromeSource: require('../../../../assets/sample-event/mono/02.jpg'),
+  },
 ];
 
 // ─── Challenge data ───────────────────────────────────────────────────────────
@@ -2352,6 +2377,23 @@ export function EventDetailView({
     return preset ? preset.source : { uri: photo };
   }
 
+  /**
+   * Preview-only source selection mirrors the creation treatment collage.
+   * It intentionally bypasses the generic B&W ColorMatrix wrapper: that
+   * native wrapper lays out differently from a regular Image in this compact
+   * grid, which was the source of the zoomed monochrome preview.
+   */
+  function getCreationPreviewPhotoSource(photo: string) {
+    const preset = GALLERY_PRESETS.find((p) => p.id === photo);
+    if (
+      preset &&
+      normalisePhotoTreatment(primarySession?.photo_treatment) === 'black_and_white'
+    ) {
+      return preset.monochromeSource;
+    }
+    return preset ? preset.source : { uri: photo };
+  }
+
   function resolvePhotoSourceForSaving(photoUri: string) {
     return getPhotoSource(photoUri);
   }
@@ -4021,6 +4063,22 @@ export function EventDetailView({
                         />
                       ) : (
                         <VideoPoster uri={photo.uri} style={S.galleryCellImg} />
+                      )
+                    ) : previewMode && !locked ? (
+                      normalisePhotoTreatment(primarySession?.photo_treatment) === 'disposable' ? (
+                        <DisposablePhoto
+                          source={getCreationPreviewPhotoSource(photo.uri)}
+                          seedKey={`preview-${photo.uri === 'preset_2' ? 1 : 0}`}
+                          dateStampEnabled
+                          style={S.galleryCellImg}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Image
+                          source={getCreationPreviewPhotoSource(photo.uri)}
+                          style={S.galleryCellImg}
+                          resizeMode="cover"
+                        />
                       )
                     ) : (
                       <TreatedPhoto

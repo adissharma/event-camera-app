@@ -68,12 +68,11 @@ export const PREVIEW_CHALLENGES: readonly PreviewChallenge[] = [
 /**
  * Stand-in gallery media.
  *
- * These are `GALLERY_PRESETS` ids, not image sources. That indirection is the
- * point: the event screen resolves them through its own `getPhotoSource`, the
- * same function it uses for every other photo, so the preview's thumbnails go
- * through the real treatment pipeline — a host who chose Disposable sees
- * disposable-filtered tiles — instead of being drawn by a second renderer that
- * happens to look similar.
+ * These are `GALLERY_PRESETS` ids for the fixed two-photo pair used in the
+ * creation treatment collage. The event screen resolves them to those bundled
+ * sources, then uses the collage's rendering path in preview mode. This keeps
+ * Original, Disposable and Monochrome on identical crops rather than letting
+ * their separate gallery renderers choose different source geometry.
  *
  * Bundled assets, so the reveal never waits on the network. An image that
  * arrived late would appear after the paywall had already taken over.
@@ -94,12 +93,12 @@ const PREVIEW_CONTRIBUTORS = [
 ];
 
 /**
- * Twelve tiles rather than four.
+ * Twelve tiles repeating the same two photographs.
  *
  * The event screen counts what it is given — its "Moments" figure is
  * `photos.length`, not a number handed to it — so a four-photo preview
  * honestly reports a four-photo event, and a grid two tiles wide showing two
- * rows reads as an event nobody came to. Cycling the four bundled assets
+ * rows reads as an event nobody came to. Cycling the two bundled assets
  * across twelve contributors fills the fold and makes the count plausible,
  * without pretending to media that does not exist.
  */
@@ -119,11 +118,8 @@ function buildPreviewPhotos(order: readonly string[]): PreviewPhoto[] {
   });
 }
 
-const WEDDING_ORDER = ['preset_1', 'preset_2', 'preset_3', 'preset_4'] as const;
-const GENERAL_ORDER = ['preset_3', 'preset_4', 'preset_1', 'preset_2'] as const;
-
-const WEDDING_MEDIA = buildPreviewPhotos(WEDDING_ORDER);
-const GENERAL_MEDIA = buildPreviewPhotos(GENERAL_ORDER);
+const PREVIEW_MEDIA_ORDER = ['preset_1', 'preset_2'] as const;
+const PREVIEW_MEDIA = buildPreviewPhotos(PREVIEW_MEDIA_ORDER);
 
 export interface PreviewPhoto {
   uri: string;
@@ -140,13 +136,12 @@ export interface PreviewPhoto {
 }
 
 /**
- * The same four assets whatever the event type — only the order changes, so a
- * wedding opens on a wedding photograph and everything else opens on something
- * unmarked.
+ * The same pair is used for every event type, so the pre-paywall gallery is a
+ * direct continuation of the two photos the host just saw on the treatment
+ * step.
  */
-export function previewMediaFor(type: CelebrationType | null | undefined): PreviewPhoto[] {
-  const weddingish = type === 'wedding' || type === 'anniversary' || type === 'religious';
-  return weddingish ? WEDDING_MEDIA : GENERAL_MEDIA;
+export function previewMediaFor(_type: CelebrationType | null | undefined): PreviewPhoto[] {
+  return PREVIEW_MEDIA;
 }
 
 /**

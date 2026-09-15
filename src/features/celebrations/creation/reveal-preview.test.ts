@@ -43,26 +43,21 @@ describe('preview challenges', () => {
 });
 
 describe('preview media', () => {
-  it('is expressed as gallery preset ids, not image sources', () => {
-    // The event screen resolves these through its own `getPhotoSource`, which
-    // is what puts the preview's thumbnails through the real treatment
-    // pipeline rather than a second renderer that merely looks similar. A
-    // literal `require` or a `{ uri }` here would bypass that — and a `{ uri }`
-    // would also put a network fetch in the middle of a timed animation.
+  it('is expressed as the two gallery preset ids used by the treatment collage', () => {
+    // The event screen resolves these to the exact bundled sources used by the
+    // treatment step, so a timed preview cannot fetch a remote image or vary
+    // its top row with the selected photo treatment.
     for (const photo of previewMediaFor('party')) {
-      expect(photo.uri).toMatch(/^preset_\d+$/);
+      expect(['preset_1', 'preset_2']).toContain(photo.uri);
       expect(photo.takenBy).toBeTruthy();
     }
   });
 
-  it('opens a wedding on a wedding photograph', () => {
-    expect(previewMediaFor('wedding')[0]!.uri).not.toBe(previewMediaFor('party')[0]!.uri);
-  });
-
-  it('offers the same photographs whatever the event type', () => {
-    const ids = (type: Parameters<typeof previewMediaFor>[0]) =>
-      previewMediaFor(type).map((photo) => photo.uri).sort();
-    expect(ids('wedding')).toEqual(ids('corporate'));
+  it('keeps the first visible pair fixed for every event type', () => {
+    const firstPair = (type: Parameters<typeof previewMediaFor>[0]) =>
+      previewMediaFor(type).slice(0, 2).map((photo) => photo.uri);
+    expect(firstPair('wedding')).toEqual(['preset_1', 'preset_2']);
+    expect(firstPair('corporate')).toEqual(['preset_1', 'preset_2']);
   });
 
   it('falls back to the neutral order for an unknown type', () => {

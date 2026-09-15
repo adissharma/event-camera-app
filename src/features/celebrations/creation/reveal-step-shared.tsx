@@ -5,30 +5,11 @@ import { LockIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, fontFamilies, layout, radii, spacing } from '@/design';
 import type { SupportedPhotoTreatment } from '@/features/media/photo-treatment';
+import {
+  CREATION_GALLERY_PREVIEW_IMAGES,
+  CREATION_GALLERY_PREVIEW_MONO_IMAGES,
+} from '@/features/celebrations/creation/gallery-preview-assets';
 import { LinearGradient } from 'expo-linear-gradient';
-
-const PREVIEW_IMAGES = [
-  require('../../../../assets/sample-event/05.jpg'),
-  require('../../../../assets/sample-event/07.jpg'),
-  require('../../../../assets/sample-event/01.jpg'),
-  require('../../../../assets/sample-event/02.jpg'),
-] as const;
-
-/**
- * The same four frames, desaturated ahead of time.
- *
- * Not a runtime filter: React Native gates `filter: [{ grayscale }]` on iOS
- * behind `enableSwiftUIBasedFilters`, which is off by default, so the style
- * is accepted and silently does nothing. These are bundled assets and there
- * are four of them, so converting them once at build time is both certain to
- * work and free at render.
- */
-const PREVIEW_IMAGES_MONO = [
-  require('../../../../assets/sample-event/mono/05.jpg'),
-  require('../../../../assets/sample-event/mono/07.jpg'),
-  require('../../../../assets/sample-event/mono/01.jpg'),
-  require('../../../../assets/sample-event/mono/02.jpg'),
-] as const;
 
 const PREVIEW_MAX_WIDTH = 340;
 const PREVIEW_GAP = 6;
@@ -81,7 +62,9 @@ export function RevealPreview({
   // held back rather than about how they will look.
   const showDisposable = !locked && treatment === 'disposable';
   const sources =
-    locked || treatment === 'black_and_white' ? PREVIEW_IMAGES_MONO : PREVIEW_IMAGES;
+    locked || treatment === 'black_and_white'
+      ? CREATION_GALLERY_PREVIEW_MONO_IMAGES
+      : CREATION_GALLERY_PREVIEW_IMAGES;
 
   return (
     <View style={styles.previewContainer}>
