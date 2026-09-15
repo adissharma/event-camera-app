@@ -25,7 +25,6 @@ import Svg, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 
-import { DashboardShaderBackground } from '@/components/ui/dashboard-shader-background';
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -352,7 +351,7 @@ function HomeUpcomingEventsEmptyState({
       />
 
       <View style={styles.upcomingEmptyCopy}>
-        <AppText variant="heading" align="center" style={styles.upcomingEmptyTitle}>
+        <AppText variant="titleMedium" align="center" style={styles.upcomingEmptyTitle}>
           Your first event starts here
         </AppText>
         <AppText variant="bodySmall" tone="secondary" align="center" style={styles.upcomingEmptyBody}>
@@ -366,14 +365,9 @@ function HomeUpcomingEventsEmptyState({
         accessibilityLabel="Create event"
         style={({ pressed }) => [styles.upcomingEmptyCreateButton, pressed && styles.cardPressed]}
       >
-        <LinearGradient
-          colors={MOMENTS_SLIDER_GRADIENT}
-          start={{ x: 0, y: 0.5 }}
-          end={{ x: 1, y: 0.5 }}
-          style={styles.upcomingEmptyCreateGradient}
-        >
-          <AppText variant="button" tone="onBrand">Create event</AppText>
-        </LinearGradient>
+        <View style={styles.upcomingEmptyCreateSurface}>
+          <AppText variant="button" style={styles.upcomingEmptyCreateLabel}>Create event</AppText>
+        </View>
       </Pressable>
     </View>
   );
@@ -544,7 +538,7 @@ export default function HomeScreen() {
   const albumsSection = (
     <View style={styles.dashboardSection}>
       <AppText variant="titleMedium" style={styles.sectionTitle}>
-        Albums
+        Previous albums
       </AppText>
       <ScrollView
         horizontal
@@ -680,8 +674,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      <DashboardShaderBackground />
-
       {/* 1. Header Toolbar (Separator border line removed) */}
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <ExpoImage
@@ -1196,10 +1188,14 @@ const styles = StyleSheet.create({
     borderRadius: radii.pill,
     overflow: 'hidden',
   },
-  upcomingEmptyCreateGradient: {
+  upcomingEmptyCreateSurface: {
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  upcomingEmptyCreateLabel: {
+    color: '#090909',
   },
   floatingMenuContainer: {
     position: 'absolute',
