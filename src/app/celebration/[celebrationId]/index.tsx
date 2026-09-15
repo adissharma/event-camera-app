@@ -4297,38 +4297,95 @@ export function EventDetailView({
                 ) : null}
               </View>
 
-              <View style={S.galleryStatsRow}>
-                <View style={S.galleryStatColumn}>
-                  <View style={S.galleryStatItem}>
-                    <FilledCameraIcon size={16} color="#FFFFFF" />
-                    <AppText style={S.galleryStatValue}>{photos.length} stills</AppText>
-                  </View>
+              {isHost && challenges.length === 0 && !showGuestbook ? (
+                <View style={S.heroChallengesEmptyWrap}>
+                  <ChallengesEmptyCard
+                    onPress={handleAddChallenge}
+                    hasSiblingChip={false}
+                    tileSize={selectorTileSize}
+                  />
                 </View>
-
-                <View style={S.galleryStatColumn}>
-                  <Pressable
-                    onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                      S.galleryStatItem,
-                      S.galleryStatPressable,
-                      pressed && S.galleryStatPressed,
+              ) : (showGuestbook || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
+                <Animated.View
+                  style={[
+                    S.heroChipStrip,
+                    previewMode?.chipStripNudge
+                      ? { transform: [{ translateX: previewMode.chipStripNudge }] }
+                      : null,
+                  ]}
+                >
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={[
+                      S.heroChipsContent,
+                      isHost && challenges.length === 0 && { gap: GALLERY_PADDING },
                     ]}
                   >
-                    <FilledPersonIcon size={16} color="#FFFFFF" />
-                    <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
-                  </Pressable>
-                </View>
+                    {showGuestbook && (
+                      <Pressable
+                        style={({ pressed }) => [
+                          S.chipWrap,
+                          { width: selectorTileSize },
+                          pressed && { opacity: 0.75 },
+                          !guestbookUnlocked && S.chipLocked,
+                        ]}
+                        onPress={() => {
+                          const open = () =>
+                            router.push(`/celebration/${celebration.id}/guestbook` as never);
+                          if (guestbookUnlocked) open();
+                          else requestUpgrade('guestbook', 'Unlock Guestbook', open);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={guestbookUnlocked ? 'Guestbook' : 'Guestbook, upgrade required'}
+                      >
+                        <ChallengeGradientCircle index={0} size={selectorTileSize}>
+                          <GuestbookIcon size={22} color="#FFFFFF" />
+                        </ChallengeGradientCircle>
+                        <AppText style={S.chipLabel} numberOfLines={2}>Guestbook</AppText>
+                        {!guestbookUnlocked ? <LockedBadge /> : null}
+                      </Pressable>
+                    )}
 
-                <View style={S.galleryStatColumn}>
-                  <View style={S.galleryStatItem}>
-                    <FilledClockIcon size={16} color="#FFFFFF" />
-                    <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
-                  </View>
-                </View>
-              </View>
+                    {isHost && challenges.length === 0 && (
+                      <View style={!challengesUnlocked ? S.chipLocked : undefined}>
+                        <ChallengesEmptyCard
+                          onPress={() => {
+                            if (challengesUnlocked) handleAddChallenge();
+                            else requestUpgrade('challenges', 'Unlock Challenges', handleAddChallenge);
+                          }}
+                          hasSiblingChip={showGuestbook}
+                          tileSize={selectorTileSize}
+                        />
+                        {!challengesUnlocked ? <LockedBadge /> : null}
+                      </View>
+                    )}
+
+                    {challenges.map((challenge, index) => (
+                      <Pressable
+                        key={challenge.id}
+                        style={({ pressed }) => [
+                          S.chipWrap,
+                          { width: selectorTileSize },
+                          pressed && { opacity: 0.75 },
+                        ]}
+                        onPress={() => handleChallengePhotoPress(challenge)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Challenge: ${challenge.label}`}
+                        hitSlop={18}
+                        pressRetentionOffset={18}
+                      >
+                        <ChallengeGradientCircle index={index + 1} size={selectorTileSize}>
+                          <SharedChallengeIconSVG type={challenge.icon} size={22} />
+                        </ChallengeGradientCircle>
+                        <AppText style={S.chipLabel} numberOfLines={2}>
+                          {challenge.label}
+                        </AppText>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </Animated.View>
+              ) : null}
             </View>
           </Animated.View>
         </View>
@@ -4390,96 +4447,41 @@ export function EventDetailView({
           </View>
         )}
 
-        {isHost && challenges.length === 0 && !showGuestbook ? (
-          <View style={S.challengesEmptyBannerWrap}>
-            <ChallengesEmptyCard
-              onPress={handleAddChallenge}
-              hasSiblingChip={false}
-              tileSize={selectorTileSize}
-            />
+        <View style={S.galleryStatsRow}>
+          <View style={S.galleryStatColumn}>
+            <View style={S.galleryStatItem}>
+              <FilledCameraIcon size={16} color="#FFFFFF" />
+              <AppText style={S.galleryStatValue}>{photos.length} stills</AppText>
+            </View>
           </View>
-        ) : (showGuestbook || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
-          // Wraps the strip rather than its content: `contentContainerStyle`
-          // is an ordinary style prop, so an animated value handed to it
-          // arrives at the transform unresolved and throws at render.
-          <Animated.View
-            style={
-              previewMode?.chipStripNudge
-                ? { transform: [{ translateX: previewMode.chipStripNudge }] }
-                : undefined
-            }
-          >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[
-              S.chipsContent,
-              isHost && challenges.length === 0 && { gap: GALLERY_PADDING },
-            ]}
-            style={S.chipsScroll}
-          >
-            {showGuestbook && (
-              <Pressable
-                style={({ pressed }) => [
-                  S.chipWrap,
-                  { width: selectorTileSize },
-                  pressed && { opacity: 0.75 },
-                  // Dimmed rather than greyed out: it is a real feature the
-                  // host can have in two taps, not a broken one.
-                  !guestbookUnlocked && S.chipLocked,
-                ]}
-                onPress={() => {
-                  const open = () =>
-                    router.push(`/celebration/${celebration.id}/guestbook` as never);
-                  if (guestbookUnlocked) open();
-                  else requestUpgrade('guestbook', 'Unlock Guestbook', open);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={guestbookUnlocked ? 'Guestbook' : 'Guestbook, upgrade required'}
-              >
-                <ChallengeGradientCircle index={0} size={selectorTileSize}>
-                  <GuestbookIcon size={22} color="#FFFFFF" />
-                </ChallengeGradientCircle>
-                <AppText style={S.chipLabel} numberOfLines={2}>Guestbook</AppText>
-                {!guestbookUnlocked ? <LockedBadge /> : null}
-              </Pressable>
-            )}
 
-            {isHost && challenges.length === 0 && (
-              <View style={!challengesUnlocked ? S.chipLocked : undefined}>
-                <ChallengesEmptyCard
-                  onPress={() => {
-                    if (challengesUnlocked) handleAddChallenge();
-                    else requestUpgrade('challenges', 'Unlock Challenges', handleAddChallenge);
-                  }}
-                  hasSiblingChip={showGuestbook}
-                  tileSize={selectorTileSize}
-                />
-                {!challengesUnlocked ? <LockedBadge /> : null}
-              </View>
-            )}
+          <View pointerEvents="none" style={S.galleryStatSeparator} />
 
-            {challenges.map((challenge, index) => (
-                <Pressable
-                  key={challenge.id}
-                  style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
-                  onPress={() => handleChallengePhotoPress(challenge)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Challenge: ${challenge.label}`}
-                  hitSlop={18}
-                  pressRetentionOffset={18}
-                >
-                  <ChallengeGradientCircle index={index + 1} size={selectorTileSize}>
-                    <SharedChallengeIconSVG type={challenge.icon} size={22} />
-                  </ChallengeGradientCircle>
-                  <AppText style={S.chipLabel} numberOfLines={2}>
-                    {challenge.label}
-                  </AppText>
-                </Pressable>
-            ))}
-          </ScrollView>
-          </Animated.View>
-        ) : null}
+          <View style={S.galleryStatColumn}>
+            <Pressable
+              onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
+              accessibilityRole="button"
+              accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
+              hitSlop={8}
+              style={({ pressed }) => [
+                S.galleryStatItem,
+                S.galleryStatPressable,
+                pressed && S.galleryStatPressed,
+              ]}
+            >
+              <FilledPersonIcon size={16} color="#FFFFFF" />
+              <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
+            </Pressable>
+          </View>
+
+          <View pointerEvents="none" style={S.galleryStatSeparator} />
+
+          <View style={S.galleryStatColumn}>
+            <View style={S.galleryStatItem}>
+              <FilledClockIcon size={16} color="#FFFFFF" />
+              <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
+            </View>
+          </View>
         </View>
 
         {showMediaTabs ? (
@@ -4570,6 +4572,7 @@ export function EventDetailView({
           )}
         </View>
 
+        </View>
       </Animated.ScrollView>
 
       {/* ══════════════════════════════════════════════════════
@@ -5740,22 +5743,24 @@ const S = StyleSheet.create({
     alignSelf: 'stretch',
     fontSize: 12,
     lineHeight: 15,
-    marginTop: -6,
+    // Leave a little breathing room for title descenders such as g and y.
+    marginTop: -2,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
-  chipsScroll: {
-    // The hero's 13pt bottom inset creates the shared section gap.
-    marginTop: 0,
+  heroChipStrip: {
+    alignSelf: 'stretch',
+    // The hero content has a gutter so its title can be comfortably inset;
+    // the horizontal strip needs the full screen width to retain its scroll
+    // peek and its original edge alignment.
+    marginHorizontal: -layout.gutter,
     overflow: 'visible',
   },
-  challengesEmptyBannerWrap: {
-    paddingHorizontal: GALLERY_PADDING,
-    marginTop: 20,
-    paddingBottom: spacing.xs,
+  heroChallengesEmptyWrap: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
   },
-  chipsContent: {
-    paddingLeft: GALLERY_PADDING,     // Aligns first tile with left edge of gallery below
-    paddingRight: GALLERY_PADDING,
+  heroChipsContent: {
+    paddingHorizontal: layout.gutter,
     gap: CHIP_GAP,
     paddingTop: 0,
     paddingBottom: 0,
@@ -5826,11 +5831,17 @@ const S = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'stretch',
+    paddingHorizontal: layout.gutter,
   },
   galleryStatColumn: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  galleryStatSeparator: {
+    width: StyleSheet.hairlineWidth,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.82)',
   },
   galleryStatItem: {
     flexDirection: 'row',
