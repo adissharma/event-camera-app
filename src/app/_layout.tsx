@@ -44,6 +44,18 @@ function RootNavigator() {
         animation: 'slide_from_right',
       }}
     >
+      {/*
+        The browser tab. Expo Router pipes a route's `title` into the document
+        through react-helmet, so this is the only place it can be set — a
+        <title> in `+html.tsx` is overridden, and `expo-router/head`'s <Head>
+        renders only while its route reports focus, which these never did.
+        Native ignores it: the stack's header is hidden.
+      */}
+      <Stack.Screen name="index" options={{ title: 'Stills - Events Camera App' }} />
+      <Stack.Screen
+        name="privacy"
+        options={{ title: 'Privacy Policy — Stills - Events Camera App' }}
+      />
       <Stack.Screen
         name="join"
         options={{

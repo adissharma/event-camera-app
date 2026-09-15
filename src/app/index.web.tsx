@@ -4,6 +4,7 @@ import { Link } from 'expo-router';
 import { AppText } from '@/components/ui/text';
 import { StillsLockup } from '@/components/brand/stills-lockup';
 import { colours, spacing } from '@/design';
+import { useDocumentTitle } from '@/components/brand/use-document-title';
 
 /**
  * The public homepage.
@@ -22,8 +23,11 @@ import { colours, spacing } from '@/design';
  * is a 1,100-line animated intro, and the web bundle has no reason to carry it.
  */
 export default function WebHome() {
+  useDocumentTitle('Stills - Events Camera App');
+
   return (
     <View style={S.page}>
+
       <View style={S.centre}>
         <StillsLockup size={76} />
       </View>

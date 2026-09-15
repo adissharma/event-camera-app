@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/text';
 import { colours, fontFamilies, layout, spacing } from '@/design';
 import { BRAND_CONFIG } from '@/config/brand';
 import { StillsLockup } from '@/components/brand/stills-lockup';
+import { useDocumentTitle } from '@/components/brand/use-document-title';
 import {
   PRIVACY_POLICY,
   PRIVACY_LAST_UPDATED,
@@ -25,6 +26,8 @@ import {
  * content could be rendered in-app later without being transcribed twice.
  */
 export default function PrivacyPolicyScreen() {
+  useDocumentTitle('Privacy Policy — Stills - Events Camera App');
+
   return (
     <ScrollView
       style={S.page}
@@ -33,6 +36,7 @@ export default function PrivacyPolicyScreen() {
       showsVerticalScrollIndicator
     >
       <View style={S.inner}>
+
         <Link href="/" asChild>
           <Pressable accessibilityRole="link" style={S.brandLink}>
             <StillsLockup size={30} />
