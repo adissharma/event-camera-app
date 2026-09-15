@@ -342,7 +342,7 @@ function HomeUpcomingEventsEmptyState({
   onCreate: () => void;
 }) {
   return (
-    <View style={[styles.upcomingEmptyState, { width, height: Math.round(width * 1.25) }]}>
+    <View style={[styles.upcomingEmptyState, { width, height: Math.round(width * 1.13) }]}>
       <ExpoImage
         source={require('../../assets/images/empty-events-illustration.png')}
         style={styles.upcomingEmptyIllustration}
@@ -351,7 +351,7 @@ function HomeUpcomingEventsEmptyState({
       />
 
       <View style={styles.upcomingEmptyCopy}>
-        <AppText variant="titleMedium" align="center" style={styles.upcomingEmptyTitle}>
+        <AppText variant="titleLarge" align="center" style={styles.upcomingEmptyTitle}>
           Your first event starts here
         </AppText>
         <AppText variant="bodySmall" tone="secondary" align="center" style={styles.upcomingEmptyBody}>
@@ -782,7 +782,7 @@ export default function HomeScreen() {
                 )}
               </View>
             ) : (
-              <View style={styles.dashboardSection}>
+              <View style={[styles.dashboardSection, styles.dashboardEmptySection]}>
                 <HomeUpcomingEventsEmptyState
                   width={upcomingHeroWidth}
                   onCreate={() => router.push('/create')}
@@ -1008,7 +1008,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colours.background,
+    backgroundColor: '#000000',
   },
   header: {
     flexDirection: 'row',
@@ -1091,6 +1091,9 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginBottom: spacing.xxl,
   },
+  dashboardEmptySection: {
+    marginBottom: spacing.base,
+  },
   sectionTitle: {
     color: colours.textPrimary,
   },
@@ -1168,7 +1171,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   upcomingEmptyIllustration: {
-    width: '74%',
+    width: '82%',
     aspectRatio: 1374 / 1145,
   },
   upcomingEmptyCopy: {
