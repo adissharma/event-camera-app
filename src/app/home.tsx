@@ -24,6 +24,14 @@ import Svg, {
 } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
+import Reanimated, {
+  Easing,
+  cancelAnimation,
+  useAnimatedProps,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { DashboardShaderBackground } from '@/components/ui/dashboard-shader-background';
 import { LoadingState } from '@/components/feedback/loading-state';
@@ -49,6 +57,7 @@ import {
   radii,
   spacing,
   MOMENTS_SLIDER_GRADIENT,
+  useMotion,
 } from '@/design';
 import { EventCardTile } from '@/features/celebrations/cards/event-card-tile';
 import { useCoverSource } from '@/features/celebrations/cover-source';
@@ -72,6 +81,7 @@ if (
 }
 
 const COMPLETED_CARD_ROTATIONS = ['-2.75deg', '1.9deg', '-1.4deg', '2.4deg', '-2.1deg'] as const;
+const AnimatedSvgPath = Reanimated.createAnimatedComponent(Path);
 
 // QR Code Icon
 function QrCodeIcon({ size = 20, color = colours.textPrimary }) {
@@ -135,7 +145,55 @@ function PlusIcon({ size = 22, color = '#0B0B0C' }) {
  * mark. Its uneven arcs keep the control tactile without reducing its 52pt
  * touch target.
  */
+function organicPlusButtonPath(phase: number) {
+  'worklet';
+
+  // Each edge moves on its own offset rhythm so the silhouette feels alive
+  // rather than simply scaling in and out as a circle.
+  const top = 1.45 + Math.sin(phase + 0.2) * 0.65;
+  const right = 50.65 + Math.sin(phase * 1.17 + 1.8) * 0.55;
+  const bottom = 50.15 + Math.sin(phase * 0.91 + 3.5) * 0.7;
+  const left = 1.35 + Math.sin(phase * 1.09 + 5.1) * 0.55;
+
+  return [
+    `M ${26 + Math.sin(phase * 0.83) * 0.7} ${top}`,
+    `C ${34.2 + Math.sin(phase * 1.21 + 0.6) * 1.1} ${top - 0.3} ${42.4 + Math.sin(phase * 0.94 + 2.5) * 1.15} ${5.1 + Math.sin(phase * 1.08 + 1.4) * 0.9} ${47.1 + Math.sin(phase * 1.15 + 3.1) * 0.85} ${11.1 + Math.sin(phase * 0.78 + 1.1) * 0.8}`,
+    `C ${right} ${16.5 + Math.sin(phase * 1.26 + 0.4) * 1.1} ${right + 0.05} ${24.2 + Math.sin(phase * 0.88 + 2.7) * 0.85} ${49.4 + Math.sin(phase * 1.13 + 4.4) * 0.75} ${31.2 + Math.sin(phase * 0.95 + 3.9) * 1.05}`,
+    `C ${47.7 + Math.sin(phase * 0.84 + 5.6) * 1.2} ${40.1 + Math.sin(phase * 1.06 + 0.9) * 0.8} ${41.7 + Math.sin(phase * 1.19 + 2.3) * 1} ${48.1 + Math.sin(phase * 0.97 + 4.7) * 0.75} ${33.7 + Math.sin(phase * 1.1 + 3.3) * 0.9} ${bottom}`,
+    `C ${26.8 + Math.sin(phase * 1.17 + 4.5) * 1.1} ${bottom + 0.35} ${20.1 + Math.sin(phase * 0.92 + 2.1) * 0.95} ${50.7 + Math.sin(phase * 1.12 + 5.5) * 0.6} ${13.9 + Math.sin(phase * 1.24 + 0.8) * 0.85} ${47.7 + Math.sin(phase * 0.81 + 3.4) * 0.9}`,
+    `C ${7.6 + Math.sin(phase * 1.04 + 4.2) * 1.1} ${44.7 + Math.sin(phase * 0.89 + 1.7) * 0.8} ${3 + Math.sin(phase * 1.2 + 2.9) * 0.9} ${39.2 + Math.sin(phase * 1.07 + 5.9) * 0.9} ${left} ${32 + Math.sin(phase * 0.96 + 3.2) * 1}`,
+    `C ${0.7 + Math.sin(phase * 1.14 + 5.3) * 0.55} ${25.5 + Math.sin(phase * 0.86 + 1.9) * 0.8} ${3.6 + Math.sin(phase * 1.09 + 3.7) * 1} ${19.2 + Math.sin(phase * 1.22 + 0.3) * 0.9} ${7.1 + Math.sin(phase * 0.93 + 4.9) * 0.8} ${13.3 + Math.sin(phase * 1.16 + 2.6) * 0.8}`,
+    `C ${12 + Math.sin(phase * 1.05 + 5.7) * 1} ${5 + Math.sin(phase * 0.9 + 1.3) * 0.9} ${19 + Math.sin(phase * 1.18 + 3.8) * 0.9} ${top - 0.5} ${26 + Math.sin(phase * 0.83) * 0.7} ${top} Z`,
+  ].join('');
+}
+
 function OrganicPlusButtonShape() {
+  const motion = useMotion();
+  const phase = useSharedValue(0);
+
+  useEffect(() => {
+    cancelAnimation(phase);
+
+    if (motion.reduceMotion) {
+      phase.set(0);
+      return;
+    }
+
+    phase.set(
+      withRepeat(
+        withTiming(Math.PI * 2, { duration: 16_000, easing: Easing.linear }),
+        -1,
+        false,
+      ),
+    );
+
+    return () => cancelAnimation(phase);
+  }, [motion.reduceMotion, phase]);
+
+  const animatedProps = useAnimatedProps(() => ({
+    d: organicPlusButtonPath(phase.get()),
+  }));
+
   return (
     <Svg
       width={52}
@@ -152,8 +210,8 @@ function OrganicPlusButtonShape() {
           <Stop offset="1" stopColor={MOMENTS_SLIDER_GRADIENT[3]} />
         </SvgLinearGradient>
       </Defs>
-      <Path
-        d="M26 1.8C34.3 1.2 42.7 4.8 47.3 10.9C51.1 16.2 50.9 24.2 49.5 31.1C47.7 40.1 41.6 48.1 33.7 50.2C26.8 52 20.1 50.7 13.9 47.7C7.7 44.7 3 39.2 1.9 32C0.7 25.5 3.6 19.2 7.1 13.3C12 5 19 1.2 26 1.8Z"
+      <AnimatedSvgPath
+        animatedProps={animatedProps}
         fill="url(#dashboard-add-button-gradient)"
       />
     </Svg>
