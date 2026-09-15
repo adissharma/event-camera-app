@@ -5654,7 +5654,8 @@ const S = StyleSheet.create({
   heroContentColumn: {
     alignSelf: 'stretch',
     alignItems: 'flex-start',
-    gap: 8,
+    // Keep the title/date as one bundle, then give the stats their own beat.
+    gap: 14,
   },
   /** Title and date stay measured together for the creation reveal. */
   heroIdentity: {
@@ -5675,6 +5676,7 @@ const S = StyleSheet.create({
     alignSelf: 'stretch',
     fontSize: 12,
     lineHeight: 15,
+    marginTop: -4,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
