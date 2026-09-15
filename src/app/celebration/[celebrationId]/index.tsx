@@ -5644,7 +5644,7 @@ const S = StyleSheet.create({
   // ── Hero info (overlaid on gradient) ──
   heroInfo: {
     position: 'absolute',
-    bottom: 14,                       // Sits gracefully at the base of the cover image
+    bottom: 13,
     left: layout.gutter,
     right: layout.gutter,
     alignItems: 'flex-start',
@@ -5654,8 +5654,8 @@ const S = StyleSheet.create({
   heroContentColumn: {
     alignSelf: 'stretch',
     alignItems: 'flex-start',
-    // Each primary section is separated by the same 20pt visual rhythm.
-    gap: spacing.lg,
+    // Each primary section is separated by the same 13pt visual rhythm.
+    gap: 13,
   },
   /** Title and date stay measured together for the creation reveal. */
   heroIdentity: {
@@ -5680,8 +5680,7 @@ const S = StyleSheet.create({
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
-    // With the hero's 14pt bottom inset and the strip's 6pt internal top
-    // padding, this creates the same 20pt visual gap as tiles → gallery.
+    // The hero's 13pt bottom inset creates the shared section gap.
     marginTop: 0,
     overflow: 'visible',
   },
@@ -5694,7 +5693,7 @@ const S = StyleSheet.create({
     paddingLeft: GALLERY_PADDING,     // Aligns first tile with left edge of gallery below
     paddingRight: GALLERY_PADDING,
     gap: CHIP_GAP,
-    paddingTop: 6,
+    paddingTop: 0,
     paddingBottom: 0,
     overflow: 'visible',
   },
@@ -5798,8 +5797,8 @@ const S = StyleSheet.create({
   },
   galleryTabsSticky: {
     backgroundColor: colours.background,
-    // Match the hero stats → Guestbook spacing above the strip.
-    paddingTop: spacing.lg,
+    // Match the date → stats and stats → Guestbook spacing above the strip.
+    paddingTop: 13,
     zIndex: 30,
     elevation: 30,
   },
