@@ -1093,6 +1093,8 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: colours.textPrimary,
+    fontSize: 18,
+    lineHeight: 23,
   },
   edgeToEdgeCarousel: {
     marginHorizontal: -layout.gutter,
