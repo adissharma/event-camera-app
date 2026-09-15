@@ -148,22 +148,23 @@ function PlusIcon({ size = 22, color = '#0B0B0C' }) {
 function organicPlusButtonPath(phase: number) {
   'worklet';
 
-  // Each edge moves on its own offset rhythm so the silhouette feels alive
-  // rather than simply scaling in and out as a circle.
-  const top = 1.45 + Math.sin(phase + 0.2) * 0.65;
-  const right = 50.65 + Math.sin(phase * 1.17 + 1.8) * 0.55;
-  const bottom = 50.15 + Math.sin(phase * 0.91 + 3.5) * 0.7;
-  const left = 1.35 + Math.sin(phase * 1.09 + 5.1) * 0.55;
+  // Whole-number phase multipliers make the start and end frames identical
+  // at 0 and 2π. Each side still follows its own offset rhythm, but the loop
+  // can restart without a visible jump.
+  const top = 2.8 + Math.sin(phase + 0.25) * 1.9;
+  const right = 49.3 + Math.sin(phase * 2 + 1.7) * 1.9;
+  const bottom = 49 + Math.sin(phase * 3 + 3.1) * 1.9;
+  const left = 2.7 + Math.sin(phase * 2 + 4.4) * 1.9;
 
   return [
-    `M ${26 + Math.sin(phase * 0.83) * 0.7} ${top}`,
-    `C ${34.2 + Math.sin(phase * 1.21 + 0.6) * 1.1} ${top - 0.3} ${42.4 + Math.sin(phase * 0.94 + 2.5) * 1.15} ${5.1 + Math.sin(phase * 1.08 + 1.4) * 0.9} ${47.1 + Math.sin(phase * 1.15 + 3.1) * 0.85} ${11.1 + Math.sin(phase * 0.78 + 1.1) * 0.8}`,
-    `C ${right} ${16.5 + Math.sin(phase * 1.26 + 0.4) * 1.1} ${right + 0.05} ${24.2 + Math.sin(phase * 0.88 + 2.7) * 0.85} ${49.4 + Math.sin(phase * 1.13 + 4.4) * 0.75} ${31.2 + Math.sin(phase * 0.95 + 3.9) * 1.05}`,
-    `C ${47.7 + Math.sin(phase * 0.84 + 5.6) * 1.2} ${40.1 + Math.sin(phase * 1.06 + 0.9) * 0.8} ${41.7 + Math.sin(phase * 1.19 + 2.3) * 1} ${48.1 + Math.sin(phase * 0.97 + 4.7) * 0.75} ${33.7 + Math.sin(phase * 1.1 + 3.3) * 0.9} ${bottom}`,
-    `C ${26.8 + Math.sin(phase * 1.17 + 4.5) * 1.1} ${bottom + 0.35} ${20.1 + Math.sin(phase * 0.92 + 2.1) * 0.95} ${50.7 + Math.sin(phase * 1.12 + 5.5) * 0.6} ${13.9 + Math.sin(phase * 1.24 + 0.8) * 0.85} ${47.7 + Math.sin(phase * 0.81 + 3.4) * 0.9}`,
-    `C ${7.6 + Math.sin(phase * 1.04 + 4.2) * 1.1} ${44.7 + Math.sin(phase * 0.89 + 1.7) * 0.8} ${3 + Math.sin(phase * 1.2 + 2.9) * 0.9} ${39.2 + Math.sin(phase * 1.07 + 5.9) * 0.9} ${left} ${32 + Math.sin(phase * 0.96 + 3.2) * 1}`,
-    `C ${0.7 + Math.sin(phase * 1.14 + 5.3) * 0.55} ${25.5 + Math.sin(phase * 0.86 + 1.9) * 0.8} ${3.6 + Math.sin(phase * 1.09 + 3.7) * 1} ${19.2 + Math.sin(phase * 1.22 + 0.3) * 0.9} ${7.1 + Math.sin(phase * 0.93 + 4.9) * 0.8} ${13.3 + Math.sin(phase * 1.16 + 2.6) * 0.8}`,
-    `C ${12 + Math.sin(phase * 1.05 + 5.7) * 1} ${5 + Math.sin(phase * 0.9 + 1.3) * 0.9} ${19 + Math.sin(phase * 1.18 + 3.8) * 0.9} ${top - 0.5} ${26 + Math.sin(phase * 0.83) * 0.7} ${top} Z`,
+    `M ${26 + Math.sin(phase * 2) * 1.7} ${top}`,
+    `C ${34.5 + Math.sin(phase * 3 + 0.6) * 2} ${top - 0.7} ${42.1 + Math.sin(phase + 2.3) * 2} ${5 + Math.sin(phase * 2 + 1.4) * 1.8} ${47 + Math.sin(phase * 3 + 3) * 1.4} ${11 + Math.sin(phase + 1.1) * 1.6}`,
+    `C ${right} ${17 + Math.sin(phase * 2 + 0.4) * 2} ${right + 0.2} ${24 + Math.sin(phase * 3 + 2.7) * 1.7} ${49 + Math.sin(phase + 4.4) * 1.5} ${31 + Math.sin(phase * 2 + 3.9) * 1.8}`,
+    `C ${47.6 + Math.sin(phase + 5.6) * 2.1} ${40 + Math.sin(phase * 2 + 0.9) * 1.8} ${41.4 + Math.sin(phase * 3 + 2.3) * 2} ${48 + Math.sin(phase + 4.7) * 1.5} ${33.5 + Math.sin(phase * 2 + 3.3) * 1.7} ${bottom}`,
+    `C ${26.6 + Math.sin(phase * 3 + 4.5) * 2} ${bottom + 0.55} ${20 + Math.sin(phase * 2 + 2.1) * 1.8} ${50.3 + Math.sin(phase + 5.5) * 1.4} ${13.8 + Math.sin(phase * 3 + 0.8) * 1.6} ${47.5 + Math.sin(phase * 2 + 3.4) * 1.7}`,
+    `C ${7.3 + Math.sin(phase * 2 + 4.2) * 2} ${44.4 + Math.sin(phase + 1.7) * 1.8} ${3.4 + Math.sin(phase * 3 + 2.9) * 1.4} ${39 + Math.sin(phase * 2 + 5.9) * 1.8} ${left} ${31.8 + Math.sin(phase + 3.2) * 1.9}`,
+    `C ${0.9 + Math.sin(phase * 3 + 5.3) * 1.2} ${25.4 + Math.sin(phase * 2 + 1.9) * 1.8} ${3.5 + Math.sin(phase + 3.7) * 1.8} ${19 + Math.sin(phase * 3 + 0.3) * 1.6} ${7.2 + Math.sin(phase * 2 + 4.9) * 1.5} ${13.1 + Math.sin(phase + 2.6) * 1.7}`,
+    `C ${11.8 + Math.sin(phase * 3 + 5.7) * 1.8} ${4.9 + Math.sin(phase * 2 + 1.3) * 1.7} ${19 + Math.sin(phase + 3.8) * 1.6} ${top - 0.9} ${26 + Math.sin(phase * 2) * 1.7} ${top} Z`,
   ].join('');
 }
 
@@ -196,9 +197,9 @@ function OrganicPlusButtonShape() {
 
   return (
     <Svg
-      width={56}
-      height={56}
-      viewBox="-2 -2 56 56"
+      width={60}
+      height={60}
+      viewBox="-4 -4 60 60"
       style={styles.headerPlusShape}
       pointerEvents="none"
     >
@@ -1094,14 +1095,14 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
-  // The SVG extends 2pt beyond its 52pt visual frame, giving the animated
+  // The SVG extends 4pt beyond its 52pt visual frame, giving the animated
   // bulges room to breathe without ever clipping at the button's edge.
   headerPlusShape: {
     position: 'absolute',
-    width: 56,
-    height: 56,
-    left: -2,
-    top: -2,
+    width: 60,
+    height: 60,
+    left: -4,
+    top: -4,
   },
   headerPlusTouch: {
     width: '100%',
