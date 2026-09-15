@@ -355,7 +355,7 @@ function HomeUpcomingEventsEmptyState({
           Make a little magic together
         </AppText>
         <AppText variant="bodySmall" tone="secondary" align="center" style={styles.upcomingEmptyBody}>
-          Every laugh, every photo—{'\n'}all in one beautiful place.
+          Keep every laugh, photo and memory{'\n'}together in one beautiful place.
         </AppText>
       </View>
 
