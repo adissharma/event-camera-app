@@ -1,7 +1,6 @@
 {
   "buildCommand": "expo export --platform web",
   "outputDirectory": "dist",
-  "cleanUrls": true,
   "functions": {
     "api/recap-worker.ts": {
       "maxDuration": 300
@@ -43,6 +42,22 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/privacy",
+      "destination": "/privacy.html"
+    },
+    {
+      "source": "/home",
+      "destination": "/home.html"
+    },
+    {
+      "source": "/sign-in",
+      "destination": "/sign-in.html"
+    },
+    {
+      "source": "/join",
+      "destination": "/join.html"
+    },
     {
       "source": "/j/:slug",
       "destination": "/j/%5Bslug%5D.html"
