@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 
 import { useEventEntitlements } from './use-event-entitlements';
 import { upgradesForFeature, type FeatureKey } from './event-entitlements';
-import { UpgradeSheet } from './upgrade-sheet';
+import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 import { colours } from '@/design';
 
 /**

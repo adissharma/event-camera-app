@@ -5,17 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
-import {
-  Newsreader_400Regular,
-  Newsreader_400Regular_Italic,
-} from '@expo-google-fonts/newsreader';
-import {
-  InstrumentSans_400Regular,
-  InstrumentSans_500Medium,
-  InstrumentSans_600SemiBold,
-  InstrumentSans_700Bold,
-  useFonts,
-} from '@expo-google-fonts/instrument-sans';
+import { Newsreader_400Regular } from '@expo-google-fonts/newsreader/400Regular';
+import { Newsreader_400Regular_Italic } from '@expo-google-fonts/newsreader/400Regular_Italic';
+import { InstrumentSans_400Regular } from '@expo-google-fonts/instrument-sans/400Regular';
+import { InstrumentSans_500Medium } from '@expo-google-fonts/instrument-sans/500Medium';
+import { InstrumentSans_600SemiBold } from '@expo-google-fonts/instrument-sans/600SemiBold';
+import { InstrumentSans_700Bold } from '@expo-google-fonts/instrument-sans/700Bold';
+import { useFonts } from 'expo-font';
 
 import { colours } from '@/design';
 import { queryClient } from '@/lib/query-client';
@@ -35,10 +31,9 @@ import { AuthContextProvider } from '@/features/auth/context';
  * - `LiveActivitySyncManager` — driven by the host's celebration list.
  * - `seedMockDataIfNeeded` — development seeding for the full app.
  *
- * `AuthContextProvider` is retained because shared guest screens read
- * `session` from it to distinguish a signed-in host viewing their own event.
- * In the Clip there is no sign-in route, so the session is always null and
- * every screen renders its guest branch.
+ * Metro replaces `AuthContextProvider` with the event-scoped guest provider
+ * for this target. That preserves the shared screen contract without pulling
+ * account restoration, OAuth or purchase identity into the Clip.
  */
 export default function AppClipLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -48,7 +43,6 @@ export default function AppClipLayout() {
     InstrumentSans_500Medium,
     InstrumentSans_600SemiBold,
     InstrumentSans_700Bold,
-    OpenMojiBlack: require('../../assets/fonts/OpenMoji-black-glyf.ttf'),
   });
 
   useEffect(() => {

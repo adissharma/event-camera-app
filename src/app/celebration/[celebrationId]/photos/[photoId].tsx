@@ -34,6 +34,7 @@ import {
 } from '@/services/celebration-detail';
 import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
 import { sharePhotoToInstagram } from '@/features/sharing/share-to-instagram';
+import { galleryPresetSource } from '@/features/celebrations/gallery-preset-assets';
 
 // ── Models ──
 
@@ -115,11 +116,7 @@ function DownloadTrayIcon({ size = 22, color = '#FFFFFF' }) {
 
 // Helper to resolve preset photo images
 function getPhotoSource(uri: string) {
-  if (uri === 'preset_1') return require('../../../../../assets/sample-event/05.jpg');
-  if (uri === 'preset_2') return require('../../../../../assets/sample-event/07.jpg');
-  if (uri === 'preset_3') return require('../../../../../assets/sample-event/01.jpg');
-  if (uri === 'preset_4') return require('../../../../../assets/sample-event/02.jpg');
-  return { uri };
+  return galleryPresetSource(uri);
 }
 
 // ── Redesigned Photo Viewer Component ──

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { eventPlanKeys, fetchEventPlanKey } from '@/services/event-plan';
+import { eventPlanKeys, fetchEventPlanKey } from '@/services/event-plan-read';
 import { entitlementsForPlanKey, type EventEntitlements } from './event-entitlements';
 
 /**

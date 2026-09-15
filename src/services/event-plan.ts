@@ -1,9 +1,9 @@
-import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
+import { requireSupabase } from '@/lib/supabase/client';
 import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchase-verification';
 import { getPaymentProvider } from '@/features/payments';
 import { upgradeChargeFor } from '@/features/payments/upgrade-catalogue';
 import type { PaywallPlan } from '@/features/payments/plan-catalogue';
-import { SAMPLE_PLAN_KEY, isSampleCelebrationId } from '@/features/celebrations/sample-event';
+export { eventPlanKeys, fetchEventPlanKey } from './event-plan-read';
 
 /**
  * The package an event is on, and moving it up.
@@ -12,35 +12,6 @@ import { SAMPLE_PLAN_KEY, isSampleCelebrationId } from '@/features/celebrations/
  * this is keyed on the celebration and never on the signed-in account — a host
  * who bought Stills+ for a wedding has not bought it for their next event.
  */
-
-export const eventPlanKeys = {
-  forEvent: (celebrationId: string) => ['event-plan', celebrationId] as const,
-};
-
-/**
- * Reads the event's current package key.
- *
- * `null` means "no plan-granted entitlements", which the entitlement layer
- * treats as granting nothing. That is the safe direction: the alternative
- * would show premium controls to a host who has not paid and, worse, to
- * guests who must never see them at all.
- */
-export async function fetchEventPlanKey(celebrationId: string): Promise<string | null> {
-  // The example album is shown on the top package, because its whole job is
-  // to show what a finished event looks like — an example with the Guestbook
-  // and Challenges locked would be advertising the paywall rather than the
-  // product. Resolved here rather than by special-casing each gated surface,
-  // so every one of them unlocks through the path it already uses.
-  if (isSampleCelebrationId(celebrationId)) return SAMPLE_PLAN_KEY;
-
-  if (!isBackendConfigured) return null;
-  const client = requireSupabase();
-  const { data, error } = await (client as any).rpc('celebration_plan_key', {
-    p_celebration_id: celebrationId,
-  });
-  if (error) throw error;
-  return (data as string | null) ?? null;
-}
 
 export class UpgradeError extends Error {
   constructor(

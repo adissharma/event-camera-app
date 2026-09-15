@@ -1,12 +1,37 @@
 require File.join(File.dirname(`node --print "require.resolve('react-native/package.json')"`), "scripts/react_native_pods")
 
-exclude = [
-  # Bug in Expo Updates preventing it from working with App Clips.
-  "expo-updates",
+# A Clip target is not a smaller icon for the full application: CocoaPods must
+# see the same product boundary as Metro. Keep only native modules used by the
+# event join, gallery, capture, treatment, sharing, Challenges and Guestbook
+# paths. Package names (rather than pod names) are what Expo autolinking
+# accepts here.
+clip_excluded_packages = [
+  "@bacons/apple-targets",
+  "@expo/dom-webview",
+  "@expo/log-box",
+  "@expo/ui",
+  "@react-native-community/datetimepicker",
+  "@react-native-masked-view/masked-view",
+  "expo-apple-authentication",
+  "expo-application",
+  "expo-dev-client",
   "expo-dev-launcher",
-  "expo-dev-menu"
+  "expo-dev-menu",
+  "expo-dev-menu-interface",
+  "expo-device",
+  "expo-eas-client",
+  "expo-glass-effect",
+  "expo-image",
+  "expo-log-box",
+  "expo-keep-awake",
+  "expo-symbols",
+  "expo-system-ui",
+  "expo-updates",
+  "expo-web-browser",
+  "react-native-purchases",
 ]
-use_expo_modules!(exclude: exclude)
+
+use_expo_modules!(exclude: clip_excluded_packages)
 
 if ENV['EXPO_USE_COMMUNITY_AUTOLINKING'] == '1'
   config_command = ['node', '-e', "process.argv=['', '', 'config'];require('@react-native-community/cli').run()"];
@@ -22,6 +47,11 @@ else
     'ios'
   ]
 end
+
+# `use_native_modules!` performs a second, unified Expo/React Native discovery
+# pass. Passing the exclusions only to `use_expo_modules!` leaves every module
+# linked through this pass (the previous Clip did exactly that).
+config_command.concat(['--exclude', *clip_excluded_packages])
 
 config = use_native_modules!(config_command)
 

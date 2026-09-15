@@ -90,17 +90,14 @@ import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
 import { TreatedPhoto } from '@/components/media/treated-photo';
 import { DisposablePhoto } from '@/components/media/disposable-photo';
-import {
-  CREATION_GALLERY_PREVIEW_IMAGES,
-  CREATION_GALLERY_PREVIEW_MONO_IMAGES,
-} from '@/features/celebrations/creation/gallery-preview-assets';
+import { GALLERY_PRESETS } from '@/features/celebrations/gallery-preset-assets';
 import { loadSourceImage } from '@/features/media/disposable-cache';
 import { renderDisposablePhotoToFile } from '@/features/media/disposable-render';
 import { normalisePhotoTreatment } from '@/features/media/photo-treatment';
 import { canViewerSeePhotos, msUntilReveal, formatRevealCountdownWords } from '@/features/celebrations/reveal/state';
 import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal';
 import { serverNow } from '@/services/server-time';
-import { LOCALE_CONFIG } from '@/config/app-config';
+import { IS_APP_CLIP, LOCALE_CONFIG } from '@/config/app-config';
 import { BRAND_CONFIG } from '@/config/brand';
 import { colours, fontFamilies, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
@@ -392,35 +389,6 @@ export function formatEventHeroDate(
     return null;
   }
 }
-
-const GALLERY_PRESETS = [
-  // Kept in the same order as the creation treatment collage. Monochrome
-  // uses a pre-rendered equivalent rather than ColorMatrix so the pre-paywall
-  // grid preserves the exact same crop as the collage on every platform.
-  {
-    id: 'preset_1',
-    source: CREATION_GALLERY_PREVIEW_IMAGES[0],
-    monochromeSource: CREATION_GALLERY_PREVIEW_MONO_IMAGES[0],
-  },
-  {
-    id: 'preset_2',
-    source: CREATION_GALLERY_PREVIEW_IMAGES[1],
-    monochromeSource: CREATION_GALLERY_PREVIEW_MONO_IMAGES[1],
-  },
-  // The live screen's existing offline fallback still includes these two
-  // assets. They are not used by the creation preview, but remain resolvable
-  // for sample/offline gallery data.
-  {
-    id: 'preset_3',
-    source: require('../../../../assets/sample-event/01.jpg'),
-    monochromeSource: require('../../../../assets/sample-event/mono/01.jpg'),
-  },
-  {
-    id: 'preset_4',
-    source: require('../../../../assets/sample-event/02.jpg'),
-    monochromeSource: require('../../../../assets/sample-event/mono/02.jpg'),
-  },
-];
 
 // ─── Challenge data ───────────────────────────────────────────────────────────
 
@@ -1267,8 +1235,8 @@ export default function CelebrationDashboard({ celebrationId: propCelebrationId 
           <Pressable style={S.fallbackBtn} onPress={() => void refetch()}>
             <AppText style={S.fallbackBtnText}>{copy.common.retry}</AppText>
           </Pressable>
-          <Pressable onPress={() => router.replace('/home')} style={{ paddingVertical: spacing.md, alignItems: 'center' }}>
-            <AppText variant="bodySmall" tone="secondary">Back to home</AppText>
+          <Pressable onPress={() => router.replace(IS_APP_CLIP ? '/j' : '/home')} style={{ paddingVertical: spacing.md, alignItems: 'center' }}>
+            <AppText variant="bodySmall" tone="secondary">{IS_APP_CLIP ? 'Back to event' : 'Back to home'}</AppText>
           </Pressable>
         </View>
       </Screen>
@@ -1395,8 +1363,8 @@ export function EventDetailView({
       return;
     }
 
-    router.replace('/home');
-  }, [navigation, router]);
+    router.replace(viewerRole === 'guest' || IS_APP_CLIP ? '/j' : '/home');
+  }, [navigation, router, viewerRole]);
 
   // The one cover for this event, shared with the dashboard card and the guest
   // invitation. Re-signs automatically when the host replaces it, because a

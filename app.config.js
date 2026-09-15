@@ -44,6 +44,10 @@ module.exports = ({ config }) => {
   return {
     ...config,
     name: 'Join Event',
+    extra: {
+      ...config.extra,
+      EXPO_PUBLIC_IS_APP_CLIP: 'true',
+    },
     // A Clip's identifier must be a child of the parent app's identifier.
     ios: {
       ...config.ios,

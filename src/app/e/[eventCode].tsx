@@ -32,7 +32,6 @@ import {
 import { useAuth } from '@/features/auth/context';
 import { fetchMyProfile, profileKeys } from '@/services/profile';
 import { isBackendConfigured } from '@/lib/supabase/client';
-import { IS_APP_CLIP } from '@/config/app-config';
 import { useCoverSource } from '@/features/celebrations/cover-source';
 
 const NAME_MAX_LENGTH = 50;
@@ -147,14 +146,6 @@ export default function GuestEntryScreen() {
   const isNameValid = showReturningWelcome || trimmedName.length > 0;
 
   const handleEnterGallery = useCallback(() => {
-    // The App Clip target bundles only `src/app-clip/*` routes, so it stays
-    // on its own self-contained gallery here. The full app (native + web)
-    // reuses the real Event Gallery so guests get the same experience hosts
-    // do, gated by role.
-    if (IS_APP_CLIP) {
-      router.replace(`/e/${eventCode}/gallery` as never);
-      return;
-    }
     if (storedSession) {
       if (photoId) {
         router.replace(`/celebration/${storedSession.celebrationId}?openPhotoId=${encodeURIComponent(photoId)}` as never);
@@ -188,14 +179,10 @@ export default function GuestEntryScreen() {
         displayName: trimmedName,
       });
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      if (IS_APP_CLIP) {
-        router.replace(`/e/${eventCode}/gallery` as never);
+      if (photoId) {
+        router.replace(`/celebration/${joinedSession.celebrationId}?openPhotoId=${encodeURIComponent(photoId)}` as never);
       } else {
-        if (photoId) {
-          router.replace(`/celebration/${joinedSession.celebrationId}?openPhotoId=${encodeURIComponent(photoId)}` as never);
-        } else {
-          router.replace(`/celebration/${joinedSession.celebrationId}` as never);
-        }
+        router.replace(`/celebration/${joinedSession.celebrationId}` as never);
       }
     } catch (e) {
       // The typed name survives the failure — retyping it is the last thing a
