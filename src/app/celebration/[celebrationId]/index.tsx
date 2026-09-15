@@ -5654,8 +5654,8 @@ const S = StyleSheet.create({
   heroContentColumn: {
     alignSelf: 'stretch',
     alignItems: 'flex-start',
-    // Keep the title/date as one bundle, then give the stats their own beat.
-    gap: 14,
+    // Each primary section is separated by the same 20pt visual rhythm.
+    gap: spacing.lg,
   },
   /** Title and date stay measured together for the creation reveal. */
   heroIdentity: {
@@ -5676,7 +5676,7 @@ const S = StyleSheet.create({
     alignSelf: 'stretch',
     fontSize: 12,
     lineHeight: 15,
-    marginTop: -4,
+    marginTop: -6,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
@@ -5798,7 +5798,8 @@ const S = StyleSheet.create({
   },
   galleryTabsSticky: {
     backgroundColor: colours.background,
-    paddingTop: spacing.md,
+    // Match the hero stats → Guestbook spacing above the strip.
+    paddingTop: spacing.lg,
     zIndex: 30,
     elevation: 30,
   },
