@@ -130,6 +130,36 @@ function PlusIcon({ size = 22, color = '#0B0B0C' }) {
   );
 }
 
+/**
+ * The add action shares the softly irregular silhouette used by the Stills
+ * mark. Its uneven arcs keep the control tactile without reducing its 52pt
+ * touch target.
+ */
+function OrganicPlusButtonShape() {
+  return (
+    <Svg
+      width={52}
+      height={52}
+      viewBox="0 0 52 52"
+      style={StyleSheet.absoluteFill}
+      pointerEvents="none"
+    >
+      <Defs>
+        <SvgLinearGradient id="dashboard-add-button-gradient" x1="0%" y1="50%" x2="100%" y2="50%">
+          <Stop offset="0" stopColor={MOMENTS_SLIDER_GRADIENT[0]} />
+          <Stop offset="0.36" stopColor={MOMENTS_SLIDER_GRADIENT[1]} />
+          <Stop offset="0.7" stopColor={MOMENTS_SLIDER_GRADIENT[2]} />
+          <Stop offset="1" stopColor={MOMENTS_SLIDER_GRADIENT[3]} />
+        </SvgLinearGradient>
+      </Defs>
+      <Path
+        d="M26 1.8C34.3 1.2 42.7 4.8 47.3 10.9C51.1 16.2 50.9 24.2 49.5 31.1C47.7 40.1 41.6 48.1 33.7 50.2C26.8 52 20.1 50.7 13.9 47.7C7.7 44.7 3 39.2 1.9 32C0.7 25.5 3.6 19.2 7.1 13.3C12 5 19 1.2 26 1.8Z"
+        fill="url(#dashboard-add-button-gradient)"
+      />
+    </Svg>
+  );
+}
+
 /** A solid clock face so the countdown reads as an accent, not another line icon. */
 function FilledClockIcon({ size = 16 }: { size?: number }) {
   return (
@@ -663,12 +693,8 @@ export default function HomeScreen() {
             <PersonIcon size={22} color="#FFFFFF" />
           </Pressable>
 
-          <LinearGradient
-            colors={MOMENTS_SLIDER_GRADIENT}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={styles.headerPlusBtn}
-          >
+          <View style={styles.headerPlusBtn}>
+            <OrganicPlusButtonShape />
             <Pressable
               onPress={() => router.push('/create')}
               style={styles.headerPlusTouch}
@@ -678,7 +704,7 @@ export default function HomeScreen() {
             >
               <PlusIcon size={24} color={colours.textPrimary} />
             </Pressable>
-          </LinearGradient>
+          </View>
         </View>
       </View>
 
@@ -1002,8 +1028,6 @@ const styles = StyleSheet.create({
   headerPlusBtn: {
     width: 52,
     height: 52,
-    borderRadius: 26,
-    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000000',
