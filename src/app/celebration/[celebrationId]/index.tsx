@@ -5647,14 +5647,12 @@ const S = StyleSheet.create({
     bottom: 14,                       // Sits gracefully at the base of the cover image
     left: layout.gutter,
     right: layout.gutter,
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
   },
-  /** A centred hero column whose contents share the title's left edge. */
+  /** The full-width hero column shares the screen's left gutter. */
   heroContentColumn: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 320,
+    alignSelf: 'stretch',
     alignItems: 'flex-start',
     gap: 8,
   },
