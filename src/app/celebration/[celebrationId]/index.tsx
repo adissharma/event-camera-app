@@ -4305,6 +4305,8 @@ export function EventDetailView({
                   </View>
                 </View>
 
+                <View pointerEvents="none" style={S.galleryStatSeparator} />
+
                 <View style={S.galleryStatColumn}>
                   <Pressable
                     onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
@@ -4321,6 +4323,8 @@ export function EventDetailView({
                     <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
                   </Pressable>
                 </View>
+
+                <View pointerEvents="none" style={S.galleryStatSeparator} />
 
                 <View style={S.galleryStatColumn}>
                   <View style={S.galleryStatItem}>
@@ -5740,7 +5744,8 @@ const S = StyleSheet.create({
     alignSelf: 'stretch',
     fontSize: 12,
     lineHeight: 15,
-    marginTop: -6,
+    // Clear title descenders without changing the title's visual position.
+    marginTop: -3,
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
@@ -5831,6 +5836,11 @@ const S = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  galleryStatSeparator: {
+    width: StyleSheet.hairlineWidth,
+    height: 16,
+    backgroundColor: 'rgba(255,255,255,0.82)',
   },
   galleryStatItem: {
     flexDirection: 'row',
