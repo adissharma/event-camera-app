@@ -1165,16 +1165,18 @@ const styles = StyleSheet.create({
   upcomingEmptyState: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: 0,
   },
   upcomingEmptyIllustration: {
     width: '82%',
     aspectRatio: 1374 / 1145,
+    marginBottom: spacing.xs,
   },
   upcomingEmptyCopy: {
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.xxs,
     paddingHorizontal: spacing.lg,
+    marginBottom: spacing.xl,
   },
   upcomingEmptyTitle: {
     color: colours.textPrimary,
