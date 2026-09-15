@@ -107,7 +107,7 @@ export default function YourNameScreen() {
 
         <View style={styles.inputArea}>
           <TextField
-            placeholder="Priya"
+            placeholder="Your first name"
             value={name}
             onChangeText={(next) => {
               hasEditedName.current = true;
