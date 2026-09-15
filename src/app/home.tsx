@@ -782,7 +782,7 @@ export default function HomeScreen() {
                 )}
               </View>
             ) : (
-              <View style={[styles.dashboardSection, styles.dashboardEmptySection]}>
+              <View style={styles.dashboardSection}>
                 <HomeUpcomingEventsEmptyState
                   width={upcomingHeroWidth}
                   onCreate={() => router.push('/create')}
@@ -1090,9 +1090,6 @@ const styles = StyleSheet.create({
   dashboardSection: {
     gap: spacing.md,
     marginBottom: spacing.xxl,
-  },
-  dashboardEmptySection: {
-    marginBottom: spacing.base,
   },
   sectionTitle: {
     color: colours.textPrimary,
