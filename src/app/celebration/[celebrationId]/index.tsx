@@ -4224,7 +4224,7 @@ export function EventDetailView({
               >
                 <AppText
                   variant="displayLarge"
-                  align="left"
+                  align="center"
                   style={S.heroTitle}
                   numberOfLines={2}
                   adjustsFontSizeToFit
@@ -4233,7 +4233,7 @@ export function EventDetailView({
                   {celebration.title}
                 </AppText>
                 {heroDate ? (
-                  <AppText variant="eyebrow" tone="secondary" align="left" style={S.heroDate}>
+                  <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
                     {heroDate}
                   </AppText>
                 ) : null}
@@ -4241,9 +4241,10 @@ export function EventDetailView({
 
               <View style={S.galleryStatsRow}>
                 <View style={S.galleryStatItem}>
-                  <FilledCameraIcon size={17} color="rgba(255,255,255,0.72)" />
-                  <AppText variant="heading" style={S.galleryStatValue}>{photos.length}</AppText>
+                  <FilledCameraIcon size={16} color="#FFFFFF" />
+                  <AppText style={S.galleryStatValue}>{photos.length} stills</AppText>
                 </View>
+                <View style={S.galleryStatSeparator} />
 
                 <Pressable
                   onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
@@ -4256,13 +4257,14 @@ export function EventDetailView({
                     pressed && S.galleryStatPressed,
                   ]}
                 >
-                  <FilledPersonIcon size={17} color="rgba(255,255,255,0.72)" />
-                  <AppText variant="heading" style={S.galleryStatValue}>{guestsJoined}</AppText>
+                  <FilledPersonIcon size={16} color="#FFFFFF" />
+                  <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
                 </Pressable>
+                <View style={S.galleryStatSeparator} />
 
                 <View style={S.galleryStatItem}>
-                  <FilledClockIcon size={17} color="rgba(255,255,255,0.72)" />
-                  <AppText variant="heading" style={S.galleryStatValue}>{timeLeftValue}</AppText>
+                  <FilledClockIcon size={16} color="#FFFFFF" />
+                  <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
                 </View>
               </View>
             </View>
@@ -5660,14 +5662,14 @@ const S = StyleSheet.create({
   /** Title and date stay measured together for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 0,
   },
   heroTitle: {
     color: colours.textPrimary,
     fontSize: 46,
     lineHeight: 50,
-    textAlign: 'left',
+    textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
@@ -5761,13 +5763,12 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 24,
+    justifyContent: 'space-between',
     alignSelf: 'stretch',
   },
   galleryStatItem: {
     flexDirection: 'row',
-    gap: 7,
+    gap: 6,
     alignItems: 'center',
   },
   galleryStatPressable: {
@@ -5784,8 +5785,16 @@ const S = StyleSheet.create({
   },
   galleryStatValue: {
     color: colours.textPrimary,
-    fontFamily: fontFamilies.textMedium,
+    fontFamily: fontFamilies.textRegular,
+    fontSize: 13,
+    lineHeight: 16,
     textAlign: 'left',
+  },
+  galleryStatSeparator: {
+    width: 3,
+    height: 3,
+    borderRadius: radii.pill,
+    backgroundColor: '#FFFFFF',
   },
 
   // ── Gallery ──
