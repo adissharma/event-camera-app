@@ -4240,31 +4240,35 @@ export function EventDetailView({
               </View>
 
               <View style={S.galleryStatsRow}>
-                <View style={S.galleryStatItem}>
-                  <FilledCameraIcon size={16} color="#FFFFFF" />
-                  <AppText style={S.galleryStatValue}>{photos.length} stills</AppText>
+                <View style={S.galleryStatColumn}>
+                  <View style={S.galleryStatItem}>
+                    <FilledCameraIcon size={16} color="#FFFFFF" />
+                    <AppText style={S.galleryStatValue}>{photos.length} stills</AppText>
+                  </View>
                 </View>
-                <View style={S.galleryStatSeparator} />
 
-                <Pressable
-                  onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    S.galleryStatItem,
-                    S.galleryStatPressable,
-                    pressed && S.galleryStatPressed,
-                  ]}
-                >
-                  <FilledPersonIcon size={16} color="#FFFFFF" />
-                  <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
-                </Pressable>
-                <View style={S.galleryStatSeparator} />
+                <View style={S.galleryStatColumn}>
+                  <Pressable
+                    onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      S.galleryStatItem,
+                      S.galleryStatPressable,
+                      pressed && S.galleryStatPressed,
+                    ]}
+                  >
+                    <FilledPersonIcon size={16} color="#FFFFFF" />
+                    <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
+                  </Pressable>
+                </View>
 
-                <View style={S.galleryStatItem}>
-                  <FilledClockIcon size={16} color="#FFFFFF" />
-                  <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
+                <View style={S.galleryStatColumn}>
+                  <View style={S.galleryStatItem}>
+                    <FilledClockIcon size={16} color="#FFFFFF" />
+                    <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
+                  </View>
                 </View>
               </View>
             </View>
@@ -5763,8 +5767,12 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     alignSelf: 'stretch',
+  },
+  galleryStatColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   galleryStatItem: {
     flexDirection: 'row',
@@ -5786,15 +5794,9 @@ const S = StyleSheet.create({
   galleryStatValue: {
     color: colours.textPrimary,
     fontFamily: fontFamilies.textRegular,
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 14,
+    lineHeight: 17,
     textAlign: 'left',
-  },
-  galleryStatSeparator: {
-    width: 3,
-    height: 3,
-    borderRadius: radii.pill,
-    backgroundColor: '#FFFFFF',
   },
 
   // ── Gallery ──
