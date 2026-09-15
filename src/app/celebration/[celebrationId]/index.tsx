@@ -4214,54 +4214,56 @@ export function EventDetailView({
                 : null,
             ]}
           >
-            {/* Date and title remain measured together for the creation reveal. */}
-            <View
-              ref={heroIdentityRef}
-              onLayout={reportHeroIdentityRect}
-              collapsable={false}
-              style={S.heroIdentity}
-            >
-              <AppText
-                variant="displayLarge"
-                align="center"
-                style={S.heroTitle}
-                numberOfLines={2}
-                adjustsFontSizeToFit
-                minimumFontScale={0.84}
+            <View style={S.heroContentColumn}>
+              {/* Date and title remain measured together for the creation reveal. */}
+              <View
+                ref={heroIdentityRef}
+                onLayout={reportHeroIdentityRect}
+                collapsable={false}
+                style={S.heroIdentity}
               >
-                {celebration.title}
-              </AppText>
-              {heroDate ? (
-                <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
-                  {heroDate}
+                <AppText
+                  variant="displayLarge"
+                  align="left"
+                  style={S.heroTitle}
+                  numberOfLines={2}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.84}
+                >
+                  {celebration.title}
                 </AppText>
-              ) : null}
-            </View>
-
-            <View style={S.galleryStatsRow}>
-              <View style={S.galleryStatItem}>
-                <FilledCameraIcon size={17} color="rgba(255,255,255,0.72)" />
-                <AppText variant="heading" style={S.galleryStatValue}>{photos.length}</AppText>
+                {heroDate ? (
+                  <AppText variant="eyebrow" tone="secondary" align="left" style={S.heroDate}>
+                    {heroDate}
+                  </AppText>
+                ) : null}
               </View>
 
-              <Pressable
-                onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
-                accessibilityRole="button"
-                accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
-                hitSlop={8}
-                style={({ pressed }) => [
-                  S.galleryStatItem,
-                  S.galleryStatPressable,
-                  pressed && S.galleryStatPressed,
-                ]}
-              >
-                <FilledPersonIcon size={17} color="rgba(255,255,255,0.72)" />
-                <AppText variant="heading" style={S.galleryStatValue}>{guestsJoined}</AppText>
-              </Pressable>
+              <View style={S.galleryStatsRow}>
+                <View style={S.galleryStatItem}>
+                  <FilledCameraIcon size={17} color="rgba(255,255,255,0.72)" />
+                  <AppText variant="heading" style={S.galleryStatValue}>{photos.length}</AppText>
+                </View>
 
-              <View style={S.galleryStatItem}>
-                <FilledClockIcon size={17} color="rgba(255,255,255,0.72)" />
-                <AppText variant="heading" style={S.galleryStatValue}>{timeLeftValue}</AppText>
+                <Pressable
+                  onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    S.galleryStatItem,
+                    S.galleryStatPressable,
+                    pressed && S.galleryStatPressed,
+                  ]}
+                >
+                  <FilledPersonIcon size={17} color="rgba(255,255,255,0.72)" />
+                  <AppText variant="heading" style={S.galleryStatValue}>{guestsJoined}</AppText>
+                </Pressable>
+
+                <View style={S.galleryStatItem}>
+                  <FilledClockIcon size={17} color="rgba(255,255,255,0.72)" />
+                  <AppText variant="heading" style={S.galleryStatValue}>{timeLeftValue}</AppText>
+                </View>
               </View>
             </View>
           </Animated.View>
@@ -5648,17 +5650,25 @@ const S = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  /** Centered title block, measured for the creation reveal. */
+  /** A centred hero column whose contents share the title's left edge. */
+  heroContentColumn: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  /** Title and date stay measured together for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 0,
   },
   heroTitle: {
     color: colours.textPrimary,
     fontSize: 46,
     lineHeight: 50,
-    textAlign: 'center',
+    textAlign: 'left',
     textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
@@ -5752,7 +5762,7 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: 24,
     alignSelf: 'stretch',
   },
@@ -5776,7 +5786,7 @@ const S = StyleSheet.create({
   galleryStatValue: {
     color: colours.textPrimary,
     fontFamily: fontFamilies.textMedium,
-    textAlign: 'center',
+    textAlign: 'left',
   },
 
   // ── Gallery ──
