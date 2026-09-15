@@ -5876,8 +5876,8 @@ const S = StyleSheet.create({
   },
   galleryTabsSticky: {
     backgroundColor: colours.background,
-    // Match the date → stats and stats → Guestbook spacing above the strip.
-    paddingTop: 13,
+    // Keep the tabs 10pt below the Guestbook/Challenges strip.
+    paddingTop: 10,
     zIndex: 30,
     elevation: 30,
   },
