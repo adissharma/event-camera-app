@@ -24,14 +24,6 @@ import Svg, {
 } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
-import Reanimated, {
-  Easing,
-  cancelAnimation,
-  useAnimatedProps,
-  useSharedValue,
-  withRepeat,
-  withTiming,
-} from 'react-native-reanimated';
 
 import { DashboardShaderBackground } from '@/components/ui/dashboard-shader-background';
 import { LoadingState } from '@/components/feedback/loading-state';
@@ -57,7 +49,6 @@ import {
   radii,
   spacing,
   MOMENTS_SLIDER_GRADIENT,
-  useMotion,
 } from '@/design';
 import { EventCardTile } from '@/features/celebrations/cards/event-card-tile';
 import { useCoverSource } from '@/features/celebrations/cover-source';
@@ -81,7 +72,6 @@ if (
 }
 
 const COMPLETED_CARD_ROTATIONS = ['-2.75deg', '1.9deg', '-1.4deg', '2.4deg', '-2.1deg'] as const;
-const AnimatedSvgPath = Reanimated.createAnimatedComponent(Path);
 
 // QR Code Icon
 function QrCodeIcon({ size = 20, color = colours.textPrimary }) {
@@ -121,99 +111,6 @@ function UserIcon({ size = 20, color = colours.textPrimary }) {
         strokeWidth={2} 
         strokeLinecap="round" 
         strokeLinejoin="round" 
-      />
-    </Svg>
-  );
-}
-
-function PlusIcon({ size = 22, color = '#0B0B0C' }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path 
-        d="M12 5v14M5 12h14" 
-        stroke={color} 
-        strokeWidth={2.25}
-        strokeLinecap="round" 
-        strokeLinejoin="round" 
-      />
-    </Svg>
-  );
-}
-
-/**
- * The add action shares the softly irregular silhouette used by the Stills
- * mark. Its uneven arcs keep the control tactile without reducing its 52pt
- * touch target.
- */
-function organicPlusButtonPath(phase: number) {
-  'worklet';
-
-  // Whole-number phase multipliers make the start and end frames identical
-  // at 0 and 2π. Each side still follows its own offset rhythm, but the loop
-  // can restart without a visible jump.
-  const top = 2.8 + Math.sin(phase + 0.25) * 1.9;
-  const right = 49.3 + Math.sin(phase * 2 + 1.7) * 1.9;
-  const bottom = 49 + Math.sin(phase * 3 + 3.1) * 1.9;
-  const left = 2.7 + Math.sin(phase * 2 + 4.4) * 1.9;
-
-  return [
-    `M ${26 + Math.sin(phase * 2) * 1.7} ${top}`,
-    `C ${34.5 + Math.sin(phase * 3 + 0.6) * 2} ${top - 0.7} ${42.1 + Math.sin(phase + 2.3) * 2} ${5 + Math.sin(phase * 2 + 1.4) * 1.8} ${47 + Math.sin(phase * 3 + 3) * 1.4} ${11 + Math.sin(phase + 1.1) * 1.6}`,
-    `C ${right} ${17 + Math.sin(phase * 2 + 0.4) * 2} ${right + 0.2} ${24 + Math.sin(phase * 3 + 2.7) * 1.7} ${49 + Math.sin(phase + 4.4) * 1.5} ${31 + Math.sin(phase * 2 + 3.9) * 1.8}`,
-    `C ${47.6 + Math.sin(phase + 5.6) * 2.1} ${40 + Math.sin(phase * 2 + 0.9) * 1.8} ${41.4 + Math.sin(phase * 3 + 2.3) * 2} ${48 + Math.sin(phase + 4.7) * 1.5} ${33.5 + Math.sin(phase * 2 + 3.3) * 1.7} ${bottom}`,
-    `C ${26.6 + Math.sin(phase * 3 + 4.5) * 2} ${bottom + 0.55} ${20 + Math.sin(phase * 2 + 2.1) * 1.8} ${50.3 + Math.sin(phase + 5.5) * 1.4} ${13.8 + Math.sin(phase * 3 + 0.8) * 1.6} ${47.5 + Math.sin(phase * 2 + 3.4) * 1.7}`,
-    `C ${7.3 + Math.sin(phase * 2 + 4.2) * 2} ${44.4 + Math.sin(phase + 1.7) * 1.8} ${3.4 + Math.sin(phase * 3 + 2.9) * 1.4} ${39 + Math.sin(phase * 2 + 5.9) * 1.8} ${left} ${31.8 + Math.sin(phase + 3.2) * 1.9}`,
-    `C ${0.9 + Math.sin(phase * 3 + 5.3) * 1.2} ${25.4 + Math.sin(phase * 2 + 1.9) * 1.8} ${3.5 + Math.sin(phase + 3.7) * 1.8} ${19 + Math.sin(phase * 3 + 0.3) * 1.6} ${7.2 + Math.sin(phase * 2 + 4.9) * 1.5} ${13.1 + Math.sin(phase + 2.6) * 1.7}`,
-    `C ${11.8 + Math.sin(phase * 3 + 5.7) * 1.8} ${4.9 + Math.sin(phase * 2 + 1.3) * 1.7} ${19 + Math.sin(phase + 3.8) * 1.6} ${top - 0.9} ${26 + Math.sin(phase * 2) * 1.7} ${top} Z`,
-  ].join('');
-}
-
-function OrganicPlusButtonShape() {
-  const motion = useMotion();
-  const phase = useSharedValue(0);
-
-  useEffect(() => {
-    cancelAnimation(phase);
-
-    if (motion.reduceMotion) {
-      phase.set(0);
-      return;
-    }
-
-    phase.set(
-      withRepeat(
-        withTiming(Math.PI * 2, { duration: 10_000, easing: Easing.linear }),
-        -1,
-        false,
-      ),
-    );
-
-    return () => cancelAnimation(phase);
-  }, [motion.reduceMotion, phase]);
-
-  const animatedProps = useAnimatedProps(() => ({
-    d: organicPlusButtonPath(phase.get()),
-  }));
-
-  return (
-    <Svg
-      width={60}
-      height={60}
-      viewBox="-4 -4 60 60"
-      style={styles.headerPlusShape}
-      pointerEvents="none"
-    >
-      <Defs>
-        <SvgLinearGradient id="dashboard-add-button-gradient" x1="0%" y1="50%" x2="100%" y2="50%">
-          <Stop offset="0" stopColor={MOMENTS_SLIDER_GRADIENT[0]} />
-          <Stop offset="0.36" stopColor={MOMENTS_SLIDER_GRADIENT[1]} />
-          <Stop offset="0.7" stopColor={MOMENTS_SLIDER_GRADIENT[2]} />
-          <Stop offset="1" stopColor={MOMENTS_SLIDER_GRADIENT[3]} />
-        </SvgLinearGradient>
-      </Defs>
-      <AnimatedSvgPath
-        animatedProps={animatedProps}
-        fill="url(#dashboard-add-button-gradient)"
       />
     </Svg>
   );
@@ -752,18 +649,19 @@ export default function HomeScreen() {
             <PersonIcon size={22} color="#FFFFFF" />
           </Pressable>
 
-          <View style={styles.headerPlusBtn}>
-            <OrganicPlusButtonShape />
-            <Pressable
-              onPress={() => router.push('/create')}
-              style={styles.headerPlusTouch}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="Create an event"
-            >
-              <PlusIcon size={24} color={colours.textPrimary} />
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => router.push('/create')}
+            style={styles.headerPlusBtn}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="Create an event"
+          >
+            <ExpoImage
+              source={require('../../assets/brand/dashboard-create-cta.png')}
+              style={styles.headerPlusImage}
+              contentFit="contain"
+            />
+          </Pressable>
         </View>
       </View>
 
@@ -1095,20 +993,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
   },
-  // The SVG extends 4pt beyond its 52pt visual frame, giving the animated
-  // bulges room to breathe without ever clipping at the button's edge.
-  headerPlusShape: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    left: -4,
-    top: -4,
-  },
-  headerPlusTouch: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+  headerPlusImage: {
+    width: 52,
+    height: 52,
   },
   /**
    * Secondary by construction: same footprint as Create, but a faint fill
