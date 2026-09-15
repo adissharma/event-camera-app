@@ -181,7 +181,7 @@ function OrganicPlusButtonShape() {
 
     phase.set(
       withRepeat(
-        withTiming(Math.PI * 2, { duration: 16_000, easing: Easing.linear }),
+        withTiming(Math.PI * 2, { duration: 10_000, easing: Easing.linear }),
         -1,
         false,
       ),
@@ -196,10 +196,10 @@ function OrganicPlusButtonShape() {
 
   return (
     <Svg
-      width={52}
-      height={52}
-      viewBox="0 0 52 52"
-      style={StyleSheet.absoluteFill}
+      width={56}
+      height={56}
+      viewBox="-2 -2 56 56"
+      style={styles.headerPlusShape}
       pointerEvents="none"
     >
       <Defs>
@@ -1093,6 +1093,15 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
     elevation: 4,
+  },
+  // The SVG extends 2pt beyond its 52pt visual frame, giving the animated
+  // bulges room to breathe without ever clipping at the button's edge.
+  headerPlusShape: {
+    position: 'absolute',
+    width: 56,
+    height: 56,
+    left: -2,
+    top: -2,
   },
   headerPlusTouch: {
     width: '100%',
