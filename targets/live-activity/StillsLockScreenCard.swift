@@ -195,6 +195,29 @@ struct StillsMark: View {
     }
 }
 
+/// The grain behind the card's dark area.
+///
+/// Only behind the dark area — the footer is the one thing on the card that is
+/// meant to be flat colour, and laying grain under a gradient would muddy the
+/// one part with something to say.
+///
+/// Filled rather than fitted, so it always covers the area whatever shape the
+/// Live Activity is given, and clipped so the overflow does not paint over the
+/// footer. The near-black fill underneath is what shows if the asset ever fails
+/// to load, which keeps a missing texture from becoming a transparent card.
+private struct CardTexture: View {
+    var body: some View {
+        Ink.background
+            .overlay(
+                Image("CardTexture")
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .allowsHitTesting(false)
+            )
+            .clipped()
+    }
+}
+
 /// Clock glyph and how long is left, quieter than everything above it.
 struct TimeRemainingView: View {
     let endTime: Date
@@ -509,6 +532,8 @@ struct StillsLockScreenCard: View {
             .padding(.horizontal, 20)
             .padding(.top, 16)
             .padding(.bottom, 14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(CardTexture())
 
             StillsRemainingFooter(photosLeft: photosLeft, allowance: allowance)
         }
