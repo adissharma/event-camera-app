@@ -27,14 +27,6 @@ enum Ink {
     static let surfaceWhite = Color.white
     static let textOnWhite = Color.black
 
-    /// The unfilled remainder of the footer — the card's own colour.
-    ///
-    /// A distinct charcoal read as a component sitting on the card rather than
-    /// as part of it, which is exactly what this footer is not meant to be.
-    /// Matching the background means what is left to shoot is the only thing
-    /// drawn, and it simply runs out.
-    static let footerTrack = background
-
     /// Mirrors `REVEAL_TRACK_GRADIENT` in `src/design/colours.ts` — the same
     /// stops the reveal toggle and the treatment swatches use, so the one
     /// coloured thing on the lock screen speaks the app's accent language.
@@ -195,11 +187,11 @@ struct StillsMark: View {
     }
 }
 
-/// The grain behind the card's dark area.
+/// The grain behind the card.
 ///
-/// Only behind the dark area — the footer is the one thing on the card that is
-/// meant to be flat colour, and laying grain under a gradient would muddy the
-/// one part with something to say.
+/// Behind all of it, including the footer: the footer paints only what is left
+/// to shoot, so where the colour has run out the grain is what shows, and the
+/// band reads as part of the card rather than as a component on top of it.
 ///
 /// Filled rather than fitted, so it always covers the area whatever shape the
 /// Live Activity is given, and clipped so the overflow does not paint over the
@@ -436,12 +428,14 @@ struct StillsRemainingFooter: View {
             let fitsInside = fill >= labelWidth + trailingPad + minLeadIn
 
             ZStack(alignment: .leading) {
-                StillsFooterShape(fraction: 1, capped: false)
-                    .fill(Ink.footerTrack)
-
-                // The same edge function as the track, evaluated over the same
-                // full width, so the two never disagree about where the top of
-                // the footer is — the colour simply stops earlier.
+                // No track is drawn. What is left to shoot is the only thing
+                // the footer paints; where the colour has run out, the card's
+                // own grain simply continues, so the band reads as part of the
+                // card rather than as a component laid on top of it.
+                //
+                // The edge function is still evaluated over the full width, so
+                // the gradient's top follows exactly the line it would have if
+                // a track were there — the colour just stops earlier.
                 StillsFooterShape(fraction: fraction, capped: true)
                     .fill(Ink.accent(completingAt: fraction))
 
@@ -533,10 +527,13 @@ struct StillsLockScreenCard: View {
             .padding(.top, 16)
             .padding(.bottom, 14)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(CardTexture())
 
             StillsRemainingFooter(photosLeft: photosLeft, allowance: allowance)
         }
+        // Behind the whole card, footer included. The footer draws no track of
+        // its own, so the grain runs under the unfilled part and the only thing
+        // interrupting it is the gradient.
+        .background(CardTexture())
         // No horizontal or bottom padding on the stack itself: the footer has to
         // reach the card's edges and let the system container's corners clip it,
         // which is what makes it part of the card rather than inside it.
