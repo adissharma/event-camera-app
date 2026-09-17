@@ -28,6 +28,8 @@ const LIVE_ACTIVITY_DIRECTORY = 'live-activity';
  * fonts and assets through its synchronised source group.
  */
 function withClipLiveActivity(config) {
+  withEasCredentials(config);
+
   config = withDangerousMod(config, [
     'ios',
     async (cfg) => {
@@ -191,6 +193,39 @@ function withClipLiveActivity(config) {
 
     return cfg;
   });
+}
+
+/**
+ * EAS signs only the extensions listed in the static app config. apple-targets
+ * lists the targets it creates; this one is ours, so without an entry here the
+ * store archive signs it for development and Xcode rejects it as "not signed
+ * with the same certificate as the parent app". Written directly rather than
+ * in an Xcode mod because EAS reads the config without running mods.
+ */
+function withEasCredentials(config) {
+  const appBundleId = config.ios?.bundleIdentifier;
+  if (!appBundleId) {
+    throw new Error('[with-clip-live-activity] ios.bundleIdentifier is required.');
+  }
+  const clipBundleId = `${appBundleId}.Clip`;
+  const bundleIdentifier = `${clipBundleId}.liveactivities`;
+
+  config.extra ??= {};
+  config.extra.eas ??= {};
+  config.extra.eas.build ??= {};
+  config.extra.eas.build.experimental ??= {};
+  config.extra.eas.build.experimental.ios ??= {};
+  const extensions = (config.extra.eas.build.experimental.ios.appExtensions ??= []);
+
+  if (!extensions.some((ext) => ext.bundleIdentifier === bundleIdentifier)) {
+    extensions.push({
+      targetName: TARGET_NAME,
+      bundleIdentifier,
+      parentBundleIdentifier: clipBundleId,
+      entitlements: { 'com.apple.developer.on-demand-install-capable': true },
+    });
+  }
+  return config;
 }
 
 function findLiveActivitySourceGroup(project, fullWidget) {
