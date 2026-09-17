@@ -55,6 +55,16 @@ config_command.concat(['--exclude', *clip_excluded_packages])
 
 config = use_native_modules!(config_command)
 
+# The Clip reaches SDWebImage only through expo-image-manipulator's WebP coder,
+# which asks for `SDWebImage/Core`; the full app asks for `SDWebImage` via
+# expo-image. CocoaPods treats those as two variants and builds both, and both
+# emit `SDWebImage.bundle` into the same archive folder ("Multiple commands
+# produce … SDWebImage.bundle"). Asking for the same spec here gives both
+# targets one shared pod. `SDWebImage` is only its Core subspec, so the Clip
+# gains nothing. Modular headers match what Expo enables for the app, or the
+# shared pod cannot serve expo-image's Swift.
+pod 'SDWebImage', :modular_headers => true
+
 use_frameworks! :linkage => podfile_properties['ios.useFrameworks'].to_sym if podfile_properties['ios.useFrameworks']
 use_frameworks! :linkage => ENV['USE_FRAMEWORKS'].to_sym if ENV['USE_FRAMEWORKS']
 
