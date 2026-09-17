@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -140,6 +140,14 @@ function ClassicJoinScreen({
   const { height: liveHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const accent = providedAccent ?? colours.accentWarm;
+  const scrollRef = useRef<ScrollView>(null);
+
+  const revealNameField = useCallback(() => {
+    // The viewport shrinks after the keyboard reports its height. Scrolling on
+    // the following frame makes the lower form visible rather than leaving the
+    // focused native input behind the keyboard.
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }, []);
 
   /**
    * Height the composition is laid out against.
@@ -247,6 +255,7 @@ function ClassicJoinScreen({
             textContentType="name"
             returnKeyType="go"
             onSubmitEditing={onJoin}
+            onFocus={revealNameField}
             accessibilityLabel="Your name"
             editable={!isJoining && interactive}
           />
@@ -306,11 +315,14 @@ function ClassicJoinScreen({
     <View style={S.root} onLayout={handleRootLayout}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={S.scrollContent}
+          contentInsetAdjustmentBehavior="automatic"
+          automaticallyAdjustKeyboardInsets
           keyboardShouldPersistTaps="handled"
           // Scrolls only as far as the focused field needs, so the CTA below
           // it stays on screen rather than being pushed out of reach.

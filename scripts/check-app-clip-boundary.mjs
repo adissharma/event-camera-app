@@ -44,6 +44,7 @@ for (const moduleName of [
   '@/features/celebrations/sample-event',
   '@/features/entitlements/upgrade-sheet',
   '@react-native-masked-view/masked-view',
+  'expo-glass-effect',
 ]) {
   if (!metro.includes(moduleName)) errors.push(`Missing Clip runtime replacement: ${moduleName}`);
 }
@@ -63,6 +64,48 @@ if (!pods.includes("use_expo_modules!(exclude: clip_excluded_packages)")) {
 }
 if (!pods.includes("config_command.concat(['--exclude', *clip_excluded_packages])")) {
   errors.push('Clip exclusions are not applied to unified React Native autolinking.');
+}
+
+if (!existsSync(fromRoot('plugins/with-clip-live-activity.js'))) {
+  errors.push('Missing persistent App Clip Live Activity target plugin.');
+}
+
+const clipInfo = readFileSync(fromRoot('targets/clip/Info.plist'), 'utf8');
+if (!/NSSupportsLiveActivities[\s\S]*?<true\/>/.test(clipInfo)) {
+  errors.push('The App Clip must opt into Live Activities in Info.plist.');
+}
+if (!/CFBundleURLSchemes[\s\S]*?<string>eventcameraclip<\/string>/.test(clipInfo)) {
+  errors.push('The App Clip must register its dedicated camera URL scheme.');
+}
+
+const appConfig = readFileSync(fromRoot('app.config.js'), 'utf8');
+if (!appConfig.includes("scheme: 'eventcameraclip'")) {
+  errors.push('The Clip app config must expose its dedicated deep-link scheme to Expo Router.');
+}
+
+const liveActivity = readFileSync(
+  fromRoot('targets/live-activity/EventLiveActivityLiveActivity.swift'),
+  'utf8',
+);
+if (
+  !liveActivity.includes('isClipActivity') ||
+  !liveActivity.includes('eventcameraclip') ||
+  !liveActivity.includes('.widgetURL(galleryURL')
+) {
+  errors.push('The shared Live Activity must use the Clip-only camera scheme when running in the Clip.');
+}
+
+// Without the gate, the App Clip invocation link iOS delivers alongside a Live
+// Activity link lands on top of the viewfinder as an event page sheet.
+const nativeIntentPath = 'src/app-clip/+native-intent.tsx';
+if (
+  !existsSync(fromRoot(nativeIntentPath)) ||
+  !readFileSync(fromRoot(nativeIntentPath), 'utf8').includes('routeSystemEntry')
+) {
+  errors.push('Every system URL the Clip receives must pass through routeSystemEntry.');
+}
+if (!layout.includes('useSystemEntryCoordinator()')) {
+  errors.push('The Clip layout must mount the system entry coordinator.');
 }
 
 if (errors.length > 0) {

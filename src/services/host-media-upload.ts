@@ -1,7 +1,13 @@
 import * as Crypto from 'expo-crypto';
 
 import { requireSupabase } from '@/lib/supabase/client';
-import { inferMediaTypeFromMimeType, inferMimeTypeFromUri, normaliseMimeType } from '@/features/media/storage-paths';
+import { signalMediaChanged } from '@/lib/supabase/media-signal';
+import {
+  IMMUTABLE_CACHE_SECONDS,
+  inferMediaTypeFromMimeType,
+  inferMimeTypeFromUri,
+  normaliseMimeType,
+} from '@/features/media/storage-paths';
 import { readLocalMediaBytes } from '@/features/media/read-local-image';
 import type { MediaSource, MediaType } from '@/types/database';
 
@@ -20,6 +26,8 @@ import type { MediaSource, MediaType } from '@/types/database';
 
 export interface UploadHostMediaParams {
   celebrationId: string;
+  /** Lets anonymous guests hear a host contribution without table-level RLS. */
+  eventCode?: string | null;
   /** file:// URI on native, blob:/data: on web. */
   localUri: string;
   source: MediaSource;
@@ -93,7 +101,15 @@ export async function uploadHostMedia(
 
   const { error: uploadError } = await client.storage
     .from(intent.bucket)
-    .upload(intent.storage_path, bytes, { contentType: mimeType, upsert: false });
+    .upload(intent.storage_path, bytes, {
+      contentType: mimeType,
+      upsert: false,
+      // Each intent has its own versioned storage path, so this immutable
+      // object can safely receive the same long-lived CDN/client cache policy
+      // as guest uploads. Without this, host media falls back to Supabase's
+      // one-hour default and is needlessly re-transferred during an event.
+      cacheControl: IMMUTABLE_CACHE_SECONDS,
+    });
 
   if (uploadError) throw new Error(`Host ${mediaLabel} storage upload failed: ${uploadError.message}`);
 
@@ -109,6 +125,7 @@ export async function uploadHostMedia(
         .upload(intent.thumbnail_storage_path, thumbnail.bytes, {
           contentType: params.thumbnailMimeType ?? 'image/jpeg',
           upsert: false,
+          cacheControl: IMMUTABLE_CACHE_SECONDS,
         });
       thumbnailUploaded = !thumbnailError;
       if (thumbnailError) {
@@ -139,6 +156,11 @@ export async function uploadHostMedia(
     status: string;
     storage_path: string;
   };
+
+  // Hosts receive the row-level realtime change. Guests deliberately cannot,
+  // so use the same event-scoped broadcast as guest uploads to avoid making
+  // every guest wait for the periodic reconciliation fetch.
+  await signalMediaChanged(params.eventCode);
 
   return {
     mediaItemId: result.media_item_id,

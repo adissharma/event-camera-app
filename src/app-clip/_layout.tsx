@@ -16,6 +16,7 @@ import { useFonts } from 'expo-font';
 import { colours } from '@/design';
 import { queryClient } from '@/lib/query-client';
 import { AuthContextProvider } from '@/features/auth/context';
+import { useSystemEntryCoordinator } from '@/lib/navigation/system-entry';
 
 /**
  * Root layout for the APP CLIP.
@@ -36,6 +37,10 @@ import { AuthContextProvider } from '@/features/auth/context';
  * account restoration, OAuth or purchase identity into the Clip.
  */
 export default function AppClipLayout() {
+  // Every URL the Clip is opened with resolves to one destination. See
+  // `+native-intent.tsx` and `lib/navigation/entry-intent.ts`.
+  useSystemEntryCoordinator();
+
   const [fontsLoaded, fontError] = useFonts({
     Newsreader_400Regular,
     Newsreader_400Regular_Italic,
@@ -70,6 +75,18 @@ export default function AppClipLayout() {
                 animation: 'slide_from_right',
               }}
             >
+              <Stack.Screen
+                name="celebration/[celebrationId]/camera"
+                options={{
+                  // A viewfinder needs to fully own the window. Presenting it
+                  // transparently allowed the prior event route to composite
+                  // over the camera in the App Clip.
+                  presentation: 'fullScreenModal',
+                  animation: 'fade',
+                  contentStyle: { backgroundColor: colours.background },
+                  gestureEnabled: false,
+                }}
+              />
               <Stack.Screen
                 name="celebration/[celebrationId]/photos/[photoId]"
                 options={{

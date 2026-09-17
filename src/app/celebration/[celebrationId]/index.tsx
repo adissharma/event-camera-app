@@ -93,11 +93,13 @@ import { DisposablePhoto } from '@/components/media/disposable-photo';
 import { GALLERY_PRESETS } from '@/features/celebrations/gallery-preset-assets';
 import { loadSourceImage } from '@/features/media/disposable-cache';
 import { renderDisposablePhotoToFile } from '@/features/media/disposable-render';
+import { resolveSignedUrls } from '@/features/media/signed-url-cache';
 import { normalisePhotoTreatment } from '@/features/media/photo-treatment';
 import { canViewerSeePhotos, msUntilReveal, formatRevealCountdownWords } from '@/features/celebrations/reveal/state';
 import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal';
 import { serverNow } from '@/services/server-time';
 import { IS_APP_CLIP, LOCALE_CONFIG } from '@/config/app-config';
+import { syncLiveActivity } from '@/services/live-activity';
 import { BRAND_CONFIG } from '@/config/brand';
 import { colours, fontFamilies, radii, spacing, layout } from '@/design';
 import { copy } from '@/i18n';
@@ -1197,14 +1199,16 @@ export default function CelebrationDashboard({ celebrationId: propCelebrationId 
     enabled: Boolean(celebrationId),
     // Polling stops for good once the event cannot be read — deleted, or not
     // visible to this account. Left unconditional, the interval reissues a
-    // fully-retried request every ten seconds forever, which is how two
+    // fully-retried request every minute forever, which is how two
     // unreadable events produced 170-odd identical errors in a few minutes.
     // Transient failures keep polling, because those do recover.
     refetchInterval: (query) =>
-      isBackendConfigured && !isPermanentQueryError(query.state.error) ? 10000 : false,
+      // Realtime/broadcast updates cover the normal case; this is only a
+      // low-frequency reconciliation backstop for a dropped socket.
+      isBackendConfigured && !isPermanentQueryError(query.state.error) ? 60_000 : false,
     // The interval pauses while the tab is in the background, and the global
     // default turns focus refetching OFF — so returning to a backgrounded
-    // Android Chrome tab could show up to ten seconds of stale gallery
+    // Android Chrome tab could show up to one minute of stale gallery
     // before the next tick. For a screen whose whole promise is "everyone
     // sees it", coming back to the tab should show the current truth.
     refetchOnWindowFocus: true,
@@ -1356,6 +1360,47 @@ export function EventDetailView({
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
   const { celebration, primarySession, metrics, viewerRole, mediaPhotos, recap } = detail;
+  const mediaRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // A host sees both the table change and the privacy-safe broadcast used by
+  // guests. Collapse those near-simultaneous signals into one query refresh
+  // instead of fetching the entire detail payload twice for a single upload.
+  const scheduleMediaDetailRefresh = useCallback(() => {
+    if (mediaRefreshTimerRef.current) return;
+    mediaRefreshTimerRef.current = setTimeout(() => {
+      mediaRefreshTimerRef.current = null;
+      void queryClient.invalidateQueries({
+        queryKey: celebrationDetailKeys.detail(String(celebration.id)),
+      });
+    }, 200);
+  }, [celebration.id, queryClient]);
+
+  useEffect(
+    () => () => {
+      if (mediaRefreshTimerRef.current) clearTimeout(mediaRefreshTimerRef.current);
+    },
+    [],
+  );
+
+  // The guest event detail is the source of truth for the guest-specific
+  // allowance. It is shared by the full app and App Clip, so both launch
+  // paths produce the same ActivityKit state without using gallery totals.
+  useEffect(() => {
+    if (viewerRole !== 'guest') return;
+    const endsAt = primarySession?.ends_at ?? celebration.ends_at;
+    if (IS_APP_CLIP && __DEV__) {
+      console.info('[AppClip] joined event loaded; syncing the Live Activity.');
+    }
+    syncLiveActivity({
+      celebrationId: celebration.id,
+      eventName: celebration.title,
+      endsAt,
+      shotLimit: primarySession?.shot_limit_per_guest,
+      // A guest's allowance is personal. `metrics.photos` is the event-wide
+      // gallery total and must never be used to count down this Live Activity.
+      shotsUsed: detail.guestShotsUsed,
+    });
+  }, [celebration.id, celebration.title, celebration.ends_at, detail.guestShotsUsed, primarySession?.ends_at, primarySession?.shot_limit_per_guest, viewerRole]);
 
   const handleGalleryBack = useCallback(() => {
     if (navigation.canGoBack()) {
@@ -1744,17 +1789,16 @@ export function EventDetailView({
       // `mediaPhotos` arrives in. The grid signs those before rendering; this
       // list has to as well, or every submission renders as a blank frame with
       // its caption intact, which is exactly how the bug presented.
-      const client = requireSupabase();
-      const { data, error } = await client.storage
-        .from('event-media')
-        .createSignedUrls(matching.map((item) => item.storagePath), 3600);
-
-      if (error || !data) {
+      let urlByPath: Map<string, string>;
+      try {
+        urlByPath = await resolveSignedUrls(
+          'event-media',
+          matching.map((item) => item.storagePath),
+        );
+      } catch (error) {
         console.error('[gallery] failed to sign challenge photo URLs', error);
         return [];
       }
-
-      const urlByPath = new Map(data.map((d) => [d.path, d.signedUrl]));
 
       return matching
         .map((item) => {
@@ -2088,29 +2132,26 @@ export function EventDetailView({
 
     let cancelled = false;
     (async () => {
-      const client = requireSupabase();
       // Thumbnail paths batched into the same call as the originals — one
       // round trip either way, and a video with no thumbnail simply
       // contributes nothing extra to the path list.
       const thumbnailPaths = mediaPhotos
         .map((p) => p.thumbnailStoragePath)
         .filter((path): path is string => Boolean(path));
-      const { data, error } = await client.storage
-        .from('event-media')
-        .createSignedUrls(
+      let urlByPath: Map<string, string>;
+      try {
+        urlByPath = await resolveSignedUrls(
+          'event-media',
           [...mediaPhotos.map((p) => p.storagePath), ...thumbnailPaths],
-          3600,
         );
-
-      if (cancelled) return;
-
-      if (error || !data) {
+      } catch (error) {
+        if (cancelled) return;
         console.error('[gallery] failed to sign photo URLs', error);
         setPhotos([]);
         return;
       }
 
-      const urlByPath = new Map(data.map((d) => [d.path, d.signedUrl]));
+      if (cancelled) return;
       const resolved: PhotoItem[] = mediaPhotos
         .map((p): PhotoItem | null => {
           const signedUrl = urlByPath.get(p.storagePath);
@@ -2162,10 +2203,7 @@ export function EventDetailView({
           filter: `event_session_id=eq.${primarySession.id}`,
         },
         () => {
-          void queryClient.invalidateQueries({
-            queryKey: celebrationDetailKeys.detail(String(celebration.id)),
-          });
-          void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+          scheduleMediaDetailRefresh();
         },
       )
       .on(
@@ -2205,7 +2243,7 @@ export function EventDetailView({
     return () => {
       void client.removeChannel(channel);
     };
-  }, [celebration.id, primarySession?.id, queryClient]);
+  }, [celebration.id, primarySession?.id, queryClient, scheduleMediaDetailRefresh]);
 
   // The same news, by a route a guest can actually hear.
   //
@@ -2215,7 +2253,7 @@ export function EventDetailView({
   // and reads the gallery through `get_guest_gallery`, so every row event is
   // filtered out before reaching them — the subscription succeeds and then
   // delivers nothing. Until now a guest's only route to a new photo was the
-  // ten-second poll.
+  // 60-second reconciliation poll.
   //
   // A broadcast carries no rows, so it is not RLS-gated and leaks nothing;
   // each device then refetches through the door it is already allowed
@@ -2226,12 +2264,9 @@ export function EventDetailView({
     if (!eventCode) return;
 
     return subscribeToMediaChanges(String(eventCode), () => {
-      void queryClient.invalidateQueries({
-        queryKey: celebrationDetailKeys.detail(String(celebration.id)),
-      });
-      void queryClient.invalidateQueries({ queryKey: celebrationKeys.list() });
+      scheduleMediaDetailRefresh();
     });
-  }, [celebration.event_code, celebration.id, previewMode, queryClient]);
+  }, [celebration.event_code, previewMode, scheduleMediaDetailRefresh]);
 
   // ── Load challenges ──
   //
@@ -4196,7 +4231,7 @@ export function EventDetailView({
                 >
                   <BackChevron />
                 </Pressable>
-              ) : Platform.OS === 'web' ? (
+              ) : Platform.OS === 'web' || IS_APP_CLIP ? (
                 <View style={[S.navBtn, { opacity: 0 }]} pointerEvents="none" />
               ) : (
                 <Pressable
@@ -4276,20 +4311,15 @@ export function EventDetailView({
                 <View pointerEvents="none" style={S.galleryStatSeparator} />
 
                 <View style={S.galleryStatColumn}>
-                  <Pressable
-                    onPress={() => router.push(`/celebration/${celebration.id}/joined-guests`)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${guestsJoined} joined guests, open guest list`}
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                      S.galleryStatItem,
-                      S.galleryStatPressable,
-                      pressed && S.galleryStatPressed,
-                    ]}
+                  <View
+                    style={S.galleryStatItem}
+                    accessible
+                    accessibilityRole="text"
+                    accessibilityLabel={`${guestsJoined} joined`}
                   >
                     <FilledPersonIcon size={16} color="#FFFFFF" />
                     <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
-                  </Pressable>
+                  </View>
                 </View>
 
                 <View pointerEvents="none" style={S.galleryStatSeparator} />
@@ -4999,7 +5029,10 @@ export function EventDetailView({
         <View style={[S.fabWrap, { bottom: insets.bottom + 28 }]}>
           <Pressable
             style={({ pressed }) => [pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
-            onPress={eventHasEnded ? openSavePhotos : () => router.push(`/celebration/${celebration.id}/camera` as never)}
+            onPress={eventHasEnded ? openSavePhotos : () => router.push({
+              pathname: '/celebration/[celebrationId]/camera',
+              params: { celebrationId: String(celebration.id) },
+            } as never)}
             accessibilityRole="button"
             accessibilityLabel={eventHasEnded ? 'Save photos' : 'Add a photo'}
           >

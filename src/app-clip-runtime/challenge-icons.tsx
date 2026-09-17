@@ -40,7 +40,25 @@ export function normalizeChallengeIconValue(value: string): string {
 
 export function resolveChallengeEmoji(value: string): string {
   const normalized = normalizeChallengeIconValue(value);
-  return LEGACY_EMOJI[normalized] ?? normalized;
+  if (LEGACY_EMOJI[normalized]) return LEGACY_EMOJI[normalized];
+
+  // Production challenge rows may store OpenMoji codepoints (for example
+  // `1F440` or `1F972`) rather than the rendered emoji. Convert those values
+  // for the Clip without bundling the full OpenMoji catalogue.
+  const codepoints = normalized
+    .replace(/^U\+/i, '')
+    .split(/[-_ ]/)
+    .filter(Boolean)
+    .map((part) => Number.parseInt(part.replace(/^U\+/i, ''), 16));
+  if (codepoints.length > 0 && codepoints.every((point) => Number.isFinite(point))) {
+    try {
+      return String.fromCodePoint(...codepoints);
+    } catch {
+      // Fall through to a readable fallback for malformed persisted values.
+    }
+  }
+
+  return normalized.length <= 4 ? normalized : '✨';
 }
 
 export function resolveChallengeLabel(value: string): string {

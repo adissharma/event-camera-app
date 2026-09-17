@@ -6,7 +6,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 
@@ -21,6 +21,7 @@ import {
   joinEventSession,
   loadStoredGuestSession,
 } from '@/services/guest-session';
+import { IS_APP_CLIP } from '@/config/app-config';
 
 
 
@@ -44,6 +45,12 @@ export default function GuestEntryScreen() {
 
   const accessToken = useMemo(() => readAccessToken(t), [t]);
 
+  useEffect(() => {
+    if (IS_APP_CLIP && __DEV__ && slug) {
+      console.info('[AppClip] invitation route received.');
+    }
+  }, [slug]);
+
   const { data: preview, isLoading, error: previewError } = useQuery({
     queryKey: guestSessionKeys.preview(String(slug)),
     queryFn: () => fetchGuestEventPreview(String(slug)),
@@ -54,22 +61,34 @@ export default function GuestEntryScreen() {
   // One resolver for every cover surface — see `cover-source`.
   const coverSource = useCoverSource(preview?.coverStoragePath);
 
+  useEffect(() => {
+    if (IS_APP_CLIP && __DEV__ && preview) {
+      console.info('[AppClip] invitation resolved.');
+    }
+  }, [preview]);
+
   // A device that has already joined goes straight through. The guest is asked
   // for a name once per event, not once per visit.
-  useEffect(() => {
-    if (!slug) return;
-    let cancelled = false;
+  //
+  // Scoped to focus: `router.replace` acts on whichever route is on top, so
+  // the redirect may only fire while that is this screen. Anything presented
+  // above it first — a viewfinder, for one — cancels the lookup's result.
+  useFocusEffect(
+    useCallback(() => {
+      if (!slug) return;
+      let cancelled = false;
 
-    void loadStoredGuestSession(String(slug)).then((stored) => {
-      if (!cancelled && stored?.displayName) {
-        router.replace(`/celebration/${stored.celebrationId}` as never);
-      }
-    });
+      void loadStoredGuestSession(String(slug)).then((stored) => {
+        if (!cancelled && stored?.displayName) {
+          router.replace(`/celebration/${stored.celebrationId}` as never);
+        }
+      });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [slug, router]);
+      return () => {
+        cancelled = true;
+      };
+    }, [slug, router]),
+  );
 
   const countdown = useCountdown(preview?.endsAt ?? null);
 
@@ -94,6 +113,9 @@ export default function GuestEntryScreen() {
         accessToken,
         displayName: trimmedName,
       });
+      if (IS_APP_CLIP && __DEV__) {
+        console.info('[AppClip] guest session established.');
+      }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       router.replace(`/celebration/${session.celebrationId}` as never);
     } catch (e) {

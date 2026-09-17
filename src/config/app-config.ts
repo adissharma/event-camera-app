@@ -10,6 +10,7 @@
  */
 
 import Constants from 'expo-constants';
+import { isAppClipRuntime } from '@/config/runtime-variant';
 
 /**
  * Statically-referenced public env vars.
@@ -58,8 +59,17 @@ export const SUPABASE_CONFIG = {
 export const HAS_SUPABASE_CREDENTIALS =
   Boolean(SUPABASE_CONFIG.url) && Boolean(SUPABASE_CONFIG.anonKey);
 
-/** True when building the iOS App Clip (guest-only experience). */
-export const IS_APP_CLIP = env('EXPO_PUBLIC_IS_APP_CLIP') === 'true';
+/**
+ * True when building the iOS App Clip (guest-only experience).
+ *
+ * Metro replaces the runtime marker while bundling the Clip, which is the
+ * durable source of truth. The resolved app config remains a fallback for
+ * tools and development builds. This avoids an old public `.env` value making
+ * the Clip render full-app guest chrome, including its close control.
+ */
+export const IS_APP_CLIP =
+  isAppClipRuntime ||
+  (Constants.expoConfig?.extra as Record<string, string> | undefined)?.EXPO_PUBLIC_IS_APP_CLIP === 'true';
 
 export const REVENUECAT_CONFIG = {
   iosApiKey: env('EXPO_PUBLIC_REVENUECAT_IOS_API_KEY'),

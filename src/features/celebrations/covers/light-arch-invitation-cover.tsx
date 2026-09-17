@@ -1,10 +1,11 @@
-import { useState, type ReactNode, type RefObject } from 'react';
+import { useCallback, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -88,6 +89,7 @@ export function LightArchInvitationCover({
   onJoin,
   footer,
   interactive = true,
+  scrollable = true,
 }: LightArchInvitationCoverProps) {
   const { height: windowHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -99,6 +101,10 @@ export function LightArchInvitationCover({
   const [measuredHeight, setMeasuredHeight] = useState(0);
   const [bottomContentHeight, setBottomContentHeight] = useState(ESTIMATED_BOTTOM_CONTENT_HEIGHT);
   const [isFocused, setIsFocused] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const revealNameField = useCallback(() => {
+    requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
+  }, []);
 
   const pageHeight = viewportHeight ?? (measuredHeight || windowHeight);
   const contentWidth = Math.min(width - spacing.xl * 2, 335);
@@ -233,7 +239,10 @@ export function LightArchInvitationCover({
               textContentType="name"
               returnKeyType="go"
               onSubmitEditing={onJoin}
-              onFocus={() => setIsFocused(true)}
+              onFocus={() => {
+                setIsFocused(true);
+                revealNameField();
+              }}
               onBlur={() => setIsFocused(false)}
               accessibilityLabel="Your name"
               editable={interactive && !isJoining}
@@ -276,13 +285,24 @@ export function LightArchInvitationCover({
     </View>
   );
 
+  if (!scrollable) {
+    return <View onLayout={handleLayout} style={S.root}>{body}</View>;
+  }
+
   return (
     <View onLayout={handleLayout} style={S.root}>
-      <KeyboardAvoidingView
-        style={S.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {body}
+      <KeyboardAvoidingView style={S.flex} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          ref={scrollRef}
+          contentContainerStyle={S.scrollContent}
+          contentInsetAdjustmentBehavior="automatic"
+          automaticallyAdjustKeyboardInsets
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          showsVerticalScrollIndicator={false}
+        >
+          {body}
+        </ScrollView>
       </KeyboardAvoidingView>
     </View>
   );
@@ -334,6 +354,7 @@ function BotanicalAccent({
 
 const S = StyleSheet.create({
   flex: { flex: 1 },
+  scrollContent: { flexGrow: 1 },
   root: { flex: 1, width: '100%', backgroundColor: IVORY },
   content: {
     alignItems: 'center',

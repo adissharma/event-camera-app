@@ -36,18 +36,31 @@ function withRouterRoot(plugins) {
 
 module.exports = ({ config }) => {
   const plugins = withRouterRoot(config.plugins ?? []);
+  // This value is deliberately set by the app config for *both* targets.
+  // A public variable in .env.local can otherwise be inlined before the Clip
+  // variant gets a chance to identify itself, which makes Clip-only navigation
+  // behave like the full app at runtime.
+  const variantConfig = {
+    ...config,
+    plugins,
+    extra: {
+      ...config.extra,
+      EXPO_PUBLIC_IS_APP_CLIP: IS_CLIP ? 'true' : 'false',
+    },
+  };
 
   if (!IS_CLIP) {
-    return { ...config, plugins };
+    return variantConfig;
   }
 
   return {
-    ...config,
+    ...variantConfig,
     name: 'Join Event',
-    extra: {
-      ...config.extra,
-      EXPO_PUBLIC_IS_APP_CLIP: 'true',
-    },
+    // The Clip owns a separate scheme for Live Activity deep links. This must
+    // match the scheme registered in `targets/clip/Info.plist`; otherwise
+    // Expo Router accepts the native URL but has no matching prefix to turn it
+    // into the intended camera or gallery route.
+    scheme: 'eventcameraclip',
     // A Clip's identifier must be a child of the parent app's identifier.
     ios: {
       ...config.ios,

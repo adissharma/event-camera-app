@@ -24,7 +24,7 @@
  * of truth, reached by two different doors.
  *
  * This complements rather than replaces the existing subscription and the
- * 10-second poll: broadcast makes the common case immediate, and the poll
+ * 60-second reconciliation poll: broadcast makes the common case immediate, and the poll
  * remains the backstop for a dropped socket.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -50,7 +50,7 @@ function topicFor(eventCode: string): string {
  * Deliberately best-effort: a failure here must never fail an upload that has
  * already succeeded. The photo is saved either way, and the other devices
  * still pick it up on their next poll — this only decides whether that takes
- * a moment or up to ten seconds.
+ * a moment or up to one minute.
  */
 export async function signalMediaChanged(eventCode: string | null | undefined): Promise<void> {
   if (!eventCode || !isBackendConfigured) return;

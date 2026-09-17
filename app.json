@@ -101,6 +101,7 @@
     },
     "plugins": [
       "./plugins/with-clip-js-bundle",
+      "./plugins/with-clip-live-activity",
       "@bacons/apple-targets",
       "./plugins/with-live-activity-module",
       "expo-router",

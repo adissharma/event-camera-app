@@ -12,6 +12,22 @@
 	<string>$(PRODUCT_NAME)</string>
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<!--
+		The Clip's own scheme, for its Live Activity links. Kept distinct from
+		the parent application's `eventcamera` so those links are only ever
+		claimed by the Clip.
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.potoevents.eventcamera.clip.camera</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>eventcameraclip</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
@@ -23,6 +39,8 @@
 		<key>NSAppClipRequestLocationConfirmation</key>
 		<false/>
 	</dict>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsArbitraryLoads</key>

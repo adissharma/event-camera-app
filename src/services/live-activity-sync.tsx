@@ -1,41 +1,42 @@
 import { useEffect, useRef } from 'react';
-import { NativeModules, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
 import { celebrationKeys, listCelebrations } from '@/services/celebrations';
+import { endLiveActivity, syncLiveActivity } from '@/services/live-activity';
+
+function debug(message: string): void {
+  if (__DEV__) console.info(message);
+}
 
 export function LiveActivitySyncManager() {
   const { data: celebrations } = useQuery({
     queryKey: celebrationKeys.list(),
     queryFn: listCelebrations,
-    refetchInterval: 10000, // Poll list every 10s to keep it fresh
+    // The dashboard/event realtime paths cover normal updates. This only
+    // reconciles eligibility after a dropped connection or passage of time.
+    refetchInterval: 60_000,
   });
 
   const activeActivitiesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (Platform.OS !== 'ios') {
-      console.log('[LiveActivitySync] OS is not iOS, skipping sync manager.');
+      debug('[LiveActivitySync] OS is not iOS, skipping sync manager.');
       return;
     }
-    const { LiveActivityModule } = NativeModules;
-    if (!LiveActivityModule) {
-      console.warn('[LiveActivitySync] CRITICAL: LiveActivityModule is UNDEFINED in NativeModules. Please verify it is compiled in Xcode.');
-      return;
-    }
-
-    console.log('[LiveActivitySync] LiveActivitySyncManager active, native module detected.');
+    debug('[LiveActivitySync] host manager active.');
 
     let isMounted = true;
 
     async function syncActivities() {
       if (!celebrations) {
-        console.log('[LiveActivitySync] No celebrations list loaded yet.');
+        debug('[LiveActivitySync] No celebrations list loaded yet.');
         return;
       }
       if (!isMounted) return;
 
-      console.log(`[LiveActivitySync] Scanning query cache: found ${celebrations.length} joined events.`);
+      debug(`[LiveActivitySync] scanning ${celebrations.length} accessible events.`);
 
       const now = Date.now();
       const currentActiveIds = new Set<string>();
@@ -46,11 +47,9 @@ export function LiveActivitySyncManager() {
         const status = event.status as string;
         const isActive = endsAtMs > now && (status === 'published' || status === 'live');
 
-        console.log(`[LiveActivitySync] Event "${event.title}" (${event.id}): status=${status}, endsAt=${event.endsAt || 'none'}, isActive=${isActive}`);
+        debug(`[LiveActivitySync] eligibility evaluated: ${isActive ? 'active' : 'inactive'}.`);
 
         if (isActive) {
-          currentActiveIds.add(event.id);
-
           // Get photo limit and taken count
           // null = unlimited, number = specific limit
           const limit = event.primarySession?.shot_limit_per_guest;
@@ -63,58 +62,36 @@ export function LiveActivitySyncManager() {
               takenCount = parsed.length;
             }
           } catch (e) {
-            console.error('Error loading taken photos count:', e);
+            if (__DEV__) console.warn('[LiveActivitySync] Could not read the local photo counter.');
           }
 
-          // If unlimited, show -1 — the widget draws that as "∞".
-          // `undefined` has to land here too, not just `null`: a session that
-          // never carried a limit was falling through to the arithmetic below
-          // and sending NaN across the bridge, which the widget then drew as a
-          // literal "NaN" where the shot count belongs.
-          const remaining =
-            limit === null || limit === undefined ? -1 : Math.max(0, limit - takenCount);
-
-          // The widget's footer draws remaining as a fraction of the whole, so
-          // it needs the allowance as well as the count. -1 is the same
-          // unlimited sentinel `remaining` already uses, kept identical so the
-          // two fields can never disagree about whether an event is capped.
-          const allowance = limit === null || limit === undefined ? -1 : limit;
-
-          if (!activeActivitiesRef.current.has(event.id)) {
-            console.log(`[LiveActivitySync] Starting Live Activity for "${event.title}" with remaining count = ${remaining}`);
-            LiveActivityModule.startActivity(
-              event.title,
-              event.id,
-              remaining,
-              allowance,
-              endsAtMs,
-            );
-            activeActivitiesRef.current.add(event.id);
-          } else {
-            console.log(`[LiveActivitySync] Updating Live Activity for "${event.title}" with remaining count = ${remaining}`);
-            LiveActivityModule.updateActivity(event.id, remaining, allowance, endsAtMs);
-          }
+          const synced = syncLiveActivity({
+            celebrationId: event.id,
+            eventName: event.title,
+            endsAt: endsAtMs,
+            shotLimit: limit,
+            shotsUsed: takenCount,
+          });
+          if (synced) currentActiveIds.add(event.id);
         }
       }
 
       // End activities that are no longer active
       for (const id of activeActivitiesRef.current) {
         if (!currentActiveIds.has(id)) {
-          console.log(`[LiveActivitySync] Ending Live Activity for event ID: ${id}`);
-          LiveActivityModule.endActivity(id);
+          endLiveActivity(id);
           activeActivitiesRef.current.delete(id);
         }
       }
     }
 
-    // Run sync immediately and then on a short interval (every 4 seconds)
-    // to catch AsyncStorage photo count updates in real-time
+    // A capture and its event query update call `syncLiveActivity` directly.
+    // No independent 4-second timer is needed; it used to submit identical
+    // ActivityKit updates indefinitely even while the app was idle.
     syncActivities();
-    const interval = setInterval(syncActivities, 4000);
 
     return () => {
       isMounted = false;
-      clearInterval(interval);
     };
   }, [celebrations]);
 

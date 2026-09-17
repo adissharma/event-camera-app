@@ -3,6 +3,7 @@ import { ActivityIndicator, Linking, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
 import { AppText } from '@/components/ui/text';
+import { routeSystemEntry } from '@/lib/navigation/system-entry';
 import { colours, layout, spacing } from '@/design';
 
 /**
@@ -20,16 +21,24 @@ export default function AppClipInvocationFallback() {
   useEffect(() => {
     let active = true;
 
-    void Linking.getInitialURL().then((url) => {
+    void Linking.getInitialURL().then(async (url) => {
       if (!active) return;
 
       const match = url?.match(/\/(j|e)\/([^/?#]+)/i);
-      if (match) {
-        router.replace(`/${match[1].toLowerCase()}/${decodeURIComponent(match[2])}` as never);
+      if (!url || !match) {
+        setResolving(false);
         return;
       }
 
-      setResolving(false);
+      // Through the same gate as every other system URL: if the invitation
+      // has meanwhile been delivered again and handled, this adds nothing.
+      const next = await routeSystemEntry(url, false);
+      if (!active || next === null) return;
+      router.replace(
+        (next.startsWith('/')
+          ? next
+          : `/${match[1].toLowerCase()}/${decodeURIComponent(match[2])}`) as never,
+      );
     });
 
     return () => {

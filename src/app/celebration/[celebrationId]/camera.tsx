@@ -362,6 +362,35 @@ export default function CameraScreen() {
   const limit = primarySession?.shot_limit_per_guest ?? null;
   const isChallengeCapture = captureTarget === 'challenge' && Boolean(challengeId);
   const isGuestbookCapture = captureTarget === 'guestbook';
+
+  // A plain event capture always closes onto its event gallery: back down to
+  // the gallery beneath it, or — when the camera is the only screen, as when
+  // a Live Activity opened it without one — by replacing it with the gallery.
+  // Replacing unconditionally would stack a second gallery on the first every
+  // time the camera closed. Challenge and Guestbook capture keep their
+  // contextual return path.
+  const returnFromCamera = useCallback(() => {
+    const galleryTarget = {
+      pathname: '/celebration/[celebrationId]',
+      params: { celebrationId: String(celebrationId) },
+    };
+
+    if (!isChallengeCapture && !isGuestbookCapture) {
+      if (router.canDismiss()) {
+        router.dismissTo(galleryTarget as never);
+      } else {
+        router.replace(galleryTarget as never);
+      }
+      return;
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+      return;
+    }
+
+    router.replace(galleryTarget as never);
+  }, [celebrationId, isChallengeCapture, isGuestbookCapture, router]);
   // The Guestbook is a distinct feature from the main gallery's photo/video
   // toggle — a host disabling video contributions for the gallery should not
   // silently break Guestbook video messages, so this bypasses that gate.
@@ -1002,6 +1031,7 @@ export default function CameraScreen() {
         } else if (!isGuest && celebrationId) {
           const uploadResult = await uploadHostPhoto({
             celebrationId: String(celebrationId),
+            eventCode: detail?.celebration.event_code ?? null,
             localUri: uri,
             source,
             mimeType,
@@ -1075,12 +1105,25 @@ export default function CameraScreen() {
     // referenced from here on; `preview` is kept only to know whether
     // compression produced a distinct file worth cleaning up afterwards.
     let effectivePreview = preview;
+    // Saved with the media row rather than only logged locally. A real-device
+    // test can therefore distinguish a successful transcode from an
+    // intentional/failure fallback after the recording has left the device.
+    let videoCompressionMetadata: Record<string, unknown> | null = null;
     if (mediaKind === 'video' && isBackendConfigured && !isWeb) {
       setPostingStage('preparing');
       const compression = await compressVideoForUpload({
         uri: preview.uri,
         expectedDurationMs: preview.durationMs,
       });
+      videoCompressionMetadata = {
+        attempted: true,
+        applied: !compression.skipped,
+        skip_reason: compression.skipReason ?? null,
+        source_size_bytes: compression.originalSizeBytes,
+        output_size_bytes: compression.sizeBytes,
+        output_width: compression.width,
+        output_height: compression.height,
+      };
       if (!compression.skipped) {
         effectivePreview = {
           ...preview,
@@ -1166,12 +1209,21 @@ export default function CameraScreen() {
                 challenge_id: effectivePreview.challengeId,
                 submission_kind: 'challenge',
                 ...(trimmedCaption ? { caption: trimmedCaption } : {}),
+                ...(videoCompressionMetadata ? { video_compression: videoCompressionMetadata } : {}),
               }
             : effectivePreview.guestbook
-              ? { submission_kind: 'guestbook' }
+              ? {
+                  submission_kind: 'guestbook',
+                  ...(videoCompressionMetadata ? { video_compression: videoCompressionMetadata } : {}),
+                }
               : trimmedCaption
-                ? { caption: trimmedCaption }
-                : undefined,
+                ? {
+                    caption: trimmedCaption,
+                    ...(videoCompressionMetadata ? { video_compression: videoCompressionMetadata } : {}),
+                  }
+                : videoCompressionMetadata
+                  ? { video_compression: videoCompressionMetadata }
+                  : undefined,
           thumbnailLocalUri: videoThumbnail?.uri,
           thumbnailMimeType: videoThumbnail?.mimeType,
         });
@@ -1184,6 +1236,7 @@ export default function CameraScreen() {
       } else if (!isGuest && celebrationId) {
         const uploadResult = await uploadHostMedia({
           celebrationId: String(celebrationId),
+          eventCode: detail?.celebration.event_code ?? null,
           localUri: effectivePreview.uri,
           source: effectivePreview.source,
           mediaType: mediaKind,
@@ -1201,12 +1254,21 @@ export default function CameraScreen() {
                 challenge_id: effectivePreview.challengeId,
                 submission_kind: 'challenge',
                 ...(trimmedCaption ? { caption: trimmedCaption } : {}),
+                ...(videoCompressionMetadata ? { video_compression: videoCompressionMetadata } : {}),
               }
             : effectivePreview.guestbook
-              ? { submission_kind: 'guestbook' }
+              ? {
+                  submission_kind: 'guestbook',
+                  ...(videoCompressionMetadata ? { video_compression: videoCompressionMetadata } : {}),
+                }
               : trimmedCaption
-                ? { caption: trimmedCaption }
-                : undefined,
+                ? {
+                    caption: trimmedCaption,
+                    ...(videoCompressionMetadata ? { video_compression: videoCompressionMetadata } : {}),
+                  }
+                : videoCompressionMetadata
+                  ? { video_compression: videoCompressionMetadata }
+                  : undefined,
           thumbnailLocalUri: videoThumbnail?.uri,
           thumbnailMimeType: videoThumbnail?.mimeType,
         });
@@ -2052,8 +2114,8 @@ export default function CameraScreen() {
             {"\n\n"}
             npx expo run:ios (or run:android)
           </AppText>
-          <Pressable style={S.permissionBtn} onPress={() => router.back()}>
-            <AppText style={S.permissionBtnText}>Go Back</AppText>
+          <Pressable style={S.permissionBtn} onPress={returnFromCamera}>
+            <AppText style={S.permissionBtnText}>Back to Event</AppText>
           </Pressable>
         </View>
       </View>
@@ -2109,8 +2171,8 @@ export default function CameraScreen() {
               <AppText tone="secondary" style={{ textDecorationLine: 'underline' }}>Open Settings</AppText>
             </Pressable>
           ) : null}
-          <Pressable style={{ marginTop: spacing.lg }} onPress={() => router.back()}>
-            <AppText tone="secondary" style={{ textDecorationLine: 'underline' }}>Go Back</AppText>
+          <Pressable style={{ marginTop: spacing.lg }} onPress={returnFromCamera}>
+            <AppText tone="secondary" style={{ textDecorationLine: 'underline' }}>Back to Event</AppText>
           </Pressable>
         </View>
       </View>
@@ -2147,10 +2209,10 @@ export default function CameraScreen() {
           <View style={S.headerBtn} />
         ) : (
           <Pressable
-            onPress={() => router.back()}
+            onPress={returnFromCamera}
             style={S.headerBtn}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel="Back to event gallery"
           >
             <CloseChevron />
           </Pressable>

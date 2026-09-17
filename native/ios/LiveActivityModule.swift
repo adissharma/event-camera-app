@@ -1,6 +1,12 @@
 import Foundation
 import ActivityKit
 
+private func liveActivityDebug(_ message: String) {
+  #if DEBUG
+  print("[LiveActivity] \(message)")
+  #endif
+}
+
 @objc(LiveActivityModule)
 class LiveActivityModule: NSObject {
   
@@ -12,7 +18,10 @@ class LiveActivityModule: NSObject {
     photoAllowance: Int,
     endTimeMs: Double
   ) {
-    guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+    guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+      liveActivityDebug("unavailable: disabled by system or device.")
+      return
+    }
     
     let targetDate = Date(timeIntervalSince1970: endTimeMs / 1000.0)
     let contentState = EventLiveActivityAttributes.ContentState(
@@ -30,6 +39,7 @@ class LiveActivityModule: NSObject {
             staleDate: nil
           )
         )
+        liveActivityDebug("update applied to existing activity.")
         return
       }
       
@@ -40,8 +50,9 @@ class LiveActivityModule: NSObject {
           content: .init(state: contentState, staleDate: nil),
           pushType: nil
         )
+        liveActivityDebug("request succeeded.")
       } catch {
-        print("[LiveActivityModule] Error starting Live Activity for \(celebrationId): \(error.localizedDescription)")
+        liveActivityDebug("request failed.")
       }
     }
   }
@@ -68,6 +79,7 @@ class LiveActivityModule: NSObject {
             staleDate: nil
           )
         )
+        liveActivityDebug("update applied.")
       }
     }
   }
@@ -77,6 +89,7 @@ class LiveActivityModule: NSObject {
     Task { @MainActor in
       for activity in Activity<EventLiveActivityAttributes>.activities where activity.attributes.celebrationId == celebrationId {
         await activity.end(dismissalPolicy: .immediate)
+        liveActivityDebug("ended.")
       }
     }
   }
@@ -95,4 +108,3 @@ class LiveActivityModule: NSObject {
     return true
   }
 }
-

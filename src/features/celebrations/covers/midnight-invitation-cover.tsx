@@ -3,6 +3,8 @@ import { useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   StyleSheet,
   TextInput,
@@ -96,7 +98,11 @@ export function MidnightInvitationCover({
   const titleSize = Math.round((title.length > 22 ? 40 : 52) * scale);
 
   return (
-    <View onLayout={handleLayout} style={S.root}>
+    <KeyboardAvoidingView
+      onLayout={handleLayout}
+      style={S.root}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       {/* ── Background: the same photograph, blurred and darkened ── */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <Image
@@ -233,7 +239,7 @@ export function MidnightInvitationCover({
           </>}
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

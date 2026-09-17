@@ -3,7 +3,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 import { BRAND_CONFIG } from '@/config/brand';
 import { STORAGE_BUCKETS } from '@/config/app-config';
-import { buildCoverPath, normaliseExtension, inferMimeTypeFromUri } from '@/features/media/storage-paths';
+import {
+  buildCoverPath,
+  IMMUTABLE_CACHE_SECONDS,
+  normaliseExtension,
+  inferMimeTypeFromUri,
+} from '@/features/media/storage-paths';
 import { readLocalImageBytes } from '@/features/media/read-local-image';
 import { resolveDraftAllowedMediaTypes } from '@/features/media/event-media';
 import { getPaymentProvider } from '@/features/payments';
@@ -405,14 +410,13 @@ export async function uploadCover(localUri: string, celebrationId: string): Prom
 
   const { error: uploadError } = await client.storage
     .from(STORAGE_BUCKETS.covers)
-    // Deliberately left on the default one-hour cache, unlike event media.
-    // `upsert: true` means a host replacing their cover writes to the SAME
-    // path, so a long cache would pin the old image in every viewer's browser
-    // and CDN long after it changed. Covers are also small — three of them
-    // account for under 3MB — so they are not what the egress bill is made of.
+    // `buildCoverPath` gives every replacement a fresh versioned path. The
+    // object is consequently immutable just like event media, so long-lived
+    // cache headers reduce repeat cover egress without serving an old cover.
     .upload(path, bytes, {
       contentType: resolvedMime.startsWith('image/') ? resolvedMime : 'image/jpeg',
-      upsert: true,
+      upsert: false,
+      cacheControl: IMMUTABLE_CACHE_SECONDS,
     });
 
   if (uploadError) throw new PublicationError(uploadError.message, 'cover');

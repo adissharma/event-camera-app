@@ -288,7 +288,7 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
       if (sessionsError) throw sessionsError;
 
       const primarySession = sessions?.[0] ?? null;
-      const metrics = primarySession
+      const baseMetrics = primarySession
         ? await fetchMetrics(primarySession.id)
         : { guestsJoined: 0, contributors: 0, photos: 0 };
 
@@ -396,6 +396,19 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
               }));
           })()
         : [];
+
+      // The gallery query above already has the ready, non-guestbook media
+      // rows and uploader IDs. Derive contributors from that result rather
+      // than issuing a second query that transfers every media row solely to
+      // count distinct guest sessions.
+      const metrics = {
+        ...baseMetrics,
+        contributors: new Set(
+          mediaPhotos
+            .map((item) => item.guestSessionId)
+            .filter((id): id is string => Boolean(id)),
+        ).size,
+      };
 
       return {
         celebration,
@@ -760,8 +773,9 @@ function mapJoinedGuests(rows: any[]): JoinedGuest[] {
 async function fetchMetrics(eventSessionId: string): Promise<EventMetrics> {
   const client = requireSupabase();
 
-  // `head: true` with an exact count fetches no rows — three cheap counts
-  // rather than pulling every guest and photo down to count them on device.
+  // `head: true` with an exact count fetches no rows. Contributor IDs are
+  // derived from the gallery query by the caller, avoiding a duplicate
+  // 1,500-row transfer just to compute a distinct count.
   const [guests, ready] = await Promise.all([
     client
       .from('guest_sessions')
@@ -769,7 +783,7 @@ async function fetchMetrics(eventSessionId: string): Promise<EventMetrics> {
       .eq('event_session_id', eventSessionId),
     client
       .from('media_items')
-      .select('guest_session_id, metadata', { count: 'exact' })
+      .select('id', { count: 'exact', head: true })
       .eq('event_session_id', eventSessionId)
       .eq('status', 'ready')
       .is('deleted_at', null)
@@ -778,15 +792,9 @@ async function fetchMetrics(eventSessionId: string): Promise<EventMetrics> {
       .or('metadata->>submission_kind.is.null,metadata->>submission_kind.neq.guestbook'),
   ]);
 
-  const contributors = new Set(
-    (ready.data ?? [])
-      .map((row) => row.guest_session_id)
-      .filter((id): id is string => id !== null),
-  ).size;
-
   return {
     guestsJoined: guests.count ?? 0,
-    contributors,
+    contributors: 0,
     photos: ready.count ?? 0,
   };
 }

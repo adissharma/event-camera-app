@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import { listThemes } from '@/services/themes';
+import { IMMUTABLE_CACHE_SECONDS } from '@/features/media/storage-paths';
 import type { Database } from '@/types/database';
 
 type GuestPreviewRpc = Database['public']['CompositeTypes']['guest_event_preview'];
@@ -649,12 +650,17 @@ export async function uploadGuestPhoto(options: {
   if (error) throw error;
   const intent = data as any;
   
-  // 2. Upload file to Supabase storage bucket `media`
+  // 2. Upload to the bucket reserved by the server-side intent. Paths are
+  // immutable/versioned, so matching the native pipeline's long cache policy
+  // prevents legacy web gallery revisits from re-fetching the same photo.
   const { error: uploadError } = await client.storage
-    .from('media')
+    .from(intent.bucket)
     .upload(intent.storage_path, options.fileBytes, {
       contentType: options.fileExtension === 'png' ? 'image/png' : 'image/jpeg',
+      // An idempotent retry can receive the same in-flight intent and needs
+      // to write its reserved path again before finalisation.
       upsert: true,
+      cacheControl: IMMUTABLE_CACHE_SECONDS,
     });
     
   if (uploadError) throw uploadError;

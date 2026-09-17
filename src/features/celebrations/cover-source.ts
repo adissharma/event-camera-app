@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
 import { STORAGE_BUCKETS } from '@/config/app-config';
+import { resolveSignedUrls } from '@/features/media/signed-url-cache';
 
 /**
  * Cover art resolution, shared by every screen that renders an event cover.
@@ -44,7 +45,10 @@ const SIGNED_URL_TTL_SECONDS = 60 * 60;
  * indefinitely because a replaced cover is written to a *new* path (see
  * `buildCoverPath`) — a stale entry can never shadow a newer image.
  */
-const signedUrlCache = new Map<string, string>();
+type SignedCoverEntry = { url: string; refreshAt: number };
+
+const SIGNED_URL_REFRESH_EARLY_MS = 2 * 60_000;
+const signedUrlCache = new Map<string, SignedCoverEntry>();
 const inFlight = new Map<string, Promise<string | null>>();
 
 /** True when `value` is already renderable without a round trip. */
@@ -74,7 +78,7 @@ export function resolveCoverSync(path: string | null | undefined) {
 
 async function signCoverPath(path: string): Promise<string | null> {
   const cached = signedUrlCache.get(path);
-  if (cached) return cached;
+  if (cached && cached.refreshAt > Date.now()) return cached.url;
 
   const existing = inFlight.get(path);
   if (existing) return existing;
@@ -91,7 +95,10 @@ async function signCoverPath(path: string): Promise<string | null> {
         return null;
       }
 
-      signedUrlCache.set(path, data.signedUrl);
+      signedUrlCache.set(path, {
+        url: data.signedUrl,
+        refreshAt: Date.now() + SIGNED_URL_TTL_SECONDS * 1000 - SIGNED_URL_REFRESH_EARLY_MS,
+      });
       return data.signedUrl;
     } finally {
       inFlight.delete(path);
@@ -111,19 +118,32 @@ async function signCoverPath(path: string): Promise<string | null> {
 export function useCoverSource(path: string | null | undefined) {
   const immediate = resolveCoverSync(path);
   const [signed, setSigned] = useState<string | null>(() =>
-    path && !immediate ? signedUrlCache.get(path) ?? null : null,
+    path && !immediate ? signedUrlCache.get(path)?.url ?? null : null,
   );
 
   useEffect(() => {
     if (!path || immediate || !isBackendConfigured) return;
 
     let cancelled = false;
-    void signCoverPath(path).then((url) => {
-      if (!cancelled && url) setSigned(url);
-    });
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const refresh = () => {
+      void signCoverPath(path).then((url) => {
+        if (cancelled || !url) return;
+        setSigned(url);
+        // A stationary dashboard can otherwise retain an expired signed URL
+        // after an hour. Renew just before expiry without persisting the
+        // bearer token beyond this process.
+        const refreshAt = signedUrlCache.get(path)?.refreshAt ?? Date.now();
+        refreshTimer = setTimeout(refresh, Math.max(0, refreshAt - Date.now()));
+      });
+    };
+
+    refresh();
 
     return () => {
       cancelled = true;
+      if (refreshTimer) clearTimeout(refreshTimer);
     };
   }, [path, immediate]);
 
@@ -145,15 +165,27 @@ export function useCoverSources(paths: (string | null | undefined)[]) {
 
     const pending = paths.filter(
       (path): path is string =>
-        typeof path === 'string' && !resolveCoverSync(path) && !signedUrlCache.has(path),
+        typeof path === 'string' &&
+        !resolveCoverSync(path) &&
+        (signedUrlCache.get(path)?.refreshAt ?? 0) <= Date.now(),
     );
     if (pending.length === 0) return;
 
     let cancelled = false;
-    void Promise.all(pending.map((path) => signCoverPath(path))).then(() => {
-      // One re-render once the batch lands, rather than one per card.
-      if (!cancelled) setTick((value) => value + 1);
-    });
+    // One batch request for a dashboard's covers, rather than one signing
+    // round trip per card. The generic resolver also shares this with any
+    // cover mounted concurrently elsewhere in the app.
+    void resolveSignedUrls(STORAGE_BUCKETS.covers, pending, SIGNED_URL_TTL_SECONDS)
+      .then((urls) => {
+        const refreshAt = Date.now() + SIGNED_URL_TTL_SECONDS * 1000 - SIGNED_URL_REFRESH_EARLY_MS;
+        for (const path of pending) {
+          const url = urls.get(path);
+          if (url) signedUrlCache.set(path, { url, refreshAt });
+        }
+        // One re-render once the batch lands, rather than one per card.
+        if (!cancelled) setTick((value) => value + 1);
+      })
+      .catch((error) => console.error('[cover] failed to sign cover URLs', error));
 
     return () => {
       cancelled = true;
@@ -164,7 +196,7 @@ export function useCoverSources(paths: (string | null | undefined)[]) {
     const immediate = resolveCoverSync(path);
     if (immediate) return immediate;
     const signed = path ? signedUrlCache.get(path) : undefined;
-    return signed ? { uri: signed } : FALLBACK_COVER;
+    return signed ? { uri: signed.url } : FALLBACK_COVER;
   };
 }
 

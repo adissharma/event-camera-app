@@ -27,9 +27,26 @@
 import { Platform } from 'react-native';
 import { File } from 'expo-file-system';
 
-let Compressor: { compress: Function; getVideoMetaData: Function } | null = null;
+type VideoCompressorModule = {
+  compress: (uri: string, options: Record<string, unknown>, onProgress?: (progress: number) => void) => Promise<string>;
+};
+
+type VideoMetadata = {
+  size?: number;
+  width?: number;
+  height?: number;
+  duration?: number;
+};
+
+let Compressor: VideoCompressorModule | null = null;
+let getVideoMetaData: ((uri: string) => Promise<VideoMetadata>) | null = null;
 try {
-  Compressor = require('react-native-compressor').Video;
+  const nativeCompressor = require('react-native-compressor');
+  // `compress` belongs to the library's `Video` export, while metadata is a
+  // top-level utility export. Treating both as Video methods meant every
+  // compression attempt failed before the encoder could start.
+  Compressor = nativeCompressor.Video;
+  getVideoMetaData = nativeCompressor.getVideoMetaData;
 } catch {
   // Not present in this build (e.g. before a native rebuild picks up the
   // new dependency) — every call below falls back to the original file.
@@ -37,6 +54,8 @@ try {
 
 export type VideoCompressionResult = {
   uri: string;
+  /** Size of the source recording before the compressor was invoked. */
+  originalSizeBytes: number;
   /** Null when unknown — the caller already has its own value to fall back to. */
   width: number | null;
   height: number | null;
@@ -165,6 +184,7 @@ function unchangedResult(
   console.log(`[video-compression] skipped (${reason}) — uploading original, ${(sizeBytes / 1024 / 1024).toFixed(2)} MB`);
   return {
     uri,
+    originalSizeBytes: sizeBytes,
     width: width ?? null,
     height: height ?? null,
     sizeBytes,
@@ -182,7 +202,7 @@ function unchangedResult(
 export async function compressVideoForUpload(
   options: CompressVideoOptions,
 ): Promise<VideoCompressionResult> {
-  if (Platform.OS === 'web' || !Compressor) {
+  if (Platform.OS === 'web' || !Compressor || !getVideoMetaData) {
     return unchangedResult(
       options.uri,
       Platform.OS === 'web' ? 'not supported on this platform' : 'react-native-compressor native module not linked in this build',
@@ -194,7 +214,7 @@ export async function compressVideoForUpload(
   let sourceHeight: number | undefined;
 
   try {
-    const source = await Compressor.getVideoMetaData(options.uri);
+    const source = await getVideoMetaData(options.uri);
     originalSizeBytes = Number(source?.size) || readLocalFileSizeBytes(options.uri);
     sourceWidth = Number(source?.width) || undefined;
     sourceHeight = Number(source?.height) || undefined;
@@ -248,7 +268,7 @@ export async function compressVideoForUpload(
       return unchangedResult(options.uri, 'already efficiently encoded', originalSizeBytes, sourceWidth, sourceHeight);
     }
 
-    const output = await Compressor.getVideoMetaData(compressedUri);
+    const output = await getVideoMetaData(compressedUri);
     const outputSizeBytes = Number(output?.size) || 0;
     const outputWidth = Number(output?.width) || 0;
     const outputHeight = Number(output?.height) || 0;
@@ -282,6 +302,7 @@ export async function compressVideoForUpload(
 
     return {
       uri: compressedUri,
+      originalSizeBytes,
       width: outputWidth,
       height: outputHeight,
       sizeBytes: outputSizeBytes,

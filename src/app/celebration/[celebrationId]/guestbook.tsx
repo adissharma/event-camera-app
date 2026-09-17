@@ -40,7 +40,6 @@ import {
   fetchHostGuestbook,
   type GuestbookMessageRecord,
 } from '@/services/guestbook';
-import { requireSupabase } from '@/lib/supabase/client';
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
 import { deleteHostPhoto } from '@/services/media-delete';
 import {
@@ -52,6 +51,7 @@ import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { FeatureGate } from '@/features/entitlements/feature-gate';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
 import { SAMPLE_COVER, isSampleCelebrationId } from '@/features/celebrations/sample-event';
+import { resolveSignedUrls } from '@/features/media/signed-url-cache';
 
 type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
 
@@ -158,19 +158,12 @@ function GuestbookScreenContent() {
     setIsSigningUrls(true);
     (async () => {
       try {
-        const client = requireSupabase();
-        const { data, error } = await client.storage
-          .from('event-media')
-          .createSignedUrls(messages.map((item) => item.storagePath), 3600);
+        const urlByPath = await resolveSignedUrls(
+          'event-media',
+          messages.map((item) => item.storagePath),
+        );
 
         if (cancelled) return;
-        if (error || !data) {
-          console.error('[guestbook] failed to sign guestbook URLs', error);
-          setResolvedMessages([]);
-          return;
-        }
-
-        const urlByPath = new Map(data.map((item) => [item.path, item.signedUrl]));
         setResolvedMessages(
           messages
             .map((item) => {
@@ -179,6 +172,11 @@ function GuestbookScreenContent() {
             })
             .filter((item): item is ResolvedMessage => item !== null),
         );
+      } catch (error) {
+        if (!cancelled) {
+          console.error('[guestbook] failed to sign guestbook URLs', error);
+          setResolvedMessages([]);
+        }
       } finally {
         if (!cancelled) setIsSigningUrls(false);
       }

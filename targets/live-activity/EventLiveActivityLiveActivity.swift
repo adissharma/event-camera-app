@@ -1,4 +1,5 @@
 import ActivityKit
+import Foundation
 import WidgetKit
 import SwiftUI
 
@@ -9,10 +10,26 @@ import SwiftUI
 // about ActivityKit. This file is the seam between the two: it unpacks the
 // live `ContentState` and hands plain values to the card.
 
-/// `eventcamera://celebration/<id>/camera` — straight into the viewfinder for
-/// this event, not into the app's home screen.
+/// Builds a URL for the application that owns the activity.
+///
+/// The App Clip has its own scheme, so a Clip activity's links are only ever
+/// claimed by the Clip and never by the full app's `eventcamera`. Where a link
+/// leaves the guest once inside is decided by the app, in
+/// `src/lib/navigation/entry-intent.ts`.
+private func eventURL(for celebrationId: String, path: String = "") -> URL {
+    let isClipActivity = Bundle.main.bundleIdentifier?.hasSuffix(".Clip.liveactivities") == true
+    let scheme = isClipActivity ? "eventcameraclip" : "eventcamera"
+    return URL(string: "\(scheme)://celebration/\(celebrationId)\(path)")!
+}
+
+/// The default card target is the event gallery.
+private func galleryURL(for celebrationId: String) -> URL {
+    eventURL(for: celebrationId)
+}
+
+/// The explicit camera control opens the viewfinder.
 private func cameraURL(for celebrationId: String) -> URL {
-    URL(string: "eventcamera://celebration/\(celebrationId)/camera")!
+    eventURL(for: celebrationId, path: "/camera")
 }
 
 struct EventLiveActivityLiveActivity: Widget {
@@ -25,6 +42,11 @@ struct EventLiveActivityLiveActivity: Widget {
                 endTime: context.state.endTime,
                 cameraDestination: cameraURL(for: context.attributes.celebrationId)
             )
+            // Without a URL, tapping the card causes iOS to fall back to a
+            // generic App Clip handoff. The event surface must instead open
+            // its own gallery, while the nested CameraCTA retains its
+            // higher-priority, viewfinder-specific Link.
+            .widgetURL(galleryURL(for: context.attributes.celebrationId))
             // The gradient retreats rather than jumping when a shot is taken.
             // Restrained on purpose: a spring here would read as a game.
             .animation(.easeInOut(duration: 0.45), value: context.state.photosLeft)
@@ -90,7 +112,9 @@ struct EventLiveActivityLiveActivity: Widget {
             } minimal: {
                 StillsMark(size: 16)
             }
-            .widgetURL(cameraURL(for: context.attributes.celebrationId))
+            // The whole Dynamic Island opens the gallery. Its explicit camera
+            // Link above still takes priority when the button is tapped.
+            .widgetURL(galleryURL(for: context.attributes.celebrationId))
             .keylineTint(Ink.accentStops[2])
         }
     }

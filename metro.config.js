@@ -13,6 +13,7 @@ const config = getDefaultConfig(projectRoot);
  */
 if (process.env.APP_VARIANT === 'clip') {
   const clipModules = new Map([
+    ['@/config/runtime-variant', 'runtime-variant.ts'],
     ['@/features/auth/context', 'auth-context.tsx'],
     ['@/features/celebrations/challenge-icons', 'challenge-icons.tsx'],
     ['@/features/celebrations/sample-event', 'sample-event.ts'],
@@ -20,6 +21,7 @@ if (process.env.APP_VARIANT === 'clip') {
     ['@/features/celebrations/gallery-preset-assets', 'gallery-preset-assets.ts'],
     ['@/features/entitlements/upgrade-sheet', 'upgrade-sheet.tsx'],
     ['@react-native-masked-view/masked-view', 'masked-view.tsx'],
+    ['expo-glass-effect', 'glass-effect.tsx'],
   ]);
 
   config.resolver.resolveRequest = (context, moduleName, platform) => {
