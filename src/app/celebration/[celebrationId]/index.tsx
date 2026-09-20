@@ -985,6 +985,7 @@ function VideoPoster({
   style,
   controls = false,
   autoPlay = false,
+  active = true,
   muted = true,
   contentFit = 'cover',
   onEnd,
@@ -993,15 +994,27 @@ function VideoPoster({
   style?: any;
   controls?: boolean;
   autoPlay?: boolean;
+  /**
+   * Whether this copy is the one being looked at.
+   *
+   * The hero viewer keeps the neighbouring pages mounted so a swipe is
+   * instant, so a video that leaves the screen is not unmounted and its
+   * player keeps running — picture and sound both. Marking a page inactive
+   * pauses it where it stands, so swiping back resumes rather than restarts.
+   */
+  active?: boolean;
   muted?: boolean;
   contentFit?: 'contain' | 'cover';
   onEnd?: () => void;
 }) {
   const containerRef = useRef<any>(null);
+  // Read inside listeners that outlive the render they were created in.
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const player = useVideoPlayer({ uri }, (instance) => {
     instance.loop = false;
     instance.muted = muted;
-    if (autoPlay) {
+    if (autoPlay && active) {
       // The container ref is not attached yet on this very first call (it
       // fires before mount commits), so this attempt just falls through to
       // a plain `play()` — the `statusChange` listener below is what
@@ -1017,7 +1030,7 @@ function VideoPoster({
   // a signed URL fetched fresh — would otherwise sit paused forever despite
   // `autoPlay`. This is what was making gallery videos fail to autoplay.
   useEventListener(player, 'statusChange', ({ status }) => {
-    if (status !== 'readyToPlay' || !autoPlay) return;
+    if (status !== 'readyToPlay' || !autoPlay || !activeRef.current) return;
     playWithSoundFallback(containerRef.current, player);
   });
 
@@ -1025,6 +1038,32 @@ function VideoPoster({
     player.pause();
     onEnd?.();
   });
+
+  useEffect(() => {
+    if (active) {
+      if (autoPlay) playWithSoundFallback(containerRef.current, player);
+      return;
+    }
+    try {
+      player.pause();
+    } catch {
+      // Already released. Nothing left to stop.
+    }
+  }, [active, autoPlay, player]);
+
+  // Closing the viewer has to silence the video, not merely hide it: the
+  // player is released on unmount, but release is asynchronous on native and
+  // the sound carries on until it lands.
+  useEffect(
+    () => () => {
+      try {
+        player.pause();
+      } catch {
+        // Already released.
+      }
+    },
+    [player],
+  );
 
   return (
     <View ref={containerRef} style={style}>
@@ -4735,6 +4774,7 @@ export function EventDetailView({
                     style={{ width: '100%', height: '100%' }}
                     controls
                     autoPlay={photo.id === activePhoto.id}
+                    active={photo.id === activePhoto.id}
                     muted={false}
                     contentFit="contain"
                   />
