@@ -1,3 +1,5 @@
+import { BRAND_CONFIG } from '@/config/brand';
+
 /**
  * The privacy policy, as data.
  *
@@ -13,7 +15,7 @@
  * Named once. It appears three times in the text below, and a policy that
  * offers two different addresses is a policy nobody trusts.
  */
-const PRIVACY_EMAIL = 'contact@stills.events';
+const PRIVACY_EMAIL = BRAND_CONFIG.supportEmail;
 
 /** Shown under the title. Update whenever the text below changes materially. */
 export const PRIVACY_LAST_UPDATED = '14 September 2026';

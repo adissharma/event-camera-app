@@ -26,7 +26,7 @@ import Svg, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 
-import { PRIVACY_POLICY_URL } from '@/config/brand';
+import { BRAND_CONFIG, PRIVACY_POLICY_URL } from '@/config/brand';
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -469,6 +469,17 @@ function ProfileSettingsRow({
  * the app would have to keep in step. Leaving the app is the point, so this
  * deliberately does not use an in-app browser.
  */
+async function openSupportEmail(): Promise<void> {
+  const address = BRAND_CONFIG.supportEmail;
+  try {
+    await Linking.openURL(`mailto:${address}?subject=${encodeURIComponent(`${BRAND_CONFIG.appName} support`)}`);
+  } catch {
+    // No mail account is set up on the device. The address is the useful part
+    // either way, so it is shown rather than swallowed.
+    Alert.alert('Contact support', `Email us at ${address}`);
+  }
+}
+
 async function openPrivacyPolicy(): Promise<void> {
   try {
     await Linking.openURL(PRIVACY_POLICY_URL);
@@ -890,9 +901,9 @@ export default function HomeScreen() {
 
                 <ProfileSettingsRow
                   title="Contact support"
-                  value="Get help with your account"
+                  value={BRAND_CONFIG.supportEmail}
                   onPress={() => {
-                    Alert.alert('Contact Support', 'Need help? Get in touch with our team at support@eventcamera.app');
+                    void openSupportEmail();
                   }}
                 />
 

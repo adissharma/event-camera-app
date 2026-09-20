@@ -15,7 +15,11 @@ export const BRAND_CONFIG = {
   appName: 'Stills.',
   shortName: 'Stills.',
   tagline: 'Every guest. Every angle.',
-  supportEmail: 'support@example.com',
+  /**
+   * The inbox the app and the policy both point at. One address: a product
+   * that offers two is a product nobody knows how to reach.
+   */
+  supportEmail: 'contact@stills.events',
   websiteUrl: 'https://example.com',
   /**
    * The canonical production origin. Every generated link — invitations, QR
