@@ -8,6 +8,7 @@ import {
   Modal, 
   Alert, 
   Image, 
+  Linking,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -25,6 +26,7 @@ import Svg, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image as ExpoImage } from 'expo-image';
 
+import { PRIVACY_POLICY_URL } from '@/config/brand';
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
@@ -459,6 +461,24 @@ function ProfileSettingsRow({
 }
 
 // Helper to resolve status label (UPCOMING, completed hides label)
+/**
+ * Opens the published policy in the device's browser rather than in the app.
+ *
+ * The policy is a web page the site already serves, so a reader gets the
+ * current text — and their browser's own reading tools — instead of a copy
+ * the app would have to keep in step. Leaving the app is the point, so this
+ * deliberately does not use an in-app browser.
+ */
+async function openPrivacyPolicy(): Promise<void> {
+  try {
+    await Linking.openURL(PRIVACY_POLICY_URL);
+  } catch {
+    // No browser took it, which is rare but not impossible on a locked-down
+    // device. The address is short enough to be read out and typed.
+    Alert.alert('Privacy Policy', `Read our privacy policy at ${PRIVACY_POLICY_URL}`);
+  }
+}
+
 export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ trashedEventId?: string; openProfile?: string }>();
@@ -882,10 +902,7 @@ export default function HomeScreen() {
                   title="Privacy Policy"
                   value="How we handle your data"
                   onPress={() => {
-                    // The hosted policy URL will be connected here once it is
-                    // published. Keeping the row active makes the destination
-                    // discoverable without introducing a dead external link.
-                    Alert.alert('Privacy Policy', 'Our privacy policy will be available here soon.');
+                    void openPrivacyPolicy();
                   }}
                 />
 

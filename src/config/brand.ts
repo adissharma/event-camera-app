@@ -46,6 +46,16 @@ export const LEGACY_GUEST_DOMAINS = [
   'https://event-camera-app-navy.vercel.app',
 ] as const;
 
+/**
+ * The published privacy policy.
+ *
+ * One address for the policy wherever it is referenced — the App Store
+ * listing, the website footer and the app's own settings all point here, so
+ * the policy is never maintained in two places. Served by the web export's
+ * `/privacy` route (`src/app/privacy.tsx`).
+ */
+export const PRIVACY_POLICY_URL = `${BRAND_CONFIG.guestDomain}/privacy`;
+
 export type BrandConfig = typeof BRAND_CONFIG;
 
 /**
