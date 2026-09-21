@@ -10,15 +10,12 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import {
-  AppleSignInButton,
-  GoogleSignInButton,
-  EmailSignInButton,
-} from '@/components/auth/auth-buttons';
+import { AppleSignInButton, GoogleSignInButton } from '@/components/auth/auth-buttons';
 import { useAuth } from '@/features/auth/context';
 import { fetchMyProfile } from '@/services/profile';
 import { resetToAuthenticatedRoot } from '@/lib/navigation/session-root';
@@ -617,6 +614,30 @@ function LegacyWelcomeScreen({
     }
   }
 
+  /**
+   * Counts the taps that reveal email sign-in.
+   *
+   * Refs rather than state: nothing on screen changes until the fifth tap,
+   * and re-rendering the welcome screen on every touch would be work done
+   * for no one to see.
+   */
+  const secretTapCount = useRef(0);
+  const secretTapAt = useRef(0);
+
+  const registerSecretTap = useCallback(() => {
+    const now = Date.now();
+    secretTapCount.current =
+      now - secretTapAt.current > SECRET_TAP_WINDOW_MS ? 1 : secretTapCount.current + 1;
+    secretTapAt.current = now;
+
+    if (secretTapCount.current < SECRET_TAPS) return;
+    secretTapCount.current = 0;
+    // Confirms the gesture landed: without a button there is nothing else to
+    // tell you it worked until the next screen arrives.
+    void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    router.push('/sign-in');
+  }, [router]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   const introRunning = introEnabled === true && step !== Infinity;
@@ -885,6 +906,27 @@ function LegacyWelcomeScreen({
         it. One opacity for the whole block: the controls arrive as a single
         composition, not as four separate entrances.
       */}
+      {/*
+        Email sign-in, without a button for it.
+
+        The screen offers Apple and Google only. Email remains reachable for
+        our own testing through five taps anywhere the visible controls are
+        not: this sits *beneath* the controls block, which passes touches
+        through the space around its buttons, so a tap on Apple, Google or
+        Join event is consumed there and never counted here.
+
+        Taps must be consecutive — see `SECRET_TAP_WINDOW_MS` — so five stray
+        touches spread across a session cannot open it by accident.
+      */}
+      {!introRunning && showAuthControls ? (
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={registerSecretTap}
+          accessible={false}
+          importantForAccessibility="no-hide-descendants"
+        />
+      ) : null}
+
       <Animated.View
         style={[S.controls, { paddingBottom: insets.bottom + spacing.base, opacity: controlsIn }]}
         pointerEvents={introRunning || !showAuthControls ? 'none' : 'box-none'}
@@ -917,11 +959,6 @@ function LegacyWelcomeScreen({
             disabled={isAppleLoading || !isBackendConfigured}
           />
 
-          <EmailSignInButton
-            onPress={() => router.push('/sign-in')}
-            disabled={isAppleLoading || isGoogleLoading}
-          />
-
           <View style={{ paddingTop: spacing.xs }}>
             <Button
               label={copy.welcome.joinEvent}
@@ -949,6 +986,10 @@ function LegacyWelcomeScreen({
     </View>
   );
 }
+
+/** Taps that reveal email sign-in, and how long a tap waits for the next. */
+const SECRET_TAPS = 5;
+const SECRET_TAP_WINDOW_MS = 3000;
 
 const S = StyleSheet.create({
   screen: { flex: 1, backgroundColor: BLACK },
