@@ -70,7 +70,7 @@ import {
   FilledClockIcon,
   CloseIcon,
   LockIcon,
-  FilledPersonIcon,
+  FilledPeopleIcon,
   PhotoGridIcon,
   PinIcon,
   VideoTabIcon,
@@ -147,6 +147,7 @@ import {
 
 const GALLERY_PADDING = 16;
 const GALLERY_EDGE_INSET = 0;
+const HERO_METADATA_COLOR = 'rgba(255,255,255,0.75)';
 /**
  * Blur applied to the copy of the photo that fills the media area behind the
  * sharp one, where the photo's shape does not match the card's.
@@ -1589,6 +1590,7 @@ export function EventDetailView({
 
   // ── Dimensions Hook (Fully Reactive to Hot Reloads and Screen Orientations) ──
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const [heroInfoHeight, setHeroInfoHeight] = useState(147);
 
   // Fit five selector tiles and leave a small preview of the next tile.
   const selectorTileSize = Math.max(
@@ -1606,6 +1608,13 @@ export function EventDetailView({
   const IMG_H = galleryHeroImageHeight(screenHeight);
   const IMG_TOP = -PARALLAX_RANGE / 2;
   const SCRIM_SOLID_AT = 1 - HERO_BLEED / HERO_TOTAL;
+  // The fade begins just above the date (or title when there is no date).
+  // Measuring the header keeps that edge aligned for one- and two-line titles.
+  const SCRIM_CLEAR_AT = Math.max(
+    0,
+    Math.min(SCRIM_SOLID_AT - 0.08, (HERO_TOTAL - 13 - heroInfoHeight - 20) / HERO_TOTAL),
+  );
+  const SCRIM_FADE_SPAN = SCRIM_SOLID_AT - SCRIM_CLEAR_AT;
 
   // Scrim ramp stop builders using semantic color token
   const scrimStop = (alpha: number) => {
@@ -1619,19 +1628,25 @@ export function EventDetailView({
   const SCRIM_COLORS = [
     scrimStop(0),
     scrimStop(0),
-    scrimStop(0.55),
-    scrimStop(0.85),
-    scrimStop(0.98),
+    scrimStop(0.03),
+    scrimStop(0.18),
+    scrimStop(0.39),
+    scrimStop(0.63),
+    scrimStop(0.82),
+    scrimStop(0.94),
     scrimStop(1),
     scrimStop(1),
   ] as const;
 
   const SCRIM_LOCATIONS = [
     0,
-    0.58 * SCRIM_SOLID_AT,
-    0.70 * SCRIM_SOLID_AT,
-    0.80 * SCRIM_SOLID_AT,
-    0.90 * SCRIM_SOLID_AT,
+    SCRIM_CLEAR_AT,
+    SCRIM_CLEAR_AT + 0.05 * SCRIM_FADE_SPAN,
+    SCRIM_CLEAR_AT + 0.16 * SCRIM_FADE_SPAN,
+    SCRIM_CLEAR_AT + 0.33 * SCRIM_FADE_SPAN,
+    SCRIM_CLEAR_AT + 0.55 * SCRIM_FADE_SPAN,
+    SCRIM_CLEAR_AT + 0.75 * SCRIM_FADE_SPAN,
+    SCRIM_CLEAR_AT + 0.9 * SCRIM_FADE_SPAN,
     SCRIM_SOLID_AT,
     1,
   ] as const;
@@ -4232,7 +4247,7 @@ export function EventDetailView({
             />
           </Animated.View>
 
-          {/* 6-stop cinematic gradient: top 58% untouched, dissolving naturally into solid black */}
+          {/* The clear-photo edge sits just above the date; the header remains on the dark fade. */}
           <Animated.View
             style={[S.heroScrim, previewMode?.overlays?.scrimOpacity
               ? { opacity: previewMode.overlays.scrimOpacity }
@@ -4313,6 +4328,7 @@ export function EventDetailView({
                 ? { opacity: previewMode.overlays.chromeOpacity }
                 : null,
             ]}
+            onLayout={({ nativeEvent }) => setHeroInfoHeight(nativeEvent.layout.height)}
           >
             <View style={S.heroContentColumn}>
               {/* Date and title remain measured together for the creation reveal. */}
@@ -4322,6 +4338,11 @@ export function EventDetailView({
                 collapsable={false}
                 style={S.heroIdentity}
               >
+                {heroDate ? (
+                  <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
+                    {heroDate}
+                  </AppText>
+                ) : null}
                 <AppText
                   variant="displayLarge"
                   align="center"
@@ -4332,42 +4353,20 @@ export function EventDetailView({
                 >
                   {celebration.title}
                 </AppText>
-                {heroDate ? (
-                  <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
-                    {heroDate}
-                  </AppText>
-                ) : null}
               </View>
 
               <View style={S.galleryStatsRow}>
-                <View style={S.galleryStatColumn}>
-                  <View style={S.galleryStatItem}>
-                    <FilledCameraIcon size={16} color="#FFFFFF" />
-                    <AppText style={S.galleryStatValue}>{photos.length} stills</AppText>
-                  </View>
+                <View style={S.galleryStatItem} accessible accessibilityRole="text" accessibilityLabel={`${photos.length} stills`}>
+                  <FilledCameraIcon size={18} color={HERO_METADATA_COLOR} />
+                  <AppText style={S.galleryStatValue}>{photos.length}</AppText>
                 </View>
-
-                <View pointerEvents="none" style={S.galleryStatSeparator} />
-
-                <View style={S.galleryStatColumn}>
-                  <View
-                    style={S.galleryStatItem}
-                    accessible
-                    accessibilityRole="text"
-                    accessibilityLabel={`${guestsJoined} joined`}
-                  >
-                    <FilledPersonIcon size={16} color="#FFFFFF" />
-                    <AppText style={S.galleryStatValue}>{guestsJoined} joined</AppText>
-                  </View>
+                <View style={S.galleryStatItem} accessible accessibilityRole="text" accessibilityLabel={`${guestsJoined} joined`}>
+                  <FilledPeopleIcon size={18} color={HERO_METADATA_COLOR} />
+                  <AppText style={S.galleryStatValue}>{guestsJoined}</AppText>
                 </View>
-
-                <View pointerEvents="none" style={S.galleryStatSeparator} />
-
-                <View style={S.galleryStatColumn}>
-                  <View style={S.galleryStatItem}>
-                    <FilledClockIcon size={16} color="#FFFFFF" />
-                    <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
-                  </View>
+                <View style={S.galleryStatItem} accessible accessibilityRole="text" accessibilityLabel={timeLeftValue}>
+                  <FilledClockIcon size={18} color={HERO_METADATA_COLOR} />
+                  <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
                 </View>
               </View>
             </View>
@@ -5753,7 +5752,7 @@ const S = StyleSheet.create({
   // ── Hero info (overlaid on gradient) ──
   heroInfo: {
     position: 'absolute',
-    bottom: 13,
+    bottom: 5,
     left: layout.gutter,
     right: layout.gutter,
     alignItems: 'flex-start',
@@ -5762,19 +5761,19 @@ const S = StyleSheet.create({
   /** The full-width hero column shares the screen's left gutter. */
   heroContentColumn: {
     alignSelf: 'stretch',
-    alignItems: 'flex-start',
-    // Each primary section is separated by the same 13pt visual rhythm.
-    gap: 13,
+    alignItems: 'center',
+    gap: 6,
   },
   /** Title and date stay measured together for the creation reveal. */
   heroIdentity: {
     alignSelf: 'stretch',
     alignItems: 'center',
-    gap: 0,
+    gap: 4,
   },
   heroTitle: {
-    color: colours.textPrimary,
-    fontSize: 46,
+    color: '#FFFFFF',
+    fontFamily: fontFamilies.display,
+    fontSize: 48,
     lineHeight: 50,
     textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)',
@@ -5783,10 +5782,12 @@ const S = StyleSheet.create({
   },
   heroDate: {
     alignSelf: 'stretch',
+    color: HERO_METADATA_COLOR,
+    fontFamily: fontFamilies.textRegular,
     fontSize: 12,
-    lineHeight: 15,
-    // Clear title descenders without changing the title's visual position.
-    marginTop: -3,
+    lineHeight: 18,
+    letterSpacing: 2.4,
+    textTransform: 'uppercase',
   },
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
@@ -5871,21 +5872,13 @@ const S = StyleSheet.create({
   galleryStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'stretch',
-  },
-  galleryStatColumn: {
-    flex: 1,
-    alignItems: 'center',
+    alignSelf: 'center',
     justifyContent: 'center',
-  },
-  galleryStatSeparator: {
-    width: StyleSheet.hairlineWidth,
-    height: 16,
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    gap: 28,
   },
   galleryStatItem: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 7,
     alignItems: 'center',
   },
   galleryStatPressable: {
@@ -5901,10 +5894,10 @@ const S = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
   galleryStatValue: {
-    color: colours.textPrimary,
-    fontFamily: fontFamilies.textRegular,
-    fontSize: 14,
-    lineHeight: 17,
+    color: HERO_METADATA_COLOR,
+    fontFamily: fontFamilies.textMedium,
+    fontSize: 15,
+    lineHeight: 19,
     textAlign: 'left',
   },
 

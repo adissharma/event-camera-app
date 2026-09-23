@@ -17,34 +17,6 @@ export const VIEWFINDER_PILL_INSET = 20;
 
 const COUNT_FONT_SIZE = 22;
 
-/**
- * Optical centring correction for the digits, as a fraction of font size.
- *
- * Flex centring centres a text node's LINE BOX, not the ink inside it, and
- * for this face those are not the same thing. Measured from the font itself
- * at 22px (Newsreader, via canvas TextMetrics):
- *
- *   font box    ascent 16.00   descent 6.00   (asymmetric: descender space)
- *   digit ink   ascent 15.09   descent  0.22   (lining figures — no descender)
- *
- * The line box reserves six pixels of depth for descenders that digits never
- * use, so the ink sits high by
- *
- *   (fontAscent - fontDescent) / 2 - (inkAscent - inkDescent) / 2
- *     = 5.00 - 7.435 = -2.435px
- *
- * which is 2.435 / 22 of the font size. Two properties of that derivation
- * matter: it does not involve `lineHeight` (which cancels out — no line
- * height can fix this), and it does not involve the value. '1', '8', '16'
- * and '100' all measure the same ascent and descent, so one digit centres
- * exactly like three.
- *
- * Expressed as a ratio rather than a pixel constant so it tracks the font
- * size, and applied as a transform rather than padding so the pill's own
- * geometry is untouched.
- */
-const DIGIT_OPTICAL_CENTRING_RATIO = 2.435 / 22;
-
 export interface ViewfinderShotCounterProps {
   value: number | '∞';
   /** The camera rolls only on first mount; the creation demo rolls per choice. */
@@ -183,6 +155,5 @@ const S = StyleSheet.create({
     // measure the way web and iOS already do. No-op elsewhere.
     includeFontPadding: false,
     textAlignVertical: 'center',
-    transform: [{ translateY: COUNT_FONT_SIZE * DIGIT_OPTICAL_CENTRING_RATIO }],
   },
 });

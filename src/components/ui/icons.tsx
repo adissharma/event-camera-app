@@ -1,4 +1,4 @@
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, Mask, Path, Rect } from 'react-native-svg';
 
 import { colours } from '@/design';
 
@@ -384,6 +384,26 @@ export function FilledPersonIcon({ size = 16, color = colours.textPrimary }: Ico
         d="M4 21v-1.75C4 15.8 7.58 13 12 13s8 2.8 8 6.25V21H4z"
         fill={color}
       />
+    </Svg>
+  );
+}
+
+/** Two filled silhouettes for guest counts. */
+export function FilledPeopleIcon({ size = 16, color = colours.textPrimary }: IconProps) {
+  const frontBody = 'M1.5 21v-1.7c0-3.45 2.72-5.55 6.5-5.55s6.5 2.1 6.5 5.55V21H1.5z';
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Defs>
+        <Mask id="filledPeopleRearMask">
+          <Rect width={24} height={24} fill="#FFFFFF" />
+          <Circle cx={8} cy={8} r={4.1} fill="#000000" stroke="#000000" strokeWidth={1.3} />
+          <Path d={frontBody} fill="#000000" stroke="#000000" strokeWidth={1.3} />
+        </Mask>
+      </Defs>
+      <Circle cx={16.1} cy={8.3} r={3.3} fill={color} mask="url(#filledPeopleRearMask)" />
+      <Path d="M11.4 21v-1.8c0-3.35 1.9-5.2 4.7-5.2s5.4 1.85 5.4 5.2V21H11.4z" fill={color} mask="url(#filledPeopleRearMask)" />
+      <Circle cx={8} cy={8} r={4.1} fill={color} />
+      <Path d={frontBody} fill={color} />
     </Svg>
   );
 }

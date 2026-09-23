@@ -62,7 +62,7 @@ enum Ink {
 /// *serif* instead — still the right shape, just not the right cut.
 enum Type {
     #if canImport(UIKit)
-    private static let hasDisplay = UIFont(name: "Newsreader-Regular", size: 12) != nil
+    private static let hasDisplay = UIFont(name: "CormorantGaramond-SemiBold", size: 12) != nil
     private static let hasText = UIFont(name: "InstrumentSans-Regular", size: 12) != nil
     private static let hasTextMedium = UIFont(name: "InstrumentSans-Medium", size: 12) != nil
     #else
@@ -71,11 +71,11 @@ enum Type {
     private static let hasTextMedium = false
     #endif
 
-    /// Newsreader. Event names only — the app's display face, matched by
+    /// Cormorant Garamond SemiBold. Event names use the app's display face, matched by
     /// PostScript name rather than by family, which is what `Font.custom`
     /// resolves against.
     static func display(_ size: CGFloat) -> Font {
-        hasDisplay ? .custom("Newsreader-Regular", size: size)
+        hasDisplay ? .custom("CormorantGaramond-SemiBold", size: size)
                    : .system(size: size, design: .serif)
     }
 
@@ -507,9 +507,7 @@ struct StillsLockScreenCard: View {
                         .foregroundColor(Ink.textPrimary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.45)
-                        // Newsreader sits higher in its line box than the face
-                        // this replaced, so the mark needs the gap restating
-                        // or it reads as touching the ascenders.
+                        // Keep the mark clear of the title's ascenders.
                         .padding(.top, 10)
                         .padding(.bottom, 6)
 

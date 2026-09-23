@@ -1,5 +1,5 @@
 {
-  "buildCommand": "expo export --platform web",
+  "buildCommand": "expo export --platform web && node scripts/add-app-clip-card.mjs",
   "outputDirectory": "dist",
   "functions": {
     "api/recap-worker.ts": {
