@@ -441,6 +441,7 @@ export default function PackageScreen() {
     x: number;
     y: number;
     width: number;
+    height: number;
   } | null>(null);
 
   // Until the event page has been laid out — and on a repeat visit, where it
@@ -466,6 +467,16 @@ export default function PackageScreen() {
    * entire purpose is to move.
    */
   const galleryTitleTop = galleryTitleRect?.y ?? paywallTitleTop;
+
+  /**
+   * The event page's title sits on its content card, which starts over the
+   * cover — so a long title can run past the foot of the hero. The mask never
+   * starts above the title's last line; below the hero it only covers the
+   * card, which is the same colour.
+   */
+  const lowerMaskTop = galleryTitleRect
+    ? Math.max(heroHeight, Math.ceil(galleryTitleRect.y + galleryTitleRect.height))
+    : heroHeight;
   const titleStartTop = reveal.reduceMotion ? paywallTitleTop : galleryTitleTop;
   const titleTravel = reveal.reduceMotion ? 0 : paywallTitleTop - galleryTitleTop;
 
@@ -614,15 +625,20 @@ export default function PackageScreen() {
    * only ever runs 0 → 1 at `ready` and then stays there — so once the
    * photograph is on screen it is never faded, moved, scaled or recropped
    * again. Everything that changes on the way to the paywall changes *around*
-   * it: the vertical scrim gives way to the horizontal one, and the chrome
-   * leaves so the purchase copy can take its place.
+   * it: the horizontal gradient arrives, and the chrome — nav row and the
+   * content card over the foot of the cover — leaves so the purchase copy can
+   * take its place.
+   *
+   * The card's contents below the title follow the lower mask, so `ready`
+   * shows the cover and the event's name alone even though the card begins
+   * above the mask's edge.
    */
   const previewOverlays = useMemo(
     () => ({
-      scrimOpacity: gradientSwap.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
       chromeOpacity: galleryOut.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+      detailsOpacity: lowerMaskIn.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
     }),
-    [gradientSwap, galleryOut],
+    [galleryOut, lowerMaskIn],
   );
 
   const previewDetail = useMemo(() => buildPreviewDetail(draft), [draft]);
@@ -636,11 +652,15 @@ export default function PackageScreen() {
       challenges: PREVIEW_CHALLENGES.map((challenge) => ({ ...challenge })),
       overlays: previewOverlays,
       chipStripNudge: chipNudge,
-      onHeroIdentityLayout: ({ x, y, width }: { x: number; y: number; width: number }) =>
+      onHeroIdentityLayout: ({ x, y, width, height }: { x: number; y: number; width: number; height: number }) =>
         setGalleryTitleRect((current) =>
-          current && current.x === x && current.y === y && current.width === width
+          current
+          && current.x === x
+          && current.y === y
+          && current.width === width
+          && current.height === height
             ? current
-            : { x, y, width },
+            : { x, y, width, height },
         ),
     }),
     [previewPhotos, previewOverlays, chipNudge],
@@ -782,7 +802,7 @@ export default function PackageScreen() {
       */}
       <Animated.View
         pointerEvents="none"
-        style={[S.lowerMask, { top: heroHeight, opacity: lowerMaskIn }]}
+        style={[S.lowerMask, { top: lowerMaskTop, opacity: lowerMaskIn }]}
       />
 
       {/*
@@ -795,10 +815,10 @@ export default function PackageScreen() {
         recrop midway through: two images of the same scene, at slightly
         different sizes, dissolving into one another.
 
-        What is left is the treatment. The event page's vertical ramp fades
-        out (driven through `previewMode.overlays`) exactly as this horizontal
-        one fades in, over the same still photograph. Two static gradient
-        layers under opposing opacities, rather than one gradient whose stops
+        What is left is the treatment. The event page has no ramp of its own
+        any more — its title sits on a card below the photograph — so this
+        horizontal one simply fades in over the same still cover. A static
+        gradient under an animated opacity, rather than a gradient whose stops
         are interpolated: colour arrays have to be rebuilt on the JS thread
         every frame, opacities do not.
       */}
