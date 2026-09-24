@@ -185,7 +185,7 @@ export default function GuestGalleryScreen() {
     }
   };
 
-  const countdown = useCountdown(data?.celebration?.ends_at ?? null);
+  const countdown = useCountdown(data?.session?.ends_at ?? data?.celebration?.ends_at ?? null);
 
   if (error) {
     return (
