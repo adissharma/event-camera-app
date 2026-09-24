@@ -112,7 +112,7 @@ export default function EditEventScreen() {
     const { choice: revealChoice, customRevealAt } = decodeRevealMode(
       primarySession.reveal_mode,
       primarySession.reveal_at,
-      celebration.ends_at,
+      primarySession.ends_at ?? celebration.ends_at,
     );
     const guestRevealChoice =
       primarySession.gallery_visibility === 'hosts_only' ? 'never' : revealChoice;
@@ -121,7 +121,7 @@ export default function EditEventScreen() {
     update({
       title: celebration.title,
       celebrationType: celebration.celebration_type || 'wedding',
-      endsAt: celebration.ends_at,
+      endsAt: primarySession.ends_at ?? celebration.ends_at,
       timezone: celebration.timezone,
       // `default_theme_id` is an id; everything downstream — the carousel's
       // selection and `resolveCoverTemplate` — keys off the slug. Seeding the
@@ -233,8 +233,10 @@ export default function EditEventScreen() {
     );
   };
 
-  const formattedEndDate = celebration.ends_at
-    ? new Date(celebration.ends_at).toLocaleString(undefined, {
+  const effectiveEndsAt = primarySession.ends_at ?? celebration.ends_at;
+
+  const formattedEndDate = effectiveEndsAt
+    ? new Date(effectiveEndsAt).toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
