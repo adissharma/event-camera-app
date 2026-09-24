@@ -37,7 +37,7 @@ echo "→ Building preview…"
 rm -rf "$APP"
 mkdir -p "$APP"
 
-# The widget's own faces and asset catalogue, so the preview uses Newsreader and
+# The widget's own faces and asset catalogue, so the preview uses Cormorant Garamond and
 # the real mark rather than falling back to a system serif and a blank square.
 cp "$ROOT"/targets/live-activity/*.ttf "$APP/"
 xcrun actool "$ASSETS" \
@@ -121,7 +121,7 @@ cat > "$APP/Info.plist" <<'PLIST'
   <key>UILaunchScreen</key><dict/>
   <key>UIAppFonts</key>
   <array>
-    <string>Newsreader-Regular.ttf</string>
+    <string>CormorantGaramond-SemiBold.ttf</string>
     <string>InstrumentSans-Regular.ttf</string>
     <string>InstrumentSans-Medium.ttf</string>
   </array>

@@ -1,11 +1,8 @@
 /**
  * Semantic typography scale.
  *
- * Display: Newsreader (OFL 1.1) — a high-contrast editorial serif used for
- * event names, cover titles and the app's larger moments. The regular weight
- * is the right constraint on a near-black canvas: white type optically gains
- * weight against black (halation), so a bold serif reads blunt where a regular
- * reads sharp.
+ * Display: Cormorant Garamond SemiBold (OFL 1.1) — the editorial serif used
+ * for event names, cover titles and the app's larger moments.
  *
  * Text/UI: Instrument Sans (SIL OFL 1.1) — a neo-grotesque (NOT geometric) with
  * excellent legibility at 13–17pt, open apertures and tabular figures.
@@ -26,9 +23,9 @@
 import type { TextStyle } from 'react-native';
 
 export const fontFamilies = {
-  display: 'Newsreader_400Regular',
+  display: 'CormorantGaramond_600SemiBold',
   /** Used sparingly — a single emphasised word, never a whole line. */
-  displayItalic: 'Newsreader_400Regular_Italic',
+  displayItalic: 'CormorantGaramond_600SemiBold_Italic',
   textRegular: 'InstrumentSans_400Regular',
   textMedium: 'InstrumentSans_500Medium',
   textSemiBold: 'InstrumentSans_600SemiBold',

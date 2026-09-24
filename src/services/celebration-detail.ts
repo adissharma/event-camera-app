@@ -906,6 +906,18 @@ export async function updateEventSettings(
     if (error) throw error;
   }
 
+  if (patch.endsAt !== undefined) {
+    // `celebrations.ends_at` is a denormalized copy of the primary session's
+    // end time (the edit screen reads it directly). Leaving it unwritten here
+    // let the dashboard, which reads `primarySession.ends_at`, show the new
+    // date while "manage event" kept displaying the original one.
+    const { error } = await client
+      .from('celebrations')
+      .update({ ends_at: patch.endsAt })
+      .eq('id', celebrationId);
+    if (error) throw error;
+  }
+
   // Typed against the generated Update shape: a column rename then fails to
   // compile here rather than silently updating nothing.
   const sessionPatch: EventSessionUpdate = {};
