@@ -62,7 +62,7 @@ enum Ink {
 /// *serif* instead — still the right shape, just not the right cut.
 enum Type {
     #if canImport(UIKit)
-    private static let hasDisplay = UIFont(name: "CormorantGaramond-SemiBold", size: 12) != nil
+    private static let hasDisplay = UIFont(name: "Isolde", size: 12) != nil
     private static let hasText = UIFont(name: "InstrumentSans-Regular", size: 12) != nil
     private static let hasTextMedium = UIFont(name: "InstrumentSans-Medium", size: 12) != nil
     #else
@@ -71,11 +71,11 @@ enum Type {
     private static let hasTextMedium = false
     #endif
 
-    /// Cormorant Garamond SemiBold. Event names use the app's display face, matched by
+    /// Isolde Regular. Event names use the app's display face, matched by
     /// PostScript name rather than by family, which is what `Font.custom`
     /// resolves against.
     static func display(_ size: CGFloat) -> Font {
-        hasDisplay ? .custom("CormorantGaramond-SemiBold", size: size)
+        hasDisplay ? .custom("Isolde", size: size)
                    : .system(size: size, design: .serif)
     }
 

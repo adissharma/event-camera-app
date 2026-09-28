@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -81,15 +82,22 @@ export function MidnightInvitationCover({
    * point of a preview.
    */
   const [boxWidth, setBoxWidth] = useState(0);
+  const [boxHeight, setBoxHeight] = useState(0);
   const handleLayout = (event: LayoutChangeEvent) => {
-    const next = event.nativeEvent.layout.width;
-    if (next > 0 && next !== boxWidth) setBoxWidth(next);
+    const { width, height } = event.nativeEvent.layout;
+    if (width > 0 && width !== boxWidth) setBoxWidth(width);
+    if (height > 0 && height !== boxHeight) setBoxHeight(height);
   };
 
   // 375 is the reference width the type scale was drawn against.
   const measured = boxWidth || 375;
   const scale = Math.min(1, measured / 375);
-  const heroWidth = measured * 0.78;
+  // The confirmation has extra copy below the photograph. Scale the print
+  // against the space above its fixed bottom action on compact phones.
+  const heroWidth = Math.min(
+    measured * 0.78,
+    footer ? Math.max(160, (boxHeight || 812) * 0.32) : measured * 0.78,
+  );
 
   // The title is the loudest element, so it fills the measure and is allowed
   // to wrap rather than shrink — two balanced serif lines read as an
@@ -124,7 +132,11 @@ export function MidnightInvitationCover({
         />
       </View>
 
-      <View style={[S.content, { paddingVertical: Math.round(spacing.xl * scale) }]}>
+      <ScrollView
+        contentContainerStyle={[S.content, { paddingVertical: Math.round(spacing.xl * scale) }]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         {/* ── Hero ── */}
         {/* Square corners: the photograph is presented as a print, not as a
             rounded app tile. */}
@@ -238,7 +250,7 @@ export function MidnightInvitationCover({
             </Pressable>
           </>}
         </View>
-      </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -289,7 +301,7 @@ const S = StyleSheet.create({
     backgroundColor: 'rgba(8, 12, 24, 0.62)',
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,

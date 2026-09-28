@@ -30,7 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Asset as ExpoAsset } from 'expo-asset';
-import { useEventListener } from 'expo';
+import { requireOptionalNativeModule, useEventListener } from 'expo';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { BlurView } from 'expo-blur';
@@ -47,6 +47,7 @@ import Svg, {
 } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
+import { useWebCoverMotion } from '@/features/celebrations/use-web-cover-motion';
 import { isPermanentQueryError } from '@/lib/query-client';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import {
@@ -368,7 +369,7 @@ const HERO_PARALLAX_FRACTION = 0.35;
 // The hero itself runs to `GALLERY_HERO_RATIO` (0.49) plus a 24pt bleed, so
 // this must stay below that for the card to overlap the cover at all.
 const EVENT_CARD_TOP_RATIO = 0.45;
-const EVENT_CARD_RADIUS = 50;
+const EVENT_CARD_RADIUS = 32;
 
 /** Photos / Videos tab icons: white when selected, the same white dimmed when not. */
 const GALLERY_TAB_ACTIVE = '#FFFFFF';
@@ -378,20 +379,51 @@ const GALLERY_TAB_INACTIVE = 'rgba(255, 255, 255, 0.4)';
  * The card's glass.
  *
  * A real backdrop blur, so the card shows whatever is genuinely behind it: the
- * cover near its top edge, black further down. Full intensity — the
- * photograph should come through as colour and light, never as detail. The
- * wash over it pulls the material towards the page's black so the type holds
- * on a bright cover; the ramp at the foot lands on exactly `colours.background`,
- * which is what the tabs and gallery below are drawn on, so the glass runs
- * into them without a tonal step.
+ * cover near its top edge, black further down. A moderate blur, so the
+ * photograph keeps a little of its shape, under a heavy wash that pulls the
+ * material well towards the page's black so the type holds on a bright
+ * cover. The plain `dark` style rather than a system material: the materials
+ * lay a grey film over the backdrop, which read as a grey cast on the card.
+ * A short ramp at the foot lands on exactly `colours.background`, which is
+ * what the tabs and gallery below are drawn on, so the glass fades into them
+ * rather than stopping on a hard edge. It is kept to the bottom of the card so
+ * the title area stays clear glass.
  */
-const EVENT_CARD_BLUR_INTENSITY = 100;
+const EVENT_CARD_BLUR_INTENSITY = 10;
 /** How far under the card's top edge the cover is drawn for the glass to blur. */
 const EVENT_CARD_GLASS_REACH = 200;
-const EVENT_CARD_GLASS_WASH = 'rgba(11, 11, 12, 0.2)';
+const EVENT_CARD_GLASS_WASH = 'rgba(11, 11, 12, 0.7)';
 const EVENT_CARD_GLASS_FOOT = ['rgba(11, 11, 12, 0)', 'rgba(11, 11, 12, 1)'] as const;
 /** Where, down the card, the foot ramp starts. */
-const EVENT_CARD_GLASS_FOOT_START = 0.55;
+const EVENT_CARD_GLASS_FOOT_START = 0.7;
+/**
+ * Neutral specular reflections, strongest at the shoulders and softer across
+ * the face. The wider low-opacity stroke gives the hairline a refracted inner
+ * edge. Both sit under the foot ramp so the pane dissolves into the gallery.
+ */
+const EVENT_CARD_GLASS_EDGE = '#F0F2F5';
+/**
+ * The cover stops partway down the card — at its own foot, or at the hero's
+ * clip once the parallax has carried it past that — and the glass would show
+ * that as a hard horizontal line. A short fade to `colours.background` on
+ * each of those edges softens it without reaching up into the photograph.
+ */
+const HERO_EDGE_FADE = 90;
+const HERO_EDGE_FADE_COLORS = ['rgba(11, 11, 12, 0)', 'rgba(11, 11, 12, 1)'] as const;
+/** The same fade, flipped, for the cover's top edge. */
+const HERO_TOP_FADE_COLORS = ['rgba(11, 11, 12, 1)', 'rgba(11, 11, 12, 0)'] as const;
+/**
+ * Whether this binary can draw the glass at all.
+ *
+ * `expo-blur` is native, and the runtime version follows the app version, so
+ * an update carrying this screen can land on a build that predates it — as
+ * can a dev client that has not been rebuilt. Rendering `BlurView` there is a
+ * red screen, not a missing effect. Without it the card falls back to
+ * `EVENT_CARD_FALLBACK_FILL`: no blur, but the same dark sheet. Web draws the
+ * blur in CSS and needs no native module.
+ */
+const CAN_BLUR = Platform.OS === 'web' || requireOptionalNativeModule('ExpoBlur') != null;
+const EVENT_CARD_FALLBACK_FILL = 'rgba(28, 28, 30, 0.72)';
 
 /**
  * How much of the page's scroll the cover follows.
@@ -1663,6 +1695,7 @@ export function EventDetailView({
   // tall this hero is.
   const HERO_H = Math.round(screenHeight * GALLERY_HERO_RATIO);
   const HERO_TOTAL = galleryHeroHeight(screenHeight);
+  const webCoverRef = useWebCoverMotion(HERO_TOTAL, HERO_COVER_FOLLOW);
   const PARALLAX_RANGE = HERO_H * HERO_PARALLAX_FRACTION;
   const IMG_H = galleryHeroImageHeight(screenHeight);
   const IMG_TOP = -PARALLAX_RANGE / 2;
@@ -2113,6 +2146,14 @@ export function EventDetailView({
   const imageScale = scrollY.interpolate({
     inputRange: [-CARD_OVERLAP - 90, -CARD_OVERLAP],
     outputRange: [1.1, 1],
+    extrapolate: 'clamp',
+  });
+  // The cover's top edge only comes into view once the pull has used up the
+  // reveal and the whole hero starts moving down, so its fade comes in then.
+  // At rest the photograph runs cleanly to the top of the screen.
+  const heroTopFadeOpacity = scrollY.interpolate({
+    inputRange: [-CARD_OVERLAP - 40, -CARD_OVERLAP],
+    outputRange: [1, 0],
     extrapolate: 'clamp',
   });
 
@@ -4245,12 +4286,13 @@ export function EventDetailView({
 
           {/* Oversized image — transforms create parallax */}
           <Animated.View
+            ref={webCoverRef}
             style={[
               S.heroImageWrapper,
               {
                 height: IMG_H,
                 top: IMG_TOP,
-                transform: [
+                transform: Platform.OS === 'web' ? undefined : [
                   { translateY: imageParallax },
                   { scale: imageScale },
                 ],
@@ -4262,6 +4304,22 @@ export function EventDetailView({
               style={S.heroImage}
               resizeMode="cover"
             />
+            <LinearGradient
+              pointerEvents="none"
+              colors={HERO_EDGE_FADE_COLORS}
+              style={S.heroEdgeFade}
+            />
+          </Animated.View>
+          <LinearGradient
+            pointerEvents="none"
+            colors={HERO_EDGE_FADE_COLORS}
+            style={S.heroEdgeFade}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[S.heroTopFade, { opacity: heroTopFadeOpacity }]}
+          >
+            <LinearGradient colors={HERO_TOP_FADE_COLORS} style={ABSOLUTE_FILL} />
           </Animated.View>
 
           {/* Floating nav icons */}
@@ -4342,12 +4400,59 @@ export function EventDetailView({
           ]}
         >
           <View pointerEvents="none" style={S.cardGlass}>
-            <BlurView
-              intensity={EVENT_CARD_BLUR_INTENSITY}
-              tint="systemUltraThinMaterialDark"
-              style={ABSOLUTE_FILL}
-            />
+            {CAN_BLUR ? (
+              <BlurView
+                intensity={EVENT_CARD_BLUR_INTENSITY}
+                tint="dark"
+                style={ABSOLUTE_FILL}
+              />
+            ) : (
+              <View style={[ABSOLUTE_FILL, { backgroundColor: EVENT_CARD_FALLBACK_FILL }]} />
+            )}
             <View style={[ABSOLUTE_FILL, { backgroundColor: EVENT_CARD_GLASS_WASH }]} />
+            <Svg width="100%" height="100%" style={ABSOLUTE_FILL}>
+              <Defs>
+                <SvgLinearGradient id="eventGlassRim" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={screenWidth} y2={0}>
+                  <Stop offset="0" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.12} />
+                  <Stop offset="0.07" stopColor="#D6E8FF" stopOpacity={0.65} />
+                  <Stop offset="0.13" stopColor="#FFFFFF" stopOpacity={0.95} />
+                  <Stop offset="0.24" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.18} />
+                  <Stop offset="0.44" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.04} />
+                  <Stop offset="0.64" stopColor="#D6E8FF" stopOpacity={0.25} />
+                  <Stop offset="0.74" stopColor="#FFFFFF" stopOpacity={0.85} />
+                  <Stop offset="0.83" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.14} />
+                  <Stop offset="0.95" stopColor="#E1EDFF" stopOpacity={0.62} />
+                  <Stop offset="1" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.12} />
+                </SvgLinearGradient>
+                {/* SVG on web needs r + a transform; rx/ry are native-only.
+                    An implicit browser radius spills tint to the rectangle's edge. */}
+                <SvgRadialGradient id="eventGlassLeftGlint" gradientUnits="userSpaceOnUse" cx={0} cy={0} r={1} gradientTransform={`translate(${screenWidth * 0.13} 2) scale(65 24)`}>
+                  <Stop offset="0" stopColor="#E1EDFF" stopOpacity={0.22} />
+                  <Stop offset="0.35" stopColor="#D6E8FF" stopOpacity={0.08} />
+                  <Stop offset="1" stopColor="#D6E8FF" stopOpacity={0} />
+                </SvgRadialGradient>
+                <SvgRadialGradient id="eventGlassRightGlint" gradientUnits="userSpaceOnUse" cx={0} cy={0} r={1} gradientTransform={`translate(${screenWidth * 0.74} 0) scale(48 18)`}>
+                  <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.2} />
+                  <Stop offset="0.4" stopColor="#E1EDFF" stopOpacity={0.06} />
+                  <Stop offset="1" stopColor="#E1EDFF" stopOpacity={0} />
+                </SvgRadialGradient>
+              </Defs>
+              <Rect width="100%" height={60} fill="url(#eventGlassLeftGlint)" />
+              <Rect width="100%" height={60} fill="url(#eventGlassRightGlint)" />
+              <Path
+                d={`M1.5 1000 V${EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 1.5} ${EVENT_CARD_RADIUS - 1.5} 0 0 1 ${EVENT_CARD_RADIUS} 1.5 H${screenWidth - EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 1.5} ${EVENT_CARD_RADIUS - 1.5} 0 0 1 ${screenWidth - 1.5} ${EVENT_CARD_RADIUS} V1000`}
+                fill="none"
+                stroke="url(#eventGlassRim)"
+                strokeWidth={2}
+                opacity={0.24}
+              />
+              <Path
+                d={`M0.5 1000 V${EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 0.5} ${EVENT_CARD_RADIUS - 0.5} 0 0 1 ${EVENT_CARD_RADIUS} 0.5 H${screenWidth - EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 0.5} ${EVENT_CARD_RADIUS - 0.5} 0 0 1 ${screenWidth - 0.5} ${EVENT_CARD_RADIUS} V1000`}
+                fill="none"
+                stroke="url(#eventGlassRim)"
+                strokeWidth={1}
+              />
+            </Svg>
             <LinearGradient
               colors={EVENT_CARD_GLASS_FOOT}
               locations={[EVENT_CARD_GLASS_FOOT_START, 1]}
@@ -5734,6 +5839,20 @@ const S = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  heroEdgeFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: HERO_EDGE_FADE,
+  },
+  heroTopFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: HERO_EDGE_FADE,
+  },
   // ── Nav bar ──
   navBar: {
     position: 'absolute',
@@ -5785,8 +5904,8 @@ const S = StyleSheet.create({
   cardTitle: {
     color: colours.textPrimary,
     fontFamily: fontFamilies.display,
-    fontSize: 44,
-    lineHeight: 48,
+    fontSize: 38,
+    lineHeight: 44,
     textAlign: 'center',
   },
   cardStats: {
@@ -5799,6 +5918,7 @@ const S = StyleSheet.create({
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
     marginTop: spacing.md,
+    marginBottom: 13,
     overflow: 'visible',
   },
   challengesEmptyBannerWrap: {
@@ -5897,7 +6017,7 @@ const S = StyleSheet.create({
   galleryTab: {
     flex: 1,
     alignItems: 'center',
-    // 10 above so the strip-to-tabs gap matches the stats-to-strip gap.
+    // Together with the strip's 13pt bottom margin, this gives 23pt above the tabs.
     paddingTop: 10,
     paddingBottom: 12,
   },

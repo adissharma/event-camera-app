@@ -9,6 +9,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import {
   InstrumentSans_400Regular,
   InstrumentSans_500Medium,
+  InstrumentSans_500Medium_Italic,
   InstrumentSans_600SemiBold,
   InstrumentSans_700Bold,
   useFonts,
@@ -96,6 +97,7 @@ export default function RootLayout() {
     CormorantGaramond_500Medium_Italic,
     InstrumentSans_400Regular,
     InstrumentSans_500Medium,
+    InstrumentSans_500Medium_Italic,
     InstrumentSans_600SemiBold,
     InstrumentSans_700Bold,
     OpenMojiBlack: require('../../assets/fonts/OpenMoji-black-glyf.ttf'),

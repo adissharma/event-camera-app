@@ -153,7 +153,7 @@ export function LightArchInvitationCover({
       style={[
         S.content,
         {
-          height: pageHeight,
+          minHeight: pageHeight,
           paddingTop: topInset,
           paddingBottom: bottomInset,
         },

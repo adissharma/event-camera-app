@@ -172,7 +172,9 @@ function ClassicJoinScreen({
     const next = Math.round(event.nativeEvent.layout.height);
     if (next > 0) setMeasuredHeight((current) => (current === next ? current : next));
   }, []);
-  const coverHeight = Math.round(pageHeight * COVER_HEIGHT_RATIO);
+  // The publication confirmation has more controls than the guest form. Give
+  // those controls room before sizing the photograph from the viewport.
+  const coverHeight = Math.round(pageHeight * (footer ? 0.44 : COVER_HEIGHT_RATIO));
   const bottomInset = viewportHeight == null ? Math.max(insets.bottom, spacing.lg) : spacing.lg;
 
   const body = (

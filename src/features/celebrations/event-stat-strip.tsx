@@ -17,7 +17,7 @@ export function formatCount(value: number): string {
 }
 
 /**
- * The event page's three-column strip: photos, joined, and time left.
+ * The event page's three-column strip: photos, joined, and time remaining or elapsed.
  *
  * Deliberately quiet — small figures, muted labels, short hairline dividers —
  * because it sits directly under the event's title and must not compete
@@ -53,8 +53,7 @@ export function EventStatStrip({
             accessibilityRole="text"
             accessibilityLabel={stat.label ? `${stat.value} ${stat.label}` : stat.value}
           >
-            {/* Figures in the italic serif; a standalone word ("Ended",
-                "Soon") stays in the sans, since it is not a number. */}
+            {/* Figures in the italic serif; a standalone word ("Soon") stays in the sans, since it is not a number. */}
             <AppText style={stat.label ? S.figure : S.value} numberOfLines={1}>
               {stat.value}
             </AppText>
@@ -83,7 +82,7 @@ const S = StyleSheet.create({
     paddingHorizontal: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    // A figure plus its label, so "Ended" centres on the same axis as the
+    // A figure plus its label, so "Soon" centres on the same axis as the
     // columns that carry one.
     minHeight: 42,
   },

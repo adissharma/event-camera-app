@@ -15,9 +15,20 @@ describe('eventCountdown', () => {
     expect(eventCountdown('not a date', Date.now())).toEqual({ state: 'open' });
   });
 
-  it('is ended at and after the end time, never "0 mins"', () => {
-    expect(eventCountdown(END, endMs)).toEqual({ state: 'ended' });
-    expect(eventCountdown(END, endMs + DAY)).toEqual({ state: 'ended' });
+  it.each([
+    [0, 'minute', 0, MINUTE],
+    [23 * MINUTE + 30_000, 'minute', 23, 30_000],
+    [HOUR - 1, 'minute', 59, 1],
+    [HOUR, 'hour', 1, HOUR],
+    [DAY - 1, 'hour', 23, 1],
+    [DAY, 'day', 1, DAY],
+    [8 * DAY + 3 * HOUR, 'day', 8, 21 * HOUR],
+  ])('counts elapsed time and schedules the next change at %i ms', (elapsed, unit, value, delay) => {
+    const now = endMs + Number(elapsed);
+    const current = eventCountdown(END, now);
+    expect(current).toEqual({ state: 'ended', unit, value, msUntilChange: delay });
+    expect(eventCountdown(END, now + Number(delay) - 1)).toMatchObject({ unit, value });
+    expect(eventCountdown(END, now + Number(delay))).not.toMatchObject({ unit, value });
   });
 
   it('counts whole days while at least one day remains', () => {
@@ -82,8 +93,17 @@ describe('countdownStat', () => {
   const running = (unit: 'day' | 'hour' | 'minute', value: number) =>
     countdownStat({ state: 'running', unit, value, msUntilChange: 1 });
 
-  it('shows Ended alone, with no label', () => {
-    expect(countdownStat({ state: 'ended' })).toEqual({ value: 'Ended', label: null });
+  it.each([
+    ['minute', 0, 'Mins ago'],
+    ['minute', 1, 'Min ago'],
+    ['minute', 23, 'Mins ago'],
+    ['hour', 1, 'Hour ago'],
+    ['hour', 23, 'Hours ago'],
+    ['day', 1, 'Day ago'],
+    ['day', 8, 'Days ago'],
+  ] as const)('formats elapsed %s values of %i', (unit, value, label) => {
+    expect(countdownStat({ state: 'ended', unit, value, msUntilChange: 1 }))
+      .toEqual({ value: String(value), label });
   });
 
   it('uses the singular for one of a unit and the plural otherwise', () => {

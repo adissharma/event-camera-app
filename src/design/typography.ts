@@ -43,6 +43,7 @@ export const fontFamilies = {
   system: 'System',
   textRegular: 'InstrumentSans_400Regular',
   textMedium: 'InstrumentSans_500Medium',
+  textMediumItalic: 'InstrumentSans_500Medium_Italic',
   textSemiBold: 'InstrumentSans_600SemiBold',
   textBold: 'InstrumentSans_700Bold',
 } as const;

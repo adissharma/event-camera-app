@@ -183,6 +183,12 @@ export const enGB = {
     hoursLeft: 'Hours left',
     minLeft: 'Min left',
     minsLeft: 'Mins left',
+    dayAgo: 'Day ago',
+    daysAgo: 'Days ago',
+    hourAgo: 'Hour ago',
+    hoursAgo: 'Hours ago',
+    minAgo: 'Min ago',
+    minsAgo: 'Mins ago',
   },
 
   errors: {
