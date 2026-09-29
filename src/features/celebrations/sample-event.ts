@@ -105,21 +105,21 @@ export const SAMPLE_CHALLENGE_IDS = {
 } as const;
 
 /**
- * The reception, in the order it happened.
+ * Dan's photo leads the gallery, followed by the rest of the reception in
+ * the order it happened.
  *
- * Curated to lead with the two most immediately celebratory frames, then
- * continue through the reception in a natural order. A gallery that jumps
- * between noon and midnight reads as a folder; this reads as an evening.
+ * The gallery opens on a guest's candid moment, then continues through the
+ * reception in a natural order.
  *
  * The count here IS the count shown in the UI. Adding a photo adds one to the
  * gallery and nowhere else needs telling.
  */
 export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
   {
-    id: 'sample-photo-8',
-    source: require('../../../assets/sample-event/08.png'),
-    displayName: 'Amelia',
-    minutesIntoDay: 40,
+    id: 'sample-photo-4',
+    source: require('../../../assets/sample-event/04.jpg'),
+    displayName: 'Dan',
+    minutesIntoDay: 485,
   },
   {
     id: 'sample-photo-7',
@@ -153,12 +153,6 @@ export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
     displayName: 'Priya',
     minutesIntoDay: 440,
     challengeId: SAMPLE_CHALLENGE_IDS.happyTears,
-  },
-  {
-    id: 'sample-photo-4',
-    source: require('../../../assets/sample-event/04.jpg'),
-    displayName: 'Dan',
-    minutesIntoDay: 485,
   },
   {
     id: 'sample-photo-6',

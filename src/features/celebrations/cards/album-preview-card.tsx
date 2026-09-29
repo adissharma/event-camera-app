@@ -56,10 +56,12 @@ export function AlbumPreviewCard({
         gap: spacing.md,
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.base }}>
         <AppText
           variant="titleMedium"
-          style={{ color: colours.textPrimary, fontSize: 20, lineHeight: 24, maxWidth: width * 0.5, flexShrink: 1 }}
+          numberOfLines={1}
+          ellipsizeMode="tail"
+          style={{ color: colours.textPrimary, fontSize: 20, lineHeight: 24, maxWidth: width * 0.58, flexShrink: 1 }}
         >
           {celebration.title}
         </AppText>
@@ -67,8 +69,9 @@ export function AlbumPreviewCard({
           <AppText
             variant="bodySmall"
             tone="secondary"
+            numberOfLines={1}
             style={{
-              maxWidth: width * 0.45,
+              maxWidth: width * 0.38,
               textAlign: 'right',
               paddingTop: spacing.xs,
               fontFamily: fontFamilies.textMediumItalic,
