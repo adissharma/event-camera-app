@@ -113,6 +113,7 @@ import {
   playWithSoundFallback,
 } from '@/features/celebrations/story-viewer';
 import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
+import { searchGuestSeating, seatingKeys } from '@/services/seating';
 import {
   listChallenges,
   updateChallenge,
@@ -1011,6 +1012,20 @@ function GuestbookIcon({ size = 24, color = '#EFE9E0' }) {
   );
 }
 
+function SeatIcon({ size = 24, color = '#EFE9E0' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7 11V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6M5 11h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1zM6 15v6M18 15v6"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** Shared visual shell for the event screen's Guestbook and Challenge tiles. */
 function ChallengeGradientCircle({
   index,
@@ -1661,6 +1676,16 @@ export function EventDetailView({
   const showGuestbook = isHost
     ? detail.hasAudioGuestbook !== false || !guestbookUnlocked
     : guestbookUnlocked && detail.hasAudioGuestbook !== false;
+
+  // Guests only, and only once the host has seated someone: hosts manage the
+  // plan from Manage Event, and an empty lookup is a dead end for a guest.
+  const seatingQuery = useQuery({
+    queryKey: seatingKeys.guestSearch(celebration.id, ''),
+    queryFn: () => searchGuestSeating(celebration.id, ''),
+    enabled: !isHost && !previewMode && isBackendConfigured,
+    staleTime: 60_000,
+  });
+  const showSeating = !isHost && Boolean(seatingQuery.data?.hasPlan);
   // Closing an event is just closing a screen.
   //
   // This used to clear the stored guest session and ask "Leave this event?"
@@ -4552,7 +4577,7 @@ export function EventDetailView({
                 tileSize={selectorTileSize}
               />
             </View>
-          ) : (showGuestbook || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
+          ) : (showGuestbook || showSeating || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
             // Wraps the strip rather than its content: `contentContainerStyle`
             // is an ordinary style prop, so an animated value handed to it
             // arrives at the transform unresolved and throws at render.
@@ -4598,6 +4623,19 @@ export function EventDetailView({
                 </Pressable>
               )}
 
+              {showSeating && (
+                <Pressable
+                  style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
+                  onPress={() => router.push(`/celebration/${celebration.id}/find-seat` as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Find your seat"
+                >
+                  <ChallengeGradientCircle index={showGuestbook ? 1 : 0} size={selectorTileSize}>
+                    <SeatIcon size={22} color="#FFFFFF" />
+                  </ChallengeGradientCircle>
+                </Pressable>
+              )}
+
               {isHost && challenges.length === 0 && (
                 <View style={!challengesUnlocked ? S.chipLocked : undefined}>
                   <ChallengesEmptyCard
@@ -4625,7 +4663,7 @@ export function EventDetailView({
                     hitSlop={{ top: 18, bottom: 18, left: CHIP_STRIP_GAP / 2, right: CHIP_STRIP_GAP / 2 }}
                     pressRetentionOffset={18}
                   >
-                    <ChallengeGradientCircle index={index + 1} size={selectorTileSize}>
+                    <ChallengeGradientCircle index={index + 1 + (showSeating ? 1 : 0)} size={selectorTileSize}>
                       <SharedChallengeIconSVG type={challenge.icon} size={22} />
                     </ChallengeGradientCircle>
                   </Pressable>
