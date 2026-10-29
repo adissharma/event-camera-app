@@ -58,6 +58,7 @@ export function MidnightInvitationCover({
   shotsLeftLabel,
   accent: providedAccent,
   nameInputRef,
+  onNameFieldPress,
   name = '',
   onNameChange,
   showValidation = false,
@@ -194,7 +195,12 @@ export function MidnightInvitationCover({
         {/* ── Form ── */}
         <View style={[S.form, { width: heroWidth, marginTop: Math.round(spacing.xl * scale) }]}>
           {footer ?? <>
-          <View
+          <Pressable
+              onPress={onNameFieldPress}
+              disabled={!onNameFieldPress || !interactive}
+              accessible={Boolean(onNameFieldPress)}
+              accessibilityRole={onNameFieldPress ? 'button' : undefined}
+              accessibilityLabel={onNameFieldPress ? 'Enter your name and find your table' : undefined}
               style={[
                 S.inputWrap,
                 {
@@ -207,16 +213,17 @@ export function MidnightInvitationCover({
               <PersonIcon size={Math.max(10, Math.round(18 * scale))} color={accent} />
               <TextInput
                 ref={nameInputRef}
+                pointerEvents={onNameFieldPress ? 'none' : 'auto'}
                 value={name}
                 onChangeText={onNameChange}
                 placeholder="Your Name"
                 placeholderTextColor="rgba(244,236,224,0.42)"
                 maxLength={50}
-                editable={interactive && !isJoining}
+                editable={interactive && !isJoining && !onNameFieldPress}
                 style={[S.input, { fontSize: Math.round(17 * scale) }]}
                 accessibilityLabel="Your name"
               />
-            </View>
+            </Pressable>
 
           {error || (showValidation && !isNameValid) ? (
             <AppText align="center" style={S.error} accessibilityLiveRegion="polite">

@@ -60,9 +60,32 @@ export async function searchGuestSeating(celebrationId: string, query: string): 
   };
 }
 
+/**
+ * The same search from the join screen, before the guest has a token.
+ *
+ * Any failure — including a backend that has not yet been migrated — reads
+ * as "no plan", so the join screen falls back to the plain name field rather
+ * than blocking entry.
+ */
+export async function searchSeatingByCode(eventCode: string, query: string): Promise<GuestSeatSearch> {
+  try {
+    const { data, error } = await (requireSupabase() as any).rpc('search_event_seating_by_code', {
+      p_event_code: eventCode, p_query: query,
+    });
+    if (error) throw error;
+    return {
+      hasPlan: Boolean(data?.has_plan),
+      matches: normaliseSeatingGuests(data?.matches),
+    };
+  } catch {
+    return { hasPlan: false, matches: [] };
+  }
+}
+
 export const seatingKeys = {
   host: (celebrationId: string) => ['seating', celebrationId] as const,
   guestSearch: (celebrationId: string, query: string) => ['seating', 'guest', celebrationId, query] as const,
+  codeSearch: (eventCode: string, query: string) => ['seating', 'code', eventCode, query] as const,
 };
 
 const NAME_HEADERS = ['name', 'guest', 'guest name', 'full name'];

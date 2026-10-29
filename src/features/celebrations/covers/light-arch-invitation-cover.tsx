@@ -44,6 +44,7 @@ export interface LightArchInvitationCoverProps {
   shotsLeftDetailLabel?: string;
   viewportHeight?: number;
   nameInputRef?: RefObject<TextInput | null>;
+  onNameFieldPress?: () => void;
   name?: string;
   onNameChange?: (value: string) => void;
   showNameInput?: boolean;
@@ -75,6 +76,7 @@ export function LightArchInvitationCover({
   shotsLeftDetailLabel = 'Shots left',
   viewportHeight,
   nameInputRef,
+  onNameFieldPress,
   name = '',
   onNameChange,
   showNameInput = true,
@@ -223,10 +225,18 @@ export function LightArchInvitationCover({
             ) : null}
           </View>
         ) : showNameInput ? (
-          <View style={[S.field, isFocused && S.fieldFocused, invalid && S.fieldInvalid]}>
+          <Pressable
+            onPress={onNameFieldPress}
+            disabled={!onNameFieldPress || !interactive}
+            accessible={Boolean(onNameFieldPress)}
+            accessibilityRole={onNameFieldPress ? 'button' : undefined}
+            accessibilityLabel={onNameFieldPress ? 'Enter your name and find your table' : undefined}
+            style={[S.field, isFocused && S.fieldFocused, invalid && S.fieldInvalid]}
+          >
             <PersonIcon size={22} color={TAUPE} />
             <TextInput
               ref={nameInputRef}
+              pointerEvents={onNameFieldPress ? 'none' : 'auto'}
               value={name}
               onChangeText={onNameChange}
               placeholder="Enter your name"
@@ -245,9 +255,9 @@ export function LightArchInvitationCover({
               }}
               onBlur={() => setIsFocused(false)}
               accessibilityLabel="Your name"
-              editable={interactive && !isJoining}
+              editable={interactive && !isJoining && !onNameFieldPress}
             />
-          </View>
+          </Pressable>
         ) : null}
 
         {invalid || error ? (

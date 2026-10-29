@@ -72,6 +72,11 @@ export interface GuestJoinScreenProps {
   welcomePrefix?: 'Welcome' | 'Welcome back';
   onChangeNamePress?: () => void;
   nameInputRef?: RefObject<TextInput | null>;
+  /**
+   * When set, the name field is a button that opens a screen of its own
+   * rather than taking typing here — the seating plan's "Find your table".
+   */
+  onNameFieldPress?: () => void;
   error?: string | null;
   showValidation?: boolean;
   isNameValid?: boolean;
@@ -128,6 +133,7 @@ function ClassicJoinScreen({
   onChangeNamePress,
   nameInputRef,
   error,
+  onNameFieldPress,
   showValidation = false,
   isNameValid = true,
   isJoining = false,
@@ -241,10 +247,18 @@ function ClassicJoinScreen({
             ) : null}
           </View>
         ) : showNameInput ? (
-          <View style={[S.field, showValidation && !isNameValid && S.fieldInvalid]}>
+          <Pressable
+            onPress={onNameFieldPress}
+            disabled={!onNameFieldPress || !interactive}
+            accessible={Boolean(onNameFieldPress)}
+            accessibilityRole={onNameFieldPress ? 'button' : undefined}
+            accessibilityLabel={onNameFieldPress ? 'Enter your name and find your table' : undefined}
+            style={[S.field, showValidation && !isNameValid && S.fieldInvalid]}
+          >
           <PersonIcon size={20} color={colours.textSecondary} />
           <TextInput
             ref={nameInputRef}
+            pointerEvents={onNameFieldPress ? 'none' : 'auto'}
             value={name}
             onChangeText={onNameChange}
             placeholder="Enter your name"
@@ -259,9 +273,9 @@ function ClassicJoinScreen({
             onSubmitEditing={onJoin}
             onFocus={revealNameField}
             accessibilityLabel="Your name"
-            editable={!isJoining && interactive}
+            editable={!isJoining && interactive && !onNameFieldPress}
           />
-          </View>
+          </Pressable>
         ) : null}
 
         {showValidation && !isNameValid && !welcomeName ? (
