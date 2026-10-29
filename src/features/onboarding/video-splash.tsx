@@ -64,6 +64,14 @@ export function VideoSplash({ onSettled }: VideoSplashProps) {
     return () => clearTimeout(timeout);
   }, [finish, status]);
 
+  // A player that reaches `readyToPlay` can still stall and never fire
+  // `playToEnd`, so the controls must arrive regardless once the 7.4s clip
+  // has had ample time to finish.
+  useEffect(() => {
+    const ceiling = setTimeout(() => finish(false), 10000);
+    return () => clearTimeout(ceiling);
+  }, [finish]);
+
   const videoStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
 
   return (
