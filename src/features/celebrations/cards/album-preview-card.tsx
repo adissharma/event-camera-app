@@ -38,13 +38,7 @@ export function AlbumPreviewCard({
   const slotCount = photos.length;
   const photoWidth = Math.min(112, (width + Math.max(0, slotCount - 1) * 9) / Math.max(4, slotCount));
   const endsAt = celebration.primarySession?.ends_at ?? celebration.endsAt;
-  const endDate = endsAt
-    ? new Intl.DateTimeFormat('en-US', {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric',
-      }).format(new Date(endsAt))
-    : null;
+  const endDate = endsAt ? formatAlbumDate(new Date(endsAt)) : null;
 
   return (
     <Pressable
@@ -130,4 +124,18 @@ export function AlbumPreviewCard({
       </View>
     </Pressable>
   );
+}
+
+/** "Sep 29th", with the year only once the album is from an earlier year. */
+function formatAlbumDate(date: Date): string {
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const day = date.getDate();
+  const tens = day % 100;
+  const suffix = tens >= 11 && tens <= 13
+    ? 'th'
+    : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[day % 10] ?? 'th';
+  const label = `${month} ${day}${suffix}`;
+  return date.getFullYear() === new Date().getFullYear()
+    ? label
+    : `${label}, ${date.getFullYear()}`;
 }
