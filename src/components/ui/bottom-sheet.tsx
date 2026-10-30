@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from './text';
@@ -34,43 +34,49 @@ export function BottomSheet({ visible, onClose, title, children }: BottomSheetPr
       onRequestClose={onClose}
       statusBarTranslucent
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Close"
-        onPress={onClose}
-        style={{ flex: 1, backgroundColor: colours.scrim, justifyContent: 'flex-end' }}
+      {/* Lifts the sheet above the keyboard when it holds a text field. */}
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* Stops a tap inside the sheet from reaching the scrim behind it. */}
         <Pressable
-          onPress={(event) => event.stopPropagation()}
-          style={{
-            backgroundColor: colours.surfaceRaised,
-            borderTopLeftRadius: radii.xxl,
-            borderTopRightRadius: radii.xxl,
-            borderTopWidth: layout.hairline,
-            borderColor: colours.borderSubtle,
-            paddingHorizontal: layout.gutter,
-            paddingTop: spacing.base,
-            paddingBottom: insets.bottom + spacing.xl,
-            gap: spacing.lg,
-          }}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+          onPress={onClose}
+          style={{ flex: 1, backgroundColor: colours.scrim, justifyContent: 'flex-end' }}
         >
-          {/* Grabber. Purely a visual affordance that this is a sheet. */}
-          <View
+          {/* Stops a tap inside the sheet from reaching the scrim behind it. */}
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
             style={{
-              width: 36,
-              height: 4,
-              borderRadius: radii.pill,
-              backgroundColor: colours.borderStrong,
-              alignSelf: 'center',
+              backgroundColor: colours.surfaceRaised,
+              borderTopLeftRadius: radii.xxl,
+              borderTopRightRadius: radii.xxl,
+              borderTopWidth: layout.hairline,
+              borderColor: colours.borderSubtle,
+              paddingHorizontal: layout.gutter,
+              paddingTop: spacing.base,
+              paddingBottom: insets.bottom + spacing.xl,
+              gap: spacing.lg,
             }}
-          />
+          >
+            {/* Grabber. Purely a visual affordance that this is a sheet. */}
+            <View
+              style={{
+                width: 36,
+                height: 4,
+                borderRadius: radii.pill,
+                backgroundColor: colours.borderStrong,
+                alignSelf: 'center',
+              }}
+            />
 
-          <AppText variant="titleMedium">{title}</AppText>
+            <AppText variant="titleMedium">{title}</AppText>
 
-          {children}
+            {children}
+          </Pressable>
         </Pressable>
-      </Pressable>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

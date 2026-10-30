@@ -17,6 +17,8 @@ export {
   fontFamilies,
   fontFallbacks,
   maxFontScale,
+  fitDisplayFace,
+  DISPLAY_OPTICAL_SCALE,
 } from './typography';
 export type { TypographyToken, FontFamilyToken } from './typography';
 export {

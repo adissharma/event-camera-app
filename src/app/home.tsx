@@ -29,6 +29,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { BRAND_CONFIG, PRIVACY_POLICY_URL } from '@/config/brand';
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
+import { DashboardButtonGlassBorder } from '@/components/ui/dashboard-button-glass-border';
 import { Button } from '@/components/ui/button';
 import { PersonIcon } from '@/components/ui/icons';
 import { SlideToConfirm } from '@/components/forms/slide-to-confirm';
@@ -51,7 +52,7 @@ import {
   spacing,
   MOMENTS_SLIDER_GRADIENT,
 } from '@/design';
-import { EventCardTile } from '@/features/celebrations/cards/event-card-tile';
+import { AlbumPreviewCard } from '@/features/celebrations/cards/album-preview-card';
 import { useCoverSource } from '@/features/celebrations/cover-source';
 import { galleryHeroImageHeight } from '@/app/celebration/[celebrationId]/index';
 import { Toast } from '@/components/feedback/toast';
@@ -71,8 +72,6 @@ if (
 ) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
-
-const COMPLETED_CARD_ROTATIONS = ['-2.75deg', '1.9deg', '-1.4deg', '2.4deg', '-2.1deg'] as const;
 
 // QR Code Icon
 function QrCodeIcon({ size = 20, color = colours.textPrimary }) {
@@ -560,45 +559,22 @@ export default function HomeScreen() {
   /** How far the carousel travels per card — one dot's worth of scroll. */
   const upcomingCarouselInterval = upcomingHeroWidth + spacing.md;
   const upcomingScrollX = useRef(new Animated.Value(0)).current;
-  const completedCardWidth = Math.round((screenWidth - layout.gutter * 2 - spacing.base) / 2);
+  const completedCardWidth = screenWidth - layout.gutter * 2;
   const firstName = firstNameFrom(profile);
 
   // Extracted so the empty state can show it too: a host with no events of
   // their own is exactly the person the example album exists for, and the
   // old "No events found" branch would have hidden it from them.
   const albumsSection = (
-    <View style={styles.dashboardSection}>
-      <AppText variant="titleMedium" style={styles.sectionTitle}>
-        Previous albums
-      </AppText>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.completedCarouselContent}
-        style={styles.edgeToEdgeCarousel}
-      >
-        {completedEvents.map((celebration, index) => (
-          <View
-            key={celebration.id}
-            style={[
-              styles.completedCardWrap,
-              {
-                width: completedCardWidth,
-                transform: [
-                  { rotate: COMPLETED_CARD_ROTATIONS[index % COMPLETED_CARD_ROTATIONS.length] },
-                ],
-              },
-            ]}
-          >
-            <EventCardTile
-              celebration={celebration}
-              index={index}
-              themes={themes}
-              onPress={() => router.push(`/celebration/${celebration.id}`)}
-            />
-          </View>
-        ))}
-      </ScrollView>
+    <View style={styles.previousAlbumsList}>
+      {completedEvents.map((celebration) => (
+        <AlbumPreviewCard
+          key={celebration.id}
+          celebration={celebration}
+          width={completedCardWidth}
+          onPress={() => router.push(`/celebration/${celebration.id}`)}
+        />
+      ))}
     </View>
   );
 
@@ -748,6 +724,7 @@ export default function HomeScreen() {
               contentFit="contain"
             />
             <PlusIcon size={24} />
+            <DashboardButtonGlassBorder shape="create" />
           </Pressable>
         </View>
       </View>
@@ -1079,8 +1056,7 @@ const styles = StyleSheet.create({
   },
   /**
    * Secondary by construction: same footprint as Create, but a faint fill
-   * and an outline glyph instead of a solid ivory disc. No border — a ring
-   * here would compete with the gradient next to it.
+   * and an outline glyph instead of a solid ivory disc.
    */
   headerProfileBtn: {
     width: 52,
@@ -1118,11 +1094,6 @@ const styles = StyleSheet.create({
   dashboardSection: {
     gap: spacing.md,
     marginBottom: spacing.xxl,
-  },
-  sectionTitle: {
-    color: colours.textPrimary,
-    fontSize: 18,
-    lineHeight: 23,
   },
   edgeToEdgeCarousel: {
     marginHorizontal: -layout.gutter,
@@ -1179,18 +1150,13 @@ const styles = StyleSheet.create({
   upcomingHeroCountdown: {
     color: '#FFFFFF',
     fontFamily: fontFamilies.textMedium,
-    fontSize: 15,
-    lineHeight: 19,
+    fontSize: 13,
+    lineHeight: 17,
     letterSpacing: 0,
   },
-  completedCarouselContent: {
-    paddingHorizontal: layout.gutter,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-    gap: spacing.base,
-  },
-  completedCardWrap: {
-    overflow: 'visible',
+  previousAlbumsList: {
+    gap: spacing.xxxl,
+    marginBottom: spacing.xxl,
   },
   upcomingEmptyState: {
     alignItems: 'center',

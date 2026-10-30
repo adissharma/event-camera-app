@@ -11,7 +11,7 @@
  * - `EventLiveActivityBundle.swift`       `@main` WidgetBundle entry point.
  * - `EventLiveActivityLiveActivity.swift` the Live Activity UI.
  * - `EventLiveActivityAttributes.swift`   the shared ActivityAttributes model.
- * - `*.ttf`                               brand faces, registered via
+ * - `*.ttf` / `*.otf`                     brand faces, registered via
  *                                         `UIAppFonts` in `Info.plist`. They
  *                                         sit at the target root, not in a
  *                                         `Fonts/` subdirectory, because

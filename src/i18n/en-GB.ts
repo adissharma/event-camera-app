@@ -169,6 +169,28 @@ export const enGB = {
     archive: 'Archive event',
   },
 
+  eventPage: {
+    photo: 'Photo',
+    photos: 'Photos',
+    joined: 'Joined',
+    videos: 'Videos',
+    ended: 'Ended',
+    /** No end time set, so there is nothing to count down to. */
+    open: 'Soon',
+    dayLeft: 'Day left',
+    daysLeft: 'Days left',
+    hourLeft: 'Hour left',
+    hoursLeft: 'Hours left',
+    minLeft: 'Min left',
+    minsLeft: 'Mins left',
+    dayAgo: 'Day ago',
+    daysAgo: 'Days ago',
+    hourAgo: 'Hour ago',
+    hoursAgo: 'Hours ago',
+    minAgo: 'Min ago',
+    minsAgo: 'Mins ago',
+  },
+
   errors: {
     // Safe to show a guest or host. Never contains a token, signed URL or path.
     uploadFailed: 'That photo did not upload',

@@ -8,7 +8,7 @@ import { ProgressThread } from '@/components/feedback/progress-thread';
 import { Reveal } from '@/components/feedback/reveal';
 import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
-import { colours, easing, layout, spacing, typography } from '@/design';
+import { colours, easing, fitDisplayFace, layout, spacing, typography } from '@/design';
 import { copy } from '@/i18n';
 import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
@@ -242,7 +242,7 @@ export function CreationStepScreen({
               align={headingAlign}
               style={
                 headingMinLines
-                  ? { minHeight: (typography.displayLarge.lineHeight ?? 41) * headingMinLines }
+                  ? { minHeight: (fitDisplayFace(typography.displayLarge).lineHeight ?? 41) * headingMinLines }
                   : undefined
               }
             >

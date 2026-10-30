@@ -30,9 +30,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Asset as ExpoAsset } from 'expo-asset';
-import { useEventListener } from 'expo';
+import { requireOptionalNativeModule, useEventListener } from 'expo';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, {
@@ -46,6 +47,7 @@ import Svg, {
 } from 'react-native-svg';
 
 import { useAuth } from '@/features/auth/context';
+import { useWebCoverMotion } from '@/features/celebrations/use-web-cover-motion';
 import { isPermanentQueryError } from '@/lib/query-client';
 import { isBackendConfigured, requireSupabase } from '@/lib/supabase/client';
 import {
@@ -66,11 +68,8 @@ import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { SegmentedControl } from '@/components/forms/segmented-control';
 import {
-  FilledCameraIcon,
-  FilledClockIcon,
   CloseIcon,
   LockIcon,
-  FilledPeopleIcon,
   PhotoGridIcon,
   PinIcon,
   VideoTabIcon,
@@ -114,6 +113,7 @@ import {
   playWithSoundFallback,
 } from '@/features/celebrations/story-viewer';
 import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
+import { searchGuestSeating, seatingKeys } from '@/services/seating';
 import {
   listChallenges,
   updateChallenge,
@@ -126,6 +126,8 @@ import {
   markChallengePacksIntroSeen,
 } from '@/features/celebrations/challenge-packs-intro-modal';
 import { ChallengesEmptyCard } from '@/features/celebrations/challenges-empty-card';
+import { useEventCountdown } from '@/features/celebrations/event-countdown';
+import { EventStatStrip } from '@/features/celebrations/event-stat-strip';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
 import {
@@ -147,7 +149,6 @@ import {
 
 const GALLERY_PADDING = 16;
 const GALLERY_EDGE_INSET = 0;
-const HERO_METADATA_COLOR = 'rgba(255,255,255,0.75)';
 /**
  * Blur applied to the copy of the photo that fills the media area behind the
  * sharp one, where the photo's shape does not match the card's.
@@ -217,6 +218,14 @@ const CHIP_D = 60;
 const CHIP_R = 12;
 const CHIP_GAP = 12;
 const CHIP_PEEK = 18;
+/**
+ * The gap between tiles on the event page's strip.
+ *
+ * Tighter than `CHIP_GAP`, which still sizes the tiles: each blob is drawn
+ * inside its tile with a few points of air on either side, so the visible gap
+ * between two blobs is this plus roughly 8pt.
+ */
+const CHIP_STRIP_GAP = 4;
 // The organic paths deliberately extend a few units past a conventional
 // 0–100 square. Give their SVG canvas breathing room instead of clipping the
 // interesting part of the silhouette at its boundary.
@@ -349,6 +358,85 @@ export function galleryHeroHeight(screenHeight: number): number {
 
 /** How far the cover travels as the page scrolls, as a fraction of the hero. */
 const HERO_PARALLAX_FRACTION = 0.35;
+
+/**
+ * Where the content card's top edge rests, as a fraction of the screen.
+ *
+ * The card starts over the foot of the cover rather than below it, so the
+ * photograph is the first thing on the page and the card reads as a sheet
+ * laid on top of it. On every supported height this leaves the nav row well
+ * clear of the card.
+ */
+// The hero itself runs to `GALLERY_HERO_RATIO` (0.49) plus a 24pt bleed, so
+// this must stay below that for the card to overlap the cover at all.
+const EVENT_CARD_TOP_RATIO = 0.45;
+const EVENT_CARD_RADIUS = 32;
+
+/** Photos / Videos tab icons: white when selected, the same white dimmed when not. */
+const GALLERY_TAB_ACTIVE = '#FFFFFF';
+const GALLERY_TAB_INACTIVE = 'rgba(255, 255, 255, 0.4)';
+
+/**
+ * The card's glass.
+ *
+ * A real backdrop blur, so the card shows whatever is genuinely behind it: the
+ * cover near its top edge, black further down. A moderate blur, so the
+ * photograph keeps a little of its shape, under a heavy wash that pulls the
+ * material well towards the page's black so the type holds on a bright
+ * cover. The plain `dark` style rather than a system material: the materials
+ * lay a grey film over the backdrop, which read as a grey cast on the card.
+ * A short ramp at the foot lands on exactly `colours.background`, which is
+ * what the tabs and gallery below are drawn on, so the glass fades into them
+ * rather than stopping on a hard edge. It is kept to the bottom of the card so
+ * the title area stays clear glass.
+ */
+const EVENT_CARD_BLUR_INTENSITY = 10;
+/** How far under the card's top edge the cover is drawn for the glass to blur. */
+const EVENT_CARD_GLASS_REACH = 200;
+const EVENT_CARD_GLASS_WASH = 'rgba(11, 11, 12, 0.7)';
+const EVENT_CARD_GLASS_FOOT = ['rgba(11, 11, 12, 0)', 'rgba(11, 11, 12, 1)'] as const;
+/** Where, down the card, the foot ramp starts. */
+const EVENT_CARD_GLASS_FOOT_START = 0.7;
+/**
+ * Neutral specular reflections, strongest at the shoulders and softer across
+ * the face. The wider low-opacity stroke gives the hairline a refracted inner
+ * edge. Both sit under the foot ramp so the pane dissolves into the gallery.
+ */
+const EVENT_CARD_GLASS_EDGE = '#F0F2F5';
+/**
+ * The cover stops partway down the card — at its own foot, or at the hero's
+ * clip once the parallax has carried it past that — and the glass would show
+ * that as a hard horizontal line. A short fade to `colours.background` on
+ * each of those edges softens it without reaching up into the photograph.
+ */
+const HERO_EDGE_FADE = 90;
+const HERO_EDGE_FADE_COLORS = ['rgba(11, 11, 12, 0)', 'rgba(11, 11, 12, 1)'] as const;
+/** The same fade, flipped, for the cover's top edge. */
+const HERO_TOP_FADE_COLORS = ['rgba(11, 11, 12, 1)', 'rgba(11, 11, 12, 0)'] as const;
+/**
+ * Whether this binary can draw the glass at all.
+ *
+ * `expo-blur` is native, and the runtime version follows the app version, so
+ * an update carrying this screen can land on a build that predates it — as
+ * can a dev client that has not been rebuilt. Rendering `BlurView` there is a
+ * red screen, not a missing effect. Without it the card falls back to
+ * `EVENT_CARD_FALLBACK_FILL`: no blur, but the same dark sheet. Web draws the
+ * blur in CSS and needs no native module.
+ */
+const CAN_BLUR = Platform.OS === 'web' || requireOptionalNativeModule('ExpoBlur') != null;
+const EVENT_CARD_FALLBACK_FILL = 'rgba(28, 28, 30, 0.72)';
+
+/**
+ * How much of the page's scroll the cover follows.
+ *
+ * The cover sits in the scroll content, so left alone it would leave at the
+ * same speed as the card and the card would never cover it. Pushing it back
+ * down by most of the scroll distance keeps it nearly still on screen while
+ * the card rises over it, which is what makes the card a sheet over a
+ * photograph rather than the next block of a page. Short of 1 so the cover
+ * still drifts a little and does not feel glued to the glass.
+ */
+const HERO_COVER_FOLLOW = 0.8;
 
 /**
  * The height of the *image* behind the hero, which is taller than the hero
@@ -924,6 +1012,20 @@ function GuestbookIcon({ size = 24, color = '#EFE9E0' }) {
   );
 }
 
+function SeatIcon({ size = 24, color = '#EFE9E0' }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M7 11V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v6M5 11h14a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1zM6 15v6M18 15v6"
+        stroke={color}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** Shared visual shell for the event screen's Guestbook and Challenge tiles. */
 function ChallengeGradientCircle({
   index,
@@ -1324,8 +1426,7 @@ export interface EventPreviewMode {
   /** Stand-in challenges, shown through the real chip row. */
   challenges: Challenge[];
   /**
-   * Reports the date-and-title block's position in window coordinates once it
-   * has laid out.
+   * Reports the title's position in window coordinates once it has laid out.
    *
    * The reveal animates that block from here into the paywall hero. Measuring
    * it means the starting point is wherever this screen actually puts it — if
@@ -1334,20 +1435,26 @@ export interface EventPreviewMode {
    */
   onHeroIdentityLayout?: (rect: { x: number; y: number; width: number; height: number }) => void;
   /**
-   * Opacities the reveal drives, applied to parts of this hero.
+   * Opacities the reveal drives, applied to parts of this screen.
    *
    * This is how the paywall is reached without ever touching the cover. The
    * photograph is never faded, moved, scaled or recropped — it is the same
    * `<Image>`, at the same size, for the whole sequence. What changes around
-   * it is the scrim (this screen's vertical ramp fading out as the paywall's
-   * horizontal one fades in over the top) and the chrome (nav row and hero
-   * text) leaving so the purchase copy can take their place.
+   * it is the chrome (nav row and content card) leaving so the purchase copy
+   * can take its place. The cover runs the full hero height underneath the
+   * card, so fading the card uncovers the rest of the same photograph.
    */
   overlays?: {
-    /** This screen's vertical cover ramp. Fades out as the paywall's fades in. */
-    scrimOpacity?: Animated.AnimatedInterpolation<number> | Animated.Value;
-    /** Nav row and hero text — everything over the cover that is not the cover. */
+    /** Nav row and content card — everything over the cover that is not the cover. */
     chromeOpacity?: Animated.AnimatedInterpolation<number> | Animated.Value;
+    /**
+     * Everything in the card below the title.
+     *
+     * Lets the reveal show the cover and the event's name alone: the card's
+     * lower content would otherwise be sliced by the reveal's mask wherever
+     * its edge happened to fall.
+     */
+    detailsOpacity?: Animated.AnimatedInterpolation<number> | Animated.Value;
   };
   /**
    * Horizontal offset for the challenge strip, so the reveal can nudge it.
@@ -1569,6 +1676,16 @@ export function EventDetailView({
   const showGuestbook = isHost
     ? detail.hasAudioGuestbook !== false || !guestbookUnlocked
     : guestbookUnlocked && detail.hasAudioGuestbook !== false;
+
+  // Guests only, and only once the host has seated someone: hosts manage the
+  // plan from Manage Event, and an empty lookup is a dead end for a guest.
+  const seatingQuery = useQuery({
+    queryKey: seatingKeys.guestSearch(celebration.id, ''),
+    queryFn: () => searchGuestSeating(celebration.id, ''),
+    enabled: !isHost && !previewMode && isBackendConfigured,
+    staleTime: 60_000,
+  });
+  const showSeating = !isHost && Boolean(seatingQuery.data?.hasPlan);
   // Closing an event is just closing a screen.
   //
   // This used to clear the stored guest session and ask "Leave this event?"
@@ -1590,7 +1707,6 @@ export function EventDetailView({
 
   // ── Dimensions Hook (Fully Reactive to Hot Reloads and Screen Orientations) ──
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-  const [heroInfoHeight, setHeroInfoHeight] = useState(147);
 
   // Fit five selector tiles and leave a small preview of the next tile.
   const selectorTileSize = Math.max(
@@ -1604,52 +1720,21 @@ export function EventDetailView({
   // tall this hero is.
   const HERO_H = Math.round(screenHeight * GALLERY_HERO_RATIO);
   const HERO_TOTAL = galleryHeroHeight(screenHeight);
+  const webCoverRef = useWebCoverMotion(HERO_TOTAL, HERO_COVER_FOLLOW);
   const PARALLAX_RANGE = HERO_H * HERO_PARALLAX_FRACTION;
   const IMG_H = galleryHeroImageHeight(screenHeight);
   const IMG_TOP = -PARALLAX_RANGE / 2;
-  const SCRIM_SOLID_AT = 1 - HERO_BLEED / HERO_TOTAL;
-  // The fade begins just above the date (or title when there is no date).
-  // Measuring the header keeps that edge aligned for one- and two-line titles.
-  const SCRIM_CLEAR_AT = Math.max(
-    0,
-    Math.min(SCRIM_SOLID_AT - 0.08, (HERO_TOTAL - 13 - heroInfoHeight - 20) / HERO_TOTAL),
-  );
-  const SCRIM_FADE_SPAN = SCRIM_SOLID_AT - SCRIM_CLEAR_AT;
-
-  // Scrim ramp stop builders using semantic color token
-  const scrimStop = (alpha: number) => {
-    const hex = colours.background.replace('#', '');
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
-
-  const SCRIM_COLORS = [
-    scrimStop(0),
-    scrimStop(0),
-    scrimStop(0.03),
-    scrimStop(0.18),
-    scrimStop(0.39),
-    scrimStop(0.63),
-    scrimStop(0.82),
-    scrimStop(0.94),
-    scrimStop(1),
-    scrimStop(1),
-  ] as const;
-
-  const SCRIM_LOCATIONS = [
-    0,
-    SCRIM_CLEAR_AT,
-    SCRIM_CLEAR_AT + 0.05 * SCRIM_FADE_SPAN,
-    SCRIM_CLEAR_AT + 0.16 * SCRIM_FADE_SPAN,
-    SCRIM_CLEAR_AT + 0.33 * SCRIM_FADE_SPAN,
-    SCRIM_CLEAR_AT + 0.55 * SCRIM_FADE_SPAN,
-    SCRIM_CLEAR_AT + 0.75 * SCRIM_FADE_SPAN,
-    SCRIM_CLEAR_AT + 0.9 * SCRIM_FADE_SPAN,
-    SCRIM_SOLID_AT,
-    1,
-  ] as const;
+  // Where the content card's rounded top sits over the cover at rest. The
+  // cover itself keeps its full height and framing underneath — the reveal's
+  // paywall is sized from the same function — so the card simply covers its
+  // lower part, and covers the rest as the page scrolls.
+  const CARD_TOP = Math.round(screenHeight * EVENT_CARD_TOP_RATIO);
+  const CARD_OVERLAP = Math.max(0, HERO_TOTAL - CARD_TOP);
+  // The hero's clip runs `EVENT_CARD_GLASS_REACH` under the card rather than
+  // stopping at `HERO_TOTAL`, so the glass has the photograph to blur behind
+  // its title and not just along its edge. Only the clip grows: the card is
+  // pulled up by the same extra amount, so nothing moves.
+  const HERO_CLIP_H = Math.max(HERO_TOTAL, CARD_TOP + EVENT_CARD_GLASS_REACH);
 
   const CELL_W =
     (screenWidth - GALLERY_EDGE_INSET * 2 - GRID_GAP * (GALLERY_COLUMNS - 1)) /
@@ -1797,10 +1882,9 @@ export function EventDetailView({
   const [guestsJoined, setGuestsJoined] = useState(metrics.guestsJoined);
 
   // ── Countdown ──
-  const [countdown, setCountdown] = useState({
-    days: 0, hours: 0, minutes: 0,
-    isCompleted: false, isOngoing: false,
-  });
+  // The session's end time is the live one; the celebration's copy can lag
+  // an edit (see `celebration-detail`).
+  const countdown = useEventCountdown(primarySession?.ends_at ?? celebration.ends_at);
 
   // ── Parallax ──
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -2064,27 +2148,47 @@ export function EventDetailView({
     updateChallengeStory,
   ]);
 
+  // Counter-scrolls the cover so the card overtakes it (see
+  // `HERO_COVER_FOLLOW`). Past `HERO_TOTAL` the whole hero is off screen, so
+  // there is nothing left to move.
   const imageParallax = scrollY.interpolate({
-    inputRange: [0, HERO_H],
-    outputRange: [0, PARALLAX_RANGE],
+    inputRange: [0, HERO_TOTAL],
+    outputRange: [0, HERO_TOTAL * HERO_COVER_FOLLOW],
     extrapolate: 'clamp',
   });
+  // Pulling down from the top first slides only the card, uncovering the
+  // part of the cover it overlaps: the hero counter-moves by the overscroll so
+  // it holds still on screen while the card travels with the content. Once
+  // the card has cleared the cover's foot (`CARD_OVERLAP`) there is nothing
+  // left beneath it, the hero stops compensating, and the whole page pulls as
+  // before. iOS rubber-banding brings the card back on release.
+  const heroPullHold = scrollY.interpolate({
+    inputRange: [-CARD_OVERLAP, 0],
+    outputRange: [-CARD_OVERLAP, 0],
+    extrapolate: 'clamp',
+  });
+  // The pull-to-stretch zoom begins only after the reveal is used up.
   const imageScale = scrollY.interpolate({
-    inputRange: [-90, 0],
+    inputRange: [-CARD_OVERLAP - 90, -CARD_OVERLAP],
     outputRange: [1.1, 1],
     extrapolate: 'clamp',
   });
-
-  const heroDate = formatEventHeroDate(celebration.ends_at, celebration.timezone);
+  // The cover's top edge only comes into view once the pull has used up the
+  // reveal and the whole hero starts moving down, so its fade comes in then.
+  // At rest the photograph runs cleanly to the top of the screen.
+  const heroTopFadeOpacity = scrollY.interpolate({
+    inputRange: [-CARD_OVERLAP - 40, -CARD_OVERLAP],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
 
   // ── Hero identity geometry, for the creation reveal ──
   //
   // Reported in window coordinates rather than computed by the reveal, so the
-  // date and title it animates start from wherever this screen actually draws
-  // them.
+  // title it animates starts from wherever this screen actually draws it.
   // Use `measureInWindow` rather than the `onLayout` rect because that rect
-  // is relative to `heroInfo`, which is itself absolutely positioned inside
-  // the hero — the reveal needs the number on screen, not the offset within a
+  // is relative to the content card, which is itself pulled up over the
+  // hero — the reveal needs the number on screen, not the offset within a
   // parent it knows nothing about.
   const heroIdentityRef = useRef<View>(null);
   const onHeroIdentityLayout = previewMode?.onHeroIdentityLayout;
@@ -2395,34 +2499,6 @@ export function EventDetailView({
     setGuestsJoined(metrics.guestsJoined);
   }, [metrics.guestsJoined]);
 
-  // ── Countdown clock ──
-  useEffect(() => {
-    const compute = () => {
-      const endsAt = primarySession?.ends_at ?? celebration.ends_at;
-      if (!endsAt) {
-        setCountdown({ days: 0, hours: 0, minutes: 0, isCompleted: false, isOngoing: true });
-        return;
-      }
-      const diff = new Date(endsAt).getTime() - Date.now();
-      if (diff <= 0) {
-        setCountdown({ days: 0, hours: 0, minutes: 0, isCompleted: true, isOngoing: false });
-        return;
-      }
-      const totalMin = Math.floor(diff / 60000);
-      const totalHrs = Math.floor(totalMin / 60);
-      setCountdown({
-        days: Math.floor(totalHrs / 24),
-        hours: totalHrs % 24,
-        minutes: totalMin % 60,
-        isCompleted: false,
-        isOngoing: false,
-      });
-    };
-    compute();
-    const t = setInterval(compute, 10000);
-    return () => clearInterval(t);
-  }, [celebration.ends_at, primarySession?.ends_at]);
-
   // ── Helpers ──
 
   function getCoverSource() {
@@ -2473,16 +2549,6 @@ export function EventDetailView({
         mediaType: existing.mediaType ?? item.mediaType,
         durationMs: existing.durationMs ?? item.durationMs,
     });
-  }
-
-  function buildTimeLeftValue() {
-    if (countdown.isOngoing) return 'Soon';
-    if (countdown.isCompleted) return 'Ended';
-    const { days, hours, minutes } = countdown;
-    if (days >= 1) return `${days} day${days === 1 ? '' : 's'}`;
-    if (hours >= 1) return `${hours} hrs`;
-    const safeMinutes = Math.max(1, minutes);
-    return `${safeMinutes} mins`;
   }
 
   async function saveChallenges(next: Challenge[]) {
@@ -3890,8 +3956,7 @@ export function EventDetailView({
   }
 
   // ── Derived ──
-  const eventHasEnded = countdown.isCompleted;
-  const timeLeftValue = buildTimeLeftValue();
+  const eventHasEnded = countdown.state === 'ended';
   const showRecapBanner = ENABLE_EVENT_RECAP && eventHasEnded && (isHost || Boolean(recap && recap.status !== 'not_available'));
   const recapNeedsRetry = recap?.status === 'failed' || Boolean(recap?.lastErrorCode && recap.status !== 'ready');
   const recapPlaybackUri = recap?.playbackUrl
@@ -4053,9 +4118,25 @@ export function EventDetailView({
     [galleryPageX, galleryTab, screenWidth, settleGalleryPager, shouldClaimGallerySwipe],
   );
 
+  // Where the sticky tab header sits in the scroll content, so the backing
+  // behind the status bar can fade in over the last few points before it
+  // pins. Zero until measured, which keeps the backing hidden at rest.
+  const [galleryTabsY, setGalleryTabsY] = useState(0);
+  const galleryTabsBackingOpacity =
+    galleryTabsY > 0
+      ? scrollY.interpolate({
+          inputRange: [galleryTabsY - 16, galleryTabsY],
+          outputRange: [0, 1],
+          extrapolate: 'clamp',
+        })
+      : 0;
+
+  // The tab line is inset by the screen gutter on both sides, so each tab's
+  // half — and the indicator's travel — is half of what remains.
+  const galleryTabHalfWidth = (screenWidth - layout.gutter * 2) / 2;
   const galleryIndicatorTranslateX = galleryPageX.interpolate({
     inputRange: [0, Math.max(1, screenWidth)],
-    outputRange: [0, screenWidth / 2],
+    outputRange: [0, galleryTabHalfWidth],
     extrapolate: 'clamp',
   });
   const galleryPagerHeight =
@@ -4224,16 +4305,19 @@ export function EventDetailView({
         <View>
 
         {/* ── HERO ─────────────────────────────────────────── */}
-        <View style={[S.hero, { height: HERO_TOTAL }]}>
+        <Animated.View
+          style={[S.hero, { height: HERO_CLIP_H, transform: [{ translateY: heroPullHold }] }]}
+        >
 
           {/* Oversized image — transforms create parallax */}
           <Animated.View
+            ref={webCoverRef}
             style={[
               S.heroImageWrapper,
               {
                 height: IMG_H,
                 top: IMG_TOP,
-                transform: [
+                transform: Platform.OS === 'web' ? undefined : [
                   { translateY: imageParallax },
                   { scale: imageScale },
                 ],
@@ -4245,21 +4329,22 @@ export function EventDetailView({
               style={S.heroImage}
               resizeMode="cover"
             />
-          </Animated.View>
-
-          {/* The clear-photo edge sits just above the date; the header remains on the dark fade. */}
-          <Animated.View
-            style={[S.heroScrim, previewMode?.overlays?.scrimOpacity
-              ? { opacity: previewMode.overlays.scrimOpacity }
-              : null]}
-            pointerEvents="none"
-          >
             <LinearGradient
-              colors={SCRIM_COLORS}
-              locations={SCRIM_LOCATIONS}
-              style={StyleSheet.absoluteFill}
               pointerEvents="none"
+              colors={HERO_EDGE_FADE_COLORS}
+              style={S.heroEdgeFade}
             />
+          </Animated.View>
+          <LinearGradient
+            pointerEvents="none"
+            colors={HERO_EDGE_FADE_COLORS}
+            style={S.heroEdgeFade}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[S.heroTopFade, { opacity: heroTopFadeOpacity }]}
+          >
+            <LinearGradient colors={HERO_TOP_FADE_COLORS} style={ABSOLUTE_FILL} />
           </Animated.View>
 
           {/* Floating nav icons */}
@@ -4321,242 +4406,318 @@ export function EventDetailView({
             </View>
           </Animated.View>
 
-          <Animated.View
-            style={[
-              S.heroInfo,
-              previewMode?.overlays?.chromeOpacity
-                ? { opacity: previewMode.overlays.chromeOpacity }
-                : null,
-            ]}
-            onLayout={({ nativeEvent }) => setHeroInfoHeight(nativeEvent.layout.height)}
-          >
-            <View style={S.heroContentColumn}>
-              {/* Date and title remain measured together for the creation reveal. */}
-              <View
-                ref={heroIdentityRef}
-                onLayout={reportHeroIdentityRect}
-                collapsable={false}
-                style={S.heroIdentity}
-              >
-                {heroDate ? (
-                  <AppText variant="eyebrow" tone="secondary" align="center" style={S.heroDate}>
-                    {heroDate}
-                  </AppText>
-                ) : null}
-                <AppText
-                  variant="displayLarge"
-                  align="center"
-                  style={S.heroTitle}
-                  numberOfLines={2}
-                  adjustsFontSizeToFit
-                  minimumFontScale={0.84}
-                >
-                  {celebration.title}
-                </AppText>
-              </View>
+        </Animated.View>
 
-              <View style={S.galleryStatsRow}>
-                <View style={S.galleryStatItem} accessible accessibilityRole="text" accessibilityLabel={`${photos.length} stills`}>
-                  <FilledCameraIcon size={18} color={HERO_METADATA_COLOR} />
-                  <AppText style={S.galleryStatValue}>{photos.length}</AppText>
-                </View>
-                <View style={S.galleryStatItem} accessible accessibilityRole="text" accessibilityLabel={`${guestsJoined} joined`}>
-                  <FilledPeopleIcon size={18} color={HERO_METADATA_COLOR} />
-                  <AppText style={S.galleryStatValue}>{guestsJoined}</AppText>
-                </View>
-                <View style={S.galleryStatItem} accessible accessibilityRole="text" accessibilityLabel={timeLeftValue}>
-                  <FilledClockIcon size={18} color={HERO_METADATA_COLOR} />
-                  <AppText style={S.galleryStatValue}>{timeLeftValue}</AppText>
-                </View>
-              </View>
-            </View>
-          </Animated.View>
-        </View>
-
-        {showRecapBanner ? (
-          <View style={S.recapBanner}>
-            <View style={{ flex: 1, gap: 3 }}>
-              <AppText variant="titleMedium">Event recap</AppText>
-              <AppText variant="bodySmall" tone="secondary">
-                {recapStatusText}
-              </AppText>
-            </View>
-            {recap?.status === 'ready' && recapPlaybackUri ? (
-              <View style={S.recapActionRow}>
-                {isHost ? (
-                  <Pressable
-                    style={S.recapButtonSecondary}
-                    onPress={openRecapSelection}
-                    accessibilityRole="button"
-                    accessibilityLabel="Change recap media"
-                  >
-                    <AppText style={S.recapButtonSecondaryText}>Change</AppText>
-                  </Pressable>
-                ) : null}
-                <Pressable
-                  style={S.recapButton}
-                  onPress={() => setRecapVisible(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Watch recap"
-                >
-                  <AppText style={S.recapButtonText}>Watch</AppText>
-                </Pressable>
-              </View>
-            ) : !recapNeedsRetry && (recap?.status === 'queued' || recap?.status === 'processing') ? (
-              <ActivityIndicator color={colours.textSecondary} />
-            ) : isHost ? (
-              <Pressable
-                style={S.recapButton}
-                onPress={openRecapSelection}
-                accessibilityRole="button"
-                accessibilityLabel={recapNeedsRetry ? 'Try recap again' : 'Create recap'}
-              >
-                <AppText style={S.recapButtonText}>
-                  {recapNeedsRetry ? 'Try again' : 'Create'}
-                </AppText>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
-
-        {!isHost && guestName && (
-          <View style={S.guestWelcome}>
-            <AppText variant="eyebrow" tone="secondary" style={S.guestWelcomeEyebrow}>
-              Welcome back
-            </AppText>
-            <AppText variant="displaySmall" style={S.guestWelcomeName}>
-              {guestName}
-            </AppText>
-          </View>
-        )}
-
-        {isHost && challenges.length === 0 && !showGuestbook ? (
-          <View style={S.challengesEmptyBannerWrap}>
-            <ChallengesEmptyCard
-              onPress={handleAddChallenge}
-              hasSiblingChip={false}
-              tileSize={selectorTileSize}
+        {/* ── CONTENT CARD ─────────────────────────────────────
+            Pulled up over the foot of the cover. It is ordinary scroll
+            content, so it rises with the page while the cover behind it
+            counter-scrolls (`imageParallax`) — the card overtakes the
+            photograph instead of the two leaving together. The tabs and
+            gallery below continue on the same background, so the card
+            reads as one sheet all the way down. */}
+        <Animated.View
+          style={[
+            S.card,
+            { marginTop: -(HERO_CLIP_H - CARD_TOP) },
+            previewMode?.overlays?.chromeOpacity
+              ? { opacity: previewMode.overlays.chromeOpacity }
+              : null,
+          ]}
+        >
+          <View pointerEvents="none" style={S.cardGlass}>
+            {CAN_BLUR ? (
+              <BlurView
+                intensity={EVENT_CARD_BLUR_INTENSITY}
+                tint="dark"
+                style={ABSOLUTE_FILL}
+              />
+            ) : (
+              <View style={[ABSOLUTE_FILL, { backgroundColor: EVENT_CARD_FALLBACK_FILL }]} />
+            )}
+            <View style={[ABSOLUTE_FILL, { backgroundColor: EVENT_CARD_GLASS_WASH }]} />
+            <Svg width="100%" height="100%" style={ABSOLUTE_FILL}>
+              <Defs>
+                <SvgLinearGradient id="eventGlassRim" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={screenWidth} y2={0}>
+                  <Stop offset="0" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.12} />
+                  <Stop offset="0.07" stopColor="#D6E8FF" stopOpacity={0.65} />
+                  <Stop offset="0.13" stopColor="#FFFFFF" stopOpacity={0.95} />
+                  <Stop offset="0.24" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.18} />
+                  <Stop offset="0.44" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.04} />
+                  <Stop offset="0.64" stopColor="#D6E8FF" stopOpacity={0.25} />
+                  <Stop offset="0.74" stopColor="#FFFFFF" stopOpacity={0.85} />
+                  <Stop offset="0.83" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.14} />
+                  <Stop offset="0.95" stopColor="#E1EDFF" stopOpacity={0.62} />
+                  <Stop offset="1" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.12} />
+                </SvgLinearGradient>
+                {/* SVG on web needs r + a transform; rx/ry are native-only.
+                    An implicit browser radius spills tint to the rectangle's edge. */}
+                <SvgRadialGradient id="eventGlassLeftGlint" gradientUnits="userSpaceOnUse" cx={0} cy={0} r={1} gradientTransform={`translate(${screenWidth * 0.13} 2) scale(65 24)`}>
+                  <Stop offset="0" stopColor="#E1EDFF" stopOpacity={0.22} />
+                  <Stop offset="0.35" stopColor="#D6E8FF" stopOpacity={0.08} />
+                  <Stop offset="1" stopColor="#D6E8FF" stopOpacity={0} />
+                </SvgRadialGradient>
+                <SvgRadialGradient id="eventGlassRightGlint" gradientUnits="userSpaceOnUse" cx={0} cy={0} r={1} gradientTransform={`translate(${screenWidth * 0.74} 0) scale(48 18)`}>
+                  <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.2} />
+                  <Stop offset="0.4" stopColor="#E1EDFF" stopOpacity={0.06} />
+                  <Stop offset="1" stopColor="#E1EDFF" stopOpacity={0} />
+                </SvgRadialGradient>
+              </Defs>
+              <Rect width="100%" height={60} fill="url(#eventGlassLeftGlint)" />
+              <Rect width="100%" height={60} fill="url(#eventGlassRightGlint)" />
+              <Path
+                d={`M1.5 1000 V${EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 1.5} ${EVENT_CARD_RADIUS - 1.5} 0 0 1 ${EVENT_CARD_RADIUS} 1.5 H${screenWidth - EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 1.5} ${EVENT_CARD_RADIUS - 1.5} 0 0 1 ${screenWidth - 1.5} ${EVENT_CARD_RADIUS} V1000`}
+                fill="none"
+                stroke="url(#eventGlassRim)"
+                strokeWidth={2}
+                opacity={0.24}
+              />
+              <Path
+                d={`M0.5 1000 V${EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 0.5} ${EVENT_CARD_RADIUS - 0.5} 0 0 1 ${EVENT_CARD_RADIUS} 0.5 H${screenWidth - EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 0.5} ${EVENT_CARD_RADIUS - 0.5} 0 0 1 ${screenWidth - 0.5} ${EVENT_CARD_RADIUS} V1000`}
+                fill="none"
+                stroke="url(#eventGlassRim)"
+                strokeWidth={1}
+              />
+            </Svg>
+            <LinearGradient
+              colors={EVENT_CARD_GLASS_FOOT}
+              locations={[EVENT_CARD_GLASS_FOOT_START, 1]}
+              style={ABSOLUTE_FILL}
             />
           </View>
-        ) : (showGuestbook || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
-          // Wraps the strip rather than its content: `contentContainerStyle`
-          // is an ordinary style prop, so an animated value handed to it
-          // arrives at the transform unresolved and throws at render.
+
+          {/* Measured for the creation reveal, which crossfades its own title in over this one. */}
+          <View
+            ref={heroIdentityRef}
+            onLayout={reportHeroIdentityRect}
+            collapsable={false}
+            style={S.cardTitleWrap}
+          >
+            <AppText variant="displayLarge" align="center" style={S.cardTitle}>
+              {celebration.title}
+            </AppText>
+          </View>
+
           <Animated.View
             style={
-              previewMode?.chipStripNudge
-                ? { transform: [{ translateX: previewMode.chipStripNudge }] }
+              previewMode?.overlays?.detailsOpacity
+                ? { opacity: previewMode.overlays.detailsOpacity }
                 : undefined
             }
           >
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[
-              S.chipsContent,
-              isHost && challenges.length === 0 && { gap: GALLERY_PADDING },
-            ]}
-            style={S.chipsScroll}
-          >
-            {showGuestbook && (
-              <Pressable
-                style={({ pressed }) => [
-                  S.chipWrap,
-                  { width: selectorTileSize },
-                  pressed && { opacity: 0.75 },
-                  // Dimmed rather than greyed out: it is a real feature the
-                  // host can have in two taps, not a broken one.
-                  !guestbookUnlocked && S.chipLocked,
-                ]}
-                onPress={() => {
-                  const open = () =>
-                    router.push(`/celebration/${celebration.id}/guestbook` as never);
-                  if (guestbookUnlocked) open();
-                  else requestUpgrade('guestbook', 'Unlock Guestbook', open);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={guestbookUnlocked ? 'Guestbook' : 'Guestbook, upgrade required'}
-              >
-                <ChallengeGradientCircle index={0} size={selectorTileSize}>
-                  <GuestbookIcon size={22} color="#FFFFFF" />
-                </ChallengeGradientCircle>
-                <AppText style={S.chipLabel} numberOfLines={2}>Guestbook</AppText>
-                {!guestbookUnlocked ? <LockedBadge /> : null}
-              </Pressable>
-            )}
+          <View style={S.cardStats}>
+            <EventStatStrip
+              photoCount={photos.length}
+              joinedCount={guestsJoined}
+              countdown={countdown}
+            />
+          </View>
 
-            {isHost && challenges.length === 0 && (
-              <View style={!challengesUnlocked ? S.chipLocked : undefined}>
-                <ChallengesEmptyCard
-                  onPress={() => {
-                    if (challengesUnlocked) handleAddChallenge();
-                    else requestUpgrade('challenges', 'Unlock Challenges', handleAddChallenge);
-                  }}
-                  hasSiblingChip={showGuestbook}
-                  tileSize={selectorTileSize}
-                />
-                {!challengesUnlocked ? <LockedBadge /> : null}
+          {showRecapBanner ? (
+            <View style={S.recapBanner}>
+              <View style={{ flex: 1, gap: 3 }}>
+                <AppText variant="titleMedium">Event recap</AppText>
+                <AppText variant="bodySmall" tone="secondary">
+                  {recapStatusText}
+                </AppText>
               </View>
-            )}
-
-            {challenges.map((challenge, index) => (
+              {recap?.status === 'ready' && recapPlaybackUri ? (
+                <View style={S.recapActionRow}>
+                  {isHost ? (
+                    <Pressable
+                      style={S.recapButtonSecondary}
+                      onPress={openRecapSelection}
+                      accessibilityRole="button"
+                      accessibilityLabel="Change recap media"
+                    >
+                      <AppText style={S.recapButtonSecondaryText}>Change</AppText>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    style={S.recapButton}
+                    onPress={() => setRecapVisible(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Watch recap"
+                  >
+                    <AppText style={S.recapButtonText}>Watch</AppText>
+                  </Pressable>
+                </View>
+              ) : !recapNeedsRetry && (recap?.status === 'queued' || recap?.status === 'processing') ? (
+                <ActivityIndicator color={colours.textSecondary} />
+              ) : isHost ? (
                 <Pressable
-                  key={challenge.id}
-                  style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
-                  onPress={() => handleChallengePhotoPress(challenge)}
+                  style={S.recapButton}
+                  onPress={openRecapSelection}
                   accessibilityRole="button"
-                  accessibilityLabel={`Challenge: ${challenge.label}`}
-                  hitSlop={18}
-                  pressRetentionOffset={18}
+                  accessibilityLabel={recapNeedsRetry ? 'Try recap again' : 'Create recap'}
                 >
-                  <ChallengeGradientCircle index={index + 1} size={selectorTileSize}>
-                    <SharedChallengeIconSVG type={challenge.icon} size={22} />
-                  </ChallengeGradientCircle>
-                  <AppText style={S.chipLabel} numberOfLines={2}>
-                    {challenge.label}
+                  <AppText style={S.recapButtonText}>
+                    {recapNeedsRetry ? 'Try again' : 'Create'}
                   </AppText>
                 </Pressable>
-            ))}
-          </ScrollView>
+              ) : null}
+            </View>
+          ) : null}
+
+          {!isHost && guestName && (
+            <View style={S.guestWelcome}>
+              <AppText variant="eyebrow" tone="secondary" style={S.guestWelcomeEyebrow}>
+                Welcome back
+              </AppText>
+              <AppText variant="displaySmall" style={S.guestWelcomeName}>
+                {guestName}
+              </AppText>
+            </View>
+          )}
+
+          {isHost && challenges.length === 0 && !showGuestbook ? (
+            <View style={S.challengesEmptyBannerWrap}>
+              <ChallengesEmptyCard
+                onPress={handleAddChallenge}
+                hasSiblingChip={false}
+                tileSize={selectorTileSize}
+              />
+            </View>
+          ) : (showGuestbook || showSeating || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
+            // Wraps the strip rather than its content: `contentContainerStyle`
+            // is an ordinary style prop, so an animated value handed to it
+            // arrives at the transform unresolved and throws at render.
+            <Animated.View
+              style={
+                previewMode?.chipStripNudge
+                  ? { transform: [{ translateX: previewMode.chipStripNudge }] }
+                  : undefined
+              }
+            >
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[
+                S.chipsContent,
+                isHost && challenges.length === 0 && { gap: GALLERY_PADDING },
+              ]}
+              style={S.chipsScroll}
+            >
+              {showGuestbook && (
+                <Pressable
+                  style={({ pressed }) => [
+                    S.chipWrap,
+                    { width: selectorTileSize },
+                    pressed && { opacity: 0.75 },
+                    // Dimmed rather than greyed out: it is a real feature the
+                    // host can have in two taps, not a broken one.
+                    !guestbookUnlocked && S.chipLocked,
+                  ]}
+                  onPress={() => {
+                    const open = () =>
+                      router.push(`/celebration/${celebration.id}/guestbook` as never);
+                    if (guestbookUnlocked) open();
+                    else requestUpgrade('guestbook', 'Unlock Guestbook', open);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={guestbookUnlocked ? 'Guestbook' : 'Guestbook, upgrade required'}
+                >
+                  <ChallengeGradientCircle index={0} size={selectorTileSize}>
+                    <GuestbookIcon size={22} color="#FFFFFF" />
+                  </ChallengeGradientCircle>
+                  {!guestbookUnlocked ? <LockedBadge /> : null}
+                </Pressable>
+              )}
+
+              {showSeating && (
+                <Pressable
+                  style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
+                  onPress={() => router.push(`/celebration/${celebration.id}/find-seat` as never)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Find your seat"
+                >
+                  <ChallengeGradientCircle index={showGuestbook ? 1 : 0} size={selectorTileSize}>
+                    <SeatIcon size={22} color="#FFFFFF" />
+                  </ChallengeGradientCircle>
+                </Pressable>
+              )}
+
+              {isHost && challenges.length === 0 && (
+                <View style={!challengesUnlocked ? S.chipLocked : undefined}>
+                  <ChallengesEmptyCard
+                    onPress={() => {
+                      if (challengesUnlocked) handleAddChallenge();
+                      else requestUpgrade('challenges', 'Unlock Challenges', handleAddChallenge);
+                    }}
+                    hasSiblingChip={showGuestbook}
+                    tileSize={selectorTileSize}
+                  />
+                  {!challengesUnlocked ? <LockedBadge /> : null}
+                </View>
+              )}
+
+              {challenges.map((challenge, index) => (
+                  <Pressable
+                    key={challenge.id}
+                    style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
+                    onPress={() => handleChallengePhotoPress(challenge)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Challenge: ${challenge.label}`}
+                    // Generous above and below, but only half the gap to each
+                    // side — any wider and a tap on the edge of one tile lands
+                    // on its neighbour, which is drawn on top of it.
+                    hitSlop={{ top: 18, bottom: 18, left: CHIP_STRIP_GAP / 2, right: CHIP_STRIP_GAP / 2 }}
+                    pressRetentionOffset={18}
+                  >
+                    <ChallengeGradientCircle index={index + 1 + (showSeating ? 1 : 0)} size={selectorTileSize}>
+                      <SharedChallengeIconSVG type={challenge.icon} size={22} />
+                    </ChallengeGradientCircle>
+                  </Pressable>
+              ))}
+            </ScrollView>
+            </Animated.View>
+          ) : null}
           </Animated.View>
-        ) : null}
+        </Animated.View>
         </View>
 
         {showMediaTabs ? (
-          <View style={S.galleryTabsSticky}>
+          // Pulled up by the status-bar height so that, once pinned, the
+          // tab row lands below the status bar / Dynamic Island rather than
+          // under it. The strip above that it overlaps at rest is left alone:
+          // the backing is invisible until the row pins, and it takes no
+          // touches — `box-none` lives in `S.galleryTabsSticky` too, because
+          // the sticky wrapper only inherits the style (see there).
+          <View
+            style={[S.galleryTabsSticky, { marginTop: -insets.top }]}
+            pointerEvents="box-none"
+            onLayout={(event) => setGalleryTabsY(event.nativeEvent.layout.y)}
+          >
+            <Animated.View
+              pointerEvents="none"
+              style={[S.galleryTabsStatusBacking, { height: insets.top, opacity: galleryTabsBackingOpacity }]}
+            />
             <View style={S.galleryTabsRow}>
-              <Pressable
-                onPress={() => selectGalleryTab('photos')}
-                style={S.galleryTab}
-                accessibilityRole="button"
-                accessibilityLabel="Photos"
-                accessibilityState={{ selected: galleryTab === 'photos' }}
-                hitSlop={8}
-              >
-                <PhotoGridIcon
-                  size={20}
-                  color={galleryTab === 'photos' ? '#EFE9E0' : 'rgba(239, 233, 224, 0.4)'}
-                />
-              </Pressable>
-              <Pressable
-                onPress={() => selectGalleryTab('videos')}
-                style={S.galleryTab}
-                accessibilityRole="button"
-                accessibilityLabel="Videos"
-                accessibilityState={{ selected: galleryTab === 'videos' }}
-                hitSlop={8}
-              >
-                <VideoTabIcon
-                  size={20}
-                  color={galleryTab === 'videos' ? '#EFE9E0' : 'rgba(239, 233, 224, 0.4)'}
-                />
-              </Pressable>
+              {/* One continuous baseline: a soft grey track across both
+                  halves, with the active half drawn over it in white. */}
+              <View pointerEvents="none" style={S.galleryTabTrack} />
+              {(['photos', 'videos'] as const).map((tab) => (
+                <Pressable
+                  key={tab}
+                  onPress={() => selectGalleryTab(tab)}
+                  style={S.galleryTab}
+                  accessibilityRole="tab"
+                  accessibilityLabel={tab === 'photos' ? copy.eventPage.photos : copy.eventPage.videos}
+                  accessibilityState={{ selected: galleryTab === tab }}
+                  hitSlop={8}
+                >
+                  {tab === 'photos' ? (
+                    <PhotoGridIcon size={20} color={galleryTab === tab ? GALLERY_TAB_ACTIVE : GALLERY_TAB_INACTIVE} />
+                  ) : (
+                    <VideoTabIcon size={20} color={galleryTab === tab ? GALLERY_TAB_ACTIVE : GALLERY_TAB_INACTIVE} />
+                  )}
+                </Pressable>
+              ))}
               <Animated.View
                 pointerEvents="none"
                 style={[
                   S.galleryTabIndicator,
                   {
-                    width: screenWidth / 2,
+                    width: galleryTabHalfWidth,
                     transform: [{ translateX: galleryIndicatorTranslateX }],
                   },
                 ]}
@@ -5716,14 +5877,20 @@ const S = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  heroScrim: {
+  heroEdgeFade: {
     position: 'absolute',
-    top: 0,
     left: 0,
     right: 0,
     bottom: 0,
+    height: HERO_EDGE_FADE,
   },
-
+  heroTopFade: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: HERO_EDGE_FADE,
+  },
   // ── Nav bar ──
   navBar: {
     position: 'absolute',
@@ -5749,50 +5916,47 @@ const S = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-  // ── Hero info (overlaid on gradient) ──
-  heroInfo: {
-    position: 'absolute',
-    bottom: 5,
-    left: layout.gutter,
-    right: layout.gutter,
-    alignItems: 'flex-start',
-    gap: 8,
+  // ── Content card ──
+  /**
+   * Glass rather than a fill: `cardGlass` blurs the cover beneath it, and the
+   * card has no fill or stroke of its own. The glass ramps to the page's
+   * background at its foot, so it runs on unbroken into the tabs and gallery.
+   */
+  card: {
+    borderTopLeftRadius: EVENT_CARD_RADIUS,
+    borderTopRightRadius: EVENT_CARD_RADIUS,
+    paddingTop: 26,
   },
-  /** The full-width hero column shares the screen's left gutter. */
-  heroContentColumn: {
-    alignSelf: 'stretch',
+  /** Clipped here: `BlurView` ignores `borderRadius` on its own. */
+  cardGlass: {
+    ...ABSOLUTE_FILL,
+    borderTopLeftRadius: EVENT_CARD_RADIUS,
+    borderTopRightRadius: EVENT_CARD_RADIUS,
+    overflow: 'hidden',
+  },
+  cardTitleWrap: {
+    paddingHorizontal: layout.gutter + spacing.xs,
     alignItems: 'center',
-    gap: 6,
   },
-  /** Title and date stay measured together for the creation reveal. */
-  heroIdentity: {
-    alignSelf: 'stretch',
-    alignItems: 'center',
-    gap: 4,
-  },
-  heroTitle: {
-    color: '#FFFFFF',
+  /** Wraps rather than shrinks — a long name gets a second or third line. */
+  cardTitle: {
+    color: colours.textPrimary,
     fontFamily: fontFamilies.display,
-    fontSize: 48,
-    lineHeight: 50,
+    fontSize: 38,
+    lineHeight: 44,
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
   },
-  heroDate: {
-    alignSelf: 'stretch',
-    color: HERO_METADATA_COLOR,
-    fontFamily: fontFamilies.textRegular,
-    fontSize: 12,
-    lineHeight: 18,
-    letterSpacing: 2.4,
-    textTransform: 'uppercase',
+  cardStats: {
+    // Small: the display face's line box already carries a deep descent below the
+    // title, which supplies most of the gap.
+    marginTop: spacing.xs,
+    paddingHorizontal: layout.gutter,
   },
+
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
-    // The hero's 13pt bottom inset creates the shared section gap.
-    marginTop: 0,
+    marginTop: spacing.md,
+    marginBottom: 13,
     overflow: 'visible',
   },
   challengesEmptyBannerWrap: {
@@ -5803,7 +5967,7 @@ const S = StyleSheet.create({
   chipsContent: {
     paddingLeft: GALLERY_PADDING,     // Aligns first tile with left edge of gallery below
     paddingRight: GALLERY_PADDING,
-    gap: CHIP_GAP,
+    gap: CHIP_STRIP_GAP,
     paddingTop: 0,
     paddingBottom: 0,
     overflow: 'visible',
@@ -5811,7 +5975,6 @@ const S = StyleSheet.create({
   chipWrap: {
     alignItems: 'center',
     width: CHIP_D,
-    gap: 9,
     overflow: 'visible',
   },
 
@@ -5860,79 +6023,57 @@ const S = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(11, 11, 12, 0.72)',
   },
-  chipLabel: {
-    fontFamily: 'InstrumentSans_500Medium',
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-    lineHeight: 14,
-  },
-
-  // ── Gallery stats ──
-  galleryStatsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    justifyContent: 'center',
-    gap: 28,
-  },
-  galleryStatItem: {
-    flexDirection: 'row',
-    gap: 7,
-    alignItems: 'center',
-  },
-  galleryStatPressable: {
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
-    flexDirection: 'row',
-    gap: 7,
-    alignItems: 'center',
-    marginVertical: -spacing.xs,
-  },
-  galleryStatPressed: {
-    backgroundColor: 'rgba(255,255,255,0.04)',
-  },
-  galleryStatValue: {
-    color: HERO_METADATA_COLOR,
-    fontFamily: fontFamilies.textMedium,
-    fontSize: 15,
-    lineHeight: 19,
-    textAlign: 'left',
-  },
-
   // ── Gallery ──
   gallery: {
     flexDirection: 'row',
-    // Keep the photo grid distinct from the Guestbook/Challenges strip above.
-    marginTop: spacing.lg,
+    // Close under the tabs; the tab baseline already separates the two.
+    marginTop: spacing.base,
     paddingHorizontal: GALLERY_EDGE_INSET,
   },
   galleryTabsSticky: {
-    backgroundColor: colours.background,
-    // Keep the tabs 10pt below the Guestbook/Challenges strip.
-    paddingTop: 10,
     zIndex: 30,
     elevation: 30,
+    // A style, not just the prop on the element: `ScrollView` wraps a sticky
+    // header in its own `Animated.View` and hands *that* this style, but not
+    // the child's `pointerEvents` prop. Without this the wrapper — pulled up
+    // over the challenge strip by `-insets.top` and drawn above it — caught
+    // every touch on most of each tile, so taps and swipes on the strip
+    // silently went to the page instead.
+    pointerEvents: 'box-none',
+  },
+  galleryTabsStatusBacking: {
+    backgroundColor: colours.background,
   },
   galleryTabsRow: {
     flexDirection: 'row',
     position: 'relative',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.12)',
+    backgroundColor: colours.background,
+    // Padding rather than margin: the background still spans the full width,
+    // so the pinned row keeps covering the gallery scrolling beneath it.
+    paddingHorizontal: layout.gutter,
   },
   galleryTab: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingBottom: 13,
+    // Together with the strip's 13pt bottom margin, this gives 23pt above the tabs.
+    paddingTop: 10,
+    paddingBottom: 12,
+  },
+  /** The inactive half of the baseline; the indicator covers the active half. */
+  galleryTabTrack: {
+    position: 'absolute',
+    left: layout.gutter,
+    right: layout.gutter,
+    bottom: 0,
+    height: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
   },
   galleryTabIndicator: {
     position: 'absolute',
-    left: 0,
+    left: layout.gutter,
     bottom: 0,
     height: 1.5,
-    backgroundColor: '#EFE9E0',
+    backgroundColor: GALLERY_TAB_ACTIVE,
   },
   galleryPagerViewport: {
     overflow: 'hidden',
@@ -5994,10 +6135,10 @@ const S = StyleSheet.create({
     letterSpacing: 0.2,
   },
   photoNameText: {
-    // Same face as the event title (`displayHero`/`titleLarge` in
-    // src/design/typography.ts) rather than the
-    // Instrument Sans used elsewhere in the grid's chrome.
-    fontFamily: fontFamilies.display,
+    // The event title's face, in its italic — an attribution ("by Priya")
+    // rather than a label — instead of the Instrument Sans used elsewhere in
+    // the grid's chrome.
+    fontFamily: fontFamilies.displayItalic,
     fontSize: 13,
     color: '#EFE9E0',
     letterSpacing: 0.2,

@@ -1,7 +1,7 @@
 import { forwardRef } from 'react';
-import { Text as RNText, type TextProps as RNTextProps, type TextStyle } from 'react-native';
+import { StyleSheet, Text as RNText, type TextProps as RNTextProps, type TextStyle } from 'react-native';
 
-import { colours, maxFontScale, typography, type TypographyToken } from '@/design';
+import { colours, fitDisplayFace, maxFontScale, typography, type TypographyToken } from '@/design';
 
 export interface AppTextProps extends RNTextProps {
   /** Semantic role. Drives family, size, leading and font-scale cap. */
@@ -40,7 +40,16 @@ export const AppText = forwardRef<RNText, AppTextProps>(function AppText(
     <RNText
       ref={ref}
       maxFontSizeMultiplier={maxFontScale[variant] ?? 2}
-      style={[typography[variant], { color: toneToColour[tone] }, align ? { textAlign: align } : null, style]}
+      // Flattened so the display-face correction sees the final family, size
+      // and leading, whichever of the variant or the override supplied them.
+      style={fitDisplayFace(
+        StyleSheet.flatten([
+          typography[variant],
+          { color: toneToColour[tone] },
+          align ? { textAlign: align } : null,
+          style,
+        ]),
+      )}
       {...rest}
     />
   );

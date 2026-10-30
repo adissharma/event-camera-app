@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppText } from '@/components/ui/text';
 import {
@@ -41,6 +42,7 @@ const COPIED_RESET_MS = 1600;
 export default function SuccessScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
   const { reset } = useCreationDraft();
 
   const [copied, setCopied] = useState(false);
@@ -103,6 +105,7 @@ export default function SuccessScreen() {
   const footerText = onLight ? '#302E2C' : colours.textPrimary;
 
   return (
+    <View style={S.root}>
     <GuestJoinScreen
       // The template the host actually selected, snapshotted at publication
       // alongside the cover path. `resolveCoverTemplate` falls back to the
@@ -172,23 +175,32 @@ export default function SuccessScreen() {
               Guests can start shooting as soon as they have this.
             </AppText>
           </Animated.View>
-
-          <Animated.View style={entrance.item(4)}>
-            <Pressable
-              onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
-              accessibilityRole="button"
-              accessibilityLabel="Go to the event"
-              style={({ pressed }) => [S.cta, pressed && S.pressed]}
-            >
-              <CameraSparkleIcon size={22} color={colours.textOnBrand} />
-              <AppText variant="labelLarge" style={S.ctaLabel}>
-                Go to the event
-              </AppText>
-            </Pressable>
-          </Animated.View>
         </View>
       }
     />
+    <Animated.View
+      style={[
+        S.actionDock,
+        {
+          backgroundColor: onLight ? '#FAF8F4' : template === 'midnight' ? '#0A0E1A' : colours.background,
+          paddingBottom: Math.max(insets.bottom, spacing.md),
+        },
+        entrance.item(4),
+      ]}
+    >
+      <Pressable
+        onPress={() => router.replace(`/celebration/${result.celebrationId}` as never)}
+        accessibilityRole="button"
+        accessibilityLabel="Go to the event"
+        style={({ pressed }) => [S.cta, pressed && S.pressed]}
+      >
+        <CameraSparkleIcon size={22} color={colours.textOnBrand} />
+        <AppText variant="labelLarge" style={S.ctaLabel}>
+          Go to the event
+        </AppText>
+      </Pressable>
+    </Animated.View>
+    </View>
   );
 }
 
@@ -427,6 +439,11 @@ const S = StyleSheet.create({
     alignItems: 'center',
   },
   copyLabel: { color: colours.accentWarm },
+
+  actionDock: {
+    paddingHorizontal: layout.gutter,
+    paddingTop: spacing.sm,
+  },
 
   cta: {
     flexDirection: 'row',

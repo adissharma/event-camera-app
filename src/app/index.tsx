@@ -35,7 +35,7 @@ import {
   hasSeenStillIntro,
   markStillIntroSeen,
 } from '@/features/onboarding/still-intro';
-import { fontFamilies, layout, radii, spacing, useMotion } from '@/design';
+import { fitDisplayFace, fontFamilies, layout, radii, spacing, useMotion } from '@/design';
 import { copy } from '@/i18n';
 import { VideoSplash } from '@/features/onboarding/video-splash';
 
@@ -115,13 +115,13 @@ function Wordmark({
    */
   onStopWidth?: (width: number) => void;
 }) {
-  const face = {
+  const face = fitDisplayFace({
     fontFamily: fontFamilies.display,
     color: '#FFFFFF',
     fontSize: size,
     lineHeight,
     letterSpacing: -0.3,
-  } as const;
+  });
 
   /**
    * The mark's own width, so the stop can be placed at a pixel offset.
@@ -1019,14 +1019,14 @@ const S = StyleSheet.create({
     gap: PARAGRAPH_GAP,
   },
 
-  paragraph: {
+  paragraph: fitDisplayFace({
     fontFamily: fontFamilies.display,
     color: '#FFFFFF',
     textAlign: 'left',
     fontSize: PARAGRAPH_SIZE,
     lineHeight: PARAGRAPH_LEADING,
     letterSpacing: -0.3,
-  },
+  }),
 
   /** The three closing lines sit closer together than the paragraphs do. */
   /**
@@ -1043,14 +1043,14 @@ const S = StyleSheet.create({
   hintText: { color: 'rgba(255, 255, 255, 0.38)', letterSpacing: 0.6 },
 
   /** The closing slide's one line, and the endings that take turns after it. */
-  closingLine: {
+  closingLine: fitDisplayFace({
     fontFamily: fontFamilies.display,
     color: '#FFFFFF',
     textAlign: 'left',
     fontSize: CLOSING_SIZE,
     lineHeight: CLOSING_LEADING,
     letterSpacing: -0.3,
-  },
+  }),
   /**
    * Hugs the wordmark, which is its only in-flow child — so the row's width is
    * the word's width and a longer ending cannot push it around.

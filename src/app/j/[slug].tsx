@@ -14,6 +14,8 @@ import { AppText } from '@/components/ui/text';
 import { useCoverSource } from '@/features/celebrations/cover-source';
 import { resolveCoverTemplate } from '@/features/celebrations/cover-templates';
 import { GuestJoinScreen } from '@/features/celebrations/join/guest-join-screen';
+import { FindYourTable } from '@/features/seating/find-your-table';
+import { searchSeatingByCode, seatingKeys } from '@/services/seating';
 import { colours, layout, radii, spacing } from '@/design';
 import {
   fetchGuestEventPreview,
@@ -58,6 +60,17 @@ export default function GuestEntryScreen() {
     retry: false,
   });
 
+  // Only whether the host has seated anyone: when they have, the name field
+  // opens "Find your table" instead of taking typing in place.
+  const { data: seating } = useQuery({
+    queryKey: seatingKeys.codeSearch(String(slug), ''),
+    queryFn: () => searchSeatingByCode(String(slug), ''),
+    enabled: Boolean(slug) && Boolean(preview),
+    staleTime: 60_000,
+  });
+  const hasSeatingPlan = Boolean(seating?.hasPlan);
+  const [isFindingTable, setIsFindingTable] = useState(false);
+
   // One resolver for every cover surface — see `cover-source`.
   const coverSource = useCoverSource(preview?.coverStoragePath);
 
@@ -95,10 +108,16 @@ export default function GuestEntryScreen() {
   const trimmedName = name.trim();
   const isNameValid = trimmedName.length > 0;
 
-  const handleJoin = useCallback(async () => {
+  const handleJoin = useCallback(async (chosenName?: string) => {
     if (isJoining) return; // Guards against a double tap submitting twice.
+    const displayName = chosenName?.trim() || trimmedName;
 
-    if (!isNameValid) {
+    if (!displayName && hasSeatingPlan) {
+      setIsFindingTable(true);
+      return;
+    }
+
+    if (!displayName) {
       setShowValidation(true);
       inputRef.current?.focus();
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
@@ -111,12 +130,13 @@ export default function GuestEntryScreen() {
       const session = await joinEventSession({
         slug: String(slug),
         accessToken,
-        displayName: trimmedName,
+        displayName,
       });
       if (IS_APP_CLIP && __DEV__) {
         console.info('[AppClip] guest session established.');
       }
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      setIsFindingTable(false);
       router.replace(`/celebration/${session.celebrationId}` as never);
     } catch (e) {
       // The typed name survives the failure — retyping it is the last thing a
@@ -124,7 +144,7 @@ export default function GuestEntryScreen() {
       setError(e instanceof Error ? e.message : 'Could not join. Please try again.');
       setIsJoining(false);
     }
-  }, [isJoining, isNameValid, slug, accessToken, trimmedName, router]);
+  }, [isJoining, hasSeatingPlan, slug, accessToken, trimmedName, router]);
 
   if (isLoading) {
     return (
@@ -149,6 +169,7 @@ export default function GuestEntryScreen() {
   const accent = preview.themeAccent ?? colours.accentWarm;
 
   return (
+    <>
     <GuestJoinScreen
       template={resolveCoverTemplate(preview.themeSlug)}
       coverSource={coverSource}
@@ -163,12 +184,29 @@ export default function GuestEntryScreen() {
         if (error) setError(null);
       }}
       nameInputRef={inputRef}
+      onNameFieldPress={hasSeatingPlan ? () => setIsFindingTable(true) : undefined}
       error={error}
       showValidation={showValidation}
-      isNameValid={isNameValid}
+      // With a plan, an empty name still opens "Find your table".
+      isNameValid={isNameValid || hasSeatingPlan}
       isJoining={isJoining}
       onJoin={() => void handleJoin()}
     />
+    {hasSeatingPlan ? (
+      <FindYourTable
+        visible={isFindingTable}
+        eventCode={String(slug)}
+        initialQuery={name}
+        isJoining={isJoining}
+        error={error}
+        onClose={() => setIsFindingTable(false)}
+        onJoin={(chosen) => {
+          setName(chosen);
+          void handleJoin(chosen);
+        }}
+      />
+    ) : null}
+    </>
   );
 }
 

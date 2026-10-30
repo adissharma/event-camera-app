@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { CormorantGaramond_500Medium_Italic } from '@expo-google-fonts/cormorant-garamond/500Medium_Italic';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -6,12 +7,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClientProvider } from '@tanstack/react-query';
 import {
-  CormorantGaramond_600SemiBold,
-  CormorantGaramond_600SemiBold_Italic,
-} from '@expo-google-fonts/cormorant-garamond';
-import {
   InstrumentSans_400Regular,
   InstrumentSans_500Medium,
+  InstrumentSans_500Medium_Italic,
   InstrumentSans_600SemiBold,
   InstrumentSans_700Bold,
   useFonts,
@@ -94,10 +92,12 @@ function RootNavigator() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    CormorantGaramond_600SemiBold,
-    CormorantGaramond_600SemiBold_Italic,
+    Isolde_400Regular: require('../../assets/fonts/Isolde-Regular.ttf'),
+    Isolde_400Italic: require('../../assets/fonts/Isolde-Italic.ttf'),
+    CormorantGaramond_500Medium_Italic,
     InstrumentSans_400Regular,
     InstrumentSans_500Medium,
+    InstrumentSans_500Medium_Italic,
     InstrumentSans_600SemiBold,
     InstrumentSans_700Bold,
     OpenMojiBlack: require('../../assets/fonts/OpenMoji-black-glyf.ttf'),

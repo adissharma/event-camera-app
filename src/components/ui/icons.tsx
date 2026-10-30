@@ -561,18 +561,17 @@ export function PhotoGridIcon({ size = 16, color = colours.textPrimary }: IconPr
 }
 
 /**
- * A play triangle inside a rounded frame — the "videos" tab.
+ * A solid rounded frame with the play triangle cut out of it — the "videos"
+ * tab. Filled to match `PhotoGridIcon` beside it.
  */
 export function VideoTabIcon({ size = 16, color = colours.textPrimary }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
-        d="M4 5.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinejoin="round"
+        d="M6 3h12a3 3 0 0 1 3 3v12a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3zM10 8.4v7.2L16 12z"
+        fill={color}
+        fillRule="evenodd"
       />
-      <Path d="M10.3 9.2v5.6l4.7-2.8z" fill={color} />
     </Svg>
   );
 }

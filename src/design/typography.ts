@@ -1,8 +1,10 @@
 /**
  * Semantic typography scale.
  *
- * Display: Cormorant Garamond SemiBold (OFL 1.1) — the editorial serif used
- * for event names, cover titles and the app's larger moments.
+ * Display: Isolde Regular (Franko Luin, Omnibus Typografi) — the editorial
+ * serif used for event names, cover titles and the app's larger moments.
+ * Bundled from `assets/fonts/Isolde-Regular.ttf`. Covers Latin-1 in full,
+ * accents included; only £ is missing and falls back to the system face.
  *
  * Text/UI: Instrument Sans (SIL OFL 1.1) — a neo-grotesque (NOT geometric) with
  * excellent legibility at 13–17pt, open apertures and tabular figures.
@@ -23,16 +25,79 @@
 import type { TextStyle } from 'react-native';
 
 export const fontFamilies = {
-  display: 'CormorantGaramond_600SemiBold',
-  /** Used sparingly — a single emphasised word, never a whole line. */
-  displayItalic: 'CormorantGaramond_600SemiBold_Italic',
+  display: 'Isolde_400Regular',
+  /** Isolde's true italic, from `assets/fonts/Isolde-Italic.ttf`. For short
+   *  attributions — a name, never a sentence. */
+  displayItalic: 'Isolde_400Italic',
+  /**
+   * Cormorant Garamond Medium Italic (SIL OFL 1.1), for figures that should
+   * read as set rather than printed — the event page's stat numbers. Its
+   * old-style italic numerals are the point; never use it for words.
+   */
+  numeralItalic: 'CormorantGaramond_500Medium_Italic',
+  /**
+   * The platform's own UI face — SF Pro on iOS, Roboto on Android, the
+   * browser's system-ui on web. For small, neutral captions that should read
+   * as part of the device rather than the brand (the stat strip's labels).
+   */
+  system: 'System',
   textRegular: 'InstrumentSans_400Regular',
   textMedium: 'InstrumentSans_500Medium',
+  textMediumItalic: 'InstrumentSans_500Medium_Italic',
   textSemiBold: 'InstrumentSans_600SemiBold',
   textBold: 'InstrumentSans_700Bold',
 } as const;
 
 export type FontFamilyToken = keyof typeof fontFamilies;
+
+/**
+ * How much smaller the display face is set than the sizes written in this file.
+ *
+ * Every display size and leading in the app was tuned for Cormorant Garamond,
+ * whose capitals stand at 0.625 em. Isolde's stand at 0.609 em, so it is set
+ * very slightly larger to match. Scaling by the ratio of the two cap heights
+ * keeps the designed sizes meaning what they were designed to mean, whichever
+ * face is in use. Raise it for a bigger display face, lower it for a smaller.
+ */
+export const DISPLAY_OPTICAL_SCALE = 625 / 609;
+
+/**
+ * The tightest leading the display face can be set at without iOS clipping it.
+ *
+ * iOS anchors the baseline a descent's height above the bottom of the line.
+ * Isolde declares a 0.28 em descent and its tallest ink (the accent on É)
+ * reaches 0.82 em, so below about 1.12 em accents are cut off; 1.15 leaves a
+ * little margin.
+ */
+const DISPLAY_MIN_LEADING = 1.15;
+
+/**
+ * A style set in the display face, corrected for Isolde.
+ *
+ * Applied centrally by `AppText`, so screens keep writing the sizes they
+ * always have. Anything that bypasses `AppText` (the welcome screen's
+ * animated text) runs its display styles through this directly.
+ */
+export function fitDisplayFace<T extends TextStyle>(style: T): T {
+  if (style.fontFamily !== fontFamilies.display || typeof style.fontSize !== 'number') {
+    return style;
+  }
+  const fontSize = Math.round(style.fontSize * DISPLAY_OPTICAL_SCALE * 2) / 2;
+  const lineHeight = Math.ceil(
+    Math.max(
+      typeof style.lineHeight === 'number' ? style.lineHeight * DISPLAY_OPTICAL_SCALE : 0,
+      fontSize * DISPLAY_MIN_LEADING,
+    ),
+  );
+  return {
+    ...style,
+    fontSize,
+    lineHeight,
+    ...(typeof style.letterSpacing === 'number'
+      ? { letterSpacing: style.letterSpacing * DISPLAY_OPTICAL_SCALE }
+      : null),
+  };
+}
 
 /**
  * Fallbacks used before fonts load and on any platform where the embedded file
