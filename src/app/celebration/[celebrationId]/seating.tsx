@@ -12,11 +12,15 @@ import { ChevronLeftIcon, ChevronRightIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
+import { FloorplanFileError, pickFloorplanFile, useFloorplanUrl } from '@/features/seating/floorplan-file';
+import { FloorplanModal, FloorplanViewer } from '@/features/seating/floorplan-viewer';
 import {
   fetchSeatingPlan,
   mergeSeatingGuests,
   parseSeatingList,
+  removeSeatingFloorplan,
   saveSeatingPlan,
+  uploadSeatingFloorplan,
   type SeatingGuest,
   type SeatingPlan,
 } from '@/services/seating';
@@ -76,6 +80,7 @@ export default function SeatingPlanScreen() {
   const [isNew, setIsNew] = useState(true);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState('');
+  const [floorplanOpen, setFloorplanOpen] = useState(false);
 
   useEffect(() => {
     if (shouldBlockHostRouteOnWeb(Platform.OS)) {
@@ -119,6 +124,51 @@ export default function SeatingPlanScreen() {
     },
     onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
+
+  const floorplanPath = data?.floorplan_path ?? null;
+  const floorplanUrl = useFloorplanUrl(floorplanPath);
+
+  const uploadFloorplan = useMutation({
+    mutationFn: async () => {
+      const file = await pickFloorplanFile();
+      if (!file) return null;
+      return uploadSeatingFloorplan(id, file);
+    },
+    onSuccess: (path) => {
+      if (!path) return;
+      queryClient.setQueryData<SeatingPlan>(queryKey, (current) => ({
+        guests: current?.guests ?? [],
+        floorplan_path: path,
+      }));
+    },
+    onError: (error) => {
+      console.error('[seating] failed to upload floor plan', error);
+      Alert.alert(
+        'Could not upload the floor plan',
+        error instanceof FloorplanFileError ? error.message : 'Check your connection and try again.',
+      );
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+  });
+
+  const removeFloorplan = useMutation({
+    mutationFn: (path: string) => removeSeatingFloorplan(id, path),
+    onError: (error) => {
+      console.error('[seating] failed to remove floor plan', error);
+      Alert.alert('Could not remove the floor plan', 'Check your connection and try again.');
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
+  });
+
+  function confirmRemoveFloorplan() {
+    if (!floorplanPath) return;
+    Alert.alert('Remove the floor plan?', 'Guests will no longer be able to see it.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Remove', style: 'destructive', onPress: () => removeFloorplan.mutate(floorplanPath) },
+    ]);
+  }
+
+  const floorplanBusy = uploadFloorplan.isPending || removeFloorplan.isPending;
 
   function openDraft(next: Draft) {
     setNameError(undefined);
@@ -263,6 +313,49 @@ export default function SeatingPlanScreen() {
         </View>
 
         <View style={styles.sectionHeader}>
+          <AppText variant="eyebrow" tone="secondary">Floor plan</AppText>
+          {floorplanBusy ? (
+            <AppText variant="caption" tone="secondary">
+              {uploadFloorplan.isPending ? 'Uploading…' : 'Removing…'}
+            </AppText>
+          ) : floorplanPath ? (
+            <View style={styles.floorplanActions}>
+              <Pressable onPress={() => uploadFloorplan.mutate()} hitSlop={10} accessibilityRole="button">
+                <AppText variant="label" style={styles.importLink}>Replace</AppText>
+              </Pressable>
+              <Pressable onPress={confirmRemoveFloorplan} hitSlop={10} accessibilityRole="button">
+                <AppText variant="label" tone="secondary">Remove</AppText>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+
+        {floorplanPath ? (
+          <Pressable
+            onPress={() => setFloorplanOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open the floor plan"
+            style={({ pressed }) => pressed && styles.pressed}
+          >
+            <FloorplanViewer uri={floorplanUrl} style={styles.floorplan} interactive={false} />
+          </Pressable>
+        ) : (
+          <View style={[styles.card, styles.floorplanEmpty]}>
+            <AppText variant="bodySmall" tone="secondary" align="center">
+              Add a picture of the room so guests can find their table.
+            </AppText>
+            <Button
+              label="Upload a PNG or PDF"
+              variant="secondary"
+              size="medium"
+              fullWidth={false}
+              loading={uploadFloorplan.isPending}
+              onPress={() => uploadFloorplan.mutate()}
+            />
+          </View>
+        )}
+
+        <View style={[styles.sectionHeader, styles.guestsHeader]}>
           <AppText variant="eyebrow" tone="secondary">
             Guests{guests.length > 0 ? ` · ${guests.length}` : ''}
           </AppText>
@@ -299,7 +392,7 @@ export default function SeatingPlanScreen() {
                   onPress={() => openDraft({ index, name: guest.name, seat: guest.seat })}
                   style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
                   accessibilityRole="button"
-                  accessibilityLabel={`${guest.name}, ${guest.seat || 'no seat assigned'}`}
+                  accessibilityLabel={guest.seat ? `${guest.name}, ${guest.seat}` : guest.name}
                   accessibilityHint="Edit this guest"
                 >
                   <View style={styles.initialsBadge}>
@@ -307,13 +400,11 @@ export default function SeatingPlanScreen() {
                   </View>
                   <View style={styles.rowText}>
                     <AppText variant="labelLarge" numberOfLines={1}>{guest.name}</AppText>
-                    <AppText
-                      variant="bodySmall"
-                      numberOfLines={1}
-                      style={guest.seat ? styles.seat : styles.seatMissing}
-                    >
-                      {guest.seat || 'No seat yet'}
-                    </AppText>
+                    {guest.seat ? (
+                      <AppText variant="bodySmall" numberOfLines={1} style={styles.seat}>
+                        {guest.seat}
+                      </AppText>
+                    ) : null}
                   </View>
                   <ChevronRightIcon />
                 </Pressable>
@@ -365,6 +456,8 @@ export default function SeatingPlanScreen() {
           )}
         </View>
       </BottomSheet>
+
+      <FloorplanModal visible={floorplanOpen} uri={floorplanUrl} onClose={() => setFloorplanOpen(false)} />
 
       <BottomSheet visible={importOpen} onClose={() => setImportOpen(false)} title="Import guests">
         <Button
@@ -450,6 +543,24 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.xs,
   },
+  floorplanActions: {
+    flexDirection: 'row',
+    gap: spacing.lg,
+  },
+  floorplan: {
+    height: 240,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderSubtle,
+  },
+  floorplanEmpty: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  guestsHeader: {
+    marginTop: spacing.xl,
+  },
   card: {
     backgroundColor: colours.surface,
     borderRadius: radii.xl,
@@ -500,9 +611,6 @@ const styles = StyleSheet.create({
   },
   seat: {
     color: colours.accentWarm,
-  },
-  seatMissing: {
-    color: colours.textSecondary,
   },
   sheetActions: {
     gap: spacing.sm,

@@ -135,6 +135,24 @@ export function buildCoverPath(
   ].join('/');
 }
 
+/**
+ * Path for a seating floor plan, beside the cover in `celebration-covers` so
+ * guests can read it under the same published-event policy. Versioned like a
+ * cover: a replacement is a new object, never an overwrite.
+ */
+export function buildFloorplanPath(
+  workspaceId: string,
+  celebrationId: string,
+  extension: string,
+  version: number | string = Date.now(),
+): string {
+  return [
+    assertId(workspaceId, 'workspaceId'),
+    assertId(celebrationId, 'celebrationId'),
+    `floorplan-v${version}.${normaliseExtension(extension)}`,
+  ].join('/');
+}
+
 export function buildQrAssetPath(
   workspaceId: string,
   celebrationId: string,
