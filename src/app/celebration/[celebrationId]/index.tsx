@@ -1677,15 +1677,16 @@ export function EventDetailView({
     ? detail.hasAudioGuestbook !== false || !guestbookUnlocked
     : guestbookUnlocked && detail.hasAudioGuestbook !== false;
 
-  // Guests only, and only once the host has seated someone: hosts manage the
-  // plan from Manage Event, and an empty lookup is a dead end for a guest.
+  // Guests only, and only once the host has seated someone or added a floor
+  // plan: hosts manage seating from Manage Event, and an empty lookup is a
+  // dead end for a guest.
   const seatingQuery = useQuery({
     queryKey: seatingKeys.guestSearch(celebration.id, ''),
     queryFn: () => searchGuestSeating(celebration.id, ''),
     enabled: !isHost && !previewMode && isBackendConfigured,
     staleTime: 60_000,
   });
-  const showSeating = !isHost && Boolean(seatingQuery.data?.hasPlan);
+  const showSeating = !isHost && Boolean(seatingQuery.data?.hasPlan || seatingQuery.data?.floorplanPath);
   // Closing an event is just closing a screen.
   //
   // This used to clear the stored guest session and ask "Leave this event?"

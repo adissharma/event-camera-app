@@ -196,6 +196,7 @@ export default function GuestEntryScreen() {
       <FindYourTable
         visible={isFindingTable}
         eventCode={String(slug)}
+        floorplanPath={seating?.floorplanPath}
         initialQuery={name}
         isJoining={isJoining}
         error={error}

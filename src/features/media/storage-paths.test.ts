@@ -1,6 +1,7 @@
 import {
   InvalidStoragePathError,
   buildCoverPath,
+  buildFloorplanPath,
   buildOriginalMediaPath,
   buildQrAssetPath,
   buildVariantPath,
@@ -97,6 +98,10 @@ describe('storage paths', () => {
   describe('other buckets', () => {
     it('builds a cover path', () => {
       expect(buildCoverPath(W, C, 'jpg', 1)).toBe(`${W}/${C}/cover-v1.jpg`);
+    });
+
+    it('builds a floor plan path beside the cover', () => {
+      expect(buildFloorplanPath(W, C, 'png', 7)).toBe(`${W}/${C}/floorplan-v7.png`);
     });
 
     it('builds a QR asset path', () => {

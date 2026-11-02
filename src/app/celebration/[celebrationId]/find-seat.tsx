@@ -8,6 +8,9 @@ import { TextField } from '@/components/forms/text-field';
 import { ChevronLeftIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
+import { useFloorplanUrl } from '@/features/seating/floorplan-file';
+import { FloorplanViewer } from '@/features/seating/floorplan-viewer';
+import { SeatViewToggle, type SeatView } from '@/features/seating/seat-view-toggle';
 import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
 import { searchGuestSeating, seatingKeys, type SeatingGuest } from '@/services/seating';
 
@@ -38,6 +41,9 @@ function useDebounced<T>(value: T, delayMs: number): T {
  * common case the answer is on screen before they touch anything. The field
  * stays editable because the name a guest typed at the door ("Sam") is often
  * not the name on the host's plan ("Samantha Lee").
+ *
+ * When the host has added a floor plan, the guest can switch between their
+ * seat and the plan; with a plan but no guest list, the plan is the screen.
  */
 export default function FindSeatScreen() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
@@ -46,6 +52,19 @@ export default function FindSeatScreen() {
 
   const [query, setQuery] = useState('');
   const [prefilled, setPrefilled] = useState(false);
+  const [view, setView] = useState<SeatView>('seat');
+
+  // The same empty search the event page made to show this screen's tile,
+  // so it is usually already cached: whether there is a list and a plan.
+  const { data: overview } = useQuery({
+    queryKey: seatingKeys.guestSearch(id, ''),
+    queryFn: () => searchGuestSeating(id, ''),
+    staleTime: 60_000,
+  });
+  const floorplanPath = overview?.floorplanPath ?? null;
+  const hasGuestList = overview?.hasPlan ?? true;
+  const floorplanUrl = useFloorplanUrl(floorplanPath);
+  const showingPlan = Boolean(floorplanPath) && (view === 'plan' || !hasGuestList);
 
   useEffect(() => {
     let active = true;
@@ -75,18 +94,44 @@ export default function FindSeatScreen() {
   );
   const others = exact ? matches.filter((guest) => guest !== exact) : matches;
 
+  const backButton = (
+    <View style={styles.header}>
+      <Pressable
+        onPress={() => router.back()}
+        style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+      >
+        <ChevronLeftIcon size={20} color={colours.textPrimary} />
+      </Pressable>
+    </View>
+  );
+
+  const toggle = floorplanPath && hasGuestList ? (
+    <View style={styles.toggle}>
+      <SeatViewToggle value={view} onChange={setView} />
+    </View>
+  ) : null;
+
+  if (showingPlan) {
+    return (
+      <Screen scrollable={false}>
+        {backButton}
+        <View style={styles.planHero}>
+          <AppText variant="titleLarge">{hasGuestList ? 'Find your seat' : 'Floor plan'}</AppText>
+          <AppText variant="body" tone="secondary">
+            {exact?.seat ? `You’re at ${exact.seat}.` : 'Pinch to zoom and drag to look around.'}
+          </AppText>
+        </View>
+        {toggle}
+        <FloorplanViewer uri={floorplanUrl} style={styles.plan} />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
-      <View style={styles.header}>
-        <Pressable
-          onPress={() => router.back()}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <ChevronLeftIcon size={20} color={colours.textPrimary} />
-        </Pressable>
-      </View>
+      {backButton}
 
       <View style={styles.hero}>
         <AppText variant="titleLarge">Find your seat</AppText>
@@ -94,6 +139,8 @@ export default function FindSeatScreen() {
           Search for your name to see where you&apos;re sitting.
         </AppText>
       </View>
+
+      {toggle}
 
       <TextField
         label="Your name"
@@ -143,20 +190,18 @@ export default function FindSeatScreen() {
                 <View
                   style={styles.row}
                   accessible
-                  accessibilityLabel={`${guest.name}, ${guest.seat || 'seat to be confirmed'}`}
+                  accessibilityLabel={guest.seat ? `${guest.name}, ${guest.seat}` : guest.name}
                 >
                   <View style={styles.initialsBadge}>
                     <AppText style={styles.initialsText}>{initialsFor(guest.name)}</AppText>
                   </View>
                   <View style={styles.rowText}>
                     <AppText variant="labelLarge" numberOfLines={1}>{guest.name}</AppText>
-                    <AppText
-                      variant="bodySmall"
-                      numberOfLines={1}
-                      style={guest.seat ? styles.seat : styles.seatMissing}
-                    >
-                      {guest.seat || 'Seat to be confirmed'}
-                    </AppText>
+                    {guest.seat ? (
+                      <AppText variant="bodySmall" numberOfLines={1} style={styles.seat}>
+                        {guest.seat}
+                      </AppText>
+                    ) : null}
                   </View>
                 </View>
               </View>
@@ -174,12 +219,16 @@ function SeatHero({ guest }: { guest: SeatingGuest }) {
     <View
       style={styles.heroCard}
       accessible
-      accessibilityLabel={`${guest.name}, ${guest.seat || 'seat to be confirmed'}`}
+      accessibilityLabel={guest.seat ? `${guest.name}, ${guest.seat}` : guest.name}
     >
-      <AppText variant="eyebrow" tone="secondary">{guest.name}</AppText>
-      <AppText variant="displayLarge" style={guest.seat ? styles.heroSeat : styles.heroSeatMissing}>
-        {guest.seat || 'Seat to be confirmed'}
-      </AppText>
+      {guest.seat ? (
+        <>
+          <AppText variant="eyebrow" tone="secondary">{guest.name}</AppText>
+          <AppText variant="displayLarge" style={styles.heroSeat}>{guest.seat}</AppText>
+        </>
+      ) : (
+        <AppText variant="titleLarge">{guest.name}</AppText>
+      )}
     </View>
   );
 }
@@ -205,6 +254,18 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.xl,
   },
+  planHero: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  toggle: {
+    marginBottom: spacing.lg,
+  },
+  plan: {
+    flex: 1,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderSubtle,
+  },
   field: {
     marginBottom: spacing.lg,
   },
@@ -220,9 +281,6 @@ const styles = StyleSheet.create({
   },
   heroSeat: {
     color: colours.accentWarm,
-  },
-  heroSeatMissing: {
-    color: colours.textSecondary,
   },
   message: {
     paddingHorizontal: spacing.xs,
@@ -285,8 +343,5 @@ const styles = StyleSheet.create({
   },
   seat: {
     color: colours.accentWarm,
-  },
-  seatMissing: {
-    color: colours.textSecondary,
   },
 });

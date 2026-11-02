@@ -9,6 +9,7 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
@@ -17,6 +18,9 @@ import { Button } from '@/components/ui/button';
 import { CloseIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
+import { useFloorplanUrl } from '@/features/seating/floorplan-file';
+import { FloorplanViewer } from '@/features/seating/floorplan-viewer';
+import { SeatViewToggle, type SeatView } from '@/features/seating/seat-view-toggle';
 import { searchSeatingByCode, seatingKeys, type SeatingGuest } from '@/services/seating';
 
 const MIN_QUERY_LENGTH = 2;
@@ -35,6 +39,8 @@ function useDebounced<T>(value: T, delayMs: number): T {
 export interface FindYourTableProps {
   visible: boolean;
   eventCode: string;
+  /** The host's floor plan, which a guest can switch to once they find themselves. */
+  floorplanPath?: string | null;
   /** Whatever the guest had already typed, so opening the sheet loses nothing. */
   initialQuery?: string;
   isJoining?: boolean;
@@ -56,6 +62,7 @@ export interface FindYourTableProps {
 export function FindYourTable({
   visible,
   eventCode,
+  floorplanPath = null,
   initialQuery = '',
   isJoining = false,
   error,
@@ -65,11 +72,14 @@ export function FindYourTable({
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState(initialQuery);
   const [selected, setSelected] = useState<SeatingGuest | null>(null);
+  const [view, setView] = useState<SeatView>('seat');
+  const floorplanUrl = useFloorplanUrl(floorplanPath);
 
   useEffect(() => {
     if (!visible) return;
     setQuery(initialQuery);
     setSelected(null);
+    setView('seat');
   }, [visible, initialQuery]);
 
   const trimmed = query.trim();
@@ -94,6 +104,7 @@ export function FindYourTable({
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
       onRequestClose={onClose}
     >
+      <GestureHandlerRootView style={S.root}>
       <KeyboardAvoidingView
         style={S.root}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -113,21 +124,27 @@ export function FindYourTable({
 
         {selected ? (
           <View style={[S.body, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+            {floorplanPath ? <SeatViewToggle value={view} onChange={setView} /> : null}
+
+            {floorplanPath && view === 'plan' ? (
+              <FloorplanViewer uri={floorplanUrl} style={S.plan} />
+            ) : (
             <View
               style={S.seatCard}
               accessible
-              accessibilityLabel={`${selected.name}, ${selected.seat || 'seat to be confirmed'}`}
+              accessibilityLabel={selected.seat ? `${selected.name}, ${selected.seat}` : selected.name}
             >
               <AppText variant="eyebrow" tone="secondary">
                 {selected.seat ? 'You’re seated at' : 'You’re on the list'}
               </AppText>
-              <AppText variant="displayLarge" style={selected.seat ? S.seat : S.seatMissing}>
-                {selected.seat || 'Seat to be confirmed'}
-              </AppText>
+              {selected.seat ? (
+                <AppText variant="displayLarge" style={S.seat}>{selected.seat}</AppText>
+              ) : null}
               <AppText variant="body" tone="secondary">{selected.name}</AppText>
             </View>
+            )}
 
-            <View style={S.actions}>
+            <View style={S.bodyActions}>
               {error ? (
                 <AppText variant="caption" tone="error" accessibilityLiveRegion="polite">{error}</AppText>
               ) : null}
@@ -185,19 +202,17 @@ export function FindYourTable({
                       <Pressable
                         onPress={() => setSelected(guest)}
                         accessibilityRole="button"
-                        accessibilityLabel={`${guest.name}, ${guest.seat || 'seat to be confirmed'}`}
+                        accessibilityLabel={guest.seat ? `${guest.name}, ${guest.seat}` : guest.name}
                         style={({ pressed }) => [S.row, pressed && S.rowPressed]}
                       >
                         <AppText variant="labelLarge" numberOfLines={1} style={S.flex}>
                           {guest.name}
                         </AppText>
-                        <AppText
-                          variant="bodySmall"
-                          numberOfLines={1}
-                          style={guest.seat ? S.seat : S.seatMissing}
-                        >
-                          {guest.seat || 'To be confirmed'}
-                        </AppText>
+                        {guest.seat ? (
+                          <AppText variant="bodySmall" numberOfLines={1} style={S.seat}>
+                            {guest.seat}
+                          </AppText>
+                        ) : null}
                       </Pressable>
                     </View>
                   ))}
@@ -250,6 +265,7 @@ export function FindYourTable({
           </>
         )}
       </KeyboardAvoidingView>
+      </GestureHandlerRootView>
     </Modal>
   );
 }
@@ -296,18 +312,22 @@ const S = StyleSheet.create({
   rowPressed: { backgroundColor: colours.surfaceMuted },
   separator: { height: layout.hairline, backgroundColor: colours.borderSubtle, marginLeft: spacing.base },
   seat: { color: colours.accentWarm },
-  seatMissing: { color: colours.textSecondary },
   welcome: { gap: spacing.xs, paddingHorizontal: spacing.xs, paddingTop: spacing.sm },
   actions: { gap: spacing.sm, marginTop: spacing.sm },
+  bodyActions: { gap: spacing.sm, marginTop: 'auto' },
   notListed: { paddingVertical: spacing.sm },
   notListedLink: { color: colours.textPrimary, textDecorationLine: 'underline' },
   body: {
     flex: 1,
     paddingHorizontal: layout.gutter,
-    justifyContent: 'space-between',
+    gap: spacing.lg,
+  },
+  plan: {
+    flex: 1,
+    borderWidth: layout.hairline,
+    borderColor: colours.borderSubtle,
   },
   seatCard: {
-    marginTop: spacing.xl,
     backgroundColor: colours.surface,
     borderRadius: radii.xl,
     borderWidth: layout.hairline,

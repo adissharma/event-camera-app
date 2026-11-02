@@ -338,7 +338,7 @@ export default function EditEventScreen() {
             <Pressable onPress={() => router.push(`/celebration/${celebrationId}/seating` as never)} style={styles.row}>
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Seating Plan</AppText>
-                <AppText variant="bodySmall" style={styles.rowValue}>Name and seat for each guest</AppText>
+                <AppText variant="bodySmall" style={styles.rowValue}>Guest seats and floor plan</AppText>
               </View>
               <ChevronRightIcon />
             </Pressable>

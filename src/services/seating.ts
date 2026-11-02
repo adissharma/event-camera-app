@@ -1,4 +1,7 @@
+import { STORAGE_BUCKETS } from '@/config/app-config';
 import { requireSupabase } from '@/lib/supabase/client';
+import { readLocalImageBytes } from '@/features/media/read-local-image';
+import { buildFloorplanPath, IMMUTABLE_CACHE_SECONDS } from '@/features/media/storage-paths';
 import { loadStoredGuestSessionByCelebrationId } from '@/services/guest-session';
 
 /** One guest and where they sit, e.g. "Table 4" or "Table 4, Seat 2". */
@@ -38,7 +41,62 @@ export async function saveSeatingPlan(celebrationId: string, guests: SeatingGues
   if (error) throw error;
 }
 
-export type GuestSeatSearch = { hasPlan: boolean; matches: SeatingGuest[] };
+/**
+ * Puts the host's floor plan image on the event, replacing any previous one.
+ *
+ * The new object gets its own versioned path, the row is pointed at it, and
+ * only then is the old file removed — so a failed upload never leaves the
+ * event without the plan it already had.
+ */
+export async function uploadSeatingFloorplan(
+  celebrationId: string,
+  file: { uri: string; mimeType: 'image/png' | 'image/jpeg' },
+): Promise<string> {
+  const client = requireSupabase() as any;
+  const { data: celebration, error } = await client
+    .from('celebrations').select('workspace_id').eq('id', celebrationId).single();
+  if (error || !celebration) throw error ?? new Error('Could not find the event');
+
+  const { data: existing } = await client
+    .from('event_seating').select('floorplan_path').eq('celebration_id', celebrationId).maybeSingle();
+  const previousPath: string | null = existing?.floorplan_path ?? null;
+
+  const { bytes } = await readLocalImageBytes(file.uri);
+  const path = buildFloorplanPath(
+    celebration.workspace_id, celebrationId, file.mimeType === 'image/png' ? 'png' : 'jpg',
+  );
+  const { error: uploadError } = await client.storage.from(STORAGE_BUCKETS.covers).upload(path, bytes, {
+    contentType: file.mimeType, upsert: false, cacheControl: IMMUTABLE_CACHE_SECONDS,
+  });
+  if (uploadError) throw uploadError;
+
+  const { error: saveError } = await client.from('event_seating').upsert({
+    celebration_id: celebrationId, floorplan_path: path, updated_at: new Date().toISOString(),
+  });
+  if (saveError) throw saveError;
+
+  if (previousPath && previousPath !== path) {
+    const { error: removeError } = await client.storage.from(STORAGE_BUCKETS.covers).remove([previousPath]);
+    if (removeError) console.warn('[seating] could not remove the previous floor plan', removeError);
+  }
+  return path;
+}
+
+export async function removeSeatingFloorplan(celebrationId: string, path: string) {
+  const client = requireSupabase() as any;
+  const { error } = await client.from('event_seating')
+    .update({ floorplan_path: null, updated_at: new Date().toISOString() })
+    .eq('celebration_id', celebrationId);
+  if (error) throw error;
+  const { error: removeError } = await client.storage.from(STORAGE_BUCKETS.covers).remove([path]);
+  if (removeError) console.warn('[seating] could not remove the floor plan file', removeError);
+}
+
+export type GuestSeatSearch = { hasPlan: boolean; floorplanPath: string | null; matches: SeatingGuest[] };
+
+function readFloorplanPath(data: any): string | null {
+  return typeof data?.floorplan_path === 'string' && data.floorplan_path ? data.floorplan_path : null;
+}
 
 /**
  * A guest's search of the seating plan.
@@ -49,13 +107,14 @@ export type GuestSeatSearch = { hasPlan: boolean; matches: SeatingGuest[] };
  */
 export async function searchGuestSeating(celebrationId: string, query: string): Promise<GuestSeatSearch> {
   const found = await loadStoredGuestSessionByCelebrationId(celebrationId);
-  if (!found) return { hasPlan: false, matches: [] };
+  if (!found) return { hasPlan: false, floorplanPath: null, matches: [] };
   const { data, error } = await (requireSupabase() as any).rpc('search_guest_seating', {
     p_event_code: found.slug, p_guest_token: found.session.guestToken, p_query: query,
   });
   if (error) throw error;
   return {
     hasPlan: Boolean(data?.has_plan),
+    floorplanPath: readFloorplanPath(data),
     matches: normaliseSeatingGuests(data?.matches),
   };
 }
@@ -75,10 +134,11 @@ export async function searchSeatingByCode(eventCode: string, query: string): Pro
     if (error) throw error;
     return {
       hasPlan: Boolean(data?.has_plan),
+      floorplanPath: readFloorplanPath(data),
       matches: normaliseSeatingGuests(data?.matches),
     };
   } catch {
-    return { hasPlan: false, matches: [] };
+    return { hasPlan: false, floorplanPath: null, matches: [] };
   }
 }
 
