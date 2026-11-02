@@ -5,6 +5,11 @@ import { IS_APP_CLIP } from '@/config/app-config';
  * Platform detection utilities for enforcing guest-only experiences.
  * Web and App Clip = guest-only. Native (full app) = host + guest.
  *
+ * The one exception on web is the host portal under `/host`, which has its own
+ * screens and sign-in rather than reusing the ones guarded here. These guards
+ * still hold for the guest routes and shared screens, so a signed-in host
+ * opening an invitation in a browser sees what a guest sees.
+ *
  * These are NOT what keeps host code out of the App Clip — that is structural.
  * The Clip builds against the `src/app-clip` route tree (see `app.config.js`),
  * so host screens and their assets are never bundled. What remains here is

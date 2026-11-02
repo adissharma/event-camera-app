@@ -147,9 +147,10 @@ const secureStoreWithFallback = {
 
 /**
  * Web has no SecureStore. AsyncStorage maps to localStorage, which is readable
- * by any script on the origin — acceptable for the local development preview,
- * NOT acceptable for a production web deployment. Shipping the guest web app
- * will need httpOnly cookie-based auth instead.
+ * by any script on the origin. The host portal at `/host` signs in here, so a
+ * cross-site scripting bug on this origin could read a host's session: moving
+ * that to httpOnly cookies, or adding a strict Content-Security-Policy, is a
+ * known gap in the web build.
  */
 const storage = isServerRendering
   ? noopStorage
@@ -166,9 +167,10 @@ export const supabase: SupabaseClient<Database> | null = HAS_SUPABASE_CREDENTIAL
         // and no timer worth starting for a pass that is thrown away.
         autoRefreshToken: !isServerRendering,
         persistSession: !isServerRendering,
-        // The app handles the deep-link callback itself; letting the library
-        // also parse the URL causes it to consume the code twice.
-        detectSessionInUrl: false,
+        // Native handles the deep-link callback itself; letting the library also
+        // parse the URL causes it to consume the code twice. On web nothing else
+        // reads the redirect back from Apple or Google, so the library must.
+        detectSessionInUrl: Platform.OS === 'web' && !isServerRendering,
       },
     })
   : null;

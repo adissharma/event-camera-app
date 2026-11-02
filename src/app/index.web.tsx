@@ -16,8 +16,9 @@ import { useDocumentTitle } from '@/components/brand/use-document-title';
  * printed QR code's domain, or from the App Store listing, should meet the
  * product's name, not its first-run flow.
  *
- * Deliberately almost nothing: the logo, and the one link the App Store
- * requires a public home for. Marketing copy can arrive when there is some.
+ * Deliberately almost nothing: the logo, the one link the App Store requires a
+ * public home for, and the way in for hosts. Marketing copy can arrive when
+ * there is some.
  *
  * Platform-suffixed rather than branched inside `index.tsx`: the native entry
  * is a 1,100-line animated intro, and the web bundle has no reason to carry it.
@@ -33,6 +34,13 @@ export default function WebHome() {
       </View>
 
       <View style={S.footer}>
+        <Link href="/host" asChild>
+          <Pressable accessibilityRole="link">
+            <AppText variant="caption" tone="secondary" style={S.footerLink}>
+              Host sign in
+            </AppText>
+          </Pressable>
+        </Link>
         <Link href="/privacy" asChild>
           <Pressable accessibilityRole="link">
             <AppText variant="caption" tone="secondary" style={S.footerLink}>
@@ -65,6 +73,7 @@ const S = StyleSheet.create({
   footer: {
     paddingBottom: spacing.xxl,
     alignItems: 'center',
+    gap: spacing.sm,
   },
   footerLink: {
     textDecorationLine: 'underline',
