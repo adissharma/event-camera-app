@@ -1,5 +1,5 @@
 {
-  "buildCommand": "expo export --platform web && node scripts/add-app-clip-card.mjs",
+  "buildCommand": "expo export --platform web && node scripts/add-app-clip-card.mjs && node scripts/story/install-home.mjs",
   "outputDirectory": "dist",
   "functions": {
     "api/recap-worker.ts": {
@@ -69,6 +69,30 @@
     {
       "source": "/e/:eventCode/gallery",
       "destination": "/e/%5BeventCode%5D/gallery.html"
+    },
+    {
+      "source": "/host",
+      "destination": "/host/index.html"
+    },
+    {
+      "source": "/host/sign-in",
+      "destination": "/host/sign-in.html"
+    },
+    {
+      "source": "/host/:celebrationId",
+      "destination": "/host/%5BcelebrationId%5D/index.html"
+    },
+    {
+      "source": "/host/:celebrationId/guests",
+      "destination": "/host/%5BcelebrationId%5D/guests.html"
+    },
+    {
+      "source": "/host/:celebrationId/seating",
+      "destination": "/host/%5BcelebrationId%5D/seating.html"
+    },
+    {
+      "source": "/host/:celebrationId/guestbook",
+      "destination": "/host/%5BcelebrationId%5D/guestbook.html"
     },
     {
       "source": "/celebration/:celebrationId",

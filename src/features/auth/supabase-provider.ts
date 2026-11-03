@@ -133,6 +133,25 @@ function parseUrlParams(url: string): Record<string, string> {
   return params;
 }
 
+/**
+ * Where Apple or Google sends a web sign-in back to: the page it started on, so
+ * the host arrives where they were. Must be in the Supabase project's redirect
+ * allowlist; a URL that is not falls back to the project's Site URL.
+ */
+function webOAuthReturnUrl(): string {
+  return `${window.location.origin}${window.location.pathname}`;
+}
+
+/**
+ * On web `signInWithOAuth` has already sent the browser to the provider, and the
+ * session arrives on the page load after it returns. Never resolving leaves the
+ * caller's spinner up while the page unloads, rather than reporting a failure,
+ * or a signed-in session with no user, in the moment before it goes.
+ */
+function leavingForProvider(): Promise<never> {
+  return new Promise(() => {});
+}
+
 /** Idempotent workspace and profile repair after successful login */
 async function repairWorkspaceIfNeeded() {
   if (!supabase) return;
@@ -258,7 +277,7 @@ export const supabaseAuthProvider: AuthProvider = {
 
       // 2. Web or Non-iOS OAuth
       const redirectUri = Platform.OS === 'web' && typeof window !== 'undefined'
-        ? window.location.origin
+        ? webOAuthReturnUrl()
         : makeRedirectUri({ scheme: 'eventcamera' });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -270,8 +289,9 @@ export const supabaseAuthProvider: AuthProvider = {
       });
 
       if (error) return { ok: false, error: classify(error) };
+      if (Platform.OS === 'web') return leavingForProvider();
 
-      if (Platform.OS !== 'web' && data?.url) {
+      if (data?.url) {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
         if (result.type === 'cancel' || result.type === 'dismiss') {
           return { ok: false, error: { code: 'cancelled', message: 'Sign in was cancelled.' } };
@@ -317,7 +337,7 @@ export const supabaseAuthProvider: AuthProvider = {
 
     try {
       const redirectUri = Platform.OS === 'web' && typeof window !== 'undefined'
-        ? window.location.origin
+        ? webOAuthReturnUrl()
         : makeRedirectUri({ scheme: 'eventcamera' });
 
       const { data, error } = await supabase.auth.signInWithOAuth({
@@ -333,8 +353,9 @@ export const supabaseAuthProvider: AuthProvider = {
       });
 
       if (error) return { ok: false, error: classify(error) };
+      if (Platform.OS === 'web') return leavingForProvider();
 
-      if (Platform.OS !== 'web' && data?.url) {
+      if (data?.url) {
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
         if (result.type === 'cancel' || result.type === 'dismiss') {
           return { ok: false, error: { code: 'cancelled', message: 'Google sign in was cancelled.' } };
