@@ -7,7 +7,8 @@
  * `print-*` carries a simplified offline version of the app's Disposable look
  * (warm flash colour, grain, soft vignette) and the real date-stamp geometry from
  * `src/features/media/disposable-date-stamp.ts`. `raw-*` is the untreated frame
- * for the camera viewfinder. Runs on Node's native TypeScript stripping.
+ * for the camera viewfinder, and `blur-*` and `raw-*-b` are tiny blurred stand-ins for
+ * the locked cells and the glass. Runs on Node's native TypeScript stripping.
  */
 import { mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -79,5 +80,11 @@ for (const [id, file, focus] of PHOTOS) {
   await sharp(treated).webp({ quality: 74, effort: 6 }).toFile(join(OUT, `print-${id}.webp`));
   await sharp(treated).resize({ width: 360 }).webp({ quality: 70, effort: 6 }).toFile(join(OUT, `print-${id}-s.webp`));
   await sharp(join(SRC, file)).resize({ width: 640 }).webp({ quality: 74, effort: 6 }).toFile(join(OUT, `raw-${id}.webp`));
+  // Already blurred, and small: the locked cells and the glass stretch these instead of
+  // paying for a live CSS blur on every frame the phone moves.
+  await sharp(treated).resize({ width: 48 }).blur(1.5).webp({ quality: 60 }).toFile(join(OUT, `blur-${id}.webp`));
+  await sharp(join(SRC, file)).resize({ width: 56 }).blur(1.5).webp({ quality: 60 }).toFile(join(OUT, `raw-${id}-b.webp`));
+  // The counter's close-up fills the screen, so its viewfinder needs the extra pixels.
+  if (id === 'p03') await sharp(join(SRC, file)).resize({ width: 1240 }).modulate({ saturation: 0 }).webp({ quality: 58, effort: 6 }).toFile(join(OUT, `raw-${id}-l.webp`));
   console.log(id);
 }

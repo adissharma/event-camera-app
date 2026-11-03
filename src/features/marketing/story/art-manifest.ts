@@ -51,5 +51,25 @@ export const ART_SIZES: Record<string, { w: number; h: number }> = {
   "shooter-teen": {
     "w": 438,
     "h": 1210
+  },
+  "dare-crew": {
+    "w": 576,
+    "h": 576
+  },
+  "easel": {
+    "w": 604,
+    "h": 1281
+  },
+  "grandad-voice": {
+    "w": 498,
+    "h": 1109
+  },
+  "morning-after": {
+    "w": 620,
+    "h": 547
+  },
+  "uncle-scan": {
+    "w": 610,
+    "h": 1265
   }
 };

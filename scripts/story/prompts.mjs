@@ -41,6 +41,49 @@ The floor is pale stone crossed by long, bold, solid black cast shadows from the
 Long horizontal bands of billowing evening clouds with scalloped, curling edges, sweeping across the frame in layers and getting bigger and denser towards the bottom. The cloud shapes use exactly three flat tones: pure white on their sunlit lower edges, a mid grey for their bodies, and a dark grey for the farthest thin wisps. No soft airbrush, no gradient, no realistic texture.
 The upper third of the picture is mostly empty black with only a few thin wisps. There is a large gap in the clouds at the lower centre of the picture. No sun, no moon, no stars, no birds, no land, no text.`,
   },
+  // One setting per use case tab. Same treatment as the venue: the sky is removed, so
+  // each one sits on the page's own sky with the phone in front of it.
+  {
+    id: 'setting-birthday',
+    size: '3072x1536',
+    quality: 'high',
+    refs: ['room'],
+    prompt: `${STYLE}
+
+A wide panoramic print of a small, relaxed surprise birthday party among friends in an ordinary back garden after dark, drawn in exactly the same style as the reference, seen straight on from a little above eye level. Homely and scruffy, nothing fancy: no marquee, no tablecloths, no balloons, no tiered cake, no suits, no gowns.
+${PEOPLE}
+The sky is pure empty white paper and fills the top 35% of the picture. Nothing at all is drawn in the sky.
+Along the back, as big simple solid black masses forming one unbroken band from edge to edge: an old brick garden wall thick with climbing ivy, a rough wooden garden gate standing open in it left of centre, the rooftops of terraced houses and big dark trees behind. A sagging string of small round bulbs hangs along the wall, in front of the black, never against the sky.
+In front, left of centre and drawn large: a woman in her forties with big curly dark hair and a loose button-up shirt, just through the gate, both hands over her mouth in happy shock. Friends in casual shirts and jumpers stand around her, some seen from behind, clapping, one holding up a smartphone towards her.
+To the right, drawn large: a long, worn wooden garden table with paper plates, wine glasses and bottles, and on it one homemade round layer cake crowded with thin lit candles. A little girl with long hair leans in beside it. No writing on anything.
+The bottom of the picture is pale paving crossed by long, bold, solid black shadows.`,
+  },
+  {
+    id: 'setting-bach',
+    size: '3072x1536',
+    quality: 'high',
+    refs: ['room'],
+    prompt: `${STYLE}
+
+A wide panoramic print of a bachelorette weekend at a glamorous rooftop pool at dusk, drawn in exactly the same style as the reference, seen straight on from a little above eye level.
+The sky is pure empty white paper and fills the top 35% of the picture. Nothing at all is drawn in the sky.
+Along the back, as big simple solid black masses forming one unbroken band from edge to edge: a skyline of solid black buildings with white windows and tall solid black palm trees.
+In front, drawn large: a swimming pool of bold black and white carved ripples, striped sun loungers, big parasols, and a group of friends fully dressed in solid black summer dresses and big sunglasses, dancing with drinks in the air, the bride-to-be in a knee-length white sundress with a small veil in the middle, one of them holding out a smartphone for a selfie. Nobody is in swimwear. No writing on anything.
+The bottom of the picture is pale paving crossed by long, bold, solid black shadows.`,
+  },
+  {
+    id: 'setting-trip',
+    size: '3072x1536',
+    quality: 'high',
+    refs: ['room'],
+    prompt: `${STYLE}
+
+A wide panoramic print of a group holiday on a Mediterranean beach at dusk, drawn in exactly the same style as the reference, seen straight on from a little above eye level.
+The sky is pure empty white paper and fills the top 35% of the picture. Nothing at all is drawn in the sky.
+Along the back, as big simple solid black masses forming one unbroken band from edge to edge: solid black headlands and a low white-walled village with black roofs and palm trees, with a solid black sea with carved white lines in front of them and one small fishing boat.
+In front, drawn large: pale sand, big parasols, and a man fast asleep on a sun lounger with a straw hat tipped over his face and his mouth open, while a friend crouches next to him, grinning, taking a photo of him on a smartphone. Other friends laugh nearby. No writing on anything.
+The bottom of the picture is pale sand crossed by long, bold, solid black shadows.`,
+  },
 ];
 
 export const FIGURES = [
@@ -59,5 +102,10 @@ export const FIGURES = [
   { id: 'cake', refs: ['dad-a'], prompt: single(`Olivia and Daniel, a laughing bride in a white lace dress with fair hair pinned back and a groom with dark curls in a solid black dinner jacket, cutting a tall white tiered cake together, heads bent together, cracking up about something. The cake stands on a small round table. Drawn as one group. Same print style as the reference.`), size: '1024x1536' },
   { id: 'shooter-overhead', refs: ['ayla-shoot'], prompt: single(`A tall bearded man in a solid black suit with a loosened tie, holding a smartphone high overhead with one arm to take a photo over a crowd, squinting up at the screen. Three-quarter view. Same print style as the reference.`), size: '1024x1536' },
   { id: 'shooter-auntie', refs: ['ayla-shoot'], prompt: single(`An older South Asian woman in a beautifully draped sari with bold black and white patterned borders, holding a smartphone out at full arm's length with both hands, head tilted back to see the screen, utterly determined. Three-quarter view. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'uncle-scan', refs: ['dad-a'], prompt: single(`A jolly man in his sixties with a big moustache, glasses pushed up on his forehead and a solid black suit, holding a smartphone out at arm's length in one hand, peering at it, and looking amazed and very pleased with himself that it worked. Three-quarter view facing right. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'easel', refs: ['dad-a'], prompt: single(`No people in this one. A tall old wooden easel holding a large seating chart board. The board shows neat rows of small empty boxes and blank lines, with absolutely no writing on it. A small bunch of flowers tied to one leg. Solid black wooden legs with carved white grain. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'dare-crew', refs: ['ayla-shoot'], prompt: single(`Three wedding guests going to absurd lengths to get a photo on their smartphones: a shy, neat man in a solid black suit standing on a chair and leaning out precariously, a woman in a black dress lying flat on her back on the floor shooting straight up, and an elegant older lady peering round from behind him with her phone held high. Everyone is thrilled. Drawn as one tight group. Same print style as the reference.`), size: '1536x1024' },
+  { id: 'grandad-voice', refs: ['dad-a'], prompt: single(`A grandfather in his eighties with white hair and a solid black suit with a flower in the lapel, sitting on a chair, holding a smartphone up in front of his mouth with both hands like a walkie-talkie, speaking into it with his eyes closed and a small, tender smile. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'morning-after', refs: ['hug'], prompt: single(`The morning after a wedding. A barefoot bride in a white dress with her heels on the ground beside her, and a groom with an undone bow tie and his solid black jacket over one shoulder, sitting close together on a low stone step, sharing one smartphone and laughing at what's on it. Tired and completely happy. Drawn as one group. Same print style as the reference.`), size: '1536x1024' },
   { id: 'shooter-teen', refs: ['ayla-shoot'], prompt: single(`A teenage boy in an ill-fitting solid black suit, slouching with one hand in a pocket and casually holding up a smartphone in the other to film something, unimpressed but secretly enjoying it. Three-quarter view. Same print style as the reference.`), size: '1024x1536' },
 ];
