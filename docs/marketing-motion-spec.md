@@ -1,7 +1,11 @@
 # Marketing site — motion specification
 
-**Not built in this phase.** This is the specification for a future marketing
-site, kept here so the app and the site share one motion language.
+**Superseded.** The homepage that shipped uses a different concept, described in
+[`docs/story-site/`](story-site/). Its motion rules below still apply; the thread
+motif and chapter list don't.
+
+This was the specification for a future marketing site, kept here so the app and
+the site share one motion language.
 
 Inspired by MindMarket's *structural* idea — one motif carrying continuity
 across sections — not by its visuals. Its saturated green, its hand-drawn

@@ -24,3 +24,7 @@ dist/
 build/
 .tmp/
 .vercel/
+
+# Raw illustration sources and their tooling; the web build only needs public/story.
+assets/story-source/
+docs/story-site/
