@@ -1,11 +1,11 @@
 # Asset library
 
-Everything the page loads lives in `public/story/`, about 7 MB in total. A visitor
-only downloads what the page actually reaches, roughly 4 MB by the end of the story.
+Everything the page loads lives in `public/story/`, about 5.4 MB in total. A visitor
+only downloads what the page actually reaches, roughly 2.5 MB by the end of the story.
 
 | Folder | Contents | Made by |
 |---|---|---|
-| `art/` | Room plate and 18 cast drawings, each as a matched `neg` and `pos` | Generated, then `process-art.mjs` |
+| `art/` | Venue, clouds and 13 cast drawings, one transparent file each | Generated, then `process-art.mjs` |
 | `photo/` | 13 photos as `print-*` (baked Disposable look), `print-*-s` (small) and `raw-*` (viewfinder) | `bake-photos.mjs`, from `assets/sample-event` |
 | `poster/` | One still per scene for the linear page, plus `share.jpg` | `capture-stills.mjs`, from the live stage |
 | `fonts/` | Isolde, Instrument Sans, and Cormorant Garamond italic (numerals only) as WOFF2 | `build-fonts.mjs` |
@@ -13,7 +13,7 @@ only downloads what the page actually reaches, roughly 4 MB by the end of the st
 | root | `home.html`, `story.js` | `build-home.mjs` |
 
 **Drawn in code, not generated:** the phone, every app screen, the invitation,
-festoon lights, table numbers, flash bursts, the gold line.
+sky gradient, sun, festoon lights, table sign, flash bursts, the line to your table.
 
 ## Generated illustrations
 
@@ -21,9 +21,10 @@ festoon lights, table numbers, flash bursts, the gold line.
 |---|---|
 | Model | `gpt-image-2.5-sunburst`, confirmed against the docs and this account's model list |
 | Quality | `high` |
-| Room plate | 3840×1440, one continuous drawing |
+| Venue | 3840×1440, one continuous drawing |
+| Clouds | 3840×2160, three flat tones on black |
 | Cast | 1024×1536 or 1536×1024 |
-| Spend | About **$1.11**: 23 calls, including 3 low-quality drafts and 1 redraw. Worked out from the logged tokens at the published rates, so check it against your OpenAI usage page |
+| Spend | About **$0.85** for this set: 19 calls, including 4 low-quality drafts. The first set cost about $1.11. Both are estimates from the logged tokens, so check them against your OpenAI usage page |
 
 Prompts, including the master style paragraph, are in
 [`scripts/story/prompts.mjs`](../../scripts/story/prompts.mjs). Raw outputs and the
@@ -31,20 +32,20 @@ token log are in `assets/story-source/` (33 MB, kept local and out of git, and
 excluded from deploys by `.vercelignore`). `process-art.mjs` needs them, so back
 them up: without them, changing a drawing means paying to generate it again.
 
+The first, ink-and-ivory set is archived in `assets/story-source/v1/`.
+
 **Consistency.** `ayla-shoot` and `dad-a` were generated first and then passed as
 image references to everything else. Poses in a pair, like `dad-a` and `dad-b`,
 reference each other.
 
-**Why the art is line-only.** All art is black line on white. `process-art.mjs`
-derives both states from one drawing:
+**How the art is processed.** All art is black on white. `process-art.mjs`:
 
-- `neg`: ivory line on `#0B0B0C`
-- `pos`: ink line on `#EFE9E0`
-
-They align exactly, so a pool of light can cross them with no seam. It also flood
-fills each figure's outside to get a silhouette, so the room doesn't show through
-blank clothes, and trims the transparent margin. Those sizes go into
-`src/features/marketing/story/art-manifest.ts`.
+- gives each figure a silhouette, by flood filling its outside, so nothing shows
+  through white clothes, then trims the margin. Those sizes go into
+  `src/features/marketing/story/art-manifest.ts`
+- removes the venue's sky, flooding down from the top edge only, so the sunset shows
+  behind it while the white arches stay solid
+- turns the clouds' tones into transparency, so they pick up the sky's colour
 
 ## Photography
 
@@ -57,15 +58,16 @@ in production, and one source file is named `Codex Image 21 Sept 2026, 11_42_34.
 (`p12`), which suggests it was generated. The provenance and rights of the whole
 album weren't verified as part of this work.
 
-| Moment in the room | Photo |
+| Moment on the terrace | Photo |
 |---|---|
 | Girl and dog | `p01` |
-| Running flower girls | `p02` |
-| The aunt at her table | `p04`; the camera scene uses `p03` |
 | The hug | `p05` |
 | The dad dancing | `p06` |
 | The sing-along | `p07` |
 | Couple and cake | `p08` |
+
+The drawn dog is black and the photographed one is golden, so they no longer match
+exactly.
 
 ## Regenerating
 

@@ -1,75 +1,55 @@
 /** Written by scripts/story/process-art.mjs: the trimmed size of each figure drawing. */
 export const ART_SIZES: Record<string, { w: number; h: number }> = {
-  "aunt": {
-    "w": 529,
-    "h": 500
-  },
   "ayla-scan": {
-    "w": 439,
-    "h": 1145
+    "w": 511,
+    "h": 1223
   },
   "ayla-shoot": {
-    "w": 488,
-    "h": 1146
+    "w": 547,
+    "h": 1219
   },
   "ayla-walk-a": {
-    "w": 596,
-    "h": 1120
+    "w": 586,
+    "h": 1188
   },
   "ayla-walk-b": {
-    "w": 451,
-    "h": 1134
+    "w": 476,
+    "h": 1194
   },
   "cake": {
-    "w": 789,
-    "h": 1144
+    "w": 821,
+    "h": 1128
   },
   "dad-a": {
-    "w": 520,
-    "h": 1202
+    "w": 571,
+    "h": 1218
   },
   "dad-b": {
-    "w": 572,
-    "h": 1195
-  },
-  "flower-girls": {
-    "w": 640,
-    "h": 504
+    "w": 563,
+    "h": 1210
   },
   "girl-dog": {
-    "w": 595,
-    "h": 513
+    "w": 571,
+    "h": 531
   },
   "hug": {
-    "w": 532,
-    "h": 1166
+    "w": 569,
+    "h": 1176
   },
   "singalong": {
-    "w": 695,
-    "h": 550
-  },
-  "waiter": {
-    "w": 673,
-    "h": 1232
-  },
-  "photographer": {
-    "w": 674,
-    "h": 928
+    "w": 571,
+    "h": 557
   },
   "shooter-auntie": {
-    "w": 427,
-    "h": 1169
-  },
-  "shooter-grandad": {
-    "w": 593,
-    "h": 1129
+    "w": 495,
+    "h": 1268
   },
   "shooter-overhead": {
-    "w": 383,
-    "h": 1248
+    "w": 487,
+    "h": 1292
   },
   "shooter-teen": {
-    "w": 392,
-    "h": 1148
+    "w": 438,
+    "h": 1210
   }
 };
