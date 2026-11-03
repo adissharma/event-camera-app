@@ -5,15 +5,20 @@ only downloads what the page actually reaches, roughly 2.5 MB by the end of the 
 
 | Folder | Contents | Made by |
 |---|---|---|
-| `art/` | Venue, clouds and 13 cast drawings, one transparent file each | Generated, then `process-art.mjs` |
-| `photo/` | 13 photos as `print-*` (baked Disposable look), `print-*-s` (small) and `raw-*` (viewfinder) | `bake-photos.mjs`, from `assets/sample-event` |
-| `poster/` | One still per scene for the linear page, plus `share.jpg` | `capture-stills.mjs`, from the live stage |
+| `art/` | Venue, clouds, 18 cast drawings and 3 use case settings, one transparent file each | Generated, then `process-art.mjs` |
+| `photo/` | 13 photos as `print-*` (baked Disposable look), `print-*-s` (small), `raw-*` (viewfinder), and tiny blurred `blur-*` and `raw-*-b` for the locked cells and the glass. `raw-p03-l` is a larger copy for the counter's close-up | `bake-photos.mjs`, from `assets/sample-event` |
+| `usecase/` | Photos for the phone in the use case tabs: the first is the cover, with a tiny blurred copy for the glass | `bake-usecase.mjs`, from `assets/story-source/usecase` |
+| `poster/` | One still per scene for the linear page, plus `share.jpg`. `s1` also closes the page | `capture-stills.mjs`, from the live stage |
 | `fonts/` | Isolde, Instrument Sans, and Cormorant Garamond italic (numerals only) as WOFF2 | `build-fonts.mjs` |
 | root | `logo.webp`, `icon.webp`, two real QR codes, `story.css` | Hand-written or exported from `assets/` |
 | root | `home.html`, `story.js` | `build-home.mjs` |
 
 **Drawn in code, not generated:** the phone, every app screen, the invitation,
-sky gradient, sun, festoon lights, table sign, flash bursts, the line to your table.
+the floor plan, sky
+gradients, sun, festoon lights, table sign, flash bursts, the line to your table.
+
+**Still placeholders:** the photos on the phone in the use case tabs. Add up to seven
+paths per tab to `photos` in `USE_CASES` (the first is the cover) and rebuild.
 
 ## Generated illustrations
 

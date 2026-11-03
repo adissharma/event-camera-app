@@ -92,7 +92,7 @@ async function clouds(id) {
 async function run(id, { room }) {
   const file = join(SOURCE, `${id}.png`);
   const meta = await sharp(file).metadata();
-  const width = room ? meta.width : Math.min(meta.width, 900);
+  const width = id === 'room' ? meta.width : room ? Math.min(meta.width, 2400) : Math.min(meta.width, 900);
   const res = await sharp(file).flatten({ background: '#fff' }).greyscale().resize({ width }).raw().toBuffer({ resolveWithObject: true });
   const { data, info } = res;
   const w = info.width, h = info.height;
@@ -118,7 +118,7 @@ async function run(id, { room }) {
   }
   const q = room ? { quality: 70, alphaQuality: 70, effort: 6 } : { quality: 66, alphaQuality: 75, effort: 6 };
   await sharp(out, raw).extract(crop).webp(q).toFile(join(OUT, `${id}.webp`));
-  if (room) {
+  if (id === 'room') {
     // Phones get a lighter plate.
     await sharp(out, raw).resize({ width: 2880 }).webp({ quality: 58, alphaQuality: 60, effort: 6 }).toFile(join(OUT, `${id}.m.webp`));
     // What the phone's camera sees behind the invitation.
@@ -132,7 +132,7 @@ for (const id of ids) {
   if (only.length && !only.includes(id)) continue;
   if (!existsSync(join(SOURCE, `${id}.png`))) continue;
   if (id === 'clouds') await clouds(id);
-  else await run(id, { room: id === 'room' });
+  else await run(id, { room: id === 'room' || id.startsWith('setting-') });
 }
 
 writeFileSync(MANIFEST, `/** Written by scripts/story/process-art.mjs: the trimmed size of each figure drawing. */

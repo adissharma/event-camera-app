@@ -20,8 +20,14 @@ export interface FigureDef {
   lens?: [number, number];
 }
 
+/** Everyone at the party, who rise together when the page loads. */
+export const CAST = ['uncle', 'girlDog', 'auntie', 'hug', 'singalong', 'dad', 'overhead', 'cake'];
+
+/** Who arrives later, only for their own scene: never in the opening frame. */
+export const LATE = ['ayla', 'easel', 'dareCrew', 'grandad', 'morning'];
+
 export const FIGURES: FigureDef[] = [
-  { id: 'teen', frames: ['shooter-teen'], x: 190, y: 1400, h: 520, lens: [0.65, 0.2] },
+  { id: 'uncle', frames: ['uncle-scan'], x: 190, y: 1400, h: 520, lens: [0.65, 0.2] },
   { id: 'girlDog', frames: ['girl-dog'], x: 500, y: 1340, h: 300 },
   { id: 'auntie', frames: ['shooter-auntie'], x: 850, y: 1410, h: 510, lens: [0.7, 0.28] },
   { id: 'hug', frames: ['hug'], x: 1260, y: 1290, h: 480 },
@@ -30,6 +36,10 @@ export const FIGURES: FigureDef[] = [
   { id: 'dad', frames: ['dad-a', 'dad-b'], x: 3010, y: 1190, h: 500, flip: true },
   { id: 'overhead', frames: ['shooter-overhead'], x: 3270, y: 1425, h: 570, lens: [0.5, 0.05] },
   { id: 'cake', frames: ['cake'], x: 3610, y: 1310, h: 530 },
+  { id: 'easel', frames: ['easel'], x: 1540, y: 1345, h: 650 },
+  { id: 'dareCrew', frames: ['dare-crew'], x: 1420, y: 1435, h: 680, lens: [0.5, 0.2] },
+  { id: 'grandad', frames: ['grandad-voice'], x: 1420, y: 1435, h: 760 },
+  { id: 'morning', frames: ['morning-after'], x: 1640, y: 1340, h: 520 },
 ];
 
 export const figure = (id: string) => FIGURES.find((f) => f.id === id)!;
@@ -53,6 +63,8 @@ export const PLACES = {
 /** The sun's box, behind the cypress trees, and how far it drops to set. */
 export const SUN = { x: 2200, y: 70, d: 720 };
 export const SUN_DOWN = 1000;
+/** Where the sun's centre comes back up the next morning, on the other side. */
+export const DAWN_X = { wide: 420, narrow: 2000 };
 
 /** Festoon spans: each wire hangs between the terrace's stone piers. */
 export const FESTOON: { x0: number; y0: number; x1: number; y1: number; sag: number }[] = [
