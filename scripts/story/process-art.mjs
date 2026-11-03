@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 /**
- * Turns black-on-white line art into the matched negative and positive pairs.
+ * Turns the black-on-white prints into the transparent art the page uses.
  *
  *   node scripts/story/process-art.mjs [ids...]
  *
- * `neg` is ivory line on the ink canvas; `pos` is ink line on ivory paper. They
- * come from one drawing, so they align exactly: a flash can swap them with no
- * seam. Figures also get a silhouette alpha so the room behind them doesn't
- * show through their blank interiors.
+ * Figures get a silhouette alpha so nothing shows through their white clothes,
+ * the room loses its sky so the sunset shows behind it, and the clouds become a
+ * white layer whose tones are transparency, so they pick up the sky's colour.
+ * Night is drawn over all of it on the page, so each drawing needs one file.
  *
  * Needs `sharp`, which isn't an app dependency: SHARP_PATH points at any install.
  */
@@ -20,11 +20,8 @@ const sharp = require(process.env.SHARP_PATH ?? 'sharp');
 
 const SOURCE = 'assets/story-source';
 const OUT = 'public/story/art';
-const INK = [11, 11, 12];
-const PAPER = [239, 233, 224];
-const LINE_ON_INK = [245, 242, 237];
-const ROOM_LINE_ON_INK = [150, 145, 137];
-const LINE_ON_PAPER = [20, 18, 16];
+const PAPER = [255, 251, 246];
+const INK = [10, 9, 12];
 
 const MANIFEST = 'src/features/marketing/story/art-manifest.ts';
 const only = process.argv.slice(2);
@@ -39,8 +36,11 @@ if (existsSync(MANIFEST)) {
 
 const mix = (a, b, t) => a + (b - a) * t;
 
-/** Flood-fills the outside from the borders; a dilated line closes small gaps. */
-function silhouette(alphaLine, w, h, gap = 3) {
+/**
+ * Flood-fills the outside from the borders; a dilated line closes small gaps.
+ * With `topOnly` it starts from the top edge alone, which finds the room's sky.
+ */
+function silhouette(alphaLine, w, h, gap = 3, topOnly = false) {
   const blocked = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     if (alphaLine[y * w + x] > 0.25) {
@@ -53,8 +53,8 @@ function silhouette(alphaLine, w, h, gap = 3) {
   const outside = new Uint8Array(w * h);
   const stack = [];
   const push = (i) => { if (!outside[i] && !blocked[i]) { outside[i] = 1; stack.push(i); } };
-  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
-  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  for (let x = 0; x < w; x++) { push(x); if (!topOnly) push((h - 1) * w + x); }
+  if (!topOnly) for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
   while (stack.length) {
     const i = stack.pop();
     const x = i % w, y = (i - x) / w;
@@ -77,6 +77,18 @@ function silhouette(alphaLine, w, h, gap = 3) {
 }
 
 
+async function clouds(id) {
+  const { data, info } = await sharp(join(SOURCE, `${id}.png`)).flatten({ background: '#000' }).greyscale().resize({ width: 2400 }).raw().toBuffer({ resolveWithObject: true });
+  const out = Buffer.alloc(info.width * info.height * 4);
+  for (let i = 0; i < data.length; i++) {
+    // Mid greys become a faint lighter pink; only the sunlit edges reach white.
+    const alpha = ((data[i] / 255) ** 1.9) * 0.94;
+    out[i * 4] = 255; out[i * 4 + 1] = 247; out[i * 4 + 2] = 242; out[i * 4 + 3] = alpha * 255;
+  }
+  await sharp(out, { raw: { width: info.width, height: info.height, channels: 4 } }).webp({ quality: 70, alphaQuality: 62, effort: 6 }).toFile(join(OUT, `${id}.webp`));
+  console.log(id, info.width, info.height);
+}
+
 async function run(id, { room }) {
   const file = join(SOURCE, `${id}.png`);
   const meta = await sharp(file).metadata();
@@ -85,24 +97,18 @@ async function run(id, { room }) {
   const { data, info } = res;
   const w = info.width, h = info.height;
   const a = new Float32Array(w * h);
-  for (let i = 0; i < a.length; i++) a[i] = Math.min(1, Math.max(0, (225 - data[i]) / 170));
+  for (let i = 0; i < a.length; i++) a[i] = Math.min(1, Math.max(0, (205 - data[i]) / 130));
 
-  const outside = room ? null : silhouette(a, w, h);
-  const neg = Buffer.alloc(w * h * 4), pos = Buffer.alloc(w * h * 4);
-  const negLine = room ? ROOM_LINE_ON_INK : LINE_ON_INK;
+  const outside = room ? silhouette(a, w, h, 2, true) : silhouette(a, w, h);
+  const out = Buffer.alloc(w * h * 4);
   for (let i = 0; i < a.length; i++) {
     const t = a[i], o = i * 4;
-    for (let c = 0; c < 3; c++) {
-      neg[o + c] = mix(INK[c], negLine[c], t);
-      pos[o + c] = mix(PAPER[c], LINE_ON_PAPER[c], t);
-    }
-    const alpha = outside && outside[i] ? 0 : 255;
-    neg[o + 3] = alpha; pos[o + 3] = alpha;
+    for (let c = 0; c < 3; c++) out[o + c] = mix(PAPER[c], INK[c], t);
+    out[o + 3] = outside[i] ? 0 : 255;
   }
   const raw = { raw: { width: w, height: h, channels: 4 } };
-  const q = room ? { quality: 72, effort: 6 } : { quality: 68, alphaQuality: 75, effort: 6 };
   let crop = { left: 0, top: 0, width: w, height: h };
-  if (outside) {
+  if (!room) {
     let x0 = w, y0 = h, x1 = 0, y1 = 0;
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       if (!outside[y * w + x]) { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }
@@ -110,14 +116,13 @@ async function run(id, { room }) {
     crop = { left: x0, top: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 };
     sizes[id] = { w: crop.width, h: crop.height };
   }
-  await sharp(neg, raw).extract(crop).webp(q).toFile(join(OUT, `${id}.neg.webp`));
-  await sharp(pos, raw).extract(crop).webp(q).toFile(join(OUT, `${id}.pos.webp`));
+  const q = room ? { quality: 70, alphaQuality: 70, effort: 6 } : { quality: 66, alphaQuality: 75, effort: 6 };
+  await sharp(out, raw).extract(crop).webp(q).toFile(join(OUT, `${id}.webp`));
   if (room) {
     // Phones get a lighter plate.
-    await sharp(neg, raw).resize({ width: 2880 }).webp({ quality: 60, effort: 6 }).toFile(join(OUT, `${id}.neg.m.webp`));
-    await sharp(pos, raw).resize({ width: 2880 }).webp({ quality: 60, effort: 6 }).toFile(join(OUT, `${id}.pos.m.webp`));
+    await sharp(out, raw).resize({ width: 2880 }).webp({ quality: 58, alphaQuality: 60, effort: 6 }).toFile(join(OUT, `${id}.m.webp`));
     // What the phone's camera sees behind the invitation.
-    await sharp(neg, raw).extract({ left: 0, top: 560, width: 1100, height: 880 }).resize({ width: 620 }).webp({ quality: 55, effort: 6 }).toFile(join(OUT, `${id}-entrance.webp`));
+    await sharp(out, raw).extract({ left: 0, top: 560, width: 1100, height: 880 }).flatten({ background: '#fe4d8d' }).resize({ width: 620 }).webp({ quality: 55, effort: 6 }).toFile(join(OUT, `${id}-entrance.webp`));
   }
   console.log(id, crop.width, crop.height);
 }
@@ -126,7 +131,8 @@ const ids = readdirSync(SOURCE).filter((f) => f.endsWith('.png') && !f.includes(
 for (const id of ids) {
   if (only.length && !only.includes(id)) continue;
   if (!existsSync(join(SOURCE, `${id}.png`))) continue;
-  await run(id, { room: id === 'room' });
+  if (id === 'clouds') await clouds(id);
+  else await run(id, { room: id === 'room' });
 }
 
 writeFileSync(MANIFEST, `/** Written by scripts/story/process-art.mjs: the trimmed size of each figure drawing. */

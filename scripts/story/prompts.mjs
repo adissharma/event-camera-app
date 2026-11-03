@@ -6,17 +6,18 @@
  * see docs/story-site/04-assets.md.
  */
 
-export const STYLE = `Hand-drawn editorial pen illustration. Pure black ink on a pure white background, nothing else.
-A single loose, confident brush-pen line with a natural wobble and slightly varying weight, as if drawn fast by a witty magazine cartoonist.
-Very sparse hatching only for small shadows. No grey, no wash, no gradient, no shading, no solid black shapes bigger than a coin: dark suits and dark hair are outlined with a few hatch strokes and stay mostly white paper.
-No text, no letters, no numbers, no logo, no frame, no border, no signature.
-People have heads about 1/5.5 of their height, long expressive limbs, slightly oversized hands, small feet, simple dot eyes, small arc brows and big readable mouths.
-A mix of ages, body types and backgrounds in realistic contemporary evening clothes. Warm, funny, affectionate, observed from life. Not glamorous, not cute, not corporate.`;
+export const STYLE = `A bold hand-carved linocut block print. Pure black ink on pure white paper, nothing else: strictly two tones, no grey, no wash, no gradient.
+High contrast and graphic, like a Japanese woodblock poster. Big confident shapes filled with solid black, about half of everything drawn is solid black, and detail is carved out of the black as crisp white gouge lines. Carved hatching only where a shadow meets a light area.
+Simple, uncluttered and instantly readable from far away. Few elements, each one large and clear. Every shape has a strong silhouette.
+No text, no letters, no numbers, no logo, no frame, no border, no signature.`;
+
+const PEOPLE = `People are drawn with warmth and humour: heads about 1/6 of their height, long expressive limbs, confident gestures, simple faces with clear big smiles. Dark suits, dark hair and dark dresses are solid black with a few carved white lines for folds. Faces, hands and white clothes stay white paper with a bold black outline. A mix of ages, body types and backgrounds in contemporary evening clothes.`;
 
 const single = (subject) => `${STYLE}
+${PEOPLE}
 
 ${subject}
-One standalone drawing, full figure, feet fully visible, centred with a wide white margin on every side. No floor line, no background, no furniture unless described. Every enclosed shape is left blank white paper.`;
+One standalone figure group, full body, feet fully visible, centred with a wide pure white margin on every side. No floor, no ground shadow, no background, no furniture unless described.`;
 
 export const PLATES = [
   {
@@ -25,35 +26,38 @@ export const PLATES = [
     quality: 'high',
     prompt: `${STYLE}
 
-An extremely wide panoramic drawing of one evening wedding reception in a walled courtyard, seen straight on from a little above eye level, with everything in a single continuous space.
-The top 40% of the picture is completely empty white paper: no sky, no lights, no wires, nothing. Do not draw any string lights or bulbs.
-From left to right along the back: a stone archway entrance with a small welcome table and an easel holding a large blank board; old stone wall with arched windows; olive trees in pots; a small band on a low stage; tall glass doors; a long head table with flowers.
-Across the floor, left to right: an open area near the entrance; then eight round dinner tables with white cloths, chairs, flowers, glasses and a small blank tent card on each; then a large empty parquet dance floor; then a round cake table with a tiered cake at far right.
-Many tiny background guests are seated at the far tables and chatting in small groups along the back wall, drawn with a few quick strokes. The front-most floor and the whole dance floor are empty, with no people.
-Keep the line weight consistent. The floor area stays mostly white with only a few strokes.`,
+An extremely wide panoramic print of one grand wedding reception on the stone terrace of an Italian hilltop villa at dusk, seen straight on from a little above eye level. A single continuous space with lots of open room.
+The sky is pure empty white paper and fills the whole top of the picture. Nothing at all is drawn in the sky: no clouds, sun, birds, wires or lights. The tallest things reach only 25% down from the top edge, and all of the rest of the skyline is lower.
+Back row, left to right, as big simple black masses with a clean skyline against the white: a tall stone archway gate at far left; a few tall solid black cypress trees; a monumental villa in the centre, very large and filling the height of the picture up to the skyline, with one row of five huge arches glowing white inside, a heavy solid black roof and a bold simple facade with big areas of solid black shadow; more cypress trees; solid black rolling hills at far right. The band behind the terrace is unbroken solid black from edge to edge, with no white gaps between trees, hills and buildings.
+On the terrace in front, left to right, drawn very large and close to the viewer: at far left a small welcome table with a white cloth beside the gate; then exactly five big round dinner tables with long white tablecloths, each table about 12% of the picture's width, each with one simple bunch of flowers and solid black chairs; then a wide completely empty dance floor of big black and white checkerboard tiles; then at far right a long head table with a white cloth and big flowers under a simple arch of solid black leaves.
+A low stone balustrade runs along the back of the terrace. Huge solid black olive tree branches frame the two bottom corners. No people anywhere, the terrace is empty and ready for the party.
+The floor is pale stone crossed by long, bold, solid black cast shadows from the low sun: each table, tree and pillar throws a long black shadow stretching down towards the viewer, so that the bottom of the picture feels heavy and dramatic while still leaving broad pale areas where figures can stand.`,
+  },
+  {
+    id: 'clouds',
+    size: '3840x2160',
+    quality: 'high',
+    prompt: `A flat graphic sky of stylised sunset clouds for a Japanese woodblock poster, made of flat shapes with crisp carved edges, on a pure solid black background.
+Long horizontal bands of billowing evening clouds with scalloped, curling edges, sweeping across the frame in layers and getting bigger and denser towards the bottom. The cloud shapes use exactly three flat tones: pure white on their sunlit lower edges, a mid grey for their bodies, and a dark grey for the farthest thin wisps. No soft airbrush, no gradient, no realistic texture.
+The upper third of the picture is mostly empty black with only a few thin wisps. There is a large gap in the clouds at the lower centre of the picture. No sun, no moon, no stars, no birds, no land, no text.`,
   },
 ];
 
 export const FIGURES = [
   // Anchor drawings: everything after these is referenced against them.
-  { id: 'ayla-shoot', prompt: single(`Ayla, a woman in her thirties with big curly hair and a simple wide-leg jumpsuit, standing and holding a smartphone up in both hands to take a photo, delighted, leaning slightly back and laughing. The phone is seen edge-on from the side. She is shown in three-quarter view facing right.`), size: '1024x1536' },
-  { id: 'dad-a', prompt: single(`A man in his sixties with white hair, white shirt with rolled sleeves and grey trousers, dancing with total commitment and no skill. One arm straight up with one finger pointing at the sky, other arm low, knees bent, eyes shut, huge grin. Three-quarter view.`), size: '1024x1536' },
+  { id: 'ayla-shoot', prompt: single(`Ayla, a woman in her thirties with big curly black hair and a simple wide-leg black jumpsuit, standing and holding a smartphone up in both hands to take a photo, delighted, leaning slightly back and laughing. The phone is seen edge-on from the side. Three-quarter view facing right.`), size: '1024x1536' },
+  { id: 'dad-a', prompt: single(`A man in his sixties with white hair, a white shirt with rolled sleeves and solid black trousers, dancing with total commitment and no skill. One arm straight up with one finger pointing at the sky, other arm low, knees bent, eyes shut, huge grin. Three-quarter view.`), size: '1024x1536' },
 
-  { id: 'ayla-scan', refs: ['ayla-shoot'], prompt: single(`The same woman Ayla, same hair, same jumpsuit, same line quality, standing and holding her phone out at chest height with both hands, looking down at it with a curious half smile, as if pointing it at something. Three-quarter view facing right.`), size: '1024x1536' },
-  { id: 'ayla-walk-a', refs: ['ayla-shoot'], prompt: single(`The same woman Ayla, same hair, same jumpsuit, same line quality, walking to the right mid-stride with her left foot forward, one hand holding a phone and glancing at it, other arm swinging. Side view facing right.`), size: '1024x1536' },
-  { id: 'ayla-walk-b', refs: ['ayla-walk-a'], prompt: single(`Exactly the same woman, same drawing style, same scale and same position, but with her legs passing each other in the middle of her stride: feet close together, one knee slightly bent and lifting, trousers hanging straighter. She still holds her phone in the same hand. The legs must look clearly different from the reference. Side view facing right.`), size: '1024x1536' },
+  { id: 'ayla-scan', refs: ['ayla-shoot'], prompt: single(`The same woman Ayla, same hair, same black jumpsuit, same print style, standing and holding her phone out at chest height with both hands, looking down at it with a curious half smile, as if pointing it at something. Three-quarter view facing right.`), size: '1024x1536' },
+  { id: 'ayla-walk-a', refs: ['ayla-shoot'], prompt: single(`The same woman Ayla, same hair, same black jumpsuit, same print style, walking to the right mid-stride with her left foot forward, one hand holding a phone and glancing at it, other arm swinging. Side view facing right.`), size: '1024x1536' },
+  { id: 'ayla-walk-b', refs: ['ayla-walk-a'], prompt: single(`Exactly the same woman, same print style, same scale and same position, but with her legs passing each other in the middle of her stride: feet close together, one knee slightly bent and lifting. She still holds her phone in the same hand. The legs must look clearly different from the reference. Side view facing right.`), size: '1024x1536' },
   { id: 'dad-b', refs: ['dad-a'], prompt: single(`Exactly the same man at the same scale and same position in the frame, the next moment of the same dance: both knees bent the other way, hips out, finger now pointing up with the opposite arm, big grin. Change only the pose.`), size: '1024x1536' },
 
-  { id: 'hug', refs: ['dad-a'], prompt: single(`A bride with dark hair in a simple slip dress and her mother, shorter, with cropped curly hair and a dark sheer dress, in a long tight hug. Eyes closed, cheeks pressed together, the mother's hand holding the back of the bride's head. Two people drawn as one group. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'aunt', refs: ['dad-a'], prompt: single(`An aunt in her fifties with a soft updo and a lacy dress, seated in a chair at the corner of a round table, dabbing her eye with a napkin while laughing, with a wine glass and a small flower arrangement in front of her. The man next to her in a waistcoat is laughing at her. Two people at a small piece of table, drawn as one group. Same line quality as the reference.`), size: '1536x1024' },
-  { id: 'girl-dog', refs: ['dad-a'], prompt: single(`A little girl of about five in a party dress, crouching with both hands in the fur of a big happy golden retriever wearing a collar of flowers. The dog is grinning with its tongue out. Same line quality as the reference.`), size: '1536x1024' },
-  { id: 'flower-girls', refs: ['dad-a'], prompt: single(`Two small flower girls in white dresses and white socks sprinting across the frame with enormous joy, hair flying, one looking back at the other. Same line quality as the reference.`), size: '1536x1024' },
-  { id: 'singalong', refs: ['dad-a'], prompt: single(`A tight group of five friends in their thirties singing at the top of their lungs with their arms around each other: mouths wide open, one man with an undone bow tie, one woman with a raised glass, one man pointing up. Drawn as one group. Same line quality as the reference.`), size: '1536x1024' },
-  { id: 'cake', refs: ['dad-a'], prompt: single(`Olivia and Daniel, a laughing bride in a lacy dress with fair hair pinned back and a groom with dark curls in a dinner jacket, cutting a small tiered cake together, heads bent together, cracking up about something. The cake stands on a small round table. Drawn as one group. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'waiter', refs: ['dad-a'], prompt: single(`A thin young waiter in a white shirt and bow tie, walking very carefully with an enormous impossibly stacked tray of champagne glasses balanced on one hand, looking up at it with terrified concentration. Three-quarter view. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'photographer', refs: ['dad-a'], prompt: single(`A professional wedding photographer in dark practical clothes with two big cameras on straps, crouching on one knee and looking through a large camera with a flash head. Serious and focused. Side view facing right. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'shooter-overhead', refs: ['ayla-shoot'], prompt: single(`A tall bearded man in a loosened tie holding a smartphone high overhead with one arm to take a photo over a crowd, squinting up at the screen. Three-quarter view. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'shooter-auntie', refs: ['ayla-shoot'], prompt: single(`An older South Asian woman in a beautifully draped sari holding a smartphone out at full arm's length with both hands, head tilted back to see the screen, utterly determined. Three-quarter view. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'shooter-teen', refs: ['ayla-shoot'], prompt: single(`A teenage boy in an ill-fitting suit, slouching with one hand in a pocket and casually holding up a smartphone in the other to film something, unimpressed but secretly enjoying it. Three-quarter view. Same line quality as the reference.`), size: '1024x1536' },
-  { id: 'shooter-grandad', refs: ['ayla-shoot'], prompt: single(`A Black grandfather in a sharp three-piece suit and a flat cap, sitting on a chair and taking a photo with a smartphone held in one big hand, one eye closed as if using a real camera, smiling. Three-quarter view. Same line quality as the reference.`), size: '1024x1536' },
+  { id: 'hug', refs: ['dad-a'], prompt: single(`A bride with dark hair in a simple white slip dress and her mother, shorter, with cropped curly hair and a solid black dress, in a long tight hug. Eyes closed, cheeks pressed together, the mother's hand holding the back of the bride's head. Two people drawn as one group. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'girl-dog', refs: ['dad-a'], prompt: single(`A little girl of about five in a white party dress, crouching with both hands in the fur of a big happy dog with a solid black coat and a collar of white flowers. The dog is grinning with its tongue out. Same print style as the reference.`), size: '1536x1024' },
+  { id: 'singalong', refs: ['dad-a'], prompt: single(`A tight group of four friends in their thirties singing at the top of their lungs with their arms around each other: mouths wide open, one man in a black suit with an undone bow tie, one woman in a black dress with a raised glass, one man pointing up. Drawn as one group. Same print style as the reference.`), size: '1536x1024' },
+  { id: 'cake', refs: ['dad-a'], prompt: single(`Olivia and Daniel, a laughing bride in a white lace dress with fair hair pinned back and a groom with dark curls in a solid black dinner jacket, cutting a tall white tiered cake together, heads bent together, cracking up about something. The cake stands on a small round table. Drawn as one group. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'shooter-overhead', refs: ['ayla-shoot'], prompt: single(`A tall bearded man in a solid black suit with a loosened tie, holding a smartphone high overhead with one arm to take a photo over a crowd, squinting up at the screen. Three-quarter view. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'shooter-auntie', refs: ['ayla-shoot'], prompt: single(`An older South Asian woman in a beautifully draped sari with bold black and white patterned borders, holding a smartphone out at full arm's length with both hands, head tilted back to see the screen, utterly determined. Three-quarter view. Same print style as the reference.`), size: '1024x1536' },
+  { id: 'shooter-teen', refs: ['ayla-shoot'], prompt: single(`A teenage boy in an ill-fitting solid black suit, slouching with one hand in a pocket and casually holding up a smartphone in the other to film something, unimpressed but secretly enjoying it. Three-quarter view. Same print style as the reference.`), size: '1024x1536' },
 ];

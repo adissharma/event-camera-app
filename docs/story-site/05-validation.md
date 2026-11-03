@@ -1,54 +1,58 @@
 # Validation
 
-Tested 2 Nov 2026 against the static page, plus one production export.
+First tested 2 Nov 2026 against the static page, plus one production export. The
+sunset redesign was re-tested on 3 Nov 2026: the rows marked \* come from that pass
+and the rest haven't been repeated since.
 
 ## Results
 
 | Check | How | Result |
 |---|---|---|
-| Typecheck | `tsc --noEmit` | Passes |
-| Lint | `expo lint` | 0 errors. 57 warnings across the repo; none reviewed individually |
-| Tests | `jest` | 47 suites, 527 tests pass. The story itself has no automated tests |
+| Typecheck \* | `tsc --noEmit` | Passes |
+| Lint \* | `eslint src/features/marketing` | Clean |
+| Tests \* | `jest` | 527 tests pass. The story itself has no automated tests |
 | Production export | `expo export` to a scratch folder, then the deploy's post-build steps | `/` serves the story |
 | Homepage independence | Network log on the exported page | 0 requests to Supabase or the Expo bundle |
 | Other routes | `/privacy` and `/host/sign-in` on the export | Both render |
 | Inside the app | `/` under `expo start` | Boots and scrolls |
-| Accessibility rules | axe-core (WCAG 2 A and AA, 2.1 AA, best practice) on both modes | 0 violations |
+| Accessibility rules \* | axe-core (WCAG 2 A and AA, 2.1 AA, best practice) on both modes | 0 violations. axe can't judge white text on the sky gradient, so contrast there was worked out by hand: about 7.6:1 at the top, 5.6:1 by a quarter of the way down, 4:1 by halfway. Copy sits in the upper part, but clouds can reduce it, and it needs a look on real screens |
 | Keyboard | Tabbed through the page | Skip link, header, closing links, chapters, footer, in order. Focus never lands in the phone |
-| Reduced motion | `prefers-reduced-motion` at desktop and phone width | Linear page, 10 captioned stills, no sticky stage, no sideways scroll |
+| Reduced motion \* | `prefers-reduced-motion` at desktop and phone width | Linear page, 9 captioned stills, no sticky stage, no sideways scroll |
 | No JavaScript | JavaScript disabled | Page renders. Screenshot taken, but it was the only check run on this mode |
 | Rough use | Jump forward, jump back, resize mid-story, chapter buttons | Position kept, no errors |
-| Sizes | 1920×1080, 1440×900, 768×1024, 390×844, 375×667, 844×390 | Checked by eye at sampled frames |
+| Sizes \* | 1920×1080, 1440×900, 768×1024, 390×844, 844×390 at sampled frames (375×667 not repeated) | Checked by eye |
 
 ## Performance
 
-From headless Chrome on this Mac, scripting a 30-second scroll through the whole
-story. The phone profile adds 4× CPU slowdown and a simulated slow connection
-(1.6 Mbps, 150 ms latency).
+From headless Chrome on this Mac using its Metal GPU, scripting a 30-second scroll
+through the whole story. The phone profile adds 4× CPU slowdown and a simulated slow
+connection (1.6 Mbps, 150 ms latency).
 
 | Measure | Desktop | Phone profile |
 |---|---|---|
-| Largest Contentful Paint | 88 ms, local server | **1.0 s** |
+| Largest Contentful Paint | 100–364 ms, local server | **1.5–2.0 s** |
 | Cumulative Layout Shift | 0 | 0 |
-| Frame rate | 59 fps | 59.5 fps |
-| Frames over 50 ms | 1 of 1,773 | 2 of 1,786 |
-| Total downloaded | 4.1 MB | 3.8 MB |
-| Homepage JavaScript | 8 KB gzipped | Same |
+| Frame rate | 60 fps | 60 fps |
+| Frames over 50 ms | 0 of 1,800 | 0 of about 1,800 |
+| Total downloaded | 2.5 MB | 2.4 MB |
+| Homepage JavaScript | 9 KB gzipped | Same |
 
-**These are indicative, not field numbers.** Headless Chrome didn't report whether
-it was using the GPU, so I can't say what it was rendering on. Figures come from
-a local server, not Vercel, and CPU slowdown isn't the same as an older phone.
+**These are indicative, not field numbers.** A fast Mac GPU flatters the night
+layer, figures come from a local server rather than Vercel, and CPU slowdown isn't
+the same as an older phone. The phone's first paint was about 1.0 s with the old
+line art, which was lighter. It measures the venue image, which starts rising before
+the headline appears: on the same slow profile the headline arrived at about 6.1 s,
+against about 2.3 s on a fast connection.
 
 ## iOS Safari
 
-Viewed in the iOS Simulator (iPhone 17), at sampled moments rather than a full
-frame-by-frame pass. It confirmed that sticky positioning, the canvas light and the
-line art all work.
+Viewed in the iOS Simulator (iPhone 17) at sampled moments on 3 Nov 2026, rather
+than a full frame-by-frame pass. Sticky positioning, the clouds and the night blend
+all work.
 
-It also caught two bugs that headless Chrome couldn't, both now addressed:
-
-- Collapsing the toolbar left a black band under the stage. Fixed, and confirmed in the Simulator.
-- Browser chrome stayed black when the page turned ivory. Fixed in code, but not re-checked in the Simulator afterwards.
+Safari colours its top and bottom bars when the page loads and didn't update them as
+the sky changed, so at night they stay violet above and below a darker page. Setting
+`theme-color` and fixed strips at the edges made no difference.
 
 ## Product accuracy
 
@@ -73,7 +77,8 @@ by side with a live event's join page, opened without joining.
 
 - **Not tested:** physical phones, Android, desktop Safari, Firefox, screen readers with a person using them.
 - **Invitation QR:** goes to `stills.events`, since there's no demo event to send people to.
+- **Brand:** the pink page deliberately departs from "photography supplies the colour". `docs/brand-system.md` hasn't been updated, because that's a decision for its owner.
 - **Demo data:** "1,284 photos, 86 joined" and the names are illustrative, for the fictional event on screen. Nothing on the page claims real usage.
 - **Walking:** Ayla's walk has two poses, so it's a stylised flipbook.
-- **Long page on a phone:** about 19 screen-heights. It holds together in the Simulator, but whether it feels too long needs a real thumb.
+- **Long page on a phone:** about 15 screen-heights. It holds together in the Simulator, but whether it feels too long needs a real thumb.
 - **No wheel stepping:** unlike FlyCrooked, scroll is native by design, so a hard flick can skip past a beat. Chapter buttons cover this on larger screens, but phones don't have them.

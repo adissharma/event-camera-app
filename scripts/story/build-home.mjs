@@ -56,9 +56,11 @@ const html = `<!doctype html>
 <meta property="og:url" content="https://stills.events/">
 <meta property="og:image" content="https://stills.events/story/poster/share.jpg">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#0B0B0C">
+<meta name="theme-color" content="#7A22B8">
 <meta name="apple-itunes-app" content="app-id=6797053710, app-clip-bundle-id=com.potoevents.eventcamera.Clip">
 <link rel="icon" href="/favicon.ico">
+<link rel="preload" href="/story/art/room.webp" as="image" fetchpriority="high" media="(min-width: 760px)">
+<link rel="preload" href="/story/art/room.m.webp" as="image" fetchpriority="high" media="(max-width: 759px)">
 <link rel="preload" href="/story/fonts/isolde-regular.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/story/fonts/instrument-400.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/story/story.css">

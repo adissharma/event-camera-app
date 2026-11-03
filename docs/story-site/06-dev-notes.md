@@ -31,10 +31,10 @@ Run `story-static` from `.claude/launch.json`, then open http://localhost:8090.
 | File | Holds |
 |---|---|
 | `content.ts` | All copy, links, demo event values and photo order. **Start here for wording** |
-| `world.ts` | Where each figure, table number and light wire sits, in panorama pixels |
+| `world.ts` | Where each figure, the table sign, the sun and light wires sit, in panorama pixels |
 | `choreography.ts` | Every movement on the page, top to bottom in story order |
 | `timeline.ts` | The small scrubbed timeline engine |
-| `boot.ts` | Scroll loop, canvas light, image loading, resize |
+| `boot.ts` | Scroll loop, night canvas, image loading, resize |
 | `phone.tsx` | The phone and rebuilt app screens |
 | `story-site.tsx` | Page markup |
 | `art-manifest.ts` | Generated. Don't edit by hand |
@@ -48,12 +48,18 @@ the whole page longer or shorter. Nothing can get stranded, because nothing keep
 its own state.
 
 **The camera.** `{ cx, cy, vh }` is a point in the panorama and how much of its
-height is on screen. `shot()` and `wide()` keep it inside the drawing. To move the
-story, add a `camTo()`.
+height is on screen. `shot()`, `wide()` and `closer()` keep it inside the drawing,
+and `closer()` also keeps sky above the skyline for the copy, so nothing has to be
+laid over the print to read it. To move the story, add a `camTo()`.
 
-**Light.** `addLight(x, y)` makes a pool in world coordinates, and growing its `r`
-opens it. `boot.ts` draws them all to one canvas: a soft mask, the `pos` plate
-through it, then a warm edge. `figLit(id, t)` flips a person to positive.
+**Night.** `night.v` in the timeline darkens everything, and `addLight(x, y)` makes a
+pool in world coordinates, which opens as its `r` grows. `boot.ts` draws them to one
+half-size canvas, multiplied over the scene. Things that must stay bright at night,
+like the festoon lights and flash bursts, go in `worldTop`, above that canvas.
+
+**The opening.** `playIntro` in `boot.ts` adds `in-venue`, `in-people`, `in-sky` and
+`in-copy` to the root in turn, and `story.css` does the rest. It uses CSS `translate`
+because the timeline owns `transform` on most of these elements.
 
 **Two heights.** `L.h` is the stage, which fills the largest viewport so a collapsing
 iOS toolbar never reveals its edge. `L.vis` is the smallest viewport. Put anything
@@ -70,7 +76,8 @@ Landscape phones get their own CSS block.
 | A headline | `content.ts`, then build and recapture stills |
 | A phone screen, because the app changed | `phone.tsx` and `story.css`, comparing with the source file named at the top of `phone.tsx` |
 | Where someone stands | `world.ts`, then build |
-| A drawing | `prompts.mjs`, `generate.mjs --force <id>`, `process-art.mjs <id>`, then build |
+| A drawing | `prompts.mjs`, `generate.mjs --force <id>`, `process-art.mjs <id>`, then build. Changing the venue means re-placing everything in `world.ts` |
+| The sky's colours | `--sky` in `story.css`, and `SKY_DAY` in `boot.ts` |
 | The invitation QR, once a demo event exists | Regenerate `public/story/qr-invite.svg` |
 | Timing of a beat | `choreography.ts`. Add tweens per property in time order, because each starts from where that property last was |
 
