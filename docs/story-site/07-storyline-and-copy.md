@@ -64,19 +64,19 @@ Guests leave private voice or video messages: your mum in tears, your best frien
 
 *The picture should be the mother of the bride, laughing and crying into her phone. The prompt is `guest-voice` in `prompts.mjs`. Until it's generated, the scene lights the guest in the sari who's already on the terrace.*
 
-### 6. Reveal
+### 6. Disposable
 
-**See every photo live. Or reveal them later.**
+**Turn every phone into a disposable camera.**
 
-**Go live.** Every photo appears in the gallery as it's taken, for everyone to watch.
+Limited shots and a retro look, hidden until you choose. Or reveal photos live as guests snap.
 
-**Go disposable.** A limited roll with a retro look, hidden until the moment you choose.
+### 7. Album, the story's close
 
-### 7. Album
+**Your guests are already taking the photos.**
 
-**See everything you missed.**
+Get every photo, video and message in one album. All you need is a QR code.
 
-Every photo, video and message from your guests, in one album to download.
+*With a "Create your event →" button on desktop.*
 
 ### Linear page only
 
@@ -99,7 +99,7 @@ Create your event in the app, share your QR code, and let your guests do the res
 - **Page title:** Stills: the shared camera app for weddings and parties
 - **Description:** Guests scan a QR code and start shooting, with nothing to download.
   Every photo, video and voice note lands in one place.
-- **Chapter menu:** Join, Seating, Photos, Challenges, Guestbook, Reveal, Album
+- **Chapter menu:** Join, Seating, Photos, Challenges, Guestbook, Disposable, Album
 
 ## How the story could look
 

@@ -47,16 +47,10 @@ export const CHAPTERS = {
   s4: { label: 'Photos', title: 'Every guest is\nyour photographer.', body: 'Everyone shoots on their own phone, so you get the moments your photographer can’t.', alt: 'Night has fallen over the terrace. Guests take photos on their phones, each flash lights up a patch of the party, and a real photograph appears above it.' },
   s5: { label: 'Challenges', title: 'Photo challenges\nget everyone shooting.', body: 'Set prompts like Happy Tears and Best Dressed, or pick a ready-made pack for your event.', alt: 'A phone showing the challenges Happy Tears, Best Dressed and Caught in the Act, while guests go to absurd lengths to get the shot.' },
   s6: { label: 'Guestbook', title: 'A guestbook\nyou can actually hear.', body: 'Guests leave private voice or video messages: your mum in tears, your best friend at 1am.', alt: 'A guest in the lit terrace records a voice message on her phone, with its waveform on the Stills guestbook screen.' },
-  s7: { label: 'Reveal', title: 'See every photo live.', titleAfter: 'Or reveal them later.', alt: 'A gallery filling up photo by photo. Then the Stills camera zooms in on its remaining-shots counter, which rolls up to 24 and runs down to nothing, and the gallery comes back locked, every photo blurred with the time until it’s revealed.' },
-  s8: { label: 'Album', title: 'See everything\nyou missed.', body: 'Every photo, video and message from your guests, in one album to download.', alt: 'The sun comes up and each locked photo in the gallery reveals itself, one at a time. Last night’s couple sit on the empty terrace, looking through it.' },
+  s7: { label: 'Disposable', title: 'Turn every phone into\na disposable camera.', body: 'Limited shots and a retro look, hidden until you choose. Or reveal photos live as guests snap.', alt: 'The Stills camera zooms in on its remaining-shots counter, which runs down to zero. The gallery locks until morning, then every photo is revealed.' },
+  s8: { label: 'Album', title: 'Your guests are already\ntaking the photos.', body: 'Get every photo, video and message in one album. All you need is a QR code.', alt: 'The sun comes up and each locked photo in the gallery reveals itself, one at a time. Last night’s couple sit on the empty terrace, looking through it.' },
   s9: { label: 'Parties', title: 'Any party with\nmore than one phone.', alt: 'Tabs for birthdays, bachelor and bachelorette parties, and holidays, each with its own setting and its own event on a phone.' },
 };
-
-/** The two ways to run the camera, in scene 7, in the order the phone shows them. */
-export const REVEAL_OPTIONS = [
-  { name: 'Go live.', line: 'Every photo appears in the gallery as it’s taken, for everyone to watch.' },
-  { name: 'Go disposable.', line: 'A limited roll with a retro look, hidden until the moment you choose.' },
-];
 
 /** The last thing on the page, once the story has let go of the scroll. */
 export const CLOSE = {
@@ -143,13 +137,6 @@ export const USE_CASES_ALSO = 'Plus engagements, anniversaries, graduations, bab
 export const NOTES = {
   table7: 'Table 7. That’s you.',
 };
-
-/** Notes for the photos that lift out of the gallery. */
-export const MEMORIES = [
-  { photo: 'p04', note: 'Table 4, all through the speeches.' },
-  { photo: 'p06', note: 'You were at the bar for this one.' },
-  { photo: 'p01', note: 'Best guest of the night.' },
-];
 
 /**
  * The photos swirling round the phone before they settle into the album. Parked for now:

@@ -214,22 +214,6 @@ function TableSheet() {
         <p className="d-tl">Find your table</p>
         <span className="tb-x"><Close /></span>
       </div>
-      <div data-el="tableSearch">
-        <div className="tb-field">
-          <span className="tb-text">
-            <span className="tb-ph" data-el="typePh">Start typing your name</span>
-            <span className="tb-typed" data-el="type1">A</span>
-            <span className="tb-typed" data-el="type2">Ay</span>
-            <span className="tb-typed" data-el="type3">Ayl</span>
-          </span>
-        </div>
-        <p className="tb-help" data-el="typeHelp">Type your name to see where you&rsquo;re sitting.</p>
-        <div className="tb-card" data-el="typeRows">
-          <div className="tb-row" data-el="typeRow1"><span>{DEMO_EVENT.guest}</span><em>{DEMO_EVENT.seat}</em></div>
-          <div className="tb-sep" />
-          <div className="tb-row"><span>{DEMO_EVENT.otherGuest}</span><em>{DEMO_EVENT.otherSeat}</em></div>
-        </div>
-      </div>
       <div className="tb-seat" data-el="seatView">
         <div className="tb-toggle" data-el="seatToggle">
           <i data-el="seatToggleOn" />
@@ -437,6 +421,7 @@ function DareScreen() {
       />
       <EventNav />
       <CameraCapsule />
+      <div className="dare-focus" data-el="dareFocus" />
       {/* `story-viewer.tsx`: the challenge's own photo blurred behind its intro slide. */}
       <div className="dare-viewer" data-el="dareViewer">
         {DARES.map((dare) => (
