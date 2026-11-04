@@ -163,7 +163,7 @@ export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
   },
 ] as const;
 
-export const SAMPLE_COVER = require('../../../assets/sample-event/amelia-and-james-cover.png');
+export const SAMPLE_COVER = require('../../../assets/sample-event/amelia-and-james-cover.jpg');
 
 export interface SampleChallenge {
   id: string;

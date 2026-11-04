@@ -162,7 +162,9 @@ export class Timeline {
       else if (key === 'rot') { rot = value; hasTransform = true; }
       else css += `${key}:${round(value)};`;
     }
-    const transform = hasTransform ? poseCss({ x, y, scale, rot }) : '';
+    // At rest in its own place it needs no transform, and so no graphics layer of its own.
+    const atRest = x === 0 && y === 0 && scale === 1 && rot === 0;
+    const transform = hasTransform && !atRest ? poseCss({ x, y, scale, rot }) : '';
     const signature = css + transform;
     if (this.written.get(el) === signature) return;
     this.written.set(el, signature);

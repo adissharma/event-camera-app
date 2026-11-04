@@ -165,7 +165,7 @@ function JoinScreen() {
   return (
     <div className="scr scr-join" data-el="screen:join">
       <div className="join-cover">
-        <img data-src={raw('p14')} alt="" />
+        <img data-src={raw('p13')} alt="" />
         <div className="join-scrim" />
       </div>
       <div className="join-id">
@@ -429,8 +429,8 @@ function DareScreen() {
     <div className="scr scr-dare" data-el="screen:dare">
       <EventHead
         title={DEMO_EVENT.title}
-        cover={raw('p08')}
-        blurred={blurredRaw('p08')}
+        cover={raw('p13')}
+        blurred={blurredRaw('p13')}
         stats={['412', '86']}
         last={['2', 'Hours left']}
         strip={<ChallengeStrip grouped />}
@@ -517,8 +517,8 @@ function EventScreen() {
       <div className="ev-scroll" data-el="evScroll">
         <EventHead
           title={DEMO_EVENT.title}
-          cover={raw('p08')}
-          blurred={blurredRaw('p08')}
+          cover={raw('p13')}
+          blurred={blurredRaw('p13')}
           stats={['1,284', '86']}
           strip={<ChallengeStrip />}
         >

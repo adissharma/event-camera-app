@@ -27,7 +27,7 @@ const PHOTOS = [
   ['p01', '01.jpg', 0.35], ['p02', '02.jpg', 0.45], ['p03', '03.jpg', 0.3], ['p04', '04.jpg', 0.42],
   ['p05', '05.jpg', 0.3], ['p06', '06.jpg', 0.32], ['p07', '07.jpg', 0.3], ['p08', '08.png', 0.3],
   ['p10', '10.png', 0.5], ['p11', '11.png', 0.55], ['p12', 'Codex Image 21 Sept 2026, 11_42_34.png', 0.3],
-  ['p13', 'amelia-and-james-cover.png', 0.4], ['p14', 'cover.jpg', 0.55],
+  ['p13', 'amelia-and-james-cover.jpg', 0.3], ['p14', 'cover.jpg', 0.55],
 ];
 
 const W = 720, H = 960;
@@ -79,7 +79,9 @@ for (const [id, file, focus] of PHOTOS) {
     .toBuffer();
   await sharp(treated).webp({ quality: 74, effort: 6 }).toFile(join(OUT, `print-${id}.webp`));
   await sharp(treated).resize({ width: 360 }).webp({ quality: 70, effort: 6 }).toFile(join(OUT, `print-${id}-s.webp`));
-  await sharp(join(SRC, file)).resize({ width: 640 }).webp({ quality: 74, effort: 6 }).toFile(join(OUT, `raw-${id}.webp`));
+  // The album cover fills the phone's whole width, so it gets more pixels than the rest.
+  const rawWidth = id === 'p13' ? 900 : 640;
+  await sharp(join(SRC, file)).resize({ width: rawWidth }).webp({ quality: id === 'p13' ? 78 : 74, effort: 6 }).toFile(join(OUT, `raw-${id}.webp`));
   // Already blurred, and small: the locked cells and the glass stretch these instead of
   // paying for a live CSS blur on every frame the phone moves.
   await sharp(treated).resize({ width: 48 }).blur(1.5).webp({ quality: 60 }).toFile(join(OUT, `blur-${id}.webp`));
