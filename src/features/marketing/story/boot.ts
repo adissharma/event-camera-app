@@ -76,6 +76,12 @@ export function bootStory(root: HTMLElement): () => void {
     ucTabs.forEach((tab, n) => tab.setAttribute('aria-pressed', String(n === i)));
     for (const layer of ucLayers) layer.forEach((el, n) => el.classList.toggle('on', n === i));
     root.classList.toggle('uc-away', i !== 0);
+    syncPlain();
+  }
+  /** Phones show just a gradient behind every party but the wedding, while the hero's up. */
+  function syncPlain() {
+    root.classList.toggle('uc-plain', ucShown !== 0 && window.scrollY <= 4);
+    if (story) syncChrome();
   }
   const onUcClick = (e: Event) => showUseCase(ucTabs.indexOf(e.currentTarget as HTMLButtonElement));
   const onUcFocus = () => scrollToTime(0);
@@ -139,7 +145,7 @@ export function bootStory(root: HTMLElement): () => void {
     const z = Math.max(box.height / story.heroCam.vh, box.width / WORLD.w);
     const x = Math.min(0, Math.max(box.width - WORLD.w * z, box.width / 2 - story.heroCam.cx * z));
     // A few pixels past the bottom, so no sky can show between the floor and the footer.
-    els.closeTerrace.style.transform = `translate3d(${x}px,${box.height + 4 - WORLD.h * z}px,0) scale(${z})`;
+    els.closeTerrace.style.transform = `translate(${x}px,${box.height + 4 - WORLD.h * z}px) scale(${z})`;
   }
 
   /** Night, with a soft hole wherever a flash has lit the party. */
@@ -216,7 +222,7 @@ export function bootStory(root: HTMLElement): () => void {
     els.nav.classList.toggle('past', past && !atClose);
     els.nav.classList.toggle('at-close', atClose);
     // The browser's own chrome follows the sky, until the story's over.
-    const morning = target() > story.labels.s7;
+    const morning = target() > story.labels.s7 || root.classList.contains('uc-plain');
     const chrome = atClose ? SKY_DAY : past ? PAGE : story.night.v > 0.5 ? SKY_NIGHT : morning ? SKY_MORNING : SKY_DAY;
     if (chrome !== chromeColour) {
       chromeColour = chrome;
@@ -270,6 +276,7 @@ export function bootStory(root: HTMLElement): () => void {
       els.stage.classList.remove('nudging');
       root.classList.add('in-phone');
     }
+    syncPlain();
     syncChrome();
     kick();
   };

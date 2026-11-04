@@ -776,7 +776,9 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const SUNRISE = WAIT + 2;
   const REVEAL = SUNRISE + 3.4;
   const left = (t: number) => {
-    const mins = Math.round(492 * (1 - seg(t, WAIT + 1, REVEAL)));
+    // In larger steps on a phone, where every change redraws the whole screen of the mock.
+    const step = m ? 30 : 1;
+    const mins = Math.round((492 * (1 - seg(t, WAIT + 1, REVEAL))) / step) * step;
     if (mins <= 0) return 'Unlocking…';
     const h = Math.floor(mins / 60);
     return `Revealed in ${h ? `${h}h ` : ''}${mins % 60}m`;
@@ -797,8 +799,10 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(els.dawn, { opacity: 1 }, S8 + 1, 1.6, 'none');
   const dawnDx = (m ? DAWN_X.narrow : DAWN_X.wide) - (SUN.x + SUN.d / 2);
   tl.set(els.sun, { x: dawnDx }, S8 + 1);
-  lights.forEach((light, i) => tl.to(light, { r: 2800 }, S8 + 2 + i * 0.1, 2.2, 'in'));
-  tl.to(night, { v: 0 }, S8 + 4, 0.5, 'none');
+  // On a phone the night simply lifts, rather than redrawing every light as it grows.
+  if (!m) lights.forEach((light, i) => tl.to(light, { r: 2800 }, S8 + 2 + i * 0.1, 2.2, 'in'));
+  if (m) tl.to(night, { v: 0 }, S8 + 1.2, 2.6, 'none');
+  else tl.to(night, { v: 0 }, S8 + 4, 0.5, 'none');
   // Not so high on desktop that it comes up behind the album's words.
   tl.to(els.sun, { y: spot ? 240 : 90 }, S8 + 2.4, 2.8, 'out');
   tl.to(els.festoonGlow, { glow: 0 }, S8 + 2.8, 1, 'none');

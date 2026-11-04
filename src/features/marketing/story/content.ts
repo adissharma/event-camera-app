@@ -107,9 +107,9 @@ export const USE_CASES: {
   {
     id: 'wedding', tab: 'Weddings', title: 'Weddings.', line: 'Every table, every tear, every angle.', art: null, tint: '#5a21a8',
     event: { title: DEMO_EVENT.title, photos: '1,284', joined: '86', last: ['2', 'Hours left'] },
-    photos: [raw('p08'), print('p08', true), print('p07', true)],
-    blurred: blurredRaw('p08'),
-    by: ['Ayla', 'Tom'],
+    photos: [raw('p13'), print('p05', true), print('p07', true)],
+    blurred: blurredRaw('p13'),
+    by: ['Priya', 'Tom'],
     challenges: ['👀', '🥹', '💃', '🔍', '🎬'],
   },
   {
@@ -159,6 +159,6 @@ export const MEMORIES = [
 export const SWIRL = false;
 
 /** What's in the album on the phone, in grid order. */
-export const GALLERY = ['p08', 'p07', 'p05', 'p01', 'p06', 'p03', 'p02', 'p04', 'p12', 'p14', 'p10', 'p11'];
+export const GALLERY = ['p05', 'p07', 'p08', 'p01', 'p06', 'p03', 'p02', 'p04', 'p12', 'p14', 'p10', 'p11'];
 /** The name tag on each of those photos. */
-export const GALLERY_BY = ['Ayla', 'Tom', 'Priya', 'Uncle Raj', 'Sofia', 'Ben', 'Nana', 'Leo', 'Ayla', 'Grace', 'Tom', 'Priya'];
+export const GALLERY_BY = ['Priya', 'Tom', 'Ayla', 'Uncle Raj', 'Sofia', 'Ben', 'Nana', 'Leo', 'Ayla', 'Grace', 'Tom', 'Priya'];
