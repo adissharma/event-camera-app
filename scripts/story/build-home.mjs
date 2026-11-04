@@ -41,8 +41,8 @@ const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 const body = renderToStaticMarkup(React.createElement(mod.exports.StoryMarkup));
 
-const TITLE = 'Stills: one shared camera for your whole party';
-const DESCRIPTION = 'Guests scan a QR code and start shooting, with nothing to download. Every photo, video and voice note lands in one place.';
+const TITLE = 'Stills: the shared camera app for weddings and parties';
+const DESCRIPTION = 'Guests scan a QR code and start shooting, with nothing to download. Every photo, video and voice message lands in one album.';
 const html = `<!doctype html>
 <html lang="en">
 <head>

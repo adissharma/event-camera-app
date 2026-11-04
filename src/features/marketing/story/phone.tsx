@@ -95,6 +95,28 @@ export function Invitation({ className, el }: { className: string; el?: string }
   );
 }
 
+/** The phone's home screen, with the two apps that matter: Stills, and the camera that scans. */
+function HomeScreen() {
+  return (
+    <div className="scr scr-home" data-el="screen:home">
+      <div className="home-grid">
+        <span className="home-app">
+          <img data-el="homeStills" src={`${ASSET}/icon-home.webp`} alt="" />
+          <small>Stills</small>
+        </span>
+        <span className="home-app" data-el="homeCamera">
+          <i className="home-cam"><CameraFill /></i>
+          <small>Camera</small>
+        </span>
+        <span className="home-app"><i /></span>
+        <span className="home-app"><i /></span>
+        <span className="home-app"><i /></span>
+        <span className="home-app"><i /></span>
+      </div>
+    </div>
+  );
+}
+
 function IosCamera() {
   return (
     <div className="scr scr-ios" data-el="screen:ios">
@@ -104,7 +126,7 @@ function IosCamera() {
         <div className="ios-reticle" data-el="reticle"><i /><i /><i /><i /></div>
         <div className="ios-pill" data-el="pill">
           <img src={`${ASSET}/icon.webp`} alt="" width="14" height="14" />
-          stills.events
+          You&rsquo;re invited!
         </div>
       </div>
       <div className="ios-top"><i /><i /><i /></div>
@@ -316,7 +338,15 @@ function Blob({ index, children, group }: { index: number; children: ReactNode; 
 }
 
 /** The tiles under the event page's stat strip: the guestbook, then the challenges. */
-function ChallengeStrip({ grouped = false }: { grouped?: boolean }) {
+function ChallengeStrip({ grouped = false, icons }: { grouped?: boolean; icons?: string[] }) {
+  if (icons) {
+    return (
+      <div className="strip">
+        <Blob index={0}><GuestbookIcon /></Blob>
+        {icons.map((icon, i) => <Blob key={icon} index={i + 1}>{icon}</Blob>)}
+      </div>
+    );
+  }
   return (
     <div className="strip">
       <Blob index={0}><GuestbookIcon /></Blob>
@@ -515,11 +545,6 @@ function EventScreen() {
         </div>
         <EventNav />
       </div>
-      {/* The real page once it's scrolled: a solid status bar, with the tabs pinned under it. */}
-      <div className="ev-sb-back" data-el="evBack" />
-      <div className="ev-pinned" data-el="evPinned">
-        <div className="ev-tabs"><span className="on"><Grid /></span><span><Play /></span><u /></div>
-      </div>
       <CameraCapsule saving />
     </div>
   );
@@ -531,20 +556,20 @@ function PartyScreen() {
     <div className="scr scr-ev" data-el="screen:party">
       {USE_CASES.map((useCase) => (
         <div key={useCase.id} className="party" data-group="ucPhone">
-          <div className="ev-scroll" data-group="ucScroll">
+          <div className="ev-scroll">
             <EventHead
               title={useCase.event.title}
               cover={useCase.photos[0]}
               blurred={useCase.blurred}
               tint={useCase.tint}
               stats={[useCase.event.photos, useCase.event.joined]}
-              last={[useCase.event.when, useCase.event.when === '1' ? 'Day ago' : 'Days ago']}
-              strip={<ChallengeStrip />}
+              last={useCase.event.last}
+              strip={<ChallengeStrip icons={useCase.challenges} />}
             />
             <div className="ev-grid">
               {Array.from({ length: 6 }, (_, i) => (
                 <span key={i} className="ev-cell party-cell" style={{ background: `color-mix(in srgb, ${useCase.tint} 16%, #111)` }}>
-                  {useCase.photos[i + 1] ? <><img data-src={useCase.photos[i + 1]} data-kind="print" alt="" /><em>{useCase.by?.[i]}</em></> : <Camera />}
+                  {useCase.photos[i + 1] ? <><img data-src={useCase.photos[i + 1]} alt="" /><em>{useCase.by?.[i]}</em></> : <Camera />}
                 </span>
               ))}
             </div>
@@ -564,6 +589,7 @@ export function Phone() {
         <div className="ph-screen" data-el="screen">
           <BlobDefs />
           <div className="ph-bg" />
+          <HomeScreen />
           <IosCamera />
           <JoinScreen />
           <TableSheet />

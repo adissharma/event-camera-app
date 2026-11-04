@@ -32,9 +32,9 @@ function catenary(x0: number, y0: number, x1: number, y1: number, sag: number, p
   return { x: x0 + (x1 - x0) * p, y: y0 + (y1 - y0) * p + sag * 4 * p * (1 - p) };
 }
 
-function Festoon() {
+function Festoon({ still }: { still?: boolean }) {
   return (
-    <svg className="festoon intro-venue" viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-el="festoonGlow">
+    <svg className={still ? 'festoon' : 'festoon intro-venue'} viewBox={`0 0 ${WORLD.w} ${WORLD.h}`} data-el={still ? undefined : 'festoonGlow'}>
       <defs>
         <radialGradient id="bulbGlow">
           <stop offset="0" stopColor="#fff3d6" stopOpacity=".95" />
@@ -69,9 +69,9 @@ function Festoon() {
 }
 
 /** The one call to action, wherever it appears. Hosts make their events in the iPhone app. */
-function CreateEvent({ small }: { small?: boolean }) {
+function CreateEvent({ small, big }: { small?: boolean; big?: boolean }) {
   return (
-    <a className={small ? 'cta cta-s' : 'cta'} href={LINKS.appStore}>
+    <a className={`cta${small ? ' cta-s' : ''}${big ? ' cta-xl' : ''}`} href={LINKS.appStore}>
       {CTA.create}
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h15M13 6l6 6-6 6" /></svg>
     </a>
@@ -92,6 +92,32 @@ function Figure({ id, order }: { id: string; order: number }) {
           <img data-src={art(frame)} data-kind={LATE.includes(id) ? 'figure-late' : 'figure'} alt="" />
         </div>
       ))}
+    </div>
+  );
+}
+
+/** The hero's terrace again, as plain layers, so the last slide is every bit as sharp and alive. */
+function CloseWorld() {
+  return (
+    <div className="close-world" aria-hidden="true">
+      <img className="close-clouds" src={art('clouds')} alt="" loading="lazy" />
+      <div className="close-terrace" data-el="closeTerrace">
+        <picture>
+          <source media="(max-width: 759px)" srcSet={`${ASSET}/art/room.m.webp`} />
+          <img src={art('room')} alt="" loading="lazy" width={WORLD.w} height={WORLD.h} />
+        </picture>
+        {FIGURES.filter((f) => !LATE.includes(f.id)).map((f) => {
+          const size = figureSize(f);
+          return (
+            <div key={f.id} className="fig" data-sway={f.id} style={{ width: size.w, height: size.h, left: f.x - size.w / 2, top: f.y - size.h }}>
+              <div className={`fig-frame${f.flip ? ' flip-a' : ''}`}>
+                <img src={art(f.frames[0])} alt="" loading="lazy" />
+              </div>
+            </div>
+          );
+        })}
+        <Festoon still />
+      </div>
     </div>
   );
 }
@@ -175,7 +201,7 @@ function Chapter({ name, heading, big, poster, children }: {
 }
 
 export function StoryMarkup() {
-  const chapters = (['s2', 's3', 's4', 's5', 's6', 's7', 's8', 's9'] as const).map((k) => ({ k, label: CHAPTERS[k].label }));
+  const chapters = (['s2', 's3', 's4', 's5', 's6', 's7', 's8'] as const).map((k) => ({ k, label: CHAPTERS[k].label }));
 
   return (
     <div className="story">
@@ -208,10 +234,16 @@ export function StoryMarkup() {
               </div>
               <div className="layer art" style={{ zIndex: 10 }} aria-hidden="true"><Phone /></div>
               <div className="layer art uc-stage" data-el="ucStage" aria-hidden="true">
-                <i className="uc-sun" />
-                {USE_CASES.map((useCase) => (
-                  <img key={useCase.id} className="uc-setting" data-group="ucSetting" data-src={art(useCase.art)} data-kind="print" alt="" />
-                ))}
+                <div className="uc-scene">
+                  <i className="uc-sun" />
+                  {USE_CASES.map((useCase) =>
+                    useCase.art ? (
+                      <img key={useCase.id} className="uc-setting" data-group="ucSetting" data-src={art(useCase.art)} data-kind="figure-late" alt="" />
+                    ) : (
+                      <i key={useCase.id} data-group="ucSetting" />
+                    ),
+                  )}
+                </div>
               </div>
               <div className="art">
                 {DARES.map((dare) => (
@@ -230,6 +262,13 @@ export function StoryMarkup() {
               <div className="white art" data-el="white" aria-hidden="true" />
 
               <Chapter name="s1" heading="h1" big poster="s1">
+                <div className="uc-hero" role="group" aria-label="Kinds of party">
+                  {USE_CASES.map((useCase, i) => (
+                    <button key={useCase.id} type="button" aria-pressed={i === 0} className="uc-tab" data-group="ucTab">
+                      {useCase.tab}
+                    </button>
+                  ))}
+                </div>
                 <div className="cta-row" data-el="heroCta">
                   <CreateEvent />
                 </div>
@@ -247,24 +286,15 @@ export function StoryMarkup() {
                 </div>
               </Chapter>
               <Chapter name="s8" heading="h2" poster="s8" />
+              {/* On the linear page only: on the live one, these are the hero's tabs. */}
               <Chapter name="s9" heading="h2" poster="s9">
-                <div className="uc-tabs" role="tablist" aria-label="Kinds of party">
-                  {USE_CASES.map((useCase, i) => (
-                    <button key={useCase.id} type="button" role="tab" id={`uc-tab-${useCase.id}`} aria-controls={`uc-panel-${useCase.id}`} aria-selected={i === 0} tabIndex={i === 0 ? 0 : -1} className="uc-tab" data-group="ucTab">
-                      {useCase.tab}
-                    </button>
-                  ))}
-                </div>
-                <div className="uc-panels">
-                  {USE_CASES.map((useCase, i) => (
-                    <p key={useCase.id} id={`uc-panel-${useCase.id}`} role="tabpanel" aria-labelledby={`uc-tab-${useCase.id}`} className={`b-l uc-panel${i === 0 ? ' on' : ''}`} data-group="ucPanel">
-                      <b>{useCase.title}</b> {useCase.line}
-                    </p>
-                  ))}
-                </div>
-                <p className="b-l uc-also" data-el="ucAlso">{USE_CASES_ALSO}</p>
+                {USE_CASES.map((useCase) => (
+                  <p key={useCase.id} className="b-l"><b>{useCase.title}</b> {useCase.line}</p>
+                ))}
+                <p className="b-l">{USE_CASES_ALSO}</p>
               </Chapter>
 
+              <i className="hint-band" data-el="hintBand" aria-hidden="true" />
               <button type="button" className="scroll-hint" data-el="hint">
                 <span className="hint-text hint-scroll">{CTA.scroll}</span>
                 <span className="hint-text hint-swipe">{CTA.swipe}</span>
@@ -297,18 +327,13 @@ export function StoryMarkup() {
           </div>
         </section>
 
-        <section className="close" id="get-stills" aria-labelledby="close-title">
+        <section className="close" id="get-stills" data-el="close" aria-labelledby="close-title">
           <img className="close-art" src={`${ASSET}/poster/s1.webp`} alt="" loading="lazy" width="1600" height="1000" />
+          <CloseWorld />
           <div className="close-in">
-            <h2 className="h-lg" id="close-title">{CLOSE.title}</h2>
+            <h2 className="h-xl" id="close-title">{CLOSE.title}</h2>
             <p className="b-l">{CLOSE.body}</p>
-            <div className="cta-row">
-              <CreateEvent />
-              <span className="cta-qr">
-                <img src={`${ASSET}/qr-appstore.svg`} alt="" width="64" height="64" />
-                <span>{CTA.scan}</span>
-              </span>
-            </div>
+            <CreateEvent big />
           </div>
         </section>
       </main>

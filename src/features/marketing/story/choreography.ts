@@ -1,5 +1,5 @@
 import { CAST, DAWN_X, FIGURES, LATE, PLACES, SUN, SUN_DOWN, WORLD, figure, figureSize } from './world';
-import { DEMO_EVENT, SWIRL, USE_CASES } from './content';
+import { DEMO_EVENT, SWIRL } from './content';
 import { Timeline, type Pose } from './timeline';
 
 /**
@@ -16,8 +16,6 @@ export interface Layout {
   vis: number;
   /** On a phone, how far down the stage the longest scene's words reach. */
   copyEnd?: number;
-  /** The same for the parties, which have the tabs as well. */
-  partiesEnd?: number;
   m: boolean;
 }
 
@@ -40,8 +38,8 @@ export interface Story {
   /** The camera's opening position, which the clouds drift relative to. */
   home: number;
   /** When the use case tabs are on screen. */
-  ucFrom: number;
-  ucTo: number;
+  /** Where the camera starts: the last slide frames its terrace the same way. */
+  heroCam: { cx: number; cy: number; vh: number };
   /** The moment each scene's still is captured at, for the linear page. */
   stills: Record<string, number>;
 }
@@ -98,20 +96,15 @@ function toScreen(L: Layout, cam: { cx: number; cy: number; vh: number }, x: num
   return { x: L.w / 2 + (x - cam.cx) * z, y: L.h / 2 + (y - cam.cy) * z, z };
 }
 
-function phonePose(L: Layout, where: 'anchor' | 'center' | 'rest') {
+function phonePose(L: Layout, where: 'anchor' | 'center') {
   if (L.m) {
     const room = L.vis - 26 - (L.copyEnd ?? 0);
-    const s = Math.min((L.w * 0.72) / PHONE.w, Math.min(L.vis * 0.62, room) / PHONE.h);
-    // The parties have more words above them, and the whole phone stays in view under those too.
-    const fit = where === 'rest' ? Math.min(s, (L.vis - 26 - (L.partiesEnd ?? 0)) / PHONE.h) : s;
-    return { x: (L.w - PHONE.w * fit) / 2, y: L.vis - PHONE.h * fit - 14, scale: fit };
+    const s = Math.min((L.w * 0.72) / PHONE.w, Math.min(L.vis * 0.66, room) / PHONE.h);
+    // Close under the words rather than down at the fold, so there's no gap between the two.
+    return { x: (L.w - PHONE.w * s) / 2, y: Math.min(L.vis - PHONE.h * s - 14, (L.copyEnd ?? 0) + 30), scale: s };
   }
   const s = Math.min((L.h * 0.86) / PHONE.h, 1);
   if (where === 'center') return { x: (L.w - PHONE.w * s) / 2, y: (L.h - PHONE.h * s) / 2, scale: s };
-  if (where === 'rest') {
-    const r = s * 0.74;
-    return { x: L.w * 0.76 - (PHONE.w * r) / 2, y: L.h - PHONE.h * r * 0.72, scale: r };
-  }
   return { x: L.w * 0.76 - (PHONE.w * s) / 2, y: (L.h - PHONE.h * s) / 2 + 6, scale: s };
 }
 
@@ -127,11 +120,6 @@ function inPhone(el: HTMLElement, screen: HTMLElement) {
   return { x, y, w: el.offsetWidth, h: el.offsetHeight };
 }
 
-/** How far down the phone's screen the first row of a party's photos ends up. */
-const PARTY_PHOTOS_END = 780;
-/** The height of `.sb`, in the phone's own pixels. */
-const STATUS_BAR = 54;
-
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const seg = (t: number, a: number, b: number) => clamp01((t - a) / (b - a));
 const smooth = (p: number) => p * p * (3 - 2 * p);
@@ -142,12 +130,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const tl = new Timeline();
   const m = layout.m;
   const scenes = ['s2', 's3', 's4', 's5', 's6', 's7', 's8'].map((name) => els[`ch:${name}`]);
-  const parties = els['ch:s9'];
-  const L: Layout = {
-    ...layout,
-    copyEnd: m ? Math.max(...scenes.map((c) => c.offsetTop + c.offsetHeight)) : 0,
-    partiesEnd: m ? parties.offsetTop + parties.offsetHeight : 0,
-  };
+  const L: Layout = { ...layout, copyEnd: m ? Math.max(...scenes.map((c) => c.offsetTop + c.offsetHeight)) : 0 };
   /**
    * Desktop's room is wide and busy, so each scene pushes in on its subject and lets
    * everything else fall into shadow. Phones are close already, and a landscape phone
@@ -157,7 +140,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   /** How far the room falls while one person has the stage. */
   const SHADOW = 0.88;
   const labels: Record<string, number> = {};
-  const home = wide(L, m ? HOME_M : undefined);
+  // On a wide screen the hero's words need more sky, so the terrace starts a little lower.
+  // On a phone, far enough along to keep the old man dancing in frame, with the sun still up.
+  const dancer = figure('dad');
+  const homeM = Math.max(HOME_M, dancer.x + figureSize(dancer).w / 2 + 40 - (wide(L).vh * L.w) / L.h / 2);
+  const widest = wide(L, m ? homeM : undefined);
+  const home = spot ? { ...widest, cy: widest.cy - (L.h * 0.07 * widest.vh) / L.h } : widest;
   const cam = { ...home };
   const night = { v: 0 };
   const lights: Light[] = [];
@@ -182,10 +170,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const hidden = (...list: (HTMLElement | undefined)[]) => list.forEach((el) => tl.start(el, { opacity: 0 }));
   const screen = (name: string) => els[`screen:${name}`];
   const tap = (x: number, y: number, at: number) => {
-    tl.set(els.tap, { x, y }, at - 0.01);
-    tl.to(els.tap, { opacity: 1, scale: 1 }, at, 0.1, 'out');
-    tl.to(els.tap, { scale: 0.74 }, at + 0.1, 0.12, 'out');
-    tl.to(els.tap, { opacity: 0 }, at + 0.28, 0.14, 'in');
+    // It shows up early and pulses over the spot, so the eye gets there before the press.
+    tl.set(els.tap, { x, y, scale: 1 }, at - 0.23);
+    tl.to(els.tap, { opacity: 1 }, at - 0.22, 0.1, 'out');
+    tl.to(els.tap, { scale: 0.74 }, at + 0.02, 0.1, 'out');
+    tl.to(els.tap, { scale: 1 }, at + 0.12, 0.1, 'out');
+    tl.to(els.tap, { opacity: 0 }, at + 0.3, 0.14, 'in');
   };
   const flashAt = (el: HTMLElement | undefined, x: number, y: number, at: number) => {
     tl.start(el, { x, y, scale: 0.2, opacity: 0 });
@@ -250,9 +240,17 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   for (const id of LATE.filter((name) => name !== 'ayla')) {
     tl.start(els[`fig:${id}`], { y: standing(id).y + OFFSTAGE, opacity: 0, rot: 0 });
   }
-  for (const n of ['s2', 's3', 's4', 's5', 's6', 's7', 's8', 's9']) tl.start(els[`ch:${n}`], { alpha: 0, y: 26 });
+  for (const n of ['s2', 's3', 's4', 's5', 's6', 's7', 's8']) tl.start(els[`ch:${n}`], { alpha: 0, y: 26 });
   tl.start(els['ch:s1'], { alpha: 1 });
-  tl.start(els.phone, { ...phonePose(L, 'anchor'), y: L.h + 60, opacity: 0 });
+  // There from the start, open on the event: beside the words, or under them on a phone,
+  // where it fits between the words and the prompt, so neither has to sit on the other.
+  const heroAnchor = phonePose(L, 'anchor');
+  const promptText = Array.from(els.hint.children).find((c) => (c as HTMLElement).offsetHeight > 0) as HTMLElement;
+  const heroY = m ? els['ch:s1'].offsetTop + els['ch:s1'].offsetHeight + 28 : heroAnchor.y;
+  const heroScale = m ? Math.min(heroAnchor.scale, (els.hint.offsetTop + promptText.offsetTop - 12 - heroY) / PHONE.h) : heroAnchor.scale;
+  tl.start(els.phone, { x: (m ? (L.w - PHONE.w * heroScale) / 2 : heroAnchor.x), y: heroY, scale: heroScale, opacity: 1 });
+  tl.start(screen('home'), { opacity: 1 });
+  tl.start(screen('party'), { x: 0, y: 0, scale: 1, opacity: 1 });
   tl.start(els.sun, { x: 0, y: 0 });
   tl.start(els.festoonGlow, { glow: 0 });
   tl.start(els.dim, { opacity: 0 });
@@ -263,9 +261,17 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   labels.s1 = 0;
   // The nudge has the bottom of the screen to itself, until the chapters take over.
   tl.to(els.hint, { opacity: 0 }, 0.02, 0.2, 'none');
+  tl.to(els.hintBand, { opacity: 0 }, 0.02, 0.2, 'none');
   tl.start(els.chapters, { alpha: 0 });
   tl.to(els.chapters, { alpha: 1 }, 0.25, 0.25, 'none');
   tl.to(els['ch:s1'], { alpha: 0 }, 0.03, 0.2, 'none');
+  // Whichever party was showing, the story itself is the wedding: the terrace comes back,
+  // and the event closes up into its icon on the home screen.
+  tl.start(els.ucStage, { opacity: 1 });
+  tl.to(els.ucStage, { opacity: 0 }, 0.03, 0.3, 'none');
+  const stillsIcon = inPhone(els.homeStills, els.screen);
+  tl.to(screen('party'), { x: stillsIcon.x, y: stillsIcon.y, scale: stillsIcon.w / PHONE.w }, 0.12, 0.42, 'inOut');
+  tl.to(screen('party'), { opacity: 0 }, 0.44, 0.1, 'none');
 
   // ---- S2. Scan: the very first scroll is the product
   labels.s2 = 0.3;
@@ -286,13 +292,16 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(els.invRoom, invPose, 0.08, 0.9, 'out3');
   ch('ch:s2', 0.32);
 
-  // The phone comes up on its camera, and lands on the invitation.
-  tl.set(screen('ios'), { opacity: 1 }, 0.05);
-  tl.set(els.phone, { opacity: 1 }, 0.1);
+  // The phone comes up on its home screen, and Camera opens out of its icon.
   tl.to(els.phone, { ...anchor, y: scanPhoneY }, 0.1, 0.95, 'out3');
+  const cameraIcon = inPhone(els.homeCamera.querySelector<HTMLElement>('.home-cam')!, els.screen);
+  tap(cameraIcon.x + cameraIcon.w / 2, cameraIcon.y + cameraIcon.h / 2, 1);
+  tl.start(screen('ios'), { x: cameraIcon.x, y: cameraIcon.y, scale: cameraIcon.w / PHONE.w, opacity: 0 });
+  tl.set(screen('ios'), { opacity: 1 }, 1.2);
+  tl.to(screen('ios'), { x: 0, y: 0, scale: 1 }, 1.2, 0.35, 'out3');
   // Held up beside the phone, then the card moves behind it, and the viewfinder picks it up
   // as it goes: the same card in the same place, at the same size, as if seen through the phone.
-  const SLIDE = 1.25;
+  const SLIDE = 1.75;
   const behind = { x: anchor.x + VF_CARD.x * anchor.scale - 143, y: scanPhoneY + VF_CARD.y * anchor.scale - 198, scale: anchor.scale, rot: -3 };
   const inFinder = (pose: { x: number; y: number; scale: number; rot: number }) => ({
     x: (pose.x + 143 - anchor.x) / anchor.scale - VF_CARD.x,
@@ -305,28 +314,28 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(els.invVf, inFinder(behind), SLIDE, 1, 'inOut');
   // Out of sight behind the phone now, and it stays there.
   tl.set(els.invRoom, { opacity: 0 }, SLIDE + 1.05);
-  tl.fromTo(els.reticle, { opacity: 0, scale: 1.5 }, { opacity: 1, scale: 1 }, 2.2, 0.3, 'out3');
-  tl.fromTo(els.pill, { opacity: 0, y: 14 }, { opacity: 1, y: 0 }, 2.5, 0.25, 'back');
+  tl.fromTo(els.reticle, { opacity: 0, scale: 1.5 }, { opacity: 1, scale: 1 }, 2.7, 0.3, 'out3');
+  tl.fromTo(els.pill, { opacity: 0, y: 14 }, { opacity: 1, y: 0 }, 3, 0.25, 'back');
   const pillTap = inPhone(els.pill, els.screen);
-  tap(pillTap.x + 66, pillTap.y + 14, 3);
+  tap(pillTap.x + pillTap.w / 2, pillTap.y + pillTap.h / 2, 3.5);
   // The room falls away, and the invitation and the phone have the stage.
   if (spot) tl.to(night, { v: 0.74 }, 0.2, 0.8, 'inOut');
 
   // iOS raises the App Clip card over the camera: no store, no install.
-  tl.to(els.clipDim, { opacity: 1 }, 3.2, 0.3, 'none');
+  tl.to(els.clipDim, { opacity: 1 }, 3.7, 0.3, 'none');
   tl.start(els.clipCard, { y: 560, opacity: 0 });
-  tl.set(els.clipCard, { opacity: 1 }, 3.2);
-  tl.to(els.clipCard, { y: 0 }, 3.2, 0.5, 'out3');
+  tl.set(els.clipCard, { opacity: 1 }, 3.7);
+  tl.to(els.clipCard, { y: 0 }, 3.7, 0.5, 'out3');
   // On a phone it's been sitting low to make room for the invitation.
-  if (m) tl.to(els.phone, { y: anchor.y }, 3.2, 0.5, 'inOut');
+  if (m) tl.to(els.phone, { y: anchor.y }, 3.7, 0.5, 'inOut');
   const clipOpen = inPhone(els.clipOpen, els.screen);
-  tap(clipOpen.x + clipOpen.w / 2, clipOpen.y + clipOpen.h / 2, 4.25);
-  tl.set(els.clipOpenText, { opacity: 0 }, 4.4);
-  tl.set(els.clipSpin, { opacity: 1 }, 4.4);
-  showScreen('join', 4.75, 0.3);
+  tap(clipOpen.x + clipOpen.w / 2, clipOpen.y + clipOpen.h / 2, 4.75);
+  tl.set(els.clipOpenText, { opacity: 0 }, 4.9);
+  tl.set(els.clipSpin, { opacity: 1 }, 4.9);
+  showScreen('join', 5.25, 0.3);
 
-  // ---- S3. Retire the easel
-  const S3 = 6.5;
+  // ---- S3. A seating chart on every phone
+  const S3 = 7;
   labels.s3 = S3;
   const t7 = PLACES.table7;
   const tablesShot = spot ? framed(L, t7.x, t7.y, 1150, 0.37) : closer(L, t7.x + (m ? 60 : 0));
@@ -344,16 +353,6 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   }
   chOut('ch:s2', S3 + 0.1);
   ch('ch:s3', S3 + 0.4);
-
-  // As soon as the headline's up, it's thrown away: up, over and out of the frame.
-  const THROW = S3 + 1;
-  const easelAt = standing('easel');
-  tl.to(els['fig:easel'], { x: easelAt.x - 1500 }, THROW, 1.05, 'in');
-  tl.to(els['fig:easel'], { rot: -135 }, THROW, 1.05, 'in');
-  tl.to(els['fig:easel'], { y: easelAt.y - 150 }, THROW, 0.45, 'out');
-  tl.to(els['fig:easel'], { y: easelAt.y + OFFSTAGE }, THROW + 0.45, 0.6, 'in');
-  // Which leaves the light free for the table she's about to find.
-  if (spot) tl.to(seatPool, { x: t7.x - 40, y: 1120, r: 520 }, THROW + 0.5, 1, 'inOut');
 
   // Only now does the phone get on with finding her seat.
   const SEEK = S3 + 1.4;
@@ -381,8 +380,21 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   // the table. On a phone there's no room beside it, so it slides down to reveal the table.
   const SEEN = SEEK + 3.4;
   const seatPhoneY = m ? L.vis * 0.8 : anchor.y;
-  if (m) tl.to(els.phone, { y: seatPhoneY }, SEEN + 0.05, 0.9, 'inOut');
-  const LINE = m ? SEEN + 1 : SEEN + 0.3;
+  // A phone has no room for both at once, so it zooms the floor plan first, then gets out of the
+  // way for the room. Wider screens show the plan while she walks.
+  const PLAN_M = SEEN + 0.5;
+  const LEAVE_M = PLAN_M + 2.1 + 0.75;
+  if (m) tl.to(els.phone, { y: seatPhoneY }, LEAVE_M, 0.9, 'inOut');
+  const LINE = m ? LEAVE_M + 1.25 : SEEN + 0.9;
+  // Table 7's up, so the easel's out of a job: thrown out of the frame, just before the line sets off.
+  const THROW = LINE - 0.7;
+  const easelAt = standing('easel');
+  tl.to(els['fig:easel'], { x: easelAt.x - 1500 }, THROW, 1.05, 'in');
+  tl.to(els['fig:easel'], { rot: -135 }, THROW, 1.05, 'in');
+  tl.to(els['fig:easel'], { y: easelAt.y - 150 }, THROW, 0.45, 'out');
+  tl.to(els['fig:easel'], { y: easelAt.y + OFFSTAGE }, THROW + 0.45, 0.6, 'in');
+  // Which leaves the light free for the table she's found.
+  if (spot) tl.to(seatPool, { x: t7.x - 40, y: 1120, r: 520 }, THROW + 0.2, 0.9, 'inOut');
   const seatWord = inPhone(els.seatWord, els.screen);
   const from = { x: anchor.x + (seatWord.x + seatWord.w / 2 - (m ? 0 : 74)) * anchor.scale, y: seatPhoneY + (seatWord.y + seatWord.h / 2) * anchor.scale };
   // The line stops at the edge of the sign, so it never covers the number.
@@ -433,10 +445,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   off(els['note:table7'], walkEnd + 0.1);
   off(els.tent7, walkEnd + 0.1);
 
-  // The floor plan: a swipe left brings it in, two fingers pinch in, and a swipe right goes
-  // back. All while she walks, except on a phone, which is out of the way until she's there.
-  if (m) tl.to(els.phone, { y: anchor.y }, walkEnd + 0.1, 0.5, 'inOut');
-  const PLAN = m ? walkEnd + 0.7 : LINE + 1.8;
+  // The floor plan: a swipe left brings it in, two fingers pinch in, and a swipe right goes back.
+  const PLAN = m ? PLAN_M : LINE + 1.8;
   const toggle = inPhone(els.seatToggle, els.screen);
   const planBox = inPhone(els.seatPlan, els.screen);
   const PAGE = planBox.w + 16;
@@ -463,9 +473,24 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     tl.to(dot, { x: pinch.x + way * 92, y: pinch.y + way * 92 }, PLAN + 0.95, 0.8, 'inOut');
     tl.to(dot, { opacity: 0 }, PLAN + 1.75, 0.12, 'in');
   });
-  tl.start(els.planZoom, { x: 0, y: 0, scale: 1 });
+  // Zoomed by redrawing the plan closer in, not by enlarging a picture of it, so it stays sharp.
+  const planSvg = els.planZoom.querySelector('svg')!;
+  const planW = 300;
+  const planH = 340;
+  const planFit = Math.min(planBox.w / planW, planBox.h / planH);
+  const planInsetX = (planBox.w - planW * planFit) / 2;
+  const planInsetY = (planBox.h - planH * planFit) / 2;
+  const planCam = { x: 0, y: 0, scale: 1 };
+  let planDrawn = '';
+  tl.onRender(() => {
+    const { x, y, scale } = planCam;
+    const view = `${(planInsetX * (1 - scale) - x) / (planFit * scale)} ${(planInsetY * (1 - scale) - y) / (planFit * scale)} ${planW / scale} ${planH / scale}`;
+    if (view === planDrawn) return;
+    planDrawn = view;
+    planSvg.setAttribute('viewBox', view);
+  });
   // Scale 2.5, with table 7 (bottom left of the plan) landing in the middle.
-  tl.to(els.planZoom, { x: -planBox.w * 0.08, y: -planBox.h * 1.3, scale: 2.5 }, PLAN + 0.95, 0.8, 'inOut');
+  tl.to(planCam, { x: -planBox.w * 0.08, y: -planBox.h * 1.3, scale: 2.5 }, PLAN + 0.95, 0.8, 'inOut');
   const BACK = PLAN + 2.1;
   swipe(BACK, 0.16, 0.84);
   tl.to(els.seatCard, { x: 0 }, BACK + 0.08, 0.55, 'inOut');
@@ -540,6 +565,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   // The fresh camera waits underneath the event page, until the disposable scene needs it.
   tl.set(screen('camera'), { opacity: 1 }, S5);
   showScreen('dare', S5, 0.02);
+  // What's underneath is done with. Left showing, Safari can paint it over the new screen.
+  for (const name of ['home', 'ios', 'join', 'table']) tl.set(screen(name), { opacity: 0 }, S5 + 0.03);
   tl.set(els.phone, { ...anchor, y: L.h + 80 }, S5);
   tl.set(els.phone, { opacity: 1 }, S5 + 0.05);
   tl.to(els.phone, { y: lowY }, S5 + 0.05, 1, 'out3');
@@ -598,7 +625,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     }
   });
 
-  // ---- S6. A photo can't keep your grandad's voice: straight from the dare to the guestbook.
+  // ---- S6. A guestbook you can hear: straight from the dare to someone leaving a message.
   const S6 = S5 + 8.9;
   labels.s6 = S6 + 0.3;
   chOut('ch:s5', S6);
@@ -606,16 +633,15 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   drop('dareCrew', S6 + 0.1);
   tl.to(crewPool, { r: 0 }, S6 + 0.3, 0.3, 'in');
   ch('ch:s6', S6 + 0.7);
-  const grandad = figure('grandad');
+  const speaker = figure('auntie');
   if (m) {
-    camTo(closer(L, grandad.x), S6 + 0.2, 0.7);
+    camTo(closer(L, speaker.x), S6 + 0.2, 0.7);
     tl.to(els.phone, { y: lowY }, S6 + 0.1, 0.5, 'inOut');
     tl.to(els.phone, { y: anchor.y }, S6 + 1.9, 0.6, 'inOut');
   }
-  if (spot) camTo(framed(L, grandad.x, grandad.y - 340, 1280, 0.28), S6 + 0.2, 0.9);
-  rise('grandad', S6 + 0.5, 0.9);
-  const grandadPool = addLight(grandad.x, grandad.y - grandad.h * 0.5);
-  tl.to(grandadPool, { r: m ? 600 : 640 }, S6 + 0.7, 0.5, 'out3');
+  if (spot) camTo(framed(L, speaker.x, speaker.y - 300, 1280, 0.28), S6 + 0.2, 0.9);
+  const speakerPool = addLight(speaker.x, speaker.y - speaker.h * 0.5);
+  tl.to(speakerPool, { r: m ? 600 : 640 }, S6 + 0.7, 0.5, 'out3');
   showScreen('guestbook', S6 + 0.3, 0.3);
   tl.to(els.gbStrip, { x: -560 }, S6 + 0.5, 4, 'none');
   // The recording's own timer: down a second at a time, as the app's does.
@@ -636,8 +662,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const S7 = S6 + 4.9;
   labels.s7 = S7 + 0.5;
   chOut('ch:s6', S7);
-  drop('grandad', S7 + 0.1);
-  tl.to(grandadPool, { r: 0 }, S7 + 0.3, 0.3, 'in');
+  tl.to(speakerPool, { r: 0 }, S7 + 0.3, 0.3, 'in');
   if (m) tl.to(els.phone, { y: anchor.y }, S7, 0.5, 'inOut');
   tl.to(els.dim, { opacity: 0.55 }, S7, 0.8, 'none');
   if (m || spot) camTo(roomWide, S7 + 0.3, 0.8);
@@ -655,13 +680,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     tl.start(cell, { opacity: 0, scale: 0.7 });
     tl.to(cell, { opacity: 1, scale: 1 }, S7 + 1 + i * 0.2, 0.22, 'back');
   });
-  // Scrolled along so the photos have the screen, with the tabs just above them.
-  const GRID_SCROLL = -330;
+  // Scrolled along so the photos have the screen, but never so far that the event's card
+  // reaches the clock: the cover stays behind the status bar, as it does at the top of the page.
+  const GRID_SCROLL = -200;
+  const GRID_MAX = -320;
   tl.start(els.evScroll, { y: 0 });
   tl.to(els.evScroll, { y: GRID_SCROLL }, S7 + 1.2, 1.5, 'inOut');
-  // Nothing scrolls through the clock: the status bar goes solid as the card reaches it.
-  hidden(els.evBack, els.evPinned);
-  tl.to(els.evBack, { opacity: 1 }, S7 + 2, 0.5, 'none');
 
   // ---- Or make them wait: the same roll, one fresh camera, and only the counter to look at.
   const DIS = S7 + 4.4;
@@ -743,7 +767,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.set(els.fabCamera, { opacity: 0 }, WAIT + 0.3);
   tl.set(els.fabSave, { opacity: 1 }, WAIT + 0.3);
   // On a phone it passes behind the words on its way back, so its own words wait until it's landed.
-  const eventBack = WAIT + (m ? 0.62 : 0.32);
+  const eventBack = WAIT + (m ? 0.82 : 0.32);
   tl.set(screen('event'), { opacity: 0 }, eventBack - 0.02);
   tl.to(screen('event'), { opacity: 1 }, eventBack, 0.3, 'out');
 
@@ -797,11 +821,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     tl.to(lockIns[i], { opacity: 0, scale: 0.8 }, revealAt(i), 0.14, 'in');
     tl.to(el, { opacity: 0 }, revealAt(i) + 0.08, 0.4, 'none');
   });
-  // Up until the tabs meet the status bar, where they pin and the photos carry on under them.
-  const tabsY = inPhone(els.evScroll.querySelector<HTMLElement>('.ev-tabs')!, els.screen).y;
-  const GRID_PINNED = STATUS_BAR - tabsY;
-  tl.to(els.evScroll, { y: GRID_PINNED }, revealAt(3), 1.5, 'inOut');
-  tl.set(els.evPinned, { opacity: 1 }, revealAt(3) + 1.5);
+  tl.to(els.evScroll, { y: GRID_MAX }, revealAt(3), 1.5, 'inOut');
   const ALBUM = revealAt(REVEALED) + 0.5;
   labels.s8 = ALBUM + 0.3;
 
@@ -817,7 +837,6 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   }
   tl.to(els.dim, { opacity: 0 }, ALBUM, 0.8, 'none');
   tl.to(els.phone, anchor, ALBUM, 1.1, 'inOut');
-  tl.to(els.evScroll, { y: GRID_PINNED - 150 }, ALBUM + 1, 7.4, 'none');
   group('lift').forEach((el, i) => {
     const at7 = ALBUM + 1.3 + i * 2.4;
     const size = m ? Math.min(L.w * 0.52, L.h * 0.25) : Math.min(L.w * 0.2, L.h * 0.42);
@@ -926,51 +945,19 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     });
   }
 
-  // ---- S9. Any party with more than one phone: look up, away from this one.
-  const S9 = ALBUM + 9;
-  labels.s9 = S9 + 0.8;
-  chOut('ch:s8', S9);
-  tl.to(els.phone, { y: L.h + 80 }, S9 + 0.05, 0.7, 'in');
-  tl.set(els.phone, { opacity: 0 }, S9 + 0.8);
-  camTo({ cx: m ? figure('morning').x : home.cx, cy: -1150, vh: home.vh }, S9 + 0.2, 1.3);
-  ch('ch:s9', S9 + 1);
-  // Each tab's setting comes up from below, with its own event on the phone in front.
-  tl.start(els.ucStage, { y: L.h, opacity: 0 });
-  // Only once the terrace and its sun have gone, so there are never two suns up.
-  tl.set(els.ucStage, { opacity: 1 }, S9 + 1.2);
-  tl.to(els.ucStage, { y: 0 }, S9 + 1.2, 0.9, 'out3');
-  const restPose = phonePose(L, 'rest');
-  const partyPose = m ? restPose : anchor;
-  showScreen('party', S9 + 1.15, 0.05);
-  tl.set(els.phone, { ...partyPose, y: L.h + 80 }, S9 + 1.16);
-  tl.set(els.phone, { opacity: 1 }, S9 + 1.2);
-  tl.to(els.phone, { y: partyPose.y }, S9 + 1.2, 0.9, 'out3');
-  const ucFrom = S9 + 1.4;
-  const ucTo = ucFrom + 7.5;
-  // On a phone each event starts on its cover, then drifts up to bring its first two photos in.
-  if (m) {
-    const each = (ucTo - ucFrom) / USE_CASES.length;
-    group('ucScroll').forEach((scroller, i) => {
-      const first = inPhone(scroller.querySelector<HTMLElement>('.ev-cell')!, els.screen);
-      const from = ucFrom + i * each + (i ? 0.2 : 0.7);
-      tl.start(scroller, { y: 0 });
-      tl.to(scroller, { y: Math.min(0, PARTY_PHOTOS_END - (first.y + first.h)) }, from, ucFrom + (i + 1) * each - from, 'none');
-    });
-  }
-  // The story ends on the parties, and the page lets go of the scroll here.
-  const T = ucTo + 0.2;
+  // The album's the last thing in the story: from here the page just scrolls on to the FAQs.
+  const T = ALBUM + 9.2;
 
   const stills = {
     s1: 0,
-    s2: 4,
+    s2: 4.5,
     s3: WALK + 1,
     s4: S5 - 0.4,
     s5: S5 + 7.6,
     s6: S6 + 3.4,
     s7: shotsFrom + 1.4,
     s8: ALBUM + 3.9,
-    s9: ucFrom + 1,
   };
 
-  return { tl, T, labels, cam, lights, night, home: home.cx, ucFrom, ucTo, stills };
+  return { tl, T, labels, cam, lights, night, home: home.cx, heroCam: home, stills };
 }

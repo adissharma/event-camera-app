@@ -34,7 +34,6 @@ export const CTA = {
   create: 'Create your event',
   scroll: 'Scroll to join the party',
   swipe: 'Swipe up to join the party',
-  scan: 'Scan with your iPhone',
 };
 
 /**
@@ -42,27 +41,27 @@ export const CTA = {
  * One idea per scene: the headline makes the promise and the body proves it.
  */
 export const CHAPTERS = {
-  s1: { title: 'You’ll miss most\nof your own party.', body: 'Your guests won’t. Stills turns every phone in the room into one shared camera.', alt: 'A bold black and white print of a wedding on the terrace of an Italian villa, under a hot pink and violet sunset.' },
-  s2: { label: 'Scan', title: 'Nothing to download.\nNothing to explain.', body: 'One scan and Stills just opens, like a card trick. Guests type their name and start shooting. No app. No account. No password your uncle will forget.', alt: 'A phone scanning the QR code on a paper invitation, then opening the Stills join screen for Olivia and Daniel’s wedding.' },
-  s3: { label: 'Seat', title: 'Retire the easel.', body: 'Guests type their name and Stills shows them their table. Add your floor plan and they can zoom in to find it. No second app. No extra charge.', alt: 'An old seating chart on an easel is thrown out of the picture. Then the Find your table screen shows Ayla seated at Table 7, and the host’s floor plan zooms in.' },
-  s4: { label: 'Shoot', title: '120 photographers.\nZero invoices.', body: 'Your photographer gets the first dance. Your guests get the speech from table nine, the auntie on the dance floor and the hug you walked straight past.', alt: 'Night has fallen over the terrace. Guests take photos on their phones, each flash lights up a patch of the party, and a real photograph appears above it.' },
-  s5: { label: 'Dare', title: 'Don’t ask for photos.\nSet a dare.', body: 'Happy Tears. Best Dressed. Caught in the Act. Write your own challenges or grab a ready-made pack, then watch your quietest table go to work.', alt: 'A phone showing the challenges Happy Tears, Best Dressed and Caught in the Act, while guests go to absurd lengths to get the shot.' },
-  s6: { label: 'Messages', title: 'A photo can’t keep\nyour grandad’s voice.', body: 'So Stills has an audio and video guestbook. Guests leave you a message, out loud or on camera, and only you get to hear it.', alt: 'A grandfather speaking into his phone, while the Stills guestbook records his voice as a waveform.' },
-  s7: { label: 'Reveal', title: 'Watch it live.', titleAfter: 'Or make them wait.', alt: 'A gallery filling up photo by photo. Then the Stills camera zooms in on its remaining-shots counter, which rolls up to 24 and runs down to nothing, and the gallery comes back locked, every photo blurred with the time until it’s revealed.' },
-  s8: { label: 'Album', title: 'Here’s everything\nyou missed.', body: 'Every photo, video and message, from every guest, in one place. No chasing the group chat. Download the lot, and finally attend your own party.', alt: 'The sun comes up and each locked photo in the gallery reveals itself, one at a time. Last night’s couple sit on the empty terrace, looking through it.' },
+  s1: { title: 'The shared camera app\nfor weddings and parties.', body: 'Guests scan a QR code and start shooting. Every photo lands in one album.', alt: 'A bold black and white print of a wedding on the terrace of an Italian villa, under a hot pink and violet sunset.' },
+  s2: { label: 'Join', title: 'Guests join\nwith one scan.', body: 'They scan your QR code and type their name. No download, no account, no password.', alt: 'A phone scanning the QR code on a paper invitation, then opening the Stills join screen for Olivia and Daniel’s wedding.' },
+  s3: { label: 'Seating', title: 'A seating chart\non every phone.', body: 'Guests type their name to find their table, then zoom into your floor plan.', alt: 'An old seating chart on an easel is thrown out of the picture. Then the Find your table screen shows Ayla seated at Table 7, and the host’s floor plan zooms in.' },
+  s4: { label: 'Photos', title: 'Every guest is\nyour photographer.', body: 'Everyone shoots on their own phone, so you get the moments your photographer can’t.', alt: 'Night has fallen over the terrace. Guests take photos on their phones, each flash lights up a patch of the party, and a real photograph appears above it.' },
+  s5: { label: 'Challenges', title: 'Photo challenges\nget everyone shooting.', body: 'Set prompts like Happy Tears and Best Dressed, or pick a ready-made pack for your event.', alt: 'A phone showing the challenges Happy Tears, Best Dressed and Caught in the Act, while guests go to absurd lengths to get the shot.' },
+  s6: { label: 'Guestbook', title: 'A guestbook\nyou can actually hear.', body: 'Guests leave private voice or video messages: your mum in tears, your best friend at 1am.', alt: 'A guest in the lit terrace records a voice message on her phone, with its waveform on the Stills guestbook screen.' },
+  s7: { label: 'Reveal', title: 'See every photo live.', titleAfter: 'Or reveal them later.', alt: 'A gallery filling up photo by photo. Then the Stills camera zooms in on its remaining-shots counter, which rolls up to 24 and runs down to nothing, and the gallery comes back locked, every photo blurred with the time until it’s revealed.' },
+  s8: { label: 'Album', title: 'See everything\nyou missed.', body: 'Every photo, video and message from your guests, in one album to download.', alt: 'The sun comes up and each locked photo in the gallery reveals itself, one at a time. Last night’s couple sit on the empty terrace, looking through it.' },
   s9: { label: 'Parties', title: 'Any party with\nmore than one phone.', alt: 'Tabs for birthdays, bachelor and bachelorette parties, and holidays, each with its own setting and its own event on a phone.' },
 };
 
 /** The two ways to run the camera, in scene 7, in the order the phone shows them. */
 export const REVEAL_OPTIONS = [
-  { name: 'Go live.', line: 'Every photo lands in the gallery as it’s taken. The party watches itself happen.' },
-  { name: 'Go disposable.', line: 'A limited roll. Direct flash, a little grain, a printed date stamp. Nobody sees a thing until the moment you pick.' },
+  { name: 'Go live.', line: 'Every photo appears in the gallery as it’s taken, for everyone to watch.' },
+  { name: 'Go disposable.', line: 'A limited roll with a retro look, hidden until the moment you choose.' },
 ];
 
 /** The last thing on the page, once the story has let go of the scroll. */
 export const CLOSE = {
   title: 'It only happens once.\nCatch all of it.',
-  body: 'Make your event. Share the QR code. Go enjoy your own party.',
+  body: 'Create your event in the app, share your QR code, and let your guests do the rest.',
 };
 
 /** Checked against the code: see the fact check in docs/story-site/07-storyline-and-copy.md. */
@@ -93,9 +92,12 @@ export const USE_CASES: {
   tab: string;
   title: string;
   line: string;
-  art: string;
+  /** The setting behind the phone. Weddings have the terrace itself. */
+  art: string | null;
   tint: string;
-  event: { title: string; photos: string; joined: string; when: string };
+  event: { title: string; photos: string; joined: string; last: [string, string] };
+  /** The icons on its challenge strip, from that kind of party's pack in `challenge-packs.ts`. */
+  challenges: string[];
   photos: string[];
   /** The cover, blurred, for behind the glass. */
   blurred?: string;
@@ -103,25 +105,36 @@ export const USE_CASES: {
   by?: string[];
 }[] = [
   {
+    id: 'wedding', tab: 'Weddings', title: 'Weddings.', line: 'Every table, every tear, every angle.', art: null, tint: '#5a21a8',
+    event: { title: DEMO_EVENT.title, photos: '1,284', joined: '86', last: ['2', 'Hours left'] },
+    photos: [raw('p08'), print('p08', true), print('p07', true)],
+    blurred: blurredRaw('p08'),
+    by: ['Ayla', 'Tom'],
+    challenges: ['👀', '🥹', '💃', '🔍', '🎬'],
+  },
+  {
     id: 'birthday', tab: 'Birthdays', title: 'Birthdays.', line: 'The surprise face. From every angle.', art: 'setting-birthday', tint: '#b5249f',
-    event: { title: 'Maya’s surprise 40th', photos: '286', joined: '22', when: '1' },
+    event: { title: 'Maya’s surprise 40th', photos: '286', joined: '22', last: ['1', 'Day ago'] },
     photos: [`${ASSET}/usecase/birthday-1.webp`, `${ASSET}/usecase/birthday-2.webp`, `${ASSET}/usecase/birthday-3.webp`],
     blurred: `${ASSET}/usecase/birthday-1-b.webp`,
     by: ['Sam', 'Nina'],
+    challenges: ['🥳', '🕯️', '🤗', '😲', '🎈'],
   },
   {
     id: 'bach', tab: 'Bach parties', title: 'Bachelor and bachelorette parties.', line: 'What happens on the trip stays in the gallery.', art: 'setting-bach', tint: '#2860c8',
-    event: { title: 'Jess’s Last Weekend', photos: '214', joined: '8', when: '3' },
+    event: { title: 'Jess’s Last Weekend', photos: '214', joined: '8', last: ['3', 'Days ago'] },
     photos: [`${ASSET}/usecase/bach-1.webp`, `${ASSET}/usecase/bach-2.webp`, `${ASSET}/usecase/bach-3.webp`],
     blurred: `${ASSET}/usecase/bach-1-b.webp`,
     by: ['Holly', 'Mia'],
+    challenges: ['✨', '🥂', '👗', '😂', '🌅'],
   },
   {
     id: 'trip', tab: 'Holidays', title: 'Holidays and group trips.', line: 'You shot the sunset. They shot you asleep on the beach.', art: 'setting-trip', tint: '#f67b3d',
-    event: { title: 'Lisbon, All of Us', photos: '337', joined: '9', when: '5' },
+    event: { title: 'Lisbon, All of Us', photos: '337', joined: '9', last: ['5', 'Days ago'] },
     photos: [`${ASSET}/usecase/trip-1.webp`, `${ASSET}/usecase/trip-2.webp`, `${ASSET}/usecase/trip-3.webp`],
     blurred: `${ASSET}/usecase/trip-1-b.webp`,
     by: ['Ana', 'Joe'],
+    challenges: ['🛬', '🏞️', '🗺️', '🌀', '💛'],
   },
 ];
 export const USE_CASES_ALSO = 'Plus engagements, anniversaries, graduations, baby showers, housewarmings and Christmas parties. There’s a challenge pack for each.';

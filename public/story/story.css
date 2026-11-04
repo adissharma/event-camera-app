@@ -70,12 +70,21 @@ body { overflow: visible !important; margin: 0; }
 .cta-row { display: flex; flex-wrap: wrap; gap: 14px 16px; margin-top: 26px; align-items: center; }
 .cta { display: inline-flex; flex: none; align-items: center; gap: 12px; height: 58px; padding: 0 26px 0 28px; border-radius: 999px; background: #fff; color: var(--ink) !important; font-size: 18px; font-weight: 600; letter-spacing: -.005em; text-decoration: none; text-shadow: none; white-space: nowrap; transition: background .18s; }
 .cta svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; transition: translate .18s ease-out; }
-.cta:hover { background: var(--paper); }
+.cta:hover::after { background: var(--paper); }
+/* The rim: the app's violet to pink, with a glint that runs around it every few seconds. The colour
+   is a square spinning behind the button, which only asks the graphics card to turn one layer. */
+.cta { position: relative; isolation: isolate; overflow: hidden; background: transparent; animation: cta-glow 3.8s ease-in-out infinite; }
+.cta::before { content: ''; position: absolute; z-index: -2; left: 50%; top: 50%; width: 130%; aspect-ratio: 1; margin: -65% 0 0 -65%; background: conic-gradient(#5b35e8, #a329ec 70deg, #e548cd 130deg, #ff8a98 165deg, #fff 180deg, #ff8a98 195deg, #e548cd 230deg, #a329ec 290deg, #5b35e8); animation: cta-shimmer 3.8s cubic-bezier(.45, .05, .35, 1) infinite; }
+.cta::after { content: ''; position: absolute; z-index: -1; inset: 3px; border-radius: inherit; background: #fff; transition: background .18s; }
+@keyframes cta-shimmer { 0% { transform: rotate(0deg); } 45%, 100% { transform: rotate(360deg); } }
+@keyframes cta-glow { 0%, 50%, 100% { box-shadow: 0 0 0 rgba(229, 72, 205, 0); } 24% { box-shadow: 0 0 26px rgba(229, 72, 205, .7); } }
 .cta:hover svg { translate: 4px 0; }
 .cta-s { height: 44px; padding: 0 18px 0 20px; gap: 8px; font-size: 15px; }
+.cta-s::after { inset: 1.5px; }
+.cta.cta-xl { height: auto; padding: .62em 1.3em; gap: .55em; font-size: clamp(22px, 2.6vw, 36px); line-height: 1.2; }
+.cta-xl svg { width: 1.1em; height: 1.1em; }
+.cta-xl::after { inset: 3px; }
 .cta-s svg { width: 16px; height: 16px; }
-.cta-qr { display: flex; align-items: center; gap: 10px; margin-left: 12px; font-size: 13px; line-height: 1.3; color: #fff; }
-.cta-qr img { width: 64px; height: 64px; padding: 5px; background: #fff; border-radius: 8px; }
 
 .foot { position: relative; z-index: 2; background: var(--ink); padding: 56px var(--gutter) 48px; display: flex; flex-wrap: wrap; gap: 24px 48px; align-items: center; justify-content: space-between; border-top: 1px solid #232326; }
 .foot img { width: 112px; height: auto; }
@@ -92,9 +101,25 @@ body { overflow: visible !important; margin: 0; }
 .faq-item summary svg { flex: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; transition: rotate .2s ease-out; }
 .faq-item[open] summary svg { rotate: 45deg; }
 .faq-item p { padding: 0 42px 24px 0; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.55; color: rgba(255, 255, 255, .86); }
-.close { position: relative; z-index: 2; min-height: 100vh; min-height: 100svh; overflow: hidden; background: #8a23ae; padding: clamp(88px, 13vh, 132px) var(--gutter) 0; }
-.close-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 100%; }
-.close-in { position: relative; text-shadow: 0 1px 14px rgba(62, 14, 120, .6); }
+/* The last slide: the first slide's terrace, the words, and one very big button in the middle. */
+.close { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; min-height: 100vh; min-height: 100svh; overflow: hidden; background: #7a22b8; padding: 72px var(--gutter) 13vh; text-align: center; }
+.close-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 100%; }
+.story-live .close-art { display: none; }
+.close-world { display: none; }
+.story-live .close-world { display: block; position: absolute; inset: 0; overflow: hidden; background: var(--sky); }
+.close-clouds { position: absolute; left: -6%; top: -4%; width: 112%; height: 74%; object-fit: cover; object-position: 50% 100%; opacity: .9; -webkit-mask-image: linear-gradient(to bottom, transparent 42%, #000 62%); mask-image: linear-gradient(to bottom, transparent 42%, #000 62%); }
+.close-terrace { position: absolute; left: 0; top: 0; width: 3840px; height: 1440px; transform-origin: 0 0; }
+.close-terrace > picture img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.close-terrace [data-sway='singalong'] .fig-frame, .close-terrace [data-sway='dad'] .fig-frame { transform-origin: 50% 100%; animation: sway 1.5s ease-in-out infinite alternate; }
+.close-terrace [data-sway='hug'] .fig-frame, .close-terrace [data-sway='cake'] .fig-frame { transform-origin: 50% 100%; animation: sway 3.2s ease-in-out infinite alternate; }
+.close-in { position: relative; display: flex; flex-direction: column; align-items: center; text-shadow: 0 1px 4px rgba(62, 14, 120, .5), 0 2px 22px rgba(62, 14, 120, .8); }
+.close-in .h-xl { max-width: none; font-size: clamp(30px, 9vw, 92px); }
+@media (min-width: 760px) and (min-aspect-ratio: 9/10) {
+  .close-in .h-xl { font-size: clamp(38px, 5.4vw, 92px); }
+}
+.close-in .b-l { margin-top: 14px !important; max-width: 44em; font-size: clamp(15px, 1.4vw, 20px); }
+.close-in .cta { margin-top: clamp(22px, 3.6vh, 36px); }
+.nav.at-close .nav-get { visibility: hidden !important; }
 
 /* ---------- the live stage ---------- */
 .story-live .track { height: var(--track, 1900vh); }
@@ -161,8 +186,8 @@ body { overflow: visible !important; margin: 0; }
 .story-live .ch { position: absolute; left: var(--gutter); top: clamp(84px, 13vh, 132px); z-index: 20; width: min(46vw, 760px); padding: 0; margin: 0; max-width: none; opacity: 0; pointer-events: none; }
 .story-live .ch:first-child { padding-top: 0; }
 .story-live .ch { text-shadow: 0 1px 14px rgba(62, 14, 120, .6); }
-.story-live .ch-s1 { width: min(74vw, 1180px); opacity: 1; }
-.story-live .ch-s1 .h-xl { max-width: 11.5em; }
+.story-live .ch-s1 { width: min(54vw, 1000px); opacity: 1; }
+.story-live .ch-s1 .h-xl { max-width: none; font-size: clamp(34px, 4.7vw, 84px); }
 .story-live .ch-s8 { width: min(31vw, 520px); }
 .story-live .ch-s8 .h-lg { font-size: clamp(30px, 3.6vw, 56px); }
 
@@ -170,7 +195,10 @@ body { overflow: visible !important; margin: 0; }
 .story-live .sr { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* The prompt to scroll: a band across the bottom, solid at the foot. It hangs below the stage
    by more than the page ever lifts, so the lift can't bring the bottom of the art into view. */
-.scroll-hint { all: unset; box-sizing: border-box; position: absolute; left: 0; right: 0; bottom: -64px; z-index: 21; display: none; flex-direction: column; align-items: center; justify-content: flex-end; gap: 12px; padding: 120px 16px calc(100lvh - 100svh + 86px); background: linear-gradient(transparent, rgba(22, 10, 54, .7) 28%, rgba(22, 10, 54, .92) 52%, #160a36 calc(100% - 70px)); color: #fff; text-align: center; cursor: pointer; }
+.scroll-hint { all: unset; box-sizing: border-box; position: absolute; left: 0; right: 0; bottom: 0; z-index: 21; display: none; flex-direction: column; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 16px calc(100lvh - 100svh + 22px); color: #fff; text-align: center; cursor: pointer; }
+/* The shade behind the prompt runs right across the page, and under the phone rather than over it. */
+.hint-band { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 9; height: calc(186px + 100lvh - 100svh); background: linear-gradient(transparent, rgba(22, 10, 54, .86) 58px, rgba(22, 10, 54, .94) 120px, #160a36 calc(100% - 40px)); opacity: 1; pointer-events: none; }
+.story-live .hint-band { display: block; }
 .story-live .scroll-hint { display: flex; }
 .story .scroll-hint:focus-visible { outline: 2px solid #fff; outline-offset: -6px; }
 .hint-text { font-family: 'Isolde', Georgia, serif; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; }
@@ -183,29 +211,21 @@ body { overflow: visible !important; margin: 0; }
   .hint-swipe { display: inline; }
   /* "Swipe up" points the way the finger goes. */
   .hint-arrow svg { rotate: 180deg; }
-  .stage.nudging .hint-arrow { animation-name: arrow-hop-up; }
+  .stage { --hop: -14px; }
 }
-/* Until someone scrolls: everything on the stage lifts and drops, to show that it moves. A few
-   times, then it leaves them in peace. The stage itself stays put, so its edge never shows. */
+/* Beside the phone on a wide screen, so the phone isn't under it. */
+@media (min-width: 760px) and (min-aspect-ratio: 9/10) {
+  .scroll-hint { right: 46%; }
+}
+/* Until someone scrolls: the prompt hops, the way the page will go. A few times, then it rests. */
 .story-live .stage-in { position: absolute; inset: 0; }
-.stage { --lift: 44px; }
-.stage.nudging .stage-in { animation: page-nudge 4.2s 4 both; will-change: transform; }
-.stage.nudging .hint-arrow { animation: arrow-hop 4.2s 4 both; }
-@keyframes page-nudge {
+.stage { --hop: 14px; }
+.stage.nudging .hint-text, .stage.nudging .hint-arrow { animation: hint-hop 4.2s 4 both; }
+@keyframes hint-hop {
   0% { transform: translateY(0); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
-  9% { transform: translateY(calc(var(--lift) * -1)); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
+  9% { transform: translateY(var(--hop)); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
   17% { transform: translateY(0); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
-  21% { transform: translateY(calc(var(--lift) * -.27)); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
-  25%, 100% { transform: translateY(0); }
-}
-@keyframes arrow-hop-up {
-  0%, 9% { transform: translateY(0); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
-  17% { transform: translateY(-10px); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
-  25%, 100% { transform: translateY(0); }
-}
-@keyframes arrow-hop {
-  0%, 9% { transform: translateY(0); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
-  17% { transform: translateY(10px); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  21% { transform: translateY(calc(var(--hop) * .27)); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
   25%, 100% { transform: translateY(0); }
 }
 
@@ -237,15 +257,21 @@ body { overflow: visible !important; margin: 0; }
 .ph-body { position: absolute; inset: -11px; border-radius: 66px; background: linear-gradient(145deg, #3b3a3d, #131315 28%, #0c0c0e 72%, #2c2b2e); box-shadow: 0 0 0 1px #4a494d, 0 36px 90px rgba(0, 0, 0, .68); }
 .ph-body::before { content: ''; position: absolute; right: -2.5px; top: 212px; width: 3px; height: 92px; background: #333236; border-radius: 0 2px 2px 0; }
 .ph-body::after { content: ''; position: absolute; left: -2.5px; top: 176px; width: 3px; height: 150px; background: linear-gradient(#333236 0 28%, transparent 28% 36%, #333236 36% 62%, transparent 62% 68%, #333236 68%); border-radius: 2px 0 0 2px; }
-.ph-screen { position: absolute; inset: 11px; border-radius: 55px; overflow: hidden; background: var(--ink); color: var(--ivory); contain: paint; }
-.ph-bg { position: absolute; inset: 0; background: var(--ink); }
+.ph-screen { position: absolute; inset: 11px; border-radius: 55px; overflow: hidden; background: var(--ink); color: var(--ivory); contain: paint; clip-path: inset(0 round 55px); }
+.ph-bg { position: absolute; inset: 0; border-radius: 55px; background: var(--ink); }
 .ph-island { position: absolute; top: 11px; left: 50%; width: 118px; height: 34px; margin-left: -59px; border-radius: 20px; background: #000; z-index: 50; }
 .ph-sb-d { position: absolute; inset: 0 0 auto 0; z-index: 45; pointer-events: none; }
 .sb { display: flex; justify-content: space-between; align-items: center; height: 54px; padding: 8px 32px 0 42px; font-size: 16px; font-weight: 600; color: #fff; }
 .sb-r { display: flex; gap: 6px; align-items: center; }
-.ph-tap { position: absolute; left: 0; top: 0; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255, 255, 255, .34); border: 1.5px solid rgba(255, 255, 255, .78); opacity: 0; visibility: hidden; z-index: 60; }
+.ph-tap { position: absolute; left: 0; top: 0; width: 66px; height: 66px; margin: -33px 0 0 -33px; border-radius: 50%; background: rgba(255, 255, 255, .36); border: 3px solid #fff; box-shadow: 0 0 0 3px rgba(91, 53, 232, .85), 0 6px 22px rgba(11, 11, 12, .5); opacity: 0; visibility: hidden; z-index: 60; }
+/* Rings pulsing out of it, only while it's showing. */
+.ph-tap[style*='visibility: visible']::before, .ph-tap[style*='visibility: visible']::after { content: ''; position: absolute; inset: -6px; border-radius: 50%; border: 4px solid #fff; animation: tap-pulse .9s ease-out infinite; }
+.ph-tap[style*='visibility: visible']::after { border-color: #e548cd; animation-delay: .3s; }
+@keyframes tap-pulse { from { transform: scale(.85); opacity: .95; } to { transform: scale(2.1); opacity: 0; } }
 
-.scr { position: absolute; inset: 0; overflow: hidden; background: var(--ink); opacity: 0; visibility: hidden; isolation: isolate; }
+/* Every screen is rounded itself, as well as clipped by the phone, so a square corner can't show
+   past the curve however the browser layers them. */
+.scr { position: absolute; inset: 0; overflow: hidden; border-radius: 55px; background: var(--ink); opacity: 0; visibility: hidden; isolation: isolate; }
 .scr img { display: block; }
 .ey { font-size: 11px; line-height: 14px; letter-spacing: 1.6px; text-transform: uppercase; color: #efe9e0; margin: 0; }
 .dim { color: var(--muted) !important; }
@@ -255,7 +281,17 @@ body { overflow: visible !important; margin: 0; }
 .b-md { font-size: 15px; line-height: 22px; margin: 0; }
 
 /* iOS camera */
-.scr-ios { background: #000; }
+/* The home screen: bigger than life, so the two names read at the size the phone's drawn. */
+.scr-home { background: linear-gradient(165deg, #241052, #6a2bb8 42%, #d44aa8 76%, #ff9a8a); }
+.home-grid { position: absolute; left: 22px; right: 22px; top: 76px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 0; justify-items: center; }
+.home-app { display: flex; flex-direction: column; align-items: center; gap: 8px; color: #fff; }
+.home-app img, .home-app i { display: block; width: 94px; height: 94px; border-radius: 22px; background: rgba(255, 255, 255, .16); }
+.home-app img { background: #000; }
+.home-app small { font-size: 21px; line-height: 26px; font-weight: 500; }
+.home-app .home-cam { display: grid; place-items: center; background: linear-gradient(#ececef, #b4b4ba); }
+.home-cam svg { width: 58px; height: 58px; }
+.scr-ios { background: #000; transform-origin: 0 0; }
+[data-el='screen:party'] { transform-origin: 0 0; }
 .ios-vf { position: absolute; left: 0; right: 0; top: 100px; bottom: 170px; background: #1c1812; overflow: hidden; }
 .ios-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 30% 100%; opacity: .55; }
 .ios-reticle { position: absolute; left: 50%; top: 50%; width: 148px; height: 148px; margin: -96px 0 0 -72px; opacity: 0; visibility: hidden; }
@@ -264,8 +300,8 @@ body { overflow: visible !important; margin: 0; }
 .ios-reticle i:nth-child(2) { right: 0; top: 0; border-left: 0; border-bottom: 0; border-top-right-radius: 8px; }
 .ios-reticle i:nth-child(3) { left: 0; bottom: 0; border-right: 0; border-top: 0; border-bottom-left-radius: 8px; }
 .ios-reticle i:nth-child(4) { right: 0; bottom: 0; border-left: 0; border-top: 0; border-bottom-right-radius: 8px; }
-.ios-pill { position: absolute; left: 50%; bottom: 14px; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 13px 0 9px; margin-left: -66px; border-radius: 8px; background: #ffd60a; color: #1a1500; font-size: 13px; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; }
-.ios-pill img { border-radius: 3px; background: #000; }
+.ios-pill { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; align-items: center; gap: 8px; width: fit-content; height: 40px; padding: 0 16px 0 11px; margin: 0 auto; border-radius: 10px; background: #ffd60a; color: #1a1500; font-size: 20px; font-weight: 500; white-space: nowrap; opacity: 0; visibility: hidden; }
+.ios-pill img { width: 20px; height: 20px; border-radius: 4px; background: #000; }
 .ios-top { position: absolute; left: 0; right: 0; top: 0; height: 100px; background: #000; display: flex; justify-content: flex-end; align-items: flex-end; gap: 12px; padding: 0 18px 12px; }
 .ios-top i { width: 22px; height: 22px; border-radius: 50%; background: #2a2a2c; }
 .ios-bot { position: absolute; left: 0; right: 0; bottom: 0; height: 170px; background: #000; padding: 12px 26px 0; }
@@ -372,8 +408,6 @@ body { overflow: visible !important; margin: 0; }
 .ev-tabs .on { opacity: 1; }
 .ev-tabs svg { width: 22px; height: 22px; }
 .ev-tabs u { position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px; background: linear-gradient(90deg, #fff 50%, rgba(255, 255, 255, .16) 50%); }
-.ev-sb-back { position: absolute; left: 0; right: 0; top: 0; height: 54px; background: var(--ink); opacity: 0; visibility: hidden; }
-.ev-pinned { position: absolute; left: 0; right: 0; top: 54px; background: var(--ink); opacity: 0; visibility: hidden; }
 .ev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 10px; background: var(--ink); }
 .ev-cell { position: relative; aspect-ratio: 4 / 5; border-radius: 22px; overflow: hidden; background: #141416; display: block; transform-origin: 50% 50%; }
 .ev-cell img { width: 100%; height: 100%; object-fit: cover; }
@@ -410,14 +444,14 @@ body { overflow: visible !important; margin: 0; }
   .nav { padding: 10px 16px; }
   .nav-logo { width: 68px; height: 28px; }
   .story-live .ch { top: 62px; left: 16px; right: 16px; width: auto; }
+  .story-live .ch-s1 .h-xl { font-size: clamp(27px, 8.4vw, 60px); }
   /* On a phone the words can't always have clear sky, so they carry a little of their own. */
   .story-live .ch .b-l { text-shadow: 0 0 2px rgba(62, 14, 120, .55), 0 1px 12px rgba(62, 14, 120, .85); }
   .story-live .ch-s1 { width: auto; }
   .story-live .ch-s8 { width: auto; }
-  .cta-qr { display: none; }
   .faq { grid-template-columns: minmax(0, 1fr); padding: 64px 20px; }
   .faq-item p { padding-right: 0; }
-  .close { padding: 72px 20px 0; }
+  .close { padding: 72px 20px 26vh; }
   .h-xl { font-size: clamp(38px, 11.5vw, 56px); }
   .h-lg { font-size: clamp(27px, 8vw, 38px); }
   .b-l { font-size: 14px; line-height: 1.4; margin-top: 8px !important; }
@@ -425,7 +459,6 @@ body { overflow: visible !important; margin: 0; }
   .chapters { display: none !important; }
   .cta-row { margin-top: 16px; gap: 14px; }
   /* Any further and the headline would slide under the logo. */
-  .stage { --lift: 24px; }
   .cta { height: 54px; font-size: 17px; }
   .cta-s { height: 38px; padding: 0 14px 0 16px; font-size: 14px; }
   .foot { padding: 40px 20px; }
@@ -433,22 +466,25 @@ body { overflow: visible !important; margin: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .cta, .cta svg, .faq-item summary svg { transition: none; }
+  .cta, .cta::before { animation: none; }
 }
 
 /* ---------- the opening: sky and logo, then venue, people, clouds and sun, then words ---------- */
 /* `translate` rather than `transform`, which the timeline owns on most of these. */
 .story-live .intro-venue, .story-live .intro-person, .story-live .clouds, .story-live .sun,
-.story-live .ch-s1 .h-xl, .story-live .ch-s1 .b-l, .story-live .ch-s1 .cta-row, .story-live .scroll-hint, .story-live .chapters { transition: translate 1.15s cubic-bezier(.16, 1, .3, 1), opacity .5s ease-out; }
+.story-live .ch-s1 .h-xl, .story-live .ch-s1 .b-l, .story-live .ch-s1 .uc-hero, .story-live .ch-s1 .cta-row, .story-live .scroll-hint, .story-live .hint-band, .story-live .chapters { transition: translate 1.15s cubic-bezier(.16, 1, .3, 1), opacity .5s ease-out; }
 .story-live .intro-venue { translate: 0 100%; }
 .story-live .intro-person { translate: 0 950px; transition-delay: calc(var(--i, 0) * 70ms); }
 .story-live .clouds { translate: 0 150%; }
 .story-live .sun { translate: 0 1500px; }
-.story-live .ch-s1 .h-xl, .story-live .ch-s1 .b-l, .story-live .ch-s1 .cta-row { translate: 0 36px; opacity: 0; }
-.story-live .scroll-hint { translate: 0 100%; }
+.story-live .ch-s1 .h-xl, .story-live .ch-s1 .b-l, .story-live .ch-s1 .uc-hero, .story-live .ch-s1 .cta-row { translate: 0 36px; opacity: 0; }
+.story-live .scroll-hint, .story-live .hint-band { translate: 0 100%; }
 .story-live .chapters { translate: 0 160px; }
+.story-live .phone { translate: 0 110vh; transition: translate 1.15s cubic-bezier(.16, 1, .3, 1); }
+.story.in-phone .phone { translate: 0 0; }
 .story.in-venue .intro-venue, .story.in-people .intro-person, .story.in-sky .clouds, .story.in-sky .sun,
-.story.in-copy .scroll-hint, .story.in-copy .chapters { translate: 0 0; }
-.story.in-copy .ch-s1 .h-xl, .story.in-copy .ch-s1 .b-l, .story.in-copy .ch-s1 .cta-row { translate: 0 0; opacity: 1; }
+.story.in-copy .scroll-hint, .story.in-copy .hint-band, .story.in-copy .chapters { translate: 0 0; }
+.story.in-copy .ch-s1 .h-xl, .story.in-copy .ch-s1 .b-l, .story.in-copy .ch-s1 .uc-hero, .story.in-copy .ch-s1 .cta-row { translate: 0 0; opacity: 1; }
 .story.intro-skip * { transition: none !important; }
 
 .fig[data-el='fig:singalong'] .fig-frame { transform-origin: 50% 100%; animation: sway 1.5s ease-in-out infinite alternate; }
@@ -460,17 +496,16 @@ body { overflow: visible !important; margin: 0; }
   .nav { padding: 6px var(--gutter); }
   .nav-logo { width: 60px; height: 25px; }
   .story-live .ch { top: 46px; left: var(--gutter); right: auto; width: 44vw; }
-  .story-live .ch-s1 { width: 60vw; }
+  .story-live .ch-s1 { width: 56vw; }
   .story-live .ch-s8 { width: 30vw; }
-  .story-live .h-xl, .story-live .h-lg, .story-live .ch-s8 .h-lg { font-size: 25px; line-height: 1.1; }
+  .story-live .h-xl, .story-live .h-lg, .story-live .ch-s8 .h-lg, .story-live .ch-s1 .h-xl { font-size: 25px; line-height: 1.1; }
   .story-live .ey-l { display: none; }
   .story-live .b-l { font-size: 12px; line-height: 1.35; margin-top: 4px !important; }
   .story-live .cta-row { margin-top: 8px; gap: 12px; }
   .ch-s1 .cta { height: 40px; padding: 0 16px 0 18px; font-size: 14px; }
-  .cta-qr { display: none; }
   .story-live .chapters { display: none; }
-  .stage { --lift: 8px; }
-  .scroll-hint { flex-direction: row; justify-content: center; gap: 10px; padding: 40px 16px calc(100lvh - 100svh + 72px); }
+  .scroll-hint { flex-direction: row; justify-content: center; gap: 10px; padding: 0 16px calc(100lvh - 100svh + 8px); }
+  .hint-band { height: calc(92px + 100lvh - 100svh); }
   .hint-text { font-size: 17px; }
   .hint-arrow { width: 34px; height: 34px; }
   .hint-arrow svg { width: 18px; height: 18px; }
@@ -529,7 +564,7 @@ body { overflow: visible !important; margin: 0; }
 .dare-cam { position: absolute; inset: 0; background: var(--ink); opacity: 0; visibility: hidden; z-index: 3; }
 .dare-cam .cam-vf { bottom: 137px; }
 .dare-cam .cam-vf img { opacity: 0; visibility: hidden; }
-.dare-cam .cam-title b { position: absolute; left: 0; right: 0; text-align: center; opacity: 0; visibility: hidden; }
+.dare-cam .cam-title b { position: absolute; left: 0; right: 0; top: 0; text-align: center; opacity: 0; visibility: hidden; }
 .dare-cam .cam-title { position: relative; height: 41px; justify-content: flex-end; }
 
 /* The App Clip card, as iOS raises it over the camera. */
@@ -549,7 +584,7 @@ body { overflow: visible !important; margin: 0; }
 .clip-foot img { border-radius: 4px; background: #000; }
 
 /* ---------- reveal and parties copy ---------- */
-.opt b, .uc-panel b { font-weight: 600; }
+.opt b { font-weight: 600; }
 .story-live .opts { display: grid; }
 .story-live .opt { grid-area: 1 / 1; }
 .story-live .ch-s7 { width: min(58vw, 900px); }
@@ -558,24 +593,23 @@ body { overflow: visible !important; margin: 0; }
 .story-live .ch-s7 .opt { max-width: 26em; }
 
 /* ---------- use case tabs ---------- */
-.uc-tabs { display: none; }
-.uc-panel { margin-top: 12px !important; }
-.story-live .uc-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
-.uc-tab { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(11, 11, 12, .72); color: #fff; font: 500 15px/1 'Instrument Sans', system-ui, sans-serif; cursor: pointer; text-shadow: none; transition: background .2s, color .2s; }
-.uc-tab:hover { background: rgba(11, 11, 12, .9); }
-.uc-tab[aria-selected='true'] { background: #fff; color: var(--ink); }
+/* The hero's chips. One is always chosen, and the bar along it is how long until the next. */
+.uc-hero { display: none; }
+.story-live .uc-hero { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.uc-tab { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; position: relative; overflow: hidden; gap: 6px; min-height: 40px; padding: 0 15px; border-radius: 999px; background: rgba(32, 12, 74, .55); white-space: nowrap; color: #fff; text-shadow: none; transition: background .2s, color .2s; font: 500 15px/1 'Instrument Sans', system-ui, sans-serif; cursor: pointer; text-shadow: none; transition: background .2s, color .2s; }
+.uc-tab:hover { background: rgba(32, 12, 74, .8); }
+.uc-tab[aria-pressed='true'] { background: rgba(255, 255, 255, .2); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .85); }
 .story .uc-tab:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-.story-live .uc-panels { display: grid; margin-top: 14px; }
-.story-live .uc-panel { grid-area: 1 / 1; margin-top: 0 !important; opacity: 0; visibility: hidden; transition: opacity .25s; }
-.story-live .uc-panel.on { opacity: 1; visibility: visible; }
-.story-live .uc-also { margin-top: 10px !important; font-size: clamp(13px, 1vw, 15px); opacity: .92; max-width: 34em; }
+.story-live .ch-s9 { display: none; }
 
 /* Beside the phone, the words stop short of the sun, which would swallow white text. */
 @media (min-width: 760px) and (min-aspect-ratio: 9/10) {
-  .story-live .ch-s9 .b-l { max-width: min(30em, 36vw); }
 }
-.uc-stage { z-index: 2; opacity: 0; visibility: hidden; }
-.uc-sun { position: absolute; left: 42%; bottom: 26%; width: min(46vh, 30vw); aspect-ratio: 1; border-radius: 50%; background: #fffdf8; box-shadow: 0 0 120px 40px rgba(255, 236, 220, .35); }
+.uc-stage { z-index: 6; opacity: 0; visibility: hidden; pointer-events: none; }
+/* Every party but the wedding has its own place, over the terrace, on the morning-after sky. */
+.uc-scene { position: absolute; inset: 0; opacity: 0; transition: opacity .45s; background: linear-gradient(180deg, #5a3fc0 0%, #9a55d6 26%, #ef86c0 52%, #ffb98a 76%, #ffe0a0 100%); }
+.uc-away .uc-scene { opacity: 1; }
+.uc-sun { position: absolute; left: 56%; bottom: 26%; width: min(46vh, 30vw); aspect-ratio: 1; border-radius: 50%; background: #fffdf8; box-shadow: 0 0 120px 40px rgba(255, 236, 220, .35); }
 /* The drawings' own empty sky keeps the copy clear, so they're shown whole on wide screens. */
 .uc-setting { position: absolute; left: 0; right: 0; bottom: -17%; width: 100%; aspect-ratio: 2 / 1; object-fit: cover; object-position: 50% 100%; opacity: 0; translate: 0 50px; transition: opacity .3s, translate .6s cubic-bezier(.16, 1, .3, 1); }
 .uc-setting.on { opacity: 1; translate: 0 0; }
@@ -588,22 +622,40 @@ body { overflow: visible !important; margin: 0; }
 @media (max-width: 759px), (max-aspect-ratio: 9/10) {
   .story-live .ch-s7 { width: auto; }
   .uc-sun { left: calc(50% - min(26vw, 13vh)); bottom: 30%; width: min(52vw, 26vh); }
+}
+/* Phones have the words and the phone to fit. The chips carry it, so these make way. */
+@media (max-width: 759px), (max-aspect-ratio: 9/10) {
+  .nav-logo { width: 56px; height: 23px; }
+  .cta.cta-xl { padding: .72em 1.2em; font-size: clamp(21px, 6.6vw, 34px); }
+  /* The hero on a phone: centred, and just the headline and the button above the mock. */
+  .story-live .ch-s1 { text-align: center; }
+  .story-live .ch-s1 .b-l { display: none; }
+  .story-live .ch-s1 .cta-row { justify-content: center; margin-top: 20px; }
+  /* The prompt on one line, to leave the phone showing above it. */
+  .scroll-hint { flex-direction: row; justify-content: center; align-items: center; gap: 12px; }
+  .hint-band { height: calc(126px + 100lvh - 100svh); }
+  .hint-text { font-size: 22px; }
+  .hint-arrow { width: 40px; height: 40px; }
+  .hint-arrow svg { width: 20px; height: 20px; }
+}
+@media (max-width: 759px), (max-aspect-ratio: 9/10) {
   .uc-setting { bottom: 0; aspect-ratio: auto; height: 42%; object-position: 42% 100%; }
 }
-/* A short phone: three tabs on one row, and no second paragraph running down into the sun. */
-@media (max-width: 400px) {
-  .story-live .uc-tabs { gap: 6px; flex-wrap: nowrap; }
-  .uc-tab { padding: 0 12px; font-size: 14px; white-space: nowrap; }
+/* Phones keep it simple: no buttons, and the mock slowly fades from one party to the next by itself. */
+@media (max-width: 759px), (max-aspect-ratio: 9/10), (max-height: 520px) {
+  .story-live .uc-hero { display: none; }
+  .party, .uc-setting, .uc-scene { transition-duration: 1.2s; transition-timing-function: ease-in-out; }
 }
-@media (max-height: 700px) and (max-aspect-ratio: 9/10) {
-  .story-live .uc-also { display: none; }
+@media (max-width: 340px) {
+  .hint-text { font-size: 19px; }
+  .story-live .b-l { font-size: 12.5px; }
+}
+@media (max-height: 800px) {
+  .uc-setting { bottom: -24%; }
 }
 @media (max-height: 520px) and (min-aspect-ratio: 9/10) {
   .story-live .ch-s7 { width: 44vw; }
   .uc-setting { bottom: -45%; }
   .uc-sun { left: 54%; width: 26vh; bottom: 44%; }
-  .story-live .uc-tabs { margin-top: 8px; }
-  .uc-tab { min-height: 34px; padding: 0 12px; font-size: 13px; }
-  .story-live .uc-panels { margin-top: 6px; }
-  .story-live .uc-also { display: none; }
-}
+  .story-live .ch-s1 .b-l { position: absolute; width: 1px; height: 1px; margin: 0 !important; overflow: hidden; clip-path: inset(50%); }
+  }
