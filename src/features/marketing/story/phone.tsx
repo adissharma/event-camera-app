@@ -142,7 +142,7 @@ function IosCamera() {
       <div className="clip-dim" data-el="clipDim" />
       <div className="clip" data-el="clipCard">
         <div className="clip-photo">
-          <img data-src={raw('p14')} alt="" />
+          <img data-src={`${ASSET}/clip-cover.webp`} alt="" />
           <span className="clip-x"><Close size={13} /></span>
         </div>
         <div className="clip-info">
