@@ -1,5 +1,5 @@
 import { CAST, DAWN_X, FIGURES, LATE, PLACES, SUN, SUN_DOWN, WORLD, figure, figureSize } from './world';
-import { DEMO_EVENT, SWIRL } from './content';
+import { DEMO_EVENT, SWIRL, USE_CASES } from './content';
 import { Timeline, type Pose } from './timeline';
 
 /**
@@ -14,6 +14,10 @@ export interface Layout {
   h: number;
   /** Height that's always visible, with a phone's toolbars showing. */
   vis: number;
+  /** On a phone, how far down the stage the longest scene's words reach. */
+  copyEnd?: number;
+  /** The same for the parties, which have the tabs as well. */
+  partiesEnd?: number;
   m: boolean;
 }
 
@@ -73,7 +77,9 @@ function wide(L: Layout, cx = WORLD.w / 2) {
  * skyline for the copy, so nothing has to be laid over the print to read it.
  */
 function closer(L: Layout, cx: number) {
-  const vh = Math.min(L.m ? 1650 : 1860, (WORLD.w * L.h) / L.w);
+  // A short phone pulls back further, to keep the skyline under the words.
+  const room = L.m ? (WORLD.h - ROOF_TOP) / (1 - (L.copyEnd ?? 0) / L.h) : 0;
+  const vh = Math.min(Math.max(L.m ? 1650 : 1860, room), (WORLD.w * L.h) / L.w);
   return shot(L, cx, WORLD.h - vh / 2, vh);
 }
 
@@ -94,12 +100,11 @@ function toScreen(L: Layout, cam: { cx: number; cy: number; vh: number }, x: num
 
 function phonePose(L: Layout, where: 'anchor' | 'center' | 'rest') {
   if (L.m) {
-    const s = Math.min((L.w * 0.72) / PHONE.w, (L.vis * 0.62) / PHONE.h);
-    if (where === 'rest') {
-      const r = s * 0.8;
-      return { x: (L.w - PHONE.w * r) / 2, y: L.vis - PHONE.h * r * 0.62, scale: r };
-    }
-    return { x: (L.w - PHONE.w * s) / 2, y: L.vis - PHONE.h * s - 14, scale: s };
+    const room = L.vis - 26 - (L.copyEnd ?? 0);
+    const s = Math.min((L.w * 0.72) / PHONE.w, Math.min(L.vis * 0.62, room) / PHONE.h);
+    // The parties have more words above them, and the whole phone stays in view under those too.
+    const fit = where === 'rest' ? Math.min(s, (L.vis - 26 - (L.partiesEnd ?? 0)) / PHONE.h) : s;
+    return { x: (L.w - PHONE.w * fit) / 2, y: L.vis - PHONE.h * fit - 14, scale: fit };
   }
   const s = Math.min((L.h * 0.86) / PHONE.h, 1);
   if (where === 'center') return { x: (L.w - PHONE.w * s) / 2, y: (L.h - PHONE.h * s) / 2, scale: s };
@@ -122,15 +127,27 @@ function inPhone(el: HTMLElement, screen: HTMLElement) {
   return { x, y, w: el.offsetWidth, h: el.offsetHeight };
 }
 
+/** How far down the phone's screen the first row of a party's photos ends up. */
+const PARTY_PHOTOS_END = 780;
+/** The height of `.sb`, in the phone's own pixels. */
+const STATUS_BAR = 54;
+
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const seg = (t: number, a: number, b: number) => clamp01((t - a) / (b - a));
 const smooth = (p: number) => p * p * (3 - 2 * p);
 const outCubic = (p: number) => 1 - (1 - p) ** 3;
 const lerp = (a: number, b: number, p: number) => a + (b - a) * p;
 
-export function buildStory(els: Els, group: (name: string) => HTMLElement[], L: Layout): Story {
+export function buildStory(els: Els, group: (name: string) => HTMLElement[], layout: Layout): Story {
   const tl = new Timeline();
-  const m = L.m;
+  const m = layout.m;
+  const scenes = ['s2', 's3', 's4', 's5', 's6', 's7', 's8'].map((name) => els[`ch:${name}`]);
+  const parties = els['ch:s9'];
+  const L: Layout = {
+    ...layout,
+    copyEnd: m ? Math.max(...scenes.map((c) => c.offsetTop + c.offsetHeight)) : 0,
+    partiesEnd: m ? parties.offsetTop + parties.offsetHeight : 0,
+  };
   /**
    * Desktop's room is wide and busy, so each scene pushes in on its subject and lets
    * everything else fall into shadow. Phones are close already, and a landscape phone
@@ -642,6 +659,9 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], L: 
   const GRID_SCROLL = -330;
   tl.start(els.evScroll, { y: 0 });
   tl.to(els.evScroll, { y: GRID_SCROLL }, S7 + 1.2, 1.5, 'inOut');
+  // Nothing scrolls through the clock: the status bar goes solid as the card reaches it.
+  hidden(els.evBack, els.evPinned);
+  tl.to(els.evBack, { opacity: 1 }, S7 + 2, 0.5, 'none');
 
   // ---- Or make them wait: the same roll, one fresh camera, and only the counter to look at.
   const DIS = S7 + 4.4;
@@ -722,8 +742,10 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], L: 
   tl.set(els.evEnded, { opacity: 1 }, WAIT + 0.3);
   tl.set(els.fabCamera, { opacity: 0 }, WAIT + 0.3);
   tl.set(els.fabSave, { opacity: 1 }, WAIT + 0.3);
-  tl.set(screen('event'), { opacity: 0 }, WAIT + 0.3);
-  tl.to(screen('event'), { opacity: 1 }, WAIT + 0.32, 0.3, 'out');
+  // On a phone it passes behind the words on its way back, so its own words wait until it's landed.
+  const eventBack = WAIT + (m ? 0.62 : 0.32);
+  tl.set(screen('event'), { opacity: 0 }, eventBack - 0.02);
+  tl.to(screen('event'), { opacity: 1 }, eventBack, 0.3, 'out');
 
   // The real words on each locked photo, counting down to the morning.
   const lockTexts = group('cellLockText');
@@ -775,7 +797,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], L: 
     tl.to(lockIns[i], { opacity: 0, scale: 0.8 }, revealAt(i), 0.14, 'in');
     tl.to(el, { opacity: 0 }, revealAt(i) + 0.08, 0.4, 'none');
   });
-  tl.to(els.evScroll, { y: GRID_SCROLL - 250 }, revealAt(3), 1.5, 'inOut');
+  // Up until the tabs meet the status bar, where they pin and the photos carry on under them.
+  const tabsY = inPhone(els.evScroll.querySelector<HTMLElement>('.ev-tabs')!, els.screen).y;
+  const GRID_PINNED = STATUS_BAR - tabsY;
+  tl.to(els.evScroll, { y: GRID_PINNED }, revealAt(3), 1.5, 'inOut');
+  tl.set(els.evPinned, { opacity: 1 }, revealAt(3) + 1.5);
   const ALBUM = revealAt(REVEALED) + 0.5;
   labels.s8 = ALBUM + 0.3;
 
@@ -791,12 +817,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], L: 
   }
   tl.to(els.dim, { opacity: 0 }, ALBUM, 0.8, 'none');
   tl.to(els.phone, anchor, ALBUM, 1.1, 'inOut');
-  tl.to(els.evScroll, { y: GRID_SCROLL - 400 }, ALBUM + 1, 7.4, 'none');
+  tl.to(els.evScroll, { y: GRID_PINNED - 150 }, ALBUM + 1, 7.4, 'none');
   group('lift').forEach((el, i) => {
     const at7 = ALBUM + 1.3 + i * 2.4;
     const size = m ? Math.min(L.w * 0.52, L.h * 0.25) : Math.min(L.w * 0.2, L.h * 0.42);
     const pose = m
-      ? { x: (L.w - size) / 2 + (i - 1) * 8, y: L.h * 0.3, rot: [-3, 2, -2][i] }
+      ? { x: (L.w - size) / 2 + (i - 1) * 8, y: Math.max(L.h * 0.3, (L.copyEnd ?? 0) + 8), rot: [-3, 2, -2][i] }
       : { x: L.w * 0.44, y: L.h * 0.2 + i * 12, rot: [-3, 2, -2][i] };
     const s = size / 300;
     tl.start(el, { x: anchor.x + 60, y: anchor.y + 420, scale: 0.4, rot: 0, opacity: 0 });
@@ -921,6 +947,16 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], L: 
   tl.to(els.phone, { y: partyPose.y }, S9 + 1.2, 0.9, 'out3');
   const ucFrom = S9 + 1.4;
   const ucTo = ucFrom + 7.5;
+  // On a phone each event starts on its cover, then drifts up to bring its first two photos in.
+  if (m) {
+    const each = (ucTo - ucFrom) / USE_CASES.length;
+    group('ucScroll').forEach((scroller, i) => {
+      const first = inPhone(scroller.querySelector<HTMLElement>('.ev-cell')!, els.screen);
+      const from = ucFrom + i * each + (i ? 0.2 : 0.7);
+      tl.start(scroller, { y: 0 });
+      tl.to(scroller, { y: Math.min(0, PARTY_PHOTOS_END - (first.y + first.h)) }, from, ucFrom + (i + 1) * each - from, 'none');
+    });
+  }
   // The story ends on the parties, and the page lets go of the scroll here.
   const T = ucTo + 0.2;
 

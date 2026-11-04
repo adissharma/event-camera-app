@@ -515,6 +515,11 @@ function EventScreen() {
         </div>
         <EventNav />
       </div>
+      {/* The real page once it's scrolled: a solid status bar, with the tabs pinned under it. */}
+      <div className="ev-sb-back" data-el="evBack" />
+      <div className="ev-pinned" data-el="evPinned">
+        <div className="ev-tabs"><span className="on"><Grid /></span><span><Play /></span><u /></div>
+      </div>
       <CameraCapsule saving />
     </div>
   );
@@ -526,23 +531,25 @@ function PartyScreen() {
     <div className="scr scr-ev" data-el="screen:party">
       {USE_CASES.map((useCase) => (
         <div key={useCase.id} className="party" data-group="ucPhone">
-          <EventHead
-            title={useCase.event.title}
-            cover={useCase.photos[0]}
-            blurred={useCase.blurred}
-            tint={useCase.tint}
-            stats={[useCase.event.photos, useCase.event.joined]}
-            last={[useCase.event.when, useCase.event.when === '1' ? 'Day ago' : 'Days ago']}
-            strip={<ChallengeStrip />}
-          />
-          <div className="ev-grid">
-            {Array.from({ length: 6 }, (_, i) => (
-              <span key={i} className="ev-cell party-cell" style={{ background: `color-mix(in srgb, ${useCase.tint} ${72 - i * 9}%, #111)` }}>
-                {useCase.photos[i + 1] ? <><img data-src={useCase.photos[i + 1]} data-kind="print" alt="" /><em>{useCase.by?.[i]}</em></> : <Camera />}
-              </span>
-            ))}
+          <div className="ev-scroll" data-group="ucScroll">
+            <EventHead
+              title={useCase.event.title}
+              cover={useCase.photos[0]}
+              blurred={useCase.blurred}
+              tint={useCase.tint}
+              stats={[useCase.event.photos, useCase.event.joined]}
+              last={[useCase.event.when, useCase.event.when === '1' ? 'Day ago' : 'Days ago']}
+              strip={<ChallengeStrip />}
+            />
+            <div className="ev-grid">
+              {Array.from({ length: 6 }, (_, i) => (
+                <span key={i} className="ev-cell party-cell" style={{ background: `color-mix(in srgb, ${useCase.tint} 16%, #111)` }}>
+                  {useCase.photos[i + 1] ? <><img data-src={useCase.photos[i + 1]} data-kind="print" alt="" /><em>{useCase.by?.[i]}</em></> : <Camera />}
+                </span>
+              ))}
+            </div>
+            <EventNav />
           </div>
-          <EventNav />
           <CameraCapsule />
         </div>
       ))}
