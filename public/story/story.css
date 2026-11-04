@@ -616,6 +616,8 @@ body { overflow: visible !important; margin: 0; }
 
 .party { position: absolute; inset: 0; opacity: 0; transition: opacity .3s; }
 .party.on { opacity: 1; }
+/* The wedding's name on one line, like the others, so its photos start just as high. */
+.party:first-child .d-ev { padding: 0 8px; font-size: 31px; white-space: nowrap; }
 .party-cell { display: grid; place-items: center; color: rgba(255, 255, 255, .4); }
 .party-cell svg { width: 26px; height: 26px; }
 
