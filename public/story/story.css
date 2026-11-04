@@ -234,17 +234,22 @@ body { overflow: visible !important; margin: 0; }
   25%, 100% { transform: translateY(0); }
 }
 
-/* Where you are in the story: one bar per section across the foot of the page. The current one fills
-   as you scroll, the ones behind stay full, and the ones ahead show how much is left. */
-.chapters { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; gap: 8px; align-items: flex-start; padding: 28px var(--gutter) 14px; font-size: 14px; line-height: 18px; background: linear-gradient(transparent, rgba(11, 8, 24, .9) 24px); }
+/* Where you are in the story: a thin line across the foot of the page, with a small break between
+   sections. It fills as you scroll, so what's behind is white, and what's ahead shows what's left.
+   The sections' names come up on hover, or when a keyboard reaches them. */
+.chapters { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; gap: 4px; align-items: flex-start; padding: 28px var(--gutter) 14px; font-size: 14px; line-height: 18px; background: linear-gradient(transparent calc(100% - 34px), rgba(11, 8, 24, .72)); }
+.chapters::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent, rgba(11, 8, 24, .9) 24px); opacity: 0; transition: opacity .2s; }
+.chapters:hover::before, .chapters:focus-within::before { opacity: 1; }
+.chapters span { opacity: 0; transition: opacity .2s; }
+.chapters:hover span, .chapters:focus-within span { opacity: 1; }
 .story-live .chapters { display: flex; }
 .story-live .chapters:focus-within { opacity: 1 !important; }
 .chapters button { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; cursor: pointer; color: rgba(255, 255, 255, .62); white-space: nowrap; transition: color .2s; }
 .chapters button:hover, .chapters button[aria-current='true'] { color: #fff; }
 .chapters button[aria-current='true'] { font-weight: 600; }
 .chapters button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 4px; }
-.chapters b { display: block; height: 6px; overflow: hidden; border-radius: 3px; background: rgba(255, 255, 255, .24); }
-.chapters i { display: block; height: 100%; border-radius: 3px; background: #fff; transform: scaleX(0); transform-origin: 0 50%; }
+.chapters b { display: block; height: 2px; background: rgba(255, 255, 255, .28); }
+.chapters i { display: block; height: 100%; background: #fff; transform: scaleX(0); transform-origin: 0 50%; }
 
 /* ---------- invitation ---------- */
 .inv { background: #f4efe6; color: #17150f; text-align: center; font-family: 'Isolde', serif; display: flex; flex-direction: column; align-items: center; }

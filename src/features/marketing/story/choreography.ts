@@ -45,6 +45,8 @@ export interface Story {
 }
 
 const PHONE = { w: 392, h: 850 };
+/** How far the phone's body stands out around its screen. */
+const BEZEL = 11;
 /** Where the invitation's centre sits in the phone, before it's moved in the viewfinder. */
 const VF_CARD = { x: 196, y: 370 };
 /** The top of the villa's chimneys, in the panorama's pixels. */
@@ -103,9 +105,14 @@ function phonePose(L: Layout, where: 'anchor' | 'center') {
     // Close under the words rather than down at the fold, so there's no gap between the two.
     return { x: (L.w - PHONE.w * s) / 2, y: Math.min(L.vis - PHONE.h * s - 14, (L.copyEnd ?? 0) + 30), scale: s };
   }
-  const s = Math.min((L.h * 0.86) / PHONE.h, 1);
-  if (where === 'center') return { x: (L.w - PHONE.w * s) / 2, y: (L.h - PHONE.h * s) / 2, scale: s };
-  return { x: L.w * 0.76 - (PHONE.w * s) / 2, y: (L.h - PHONE.h * s) / 2 + 6, scale: s };
+  // Clear of the header's button above and the progress bar below, bezel included.
+  const roomy = L.h >= 520;
+  const top = roomy ? 72 : 42;
+  const foot = roomy ? 62 : 12;
+  const s = Math.min((L.h - top - foot) / (PHONE.h + BEZEL * 2), 1);
+  const y = top + (L.h - top - foot - (PHONE.h + BEZEL * 2) * s) / 2 + BEZEL * s;
+  if (where === 'center') return { x: (L.w - PHONE.w * s) / 2, y, scale: s };
+  return { x: L.w * 0.76 - (PHONE.w * s) / 2, y, scale: s };
 }
 
 /** Where a descendant sits inside the phone screen, at the phone's own scale. */
@@ -502,11 +509,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
 
   // Each flash lights a patch of the party, and a photo appears above it.
   const SHOTS = [
-    { who: 'uncle', moment: 'girlDog' },
+    { who: 'auntie', moment: 'girlDog' },
     { who: 'auntie', moment: 'hug' },
     { who: 'ayla', moment: 'singalong', lensAt: aylaLens },
-    { who: 'overhead', moment: 'dad' },
-    { who: 'overhead', moment: 'cake' },
+    { who: 'ayla', moment: 'dad', lensAt: aylaLens },
+    { who: 'ayla', moment: 'cake', lensAt: aylaLens },
   ];
   type FlashRecord = { t: number; x: number; y: number; to: { x: number; y: number }; s: number; rot: number };
   const records: FlashRecord[] = [];

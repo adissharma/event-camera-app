@@ -299,7 +299,7 @@ export function StoryMarkup() {
               <nav className="chapters" data-el="chapters" aria-label="Chapters">
                 {chapters.map(({ k, label }) => (
                   <button key={k} type="button" data-group="chapter" data-chapter={k}>
-                    {label}
+                    <span>{label}</span>
                     <b aria-hidden="true"><i data-group="chapterFill" /></b>
                   </button>
                 ))}
