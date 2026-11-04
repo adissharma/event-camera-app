@@ -8,11 +8,9 @@ import { WORLD } from './world';
  * per frame (and see the React Compiler note in the memory on module state).
  */
 
-/** Scroll per story unit, as a share of the viewport height. */
-const UNIT_VH = 0.2;
 const SMOOTHING = 7.5;
 /** Where the scroll nudge lands: the phone, with the App Clip card up. */
-const NUDGE_TO = 4.5;
+const NUDGE_TO = 3.6;
 /** How long a phone's mock stays on each party, in ms. */
 const UC_DWELL = 4500;
 /** Behind the FAQs, once the story's over. */
@@ -55,16 +53,21 @@ function loadImages(root: HTMLElement, plate: HTMLImageElement) {
   };
   const venue = Promise.race([plate.decode().catch(() => {}), wait(3000)]);
   const people = venue.then(() => batch('figure'));
-  void people.then(() => batch('phone')).then(() => batch('figure-late')).then(() => batch('print'));
-  return { venue, people };
+  const screens = people.then(() => batch('phone'));
+  void screens.then(() => batch('figure-late')).then(() => batch('print'));
+  return { venue, people, screens };
 }
 
 export function bootStory(root: HTMLElement): () => void {
+  // Scroll per story unit, as a share of the viewport height. A wheel moves in big fixed steps,
+  // so it covers more story per notch than a swipe does.
+  const UNIT_VH = window.matchMedia('(pointer: coarse)').matches ? 0.2 : 0.14;
   const { els, group } = collect(root);
   const canvas = els.night as unknown as HTMLCanvasElement;
   const ctx = canvas.getContext('2d')!;
   const track = els.track;
   const nav = group('chapter') as HTMLButtonElement[];
+  const chapterFills = group('chapterFill');
 
   // The kinds of party: each button brings its setting and its event on the phone.
   const ucTabs = group('ucTab') as HTMLButtonElement[];
@@ -139,6 +142,19 @@ export function bootStory(root: HTMLElement): () => void {
     }, 400);
   }
 
+  /** Fills each section's bar by how far through it the story is. */
+  function syncChapterBars(t: number) {
+    if (layout.m) return;
+    chapterFills.forEach((fill, i) => {
+      const from = story.labels[nav[i].dataset.chapter!];
+      const to = i + 1 < nav.length ? story.labels[nav[i + 1].dataset.chapter!] : story.T;
+      const done = (Math.max(0, Math.min(1, (t - from) / (to - from)))).toFixed(3);
+      if (fill.dataset.done === done) return;
+      fill.dataset.done = done;
+      fill.style.transform = `scaleX(${done})`;
+    });
+  }
+
   /** The last slide's terrace, framed like the hero's, with its floor along the bottom. */
   function placeClose() {
     const box = els.close.getBoundingClientRect();
@@ -199,9 +215,11 @@ export function bootStory(root: HTMLElement): () => void {
     drawNight();
 
     syncChrome();
+    syncChapterBars(t);
     els['ch:s1'].style.pointerEvents = t < 0.25 ? 'auto' : 'none';
+    els['ch:s8'].style.pointerEvents = t >= story.labels.s8 ? 'auto' : 'none';
     // The hero has its own button, so the header's waits until that one's gone.
-    els.navGet.style.visibility = t >= 0.25 ? 'visible' : 'hidden';
+    els.navGet.style.display = t >= 0.25 ? 'flex' : 'none';
     // Hidden on the hero, where it would otherwise catch clicks meant for the nudge.
     els.chapters.style.pointerEvents = t < 0.25 ? 'none' : '';
 
@@ -310,7 +328,7 @@ export function bootStory(root: HTMLElement): () => void {
    * the words come early: they're what a visitor is waiting for.
    */
   let introStopped = false;
-  async function playIntro({ venue, people }: ReturnType<typeof loadImages>) {
+  async function playIntro({ venue, people, screens }: ReturnType<typeof loadImages>) {
     const step = (name: string) => {
       if (!introStopped) root.classList.add(name);
     };
@@ -331,8 +349,8 @@ export function bootStory(root: HTMLElement): () => void {
     const clouds = els.clouds as unknown as HTMLImageElement;
     await Promise.all([Promise.race([clouds.decode().catch(() => {}), wait(1500)]), wait(800)]);
     step('in-sky');
-    // Last of all, once the rest has settled: the phone.
-    await wait(900);
+    // Last of all, once the rest has settled and its screen has loaded: the phone.
+    await Promise.all([Promise.race([screens, wait(3500)]), wait(900)]);
     step('in-phone');
     // Everything's in place. If they still haven't scrolled, show them it moves.
     await wait(1200);

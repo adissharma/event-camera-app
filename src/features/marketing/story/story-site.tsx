@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 
-import { ASSET, CHAPTERS, CLOSE, CTA, DARES, FAQS, GALLERY, LINKS, MEMORIES, NOTES, REVEAL_OPTIONS, SWIRL, USE_CASES, USE_CASES_ALSO, art, print } from './content';
+import { ASSET, CHAPTERS, CLOSE, CTA, DARES, FAQS, GALLERY, LINKS, NOTES, SWIRL, USE_CASES, USE_CASES_ALSO, art, print } from './content';
 import { Invitation, Phone } from './phone';
 import { FESTOON, FIGURES, LATE, SUN, TABLE7, WORLD, figure, figureSize } from './world';
 
@@ -100,7 +100,6 @@ function Figure({ id, order }: { id: string; order: number }) {
 function CloseWorld() {
   return (
     <div className="close-world" aria-hidden="true">
-      <img className="close-clouds" src={art('clouds')} alt="" loading="lazy" />
       <div className="close-terrace" data-el="closeTerrace">
         <picture>
           <source media="(max-width: 759px)" srcSet={`${ASSET}/art/room.m.webp`} />
@@ -184,13 +183,12 @@ function Chapter({ name, heading, big, poster, children }: {
   poster: string;
   children?: ReactNode;
 }) {
-  const c = CHAPTERS[name] as { title: string; titleAfter?: string; body?: string; alt: string };
+  const c = CHAPTERS[name] as { title: string; body?: string; alt: string };
   const Heading = heading;
   return (
     <section className={`ch ch-${name}`} data-el={`ch:${name}`}>
       <Heading className={big ? 'h-xl' : 'h-lg'}>
         {c.title}
-        {c.titleAfter ? <> <span data-el={`after:${name}`}>{c.titleAfter}</span></> : null}
       </Heading>
       {c.body ? <p className="b-l">{c.body}</p> : null}
       {children}
@@ -212,8 +210,12 @@ export function StoryMarkup() {
         <a className="nav-logo" href="/" aria-label="Stills, home">
           <img src={`${ASSET}/logo.webp`} alt="" width="104" height="42" />
         </a>
-        <div className="nav-get" data-el="navGet">
-          <CreateEvent small />
+        <div className="nav-right">
+          <a className="nav-link" href="#faqs">FAQs</a>
+          <a className="nav-link" href={LINKS.hostPortal}>Host login</a>
+          <div className="nav-get" data-el="navGet">
+            <CreateEvent small />
+          </div>
         </div>
       </header>
       <main>
@@ -252,12 +254,6 @@ export function StoryMarkup() {
                     <p>{dare.label}</p>
                   </div>
                 ))}
-                {MEMORIES.map((m) => (
-                  <div key={m.photo} className="lift" data-group="lift" aria-hidden="true">
-                    <div className="print-in"><img data-src={print(m.photo)} data-kind="print" alt="" /></div>
-                    <p>{m.note}</p>
-                  </div>
-                ))}
               </div>
               <div className="white art" data-el="white" aria-hidden="true" />
 
@@ -278,14 +274,12 @@ export function StoryMarkup() {
               <Chapter name="s4" heading="h2" poster="s4" />
               <Chapter name="s5" heading="h2" poster="s5" />
               <Chapter name="s6" heading="h2" poster="s6" />
-              <Chapter name="s7" heading="h2" poster="s7">
-                <div className="opts">
-                  {REVEAL_OPTIONS.map((option, i) => (
-                    <p key={option.name} className="b-l opt" data-el={`opt:${i}`}><b>{option.name}</b> {option.line}</p>
-                  ))}
+              <Chapter name="s7" heading="h2" poster="s7" />
+              <Chapter name="s8" heading="h2" poster="s8">
+                <div className="cta-row">
+                  <CreateEvent />
                 </div>
               </Chapter>
-              <Chapter name="s8" heading="h2" poster="s8" />
               {/* On the linear page only: on the live one, these are the hero's tabs. */}
               <Chapter name="s9" heading="h2" poster="s9">
                 {USE_CASES.map((useCase) => (
@@ -304,7 +298,10 @@ export function StoryMarkup() {
               </button>
               <nav className="chapters" data-el="chapters" aria-label="Chapters">
                 {chapters.map(({ k, label }) => (
-                  <button key={k} type="button" data-group="chapter" data-chapter={k}>{label}</button>
+                  <button key={k} type="button" data-group="chapter" data-chapter={k}>
+                    {label}
+                    <b aria-hidden="true"><i data-group="chapterFill" /></b>
+                  </button>
                 ))}
               </nav>
             </div>
@@ -341,7 +338,7 @@ export function StoryMarkup() {
         <img src={`${ASSET}/logo.webp`} alt="Stills." width="112" height="45" />
         <div className="foot-links">
           <a href={LINKS.appStore}>Get the app</a>
-          <a href={LINKS.hostPortal}>Host sign in</a>
+          <a href={LINKS.hostPortal}>Host login</a>
           <a href={LINKS.privacy}>Privacy Policy</a>
         </div>
       </footer>
