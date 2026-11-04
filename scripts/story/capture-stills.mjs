@@ -20,13 +20,18 @@ const browser = await chromium.launch({ channel: 'chrome', headless: true, args:
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 await page.goto(process.env.STORY_URL ?? 'http://localhost:8090/', { waitUntil: 'load' });
 await page.waitForFunction(() => document.querySelector('.story')?.dataset.booted === '1');
-await page.waitForTimeout(4000);
-await page.addStyleTag({ content: '.ch > *, .nav, .chapters, .scroll-hint { opacity: 0 !important; } .stage-in { animation: none !important; }' });
+await page.waitForFunction(() => document.querySelector('.story')?.classList.contains('in-sky'), null, { timeout: 90000 });
+await page.waitForTimeout(2500);
+const WORDS_OFF = '.ch > *, .nav, .chapters, .scroll-hint, .hint-band { opacity: 0 !important; }';
+await page.addStyleTag({ content: WORDS_OFF });
+await page.evaluate(() => document.querySelector('.story').classList.add('in-phone'));
 
 const { stills, unit } = await page.evaluate(() => {
   const root = document.querySelector('.story');
   return { stills: JSON.parse(root.dataset.stills), unit: Number(root.dataset.unit) };
 });
+// The first still also closes the page and is its share image, so the phone stays out of it.
+const noPhone = await page.addStyleTag({ content: '.phone { display: none !important; }' });
 for (const [name, t] of Object.entries(stills)) {
   await page.evaluate((y) => window.scrollTo(0, y), t * unit);
   await page.waitForFunction((want) => Math.abs(Number(document.querySelector('.story').dataset.t) - want) < 0.02, t, { timeout: 90000 });
@@ -34,6 +39,8 @@ for (const [name, t] of Object.entries(stills)) {
   const png = await page.screenshot({ type: 'png' });
   await sharp(png).webp({ quality: 74, effort: 6 }).toFile(`public/story/poster/${name}.webp`);
   if (name === 's1') await sharp(png).resize({ width: 1200 }).jpeg({ quality: 80 }).toFile('public/story/poster/share.jpg');
+  if (name === 's1') await noPhone.evaluate((tag) => tag.remove());
   console.log(name, t);
 }
+
 await browser.close();

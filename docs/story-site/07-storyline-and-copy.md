@@ -4,140 +4,102 @@
 
 ## The spine
 
-The buyer is the host, and the one thing only the host feels is this: **they will
-miss most of their own party.** They'll be hugging an aunt while the best thing of the
-night happens behind them.
-
-So the page opens on that fear and closes it:
-
-> You'll miss most of your own party. → Here's everything you missed.
-
-Everything between is why that's now easy. The order follows one guest through one
-night: arrive, sit down, shoot, get dared, leave a message, go home, and then the
-morning after.
+Stills is new and nobody's heard of it, so the page says what it is first: a shared camera app for weddings and parties. Then it follows one guest through one night, and each scene names the feature plainly before anything clever: join, find your seat, shoot, challenges, guestbook, reveal, album.
 
 ## The rules I wrote to
 
-Taken from Honey Copy's approach, with the swearing and innuendo left out, because this
-sells to people planning their wedding.
-
-1. **One idea per scene.** A headline makes the promise, and a body proves it.
-2. **Nouns you can see.** "Your uncle's password", not "seamless onboarding".
-3. **Headlines for the heart, bodies for the wallet.** Feel it first, then get the fact.
-4. **Sound like the funniest person at the table.** Warm, a bit cheeky, never smug.
-5. **At most 8 words in a headline and 30 in a body.**
+1. **Say what it is.** A stranger should be able to repeat each headline back. Canva and Monday do this.
+2. **Name the feature.** "A seating chart on every phone", not "Retire the easel".
+3. **One idea per scene.** The headline makes the promise, the body adds the fact.
+4. **Short.** At most two lines of body on any screen, and at most 90 characters.
+5. **A little warmth.** Keep the human detail where it adds something: your mum in tears, your best friend at 1am.
 
 ## The copy
 
 ### 0. Hero
 
-**You'll miss most of your own party.**
+**The shared camera app for weddings and parties.**
 
-Your guests won't. Stills turns every phone in the room into one shared camera.
+Guests scan a QR code and start shooting. Every photo lands in one album.
+
+*On phones the hero is centred, with no description, just the headline, the button and the mock.*
 
 *Button: "Create your event →". Prompt: "Scroll to join the party" ("Swipe up to join the party" on touch screens).*
 
-### 1. Scan
+*Buttons, on desktop only: Weddings, Birthdays, Bach parties, Holidays. They change only when clicked. Phones have no buttons, so the mock slowly fades through the four parties by itself. Each brings its own setting and its own event on the phone, with the challenges from that party's pack in `challenge-packs.ts`.*
 
-**Nothing to download. Nothing to explain.**
+### 1. Join
 
-One scan and Stills just opens, like a card trick. Guests type their name and start
-shooting. No app. No account. No password your uncle will forget.
+**Guests join with one scan.**
 
-*On the phone, the App Clip card: "You're invited", "Find your seat and grab the camera".
-Those words need checking against what's set in App Store Connect.*
+They scan your QR code and type their name. No download, no account, no password.
 
-### 2. Find your seat
+*On the phone, the App Clip card: "You're invited", "Find your seat and grab the camera". Those words need checking against what's set in App Store Connect.*
 
-**Retire the easel.**
+*The yellow prompt in the viewfinder says "You're invited!" for the story. The real iOS camera shows the link's domain there, not words we choose.*
 
-Guests type their name and Stills shows them their table. Add your floor plan and they
-can zoom in to find it. No second app. No extra charge.
+### 2. Seating
 
-### 3. Everyone shoots
+**A seating chart on every phone.**
 
-**120 photographers. Zero invoices.**
+Guests type their name to find their table, then zoom into your floor plan.
 
-Your photographer gets the first dance. Your guests get the speech from table nine, the
-auntie on the dance floor and the hug you walked straight past.
+### 3. Photos
+
+**Every guest is your photographer.**
+
+Everyone shoots on their own phone, so you get the moments your photographer can't.
 
 ### 4. Challenges
 
-**Don't ask for photos. Set a dare.**
+**Photo challenges get everyone shooting.**
 
-Happy Tears. Best Dressed. Caught in the Act. Write your own challenges or grab a
-ready-made pack, then watch your quietest table go to work.
+Set prompts like Happy Tears and Best Dressed, or pick a ready-made pack for your event.
 
-### 5. Audio and video guestbook
+### 5. Guestbook
 
-**A photo can't keep your grandad's voice.**
+**A guestbook you can actually hear.**
 
-So Stills has an audio and video guestbook. Guests leave you a message, out loud or on
-camera, and only you get to hear it.
+Guests leave private voice or video messages: your mum in tears, your best friend at 1am.
 
-### 6. Live or disposable
+*The picture should be the mother of the bride, laughing and crying into her phone. The prompt is `guest-voice` in `prompts.mjs`. Until it's generated, the scene lights the guest in the sari who's already on the terrace.*
 
-**Watch it live. Or make them wait.**
+### 6. Reveal
 
-**Go live.** Every photo lands in the gallery as it's taken. The party watches itself
-happen.
+**See every photo live. Or reveal them later.**
 
-**Go disposable.** A limited roll. Direct flash, a little grain, a printed date stamp.
-Nobody sees a thing until the moment you pick.
+**Go live.** Every photo appears in the gallery as it's taken, for everyone to watch.
 
-*This was "Make them wait. Or don't." The order swapped because the disposable half now
-runs straight into the reveal. To bring those words back, the live half has to go first
-anyway, which would read back to front.*
+**Go disposable.** A limited roll with a retro look, hidden until the moment you choose.
 
-### 7. The payoff
+### 7. Album
 
-**Here's everything you missed.**
+**See everything you missed.**
 
-Every photo, video and message, from every guest, in one place. No chasing the group
-chat. Download the lot, and finally attend your own party.
+Every photo, video and message from your guests, in one album to download.
 
-### 8. Use cases
+### Linear page only
 
-**Any party with more than one phone.**
-
-Tabs: **Birthdays**, **Bach parties**, **Holidays**.
-
-- **Birthdays.** The surprise face. From every angle.
-- **Bachelor and bachelorette parties.** What happens on the trip stays in the gallery.
-- **Holidays and group trips.** You shot the sunset. They shot you asleep on the beach.
-
-Plus engagements, anniversaries, graduations, baby showers, housewarmings and Christmas
-parties. There's a challenge pack for each.
+**Any party with more than one phone.** The four parties in a list, for reduced motion and no JavaScript.
 
 ### FAQs
 
-**Good questions.** The seven in `FAQS` in `content.ts`, with the prices that used to have
-their own scene.
+**Good questions.** The seven in `FAQS` in `content.ts`, with the prices that used to have their own scene.
 
 ### Close
 
 **It only happens once. Catch all of it.**
 
-Make your event. Share the QR code. Go enjoy your own party.
+Create your event in the app, share your QR code, and let your guests do the rest.
 
-*Button: "Create your event →", which goes to the App Store, plus a QR code on desktop.
-Host sign in is in the footer.*
+*One very big "Create your event →" in the middle, which goes to the App Store, on the hero's terrace. Host sign in is in the footer.*
 
 ## Small print
 
-- **Page title:** Stills: one shared camera for your whole party
+- **Page title:** Stills: the shared camera app for weddings and parties
 - **Description:** Guests scan a QR code and start shooting, with nothing to download.
   Every photo, video and voice note lands in one place.
-- **Chapter menu:** Scan, Seat, Shoot, Dare, Messages, Reveal, Album, Parties
-
-## Alternatives worth keeping
-
-| Scene | Alternative | Why it isn't first choice |
-|---|---|---|
-| Hero | You'll miss most of your own wedding. | Stronger for couples, but shuts out every other event |
-| Seat | Two hundred guests. One easel. Not anymore. | Funny, but less punchy |
-| Everyone | 120 photographers. No shot list. | Safer if "zero invoices" feels too close to "free" |
-| Close | You only get one first dance. | Beautiful, but wedding-only |
+- **Chapter menu:** Join, Seating, Photos, Challenges, Guestbook, Reveal, Album
 
 ## How the story could look
 

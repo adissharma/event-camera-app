@@ -1,4 +1,5 @@
 import { buildStory, type Els, type Layout, type Story } from './choreography';
+import { WORLD } from './world';
 
 /**
  * Runs the story: one scroll listener, one rAF loop, one timeline.
@@ -11,7 +12,9 @@ import { buildStory, type Els, type Layout, type Story } from './choreography';
 const UNIT_VH = 0.2;
 const SMOOTHING = 7.5;
 /** Where the scroll nudge lands: the phone, with the App Clip card up. */
-const NUDGE_TO = 4;
+const NUDGE_TO = 4.5;
+/** How long a phone's mock stays on each party, in ms. */
+const UC_DWELL = 4500;
 /** Behind the FAQs, once the story's over. */
 const PAGE = '#2f0f5d';
 /** Multiplied over the whole scene: white paper falls to this, black stays black. */
@@ -63,41 +66,34 @@ export function bootStory(root: HTMLElement): () => void {
   const track = els.track;
   const nav = group('chapter') as HTMLButtonElement[];
 
-  // The use case tabs: each one brings its setting, its copy and its event on the phone.
+  // The kinds of party: each button brings its setting and its event on the phone.
   const ucTabs = group('ucTab') as HTMLButtonElement[];
-  const ucLayers = [group('ucPanel'), group('ucSetting'), group('ucPhone')];
-  let ucChosen: number | null = null;
+  const ucLayers = [group('ucSetting'), group('ucPhone')];
   let ucShown = -1;
   function showUseCase(i: number) {
     if (i === ucShown) return;
     ucShown = i;
-    ucTabs.forEach((tab, n) => {
-      tab.setAttribute('aria-selected', String(n === i));
-      tab.tabIndex = n === i ? 0 : -1;
-    });
+    ucTabs.forEach((tab, n) => tab.setAttribute('aria-pressed', String(n === i)));
     for (const layer of ucLayers) layer.forEach((el, n) => el.classList.toggle('on', n === i));
+    root.classList.toggle('uc-away', i !== 0);
   }
-  const onUcClick = (e: Event) => {
-    ucChosen = ucTabs.indexOf(e.currentTarget as HTMLButtonElement);
-    showUseCase(ucChosen);
-  };
-  const onUcKey = (e: KeyboardEvent) => {
-    const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-    if (!step) return;
-    e.preventDefault();
-    ucChosen = (ucTabs.indexOf(e.currentTarget as HTMLButtonElement) + step + ucTabs.length) % ucTabs.length;
-    showUseCase(ucChosen);
-    ucTabs[ucChosen].focus();
-  };
-  const onUcFocus = () => {
-    const t = target();
-    if (t < story.ucFrom - 0.3 || t >= story.ucTo) scrollToTime(story.ucFrom + 0.2);
-  };
+  const onUcClick = (e: Event) => showUseCase(ucTabs.indexOf(e.currentTarget as HTMLButtonElement));
+  const onUcFocus = () => scrollToTime(0);
   ucTabs.forEach((tab) => {
     tab.addEventListener('click', onUcClick);
-    tab.addEventListener('keydown', onUcKey);
     tab.addEventListener('focus', onUcFocus);
   });
+  // Phones have no buttons, so the mock fades through the parties by itself while the hero's up.
+  const noButtons = window.matchMedia('(max-width: 759px), (max-aspect-ratio: 9/10), (max-height: 520px)');
+  let ucLanded = false;
+  const ucClock = setInterval(() => {
+    if (!root.classList.contains('in-phone')) return;
+    // The first event gets a full turn once the phone's landed.
+    if (ucLanded && noButtons.matches && !document.hidden && target() < 0.1) {
+      showUseCase((ucShown + 1) % ucTabs.length);
+    }
+    ucLanded = true;
+  }, UC_DWELL);
 
   let story!: Story;
   let layout: Layout;
@@ -127,6 +123,7 @@ export function bootStory(root: HTMLElement): () => void {
     root.dataset.labels = JSON.stringify(story.labels);
     root.dataset.unit = String(UNIT_VH * layout.h);
     root.dataset.stills = JSON.stringify(story.stills);
+    placeClose();
     // Safari can go on showing the phone's old screen after a rebuild, until something repaints it.
     clearTimeout(repaintTimer);
     repaintTimer = setTimeout(() => {
@@ -134,6 +131,15 @@ export function bootStory(root: HTMLElement): () => void {
       void els.phone.offsetHeight;
       els.phone.style.display = '';
     }, 400);
+  }
+
+  /** The last slide's terrace, framed like the hero's, with its floor along the bottom. */
+  function placeClose() {
+    const box = els.close.getBoundingClientRect();
+    const z = Math.max(box.height / story.heroCam.vh, box.width / WORLD.w);
+    const x = Math.min(0, Math.max(box.width - WORLD.w * z, box.width / 2 - story.heroCam.cx * z));
+    // A few pixels past the bottom, so no sky can show between the floor and the footer.
+    els.closeTerrace.style.transform = `translate3d(${x}px,${box.height + 4 - WORLD.h * z}px,0) scale(${z})`;
   }
 
   /** Night, with a soft hole wherever a flash has lit the party. */
@@ -188,12 +194,6 @@ export function bootStory(root: HTMLElement): () => void {
 
     syncChrome();
     els['ch:s1'].style.pointerEvents = t < 0.25 ? 'auto' : 'none';
-    const ucOpen = t >= story.ucFrom - 0.3 && t < story.ucTo;
-    els['ch:s9'].style.pointerEvents = ucOpen ? 'auto' : 'none';
-    // Scrolling through moves along the tabs, until someone picks one for themselves.
-    if (!ucOpen) ucChosen = null;
-    const ucAuto = Math.max(0, Math.min(ucTabs.length - 1, Math.floor(((t - story.ucFrom) / (story.ucTo - story.ucFrom)) * ucTabs.length)));
-    showUseCase(ucChosen ?? ucAuto);
     // The hero has its own button, so the header's waits until that one's gone.
     els.navGet.style.visibility = t >= 0.25 ? 'visible' : 'hidden';
     // Hidden on the hero, where it would otherwise catch clicks meant for the nudge.
@@ -211,10 +211,13 @@ export function bootStory(root: HTMLElement): () => void {
   function syncChrome() {
     const past = goalPast();
     // Past the stage, the header needs a ground of its own to sit on over the FAQs.
-    els.nav.classList.toggle('past', past);
+    // The last slide has the sky back, and its own much bigger button.
+    const atClose = els.close.getBoundingClientRect().top < 60;
+    els.nav.classList.toggle('past', past && !atClose);
+    els.nav.classList.toggle('at-close', atClose);
     // The browser's own chrome follows the sky, until the story's over.
     const morning = target() > story.labels.s7;
-    const chrome = past ? PAGE : story.night.v > 0.5 ? SKY_NIGHT : morning ? SKY_MORNING : SKY_DAY;
+    const chrome = atClose ? SKY_DAY : past ? PAGE : story.night.v > 0.5 ? SKY_NIGHT : morning ? SKY_MORNING : SKY_DAY;
     if (chrome !== chromeColour) {
       chromeColour = chrome;
       document.documentElement.style.background = chrome;
@@ -222,7 +225,7 @@ export function bootStory(root: HTMLElement): () => void {
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', chrome);
       // Safari 26 ignores theme-color and colours its bars from fixed elements at the edges.
       els.edgeTop = renewEdge(els.edgeTop, chrome);
-      els.edgeFoot = renewEdge(els.edgeFoot, past ? PAGE : GROUND);
+      els.edgeFoot = renewEdge(els.edgeFoot, past && !atClose ? PAGE : GROUND);
     }
   }
 
@@ -263,7 +266,10 @@ export function bootStory(root: HTMLElement): () => void {
   }
 
   const onScroll = () => {
-    if (window.scrollY > 4) els.stage.classList.remove('nudging');
+    if (window.scrollY > 4) {
+      els.stage.classList.remove('nudging');
+      root.classList.add('in-phone');
+    }
     syncChrome();
     kick();
   };
@@ -304,7 +310,7 @@ export function bootStory(root: HTMLElement): () => void {
     if (current > 0.05) {
       // Reloaded partway down the page: nothing to introduce.
       root.classList.add('intro-skip');
-      for (const name of ['in-venue', 'in-people', 'in-sky', 'in-copy']) step(name);
+      for (const name of ['in-venue', 'in-people', 'in-sky', 'in-copy', 'in-phone']) step(name);
       return;
     }
     // On a very slow connection the words don't wait for the venue either.
@@ -318,8 +324,11 @@ export function bootStory(root: HTMLElement): () => void {
     const clouds = els.clouds as unknown as HTMLImageElement;
     await Promise.all([Promise.race([clouds.decode().catch(() => {}), wait(1500)]), wait(800)]);
     step('in-sky');
-    // Everything's in place. If they still haven't scrolled, show them it moves.
+    // Last of all, once the rest has settled: the phone.
     await wait(900);
+    step('in-phone');
+    // Everything's in place. If they still haven't scrolled, show them it moves.
+    await wait(1200);
     if (!introStopped && window.scrollY <= 4) els.stage.classList.add('nudging');
   }
 
@@ -347,6 +356,7 @@ export function bootStory(root: HTMLElement): () => void {
 
   lastW = window.innerWidth;
   lastH = window.innerHeight;
+  showUseCase(0);
   measure();
   current = target();
   apply(current);
@@ -374,6 +384,7 @@ export function bootStory(root: HTMLElement): () => void {
     introStopped = true;
     stopped = true;
     cancelAnimationFrame(raf);
+    clearInterval(ucClock);
     clearTimeout(resizeTimer);
     clearTimeout(repaintTimer);
     window.removeEventListener('scroll', onScroll);
@@ -383,7 +394,6 @@ export function bootStory(root: HTMLElement): () => void {
     els.hint.removeEventListener('click', onHint);
     ucTabs.forEach((tab) => {
       tab.removeEventListener('click', onUcClick);
-      tab.removeEventListener('keydown', onUcKey);
       tab.removeEventListener('focus', onUcFocus);
     });
   };

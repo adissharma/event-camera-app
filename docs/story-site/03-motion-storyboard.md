@@ -151,3 +151,7 @@ fixed header gets a solid background.
 From `docs/marketing-motion-spec.md`: `transform` and `opacity` only, one rAF
 loop, no scroll-jacking. The one exception is the night layer, drawn on a canvas
 only when it changes. Camera and copy scrub with a short smoothing behind scroll.
+
+## The opening and the hero (Nov 2026)
+
+The hero has the phone on screen from the start, open on the chosen party's event. Scrolling fades back to the wedding terrace whichever chip was showing, closes the event into its icon on the home screen, taps Camera, and carries on into the QR scan. The story now ends on the album, and the page scrolls on to the FAQs.
