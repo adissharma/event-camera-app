@@ -1,6 +1,6 @@
 # Storyline and copy
 
-**Status: approved and built. Nothing on it has been released yet.**
+**Status: approved, built and live at stills.events.**
 
 ## The spine
 

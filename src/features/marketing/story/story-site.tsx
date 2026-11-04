@@ -180,6 +180,8 @@ export function StoryMarkup() {
   return (
     <div className="story">
       <a className="skip" href="#get-stills">Skip the story</a>
+      <i className="edge edge-top" data-el="edgeTop" />
+      <i className="edge edge-foot" data-el="edgeFoot" />
       <header className="nav" data-el="nav">
         <a className="nav-logo" href="/" aria-label="Stills, home">
           <img src={`${ASSET}/logo.webp`} alt="" width="104" height="42" />

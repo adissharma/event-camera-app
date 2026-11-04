@@ -20,7 +20,7 @@
   --sky: linear-gradient(180deg, #7a22b8 0%, #b5249f 24%, #ea2b8c 48%, #fe4d8d 68%, #ff7ea8 100%);
   --violet: #2f0f5d;
   --line: #ff2f7e;
-  --gutter: clamp(20px, 5vw, 72px);
+  --gutter: max(clamp(20px, 5vw, 72px), env(safe-area-inset-left), env(safe-area-inset-right));
 }
 
 /* Expo's reset pins the document for native-like scrolling. This page scrolls. */
@@ -41,6 +41,11 @@ body { overflow: visible !important; margin: 0; }
 .skip:focus { transform: none; }
 
 /* ---------- header ---------- */
+/* What Safari tints its bars from, so they follow the sky. Any thinner and it stops looking. */
+.edge { display: none; }
+.story-live .edge { display: block; position: fixed; left: 0; right: 0; z-index: 41; height: 6px; pointer-events: none; }
+.edge-top { top: 0; }
+.edge-foot { bottom: 0; }
 .nav { position: fixed; inset: 0 0 auto 0; z-index: 40; display: flex; align-items: center; justify-content: space-between; padding: 18px var(--gutter); pointer-events: none; transition: color .3s; }
 .nav > * { pointer-events: auto; }
 .nav-logo { display: block; width: 84px; height: 34px; }
@@ -176,6 +181,9 @@ body { overflow: visible !important; margin: 0; }
 @media (hover: none) {
   .hint-scroll { display: none; }
   .hint-swipe { display: inline; }
+  /* "Swipe up" points the way the finger goes. */
+  .hint-arrow svg { rotate: 180deg; }
+  .stage.nudging .hint-arrow { animation-name: arrow-hop-up; }
 }
 /* Until someone scrolls: everything on the stage lifts and drops, to show that it moves. A few
    times, then it leaves them in peace. The stage itself stays put, so its edge never shows. */
@@ -188,6 +196,11 @@ body { overflow: visible !important; margin: 0; }
   9% { transform: translateY(calc(var(--lift) * -1)); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
   17% { transform: translateY(0); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
   21% { transform: translateY(calc(var(--lift) * -.27)); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
+  25%, 100% { transform: translateY(0); }
+}
+@keyframes arrow-hop-up {
+  0%, 9% { transform: translateY(0); animation-timing-function: cubic-bezier(.5, 0, .8, .4); }
+  17% { transform: translateY(-10px); animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
   25%, 100% { transform: translateY(0); }
 }
 @keyframes arrow-hop {
@@ -221,7 +234,7 @@ body { overflow: visible !important; margin: 0; }
 
 /* ---------- phone ---------- */
 .phone { position: absolute; left: 0; top: 0; width: 392px; height: 850px; z-index: 10; transform-origin: 0 0; will-change: transform; opacity: 0; visibility: hidden; font-family: 'Instrument Sans', sans-serif; }
-.ph-body { position: absolute; inset: -11px; border-radius: 66px; background: linear-gradient(145deg, #3b3a3d, #131315 28%, #0c0c0e 72%, #2c2b2e); box-shadow: 0 0 0 1px #4a494d, 0 44px 110px rgba(0, 0, 0, .62), 0 12px 30px rgba(0, 0, 0, .4); }
+.ph-body { position: absolute; inset: -11px; border-radius: 66px; background: linear-gradient(145deg, #3b3a3d, #131315 28%, #0c0c0e 72%, #2c2b2e); box-shadow: 0 0 0 1px #4a494d, 0 36px 90px rgba(0, 0, 0, .68); }
 .ph-body::before { content: ''; position: absolute; right: -2.5px; top: 212px; width: 3px; height: 92px; background: #333236; border-radius: 0 2px 2px 0; }
 .ph-body::after { content: ''; position: absolute; left: -2.5px; top: 176px; width: 3px; height: 150px; background: linear-gradient(#333236 0 28%, transparent 28% 36%, #333236 36% 62%, transparent 62% 68%, #333236 68%); border-radius: 2px 0 0 2px; }
 .ph-screen { position: absolute; inset: 11px; border-radius: 55px; overflow: hidden; background: var(--ink); color: var(--ivory); contain: paint; }
@@ -359,6 +372,8 @@ body { overflow: visible !important; margin: 0; }
 .ev-tabs .on { opacity: 1; }
 .ev-tabs svg { width: 22px; height: 22px; }
 .ev-tabs u { position: absolute; left: 0; right: 0; bottom: 0; height: 1.5px; background: linear-gradient(90deg, #fff 50%, rgba(255, 255, 255, .16) 50%); }
+.ev-sb-back { position: absolute; left: 0; right: 0; top: 0; height: 54px; background: var(--ink); opacity: 0; visibility: hidden; }
+.ev-pinned { position: absolute; left: 0; right: 0; top: 54px; background: var(--ink); opacity: 0; visibility: hidden; }
 .ev-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding-top: 10px; background: var(--ink); }
 .ev-cell { position: relative; aspect-ratio: 4 / 5; border-radius: 22px; overflow: hidden; background: #141416; display: block; transform-origin: 50% 50%; }
 .ev-cell img { width: 100%; height: 100%; object-fit: cover; }
@@ -395,6 +410,8 @@ body { overflow: visible !important; margin: 0; }
   .nav { padding: 10px 16px; }
   .nav-logo { width: 68px; height: 28px; }
   .story-live .ch { top: 62px; left: 16px; right: 16px; width: auto; }
+  /* On a phone the words can't always have clear sky, so they carry a little of their own. */
+  .story-live .ch .b-l { text-shadow: 0 0 2px rgba(62, 14, 120, .55), 0 1px 12px rgba(62, 14, 120, .85); }
   .story-live .ch-s1 { width: auto; }
   .story-live .ch-s8 { width: auto; }
   .cta-qr { display: none; }
@@ -442,7 +459,7 @@ body { overflow: visible !important; margin: 0; }
 @media (max-height: 520px) and (min-aspect-ratio: 9/10) {
   .nav { padding: 6px var(--gutter); }
   .nav-logo { width: 60px; height: 25px; }
-  .story-live .ch { top: 46px; width: 44vw; }
+  .story-live .ch { top: 46px; left: var(--gutter); right: auto; width: 44vw; }
   .story-live .ch-s1 { width: 60vw; }
   .story-live .ch-s8 { width: 30vw; }
   .story-live .h-xl, .story-live .h-lg, .story-live .ch-s8 .h-lg { font-size: 25px; line-height: 1.1; }
@@ -453,7 +470,7 @@ body { overflow: visible !important; margin: 0; }
   .cta-qr { display: none; }
   .story-live .chapters { display: none; }
   .stage { --lift: 8px; }
-  .scroll-hint { flex-direction: row; justify-content: center; gap: 10px; padding: 40px 16px 72px; }
+  .scroll-hint { flex-direction: row; justify-content: center; gap: 10px; padding: 40px 16px calc(100lvh - 100svh + 72px); }
   .hint-text { font-size: 17px; }
   .hint-arrow { width: 34px; height: 34px; }
   .hint-arrow svg { width: 18px; height: 18px; }
@@ -572,6 +589,14 @@ body { overflow: visible !important; margin: 0; }
   .story-live .ch-s7 { width: auto; }
   .uc-sun { left: calc(50% - min(26vw, 13vh)); bottom: 30%; width: min(52vw, 26vh); }
   .uc-setting { bottom: 0; aspect-ratio: auto; height: 42%; object-position: 42% 100%; }
+}
+/* A short phone: three tabs on one row, and no second paragraph running down into the sun. */
+@media (max-width: 400px) {
+  .story-live .uc-tabs { gap: 6px; flex-wrap: nowrap; }
+  .uc-tab { padding: 0 12px; font-size: 14px; white-space: nowrap; }
+}
+@media (max-height: 700px) and (max-aspect-ratio: 9/10) {
+  .story-live .uc-also { display: none; }
 }
 @media (max-height: 520px) and (min-aspect-ratio: 9/10) {
   .story-live .ch-s7 { width: 44vw; }

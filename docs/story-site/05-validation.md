@@ -78,6 +78,7 @@ by side with a live event's join page, opened without joining.
 
 ## Known limitations
 
+- **Phones, 4 Nov 2026:** every half unit of the story audited in Chrome's phone emulation at twelve sizes, from 320×568 up to tablets, both ways round, for sideways scroll, words off screen, and words over the phone, the logo or each other. Scrolled in Mobile Safari on the iOS 26.5 Simulator (iPhone 17 and iPhone SE) with real swipes and taps, including rotation and reload part-way through.
 - **Not tested:** physical phones, Android, desktop Safari, Firefox, screen readers with a person using them.
 - **Invitation QR:** goes to `stills.events`, since there's no demo event to send people to.
 - **Apple's product rules:** the rebuilt phone has a Dynamic Island and side buttons, and one screen imitates Apple's camera. Apple's marketing guidelines ask that illustrated devices don't copy details unique to its products, and that its own bezels are used instead. This hasn't been changed, and is worth a decision.

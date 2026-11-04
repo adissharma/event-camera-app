@@ -17,7 +17,10 @@ const PAGE = '#2f0f5d';
 /** Multiplied over the whole scene: white paper falls to this, black stays black. */
 const NIGHT = '#31206c';
 const SKY_DAY = '#7a22b8';
-const SKY_NIGHT = '#1a0b3a';
+const SKY_NIGHT = '#17054a';
+const SKY_MORNING = '#5a3fc0';
+/** Solid at the foot of the scroll prompt, and under everything else at the bottom. */
+const GROUND = '#160a36';
 /** The night layer is only soft gradients, so it can draw at a fraction of the size. */
 const NIGHT_RES = 0.5;
 
@@ -105,13 +108,16 @@ export function bootStory(root: HTMLElement): () => void {
   let chromeColour = '';
   let chapter = '';
   let lastLightKey = '';
+  let repaintTimer: ReturnType<typeof setTimeout> | undefined;
 
   function measure() {
     const rect = els.stage.getBoundingClientRect();
     // The stage fills the largest viewport, so a collapsing toolbar never reveals an
     // edge. What must stay in view (the phone) is laid out in the smallest one.
     const visible = els.visProbe.getBoundingClientRect().height || rect.height;
-    layout = { w: rect.width, h: rect.height, vis: Math.min(visible, rect.height), m: rect.width < 760 || rect.width / rect.height < 0.9 };
+    // A small phone on its side still gets the side-by-side layout, or the phone would cover the words.
+    const onItsSide = window.matchMedia('(max-height: 520px) and (min-aspect-ratio: 9/10)').matches;
+    layout = { w: rect.width, h: rect.height, vis: Math.min(visible, rect.height), m: !onItsSide && (rect.width < 760 || rect.width / rect.height < 0.9) };
     canvas.width = Math.round(layout.w * NIGHT_RES);
     canvas.height = Math.round(layout.h * NIGHT_RES);
     lastLightKey = '';
@@ -121,6 +127,13 @@ export function bootStory(root: HTMLElement): () => void {
     root.dataset.labels = JSON.stringify(story.labels);
     root.dataset.unit = String(UNIT_VH * layout.h);
     root.dataset.stills = JSON.stringify(story.stills);
+    // Safari can go on showing the phone's old screen after a rebuild, until something repaints it.
+    clearTimeout(repaintTimer);
+    repaintTimer = setTimeout(() => {
+      els.phone.style.display = 'none';
+      void els.phone.offsetHeight;
+      els.phone.style.display = '';
+    }, 400);
   }
 
   /** Night, with a soft hole wherever a flash has lit the party. */
@@ -200,14 +213,25 @@ export function bootStory(root: HTMLElement): () => void {
     // Past the stage, the header needs a ground of its own to sit on over the FAQs.
     els.nav.classList.toggle('past', past);
     // The browser's own chrome follows the sky, until the story's over.
-    const chrome = past ? PAGE : story.night.v > 0.5 ? SKY_NIGHT : SKY_DAY;
+    const morning = target() > story.labels.s7;
+    const chrome = past ? PAGE : story.night.v > 0.5 ? SKY_NIGHT : morning ? SKY_MORNING : SKY_DAY;
     if (chrome !== chromeColour) {
       chromeColour = chrome;
       document.documentElement.style.background = chrome;
-      // iOS Safari colours its bars from the stage's own background, which the sky covers.
       els.stage.style.background = chrome;
       document.querySelector('meta[name="theme-color"]')?.setAttribute('content', chrome);
+      // Safari 26 ignores theme-color and colours its bars from fixed elements at the edges.
+      els.edgeTop = renewEdge(els.edgeTop, chrome);
+      els.edgeFoot = renewEdge(els.edgeFoot, past ? PAGE : GROUND);
     }
+  }
+
+  /** A new element each time, because Safari only looks again at one it hasn't seen. */
+  function renewEdge(edge: HTMLElement, colour: string) {
+    const next = edge.cloneNode() as HTMLElement;
+    next.style.background = colour;
+    edge.replaceWith(next);
+    return next;
   }
 
   function goalPast() {
@@ -351,6 +375,7 @@ export function bootStory(root: HTMLElement): () => void {
     stopped = true;
     cancelAnimationFrame(raf);
     clearTimeout(resizeTimer);
+    clearTimeout(repaintTimer);
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
     nav.forEach((b) => b.removeEventListener('click', onChapter));
