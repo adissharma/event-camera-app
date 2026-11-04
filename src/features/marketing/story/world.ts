@@ -21,20 +21,18 @@ export interface FigureDef {
 }
 
 /** Everyone at the party, who rise together when the page loads. */
-export const CAST = ['uncle', 'girlDog', 'auntie', 'hug', 'singalong', 'dad', 'overhead', 'cake'];
+export const CAST = ['girlDog', 'auntie', 'hug', 'singalong', 'dad', 'cake'];
 
 /** Who arrives later, only for their own scene: never in the opening frame. */
 export const LATE = ['ayla', 'easel', 'dareCrew', 'morning'];
 
 export const FIGURES: FigureDef[] = [
-  { id: 'uncle', frames: ['uncle-scan'], x: 190, y: 1400, h: 520, lens: [0.65, 0.2] },
   { id: 'girlDog', frames: ['girl-dog'], x: 500, y: 1340, h: 300 },
   { id: 'auntie', frames: ['shooter-auntie'], x: 850, y: 1410, h: 510, lens: [0.7, 0.28] },
   { id: 'hug', frames: ['hug'], x: 1260, y: 1290, h: 480 },
   { id: 'ayla', frames: ['ayla-scan', 'ayla-walk-a', 'ayla-walk-b', 'ayla-shoot'], x: 1900, y: 1215, h: 480, lens: [0.62, 0.1] },
   { id: 'singalong', frames: ['singalong'], x: 2620, y: 1130, h: 380 },
   { id: 'dad', frames: ['dad-a', 'dad-b'], x: 3010, y: 1190, h: 500, flip: true },
-  { id: 'overhead', frames: ['shooter-overhead'], x: 3270, y: 1425, h: 570, lens: [0.5, 0.05] },
   { id: 'cake', frames: ['cake'], x: 3610, y: 1310, h: 530 },
   { id: 'easel', frames: ['easel'], x: 1540, y: 1345, h: 650 },
   { id: 'dareCrew', frames: ['dare-crew'], x: 1420, y: 1435, h: 680, lens: [0.5, 0.2] },
