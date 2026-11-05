@@ -252,9 +252,9 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   // There from the start, open on the event: beside the words, or under them on a phone,
   // where it fits between the words and the prompt, so neither has to sit on the other.
   const heroAnchor = phonePose(L, 'anchor');
-  const promptText = Array.from(els.hint.children).find((c) => (c as HTMLElement).offsetHeight > 0) as HTMLElement;
+  const promptTop = els.hint.offsetTop + Math.min(...Array.from(els.hint.children as HTMLCollectionOf<HTMLElement>).filter((c) => c.offsetHeight > 0).map((c) => c.offsetTop));
   const heroY = m ? els['ch:s1'].offsetTop + els['ch:s1'].offsetHeight + 28 : heroAnchor.y;
-  const heroScale = m ? Math.min(heroAnchor.scale, (els.hint.offsetTop + promptText.offsetTop - 12 - heroY) / PHONE.h) : heroAnchor.scale;
+  const heroScale = m ? Math.min(heroAnchor.scale, (promptTop - 14 - heroY) / (PHONE.h + BEZEL)) : heroAnchor.scale;
   tl.start(els.phone, { x: (m ? (L.w - PHONE.w * heroScale) / 2 : heroAnchor.x), y: heroY, scale: heroScale, opacity: 1 });
   tl.start(screen('home'), { opacity: 1 });
   tl.start(screen('party'), { x: 0, y: 0, scale: 1, opacity: 1 });
