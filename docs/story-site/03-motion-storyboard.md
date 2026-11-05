@@ -1,21 +1,34 @@
 # Motion storyboard
 
 **Stage:** one `position: sticky` stage inside a tall wrapper, driven by one
-timeline. Timeline units (`u`) map to scroll at 0.2 viewport heights per unit, about
-17 viewports in all. All values for the camera and phone come from layout functions
-that differ by breakpoint.
+timeline. Timeline units (`u`) map to scroll at 0.24 viewport heights per unit on touch and
+0.16 with a mouse, about 38 u and 9 viewports in all on touch. All values for the camera and phone
+come from layout functions that differ by breakpoint.
 
-**As built.** Times below are the desktop values from `choreography.ts`, which is the
-source of truth; phone times run slightly later from the seat scene on. The copy is
-in `07-storyline-and-copy.md`.
+**As built.** Times below are from `choreography.ts`, which is the source of truth. Phones
+run a little differently where noted. The copy is in `07-storyline-and-copy.md`.
 
 **World:** a single panorama, left to right: gate and welcome table, five dinner
 tables in front of the villa, checkerboard dance floor under festoon lights, and
-the head table. A "camera" pans and zooms this one drawing
-for the whole page, so continuity is real rather than implied.
+the head table.
 
-**Timing grammar:** a transition is short and carries no text. A dwell is long
-and holds still. One thing moves at a time, and copy arrives last.
+**Timing grammar: every section opens the same way.** The page used to read as one long
+shot, with nothing to say a new section had started. Now the opening itself is the signal:
+
+1. **Words on the sky.** The scene and phone fade away, leaving the sky and its clouds, and
+   the new headline arrives on them alone.
+2. **The whole scene.** The terrace fades back in behind the words, always from the same view,
+   the hero's, and holds for a moment. Anything that needs to change, such as who's on stage or
+   where the camera is, changes while nothing's showing.
+3. **In on the subject.** The camera zooms and pans to whoever the section's about, and the phone
+   comes up as it arrives.
+4. **One proof, then a rest.** The one thing that proves the headline, then everything stops for
+   at least half a unit before the next section.
+
+Time of day moves under the words: the sky goes dark as "Every guest is your photographer"
+arrives, and comes up to morning under the album's. Progress is a thin segmented bar along the
+foot, with labels on hover on desktop. The clouds no longer follow the
+camera, since they're all that's showing at step 1.
 
 ---
 
@@ -40,92 +53,56 @@ up" on touch screens) and a white arrow, which goes to the App Clip card when cl
 About a second after the opening finishes, if nobody has scrolled, the whole page lifts
 and drops, four times over 17 seconds, then rests. The first scroll stops it for good.
 
-## 1. Scan (0–6.5 u)
+Every section below opens with the steps above. These are what comes after, with the unit
+each one's words arrive at.
 
-Camera moves to the gate and the room falls into shadow. The invitation lifts off the
-welcome table and is held up beside the phone, then **moves behind the phone, appearing in
-its viewfinder as it goes**: the same card in the same place at the same size, as if seen
-through the phone, so it's obvious what's being scanned. Corners lock on → yellow pill → tap
-→ the **App Clip card** rises over the blurred camera ("You're invited", "Find your seat
-and grab the camera", Open, "App Clip · Stills") → tap Open, spinner → real **join screen**.
+## 1. Join (0.3 u)
 
-## 2. Seat (6.5–19.6 u)
+The one section that doesn't open on the sky, because the hero's scene is already showing and
+moves on smoothly: the event on the phone closes up to the home screen as the first scroll starts,
+the phone fades, and the words change over the terrace. In on the gate. The phone comes up on its home screen with the invitation beside
+it, or above it on a phone. Tap Camera → it opens → **the invitation moves behind the phone,
+appearing in its viewfinder as it goes**: the same card in the same place at the same size, as if
+seen through the phone, so it's obvious what's being scanned. Corners lock on, yellow pill → the
+**App Clip card** rises → tap Open → the real **join screen**. Rest.
 
-A seating chart on an easel rises in the only light in the room. As soon as "Retire the
-easel" is up, **the easel is thrown out of the frame**, and the light moves to Table 7.
-Only then does the phone start: the **Find your table** sheet, "Ayl", rows, tap, seat card.
+## 2. Seating (6.4 u)
 
-The moment "Table 7" appears, the room starts too. A pink line leaves those words, leaves
-the phone, reaches the sign on the table and lets go of the phone, and Ayla walks to it with
-the light following her. **At the same time**, the phone swipes left to the **floor plan**,
-with the toggle following, two fingers pinch in on table 7, and it swipes back. On phones
-the phone has to slide low to show the walk, so the floor plan comes straight after it.
+In on the easel, in the only light in the room, with Ayla's seat card on the phone. Swipe to the
+floor plan, pinch in on table 7. **The easel is thrown out of the frame**, then a pink line leaves
+the phone for the real table and Ayla walks to it. On a phone the mock slides down once, to show
+that. Rest.
 
-## 3. Shoot (19–28 u)
+## 3. Photos (about 13 u)
 
-Ayla's at her table, so that's the job done. There's no join tap, no viewfinder and no
-shrinking: **the phone slides off to the right** and the camera slides across to the whole
-terrace. The sun drops behind the villa, the sky goes violet and the festoon lights glow.
-Then along the terrace, left to right, one moment at a time: each flash opens a pool in
-the night and a real photo drifts up above its moment, clearing for the next. On desktop
-the last moment sinks back as the next is lit, and the camera pulls back at the end to see
-the whole party. Night is one canvas multiplied over the scene, with a soft hole per pool.
+Night falls under the words. The party's the subject, so desktop stays on the whole terrace and a
+phone moves along to the far end of it. Flashes go off across it, five on desktop and three on a
+phone, each leaving a photo above the moment it caught. **The photos stay**, so the scene ends on
+the party and its pictures together. Rest.
 
-## 4. Dare (28–37 u)
+## 4. Challenges (about 18 u)
 
-Phone back up from below, onto the event page with its **challenge strip**. The camera pushes in on a
-group of guests rising, lit, going to absurd lengths. Tap a tile: the real challenge story
-(**Happy Tears**, **Best Dressed**, **Caught in the Act**, word for word), "Add Yours",
-camera, shutter. Each photo stacks up beside the phone with its challenge as a caption.
+In on the crew, in the light. The event page comes up with the row of challenges lit and the rest
+dimmed. Tap → Happy Tears → Add Yours → the camera → one shutter, one flash, and the photo comes
+out of the phone with its dare. Then the same again, quicker to follow, for Best Dressed. Rest.
 
-## 5. Messages (36–41 u)
+## 5. Guestbook (about 23 u)
 
-Straight from the dare to the **Guestbook**. The camera pushes in on Grandad, lit, and the
-phone records him: the bars of a voice message scrolling and the timer running from 1:00.
-There's no video on screen, because it muddied the idea. The copy says guests can leave
-audio or video.
+In on one guest, and the recording screen comes up. The only thing moving is the waveform and its
+timer.
 
-## 6. Reveal (41–58 u)
+## 6. Disposable (about 27.5 u)
 
-**Watch it live.** The room fades back. The phone lands on the event page, with its grid
-filling photo by photo.
+The room falls away as the phone comes up on the camera, in black and white, at 24. The push in on
+the counter, and it runs down to 0, slowly and then quickly, with the flashes dying away early so
+it never strobes. Then the phone pulls back to the locked gallery ("Revealed in 8h 12m" on every
+cell). Rest.
 
-**Or make them wait.** The second half of the headline arrives. Everything but the phone
-all but disappears and the phone moves to a fresh camera, while the page pushes in on the
-remaining-shots pill, the same idea as the app's "How many photos can guests take?" step.
-The viewfinder falls to monochrome and every other control fades, so the number is all
-that's left. The counter is the app's own: `viewfinder-shot-counter.tsx`, Isolde numerals
-in a dark pill, grown in the phone's own pixels so it stays sharp. It **rolls up from 0 to
-24 when the camera opens, then runs down to 0**, slowly and then faster and faster. The
-flashes die away after the first few, so it never strobes.
+## 7. Album (about 34 u)
 
-**The wait.** Back out to the whole phone, on the event page as the app shows it before a
-reveal: every photo blurred, with a lock and "Revealed in 8h 12m", counting down. The
-stat reads "Ended" and the floating button becomes "Save". Scroll back and it all winds
-back.
-
-## 7. Album (58–71 u)
-
-The sky turns to dawn and the sun rises **on the far side of the villa from where it set**.
-Everyone slides away home, leaving last night's couple on the terrace. When the count
-reaches "Unlocking…", the phone moves to the centre and **each slot reveals its photo, one
-at a time**. Then "Here's everything you missed": on desktop the phone goes back to the
-right and the camera eases in a little with the couple on the left, as close as it can get
-with the villa still below the words, in full daylight with no spotlight, as three photos lift out with notes. A phone's screen would cover the couple,
-so they only appear on desktop.
-
-The swirl of photos that used to lead into this is parked, not deleted. `SWIRL` in
-`content.ts` turns it back on. It would need the cell reveal moving out of its way.
-
-## 8. Parties (71–80 u)
-
-The camera tilts up off the terrace into the morning sky. **Three tabs: Birthdays, Bach
-parties, Holidays.** Each has its own whole setting rising in behind, its own line of
-copy and its own event on the phone. Scrolling moves through them by itself; picking a
-tab holds it until you leave the scene. Arrow keys work, as tabs should.
-
-All three tabs have real photos on their phones, in `USE_CASES` in `content.ts`. The rows
-below the phone's edge are placeholder tiles, which nobody can scroll to.
+Morning comes up under the words, and everyone's gone home. On desktop, in on the two of them on the
+empty terrace. The phone comes up with its locked photos, they open quickly one after another,
+and the page holds on the album with its button.
 
 ## After the story
 

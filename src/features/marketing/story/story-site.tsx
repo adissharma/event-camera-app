@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 
-import { ASSET, CHAPTERS, CLOSE, CTA, DARES, FAQS, GALLERY, LINKS, NOTES, SWIRL, USE_CASES, USE_CASES_ALSO, art, print } from './content';
+import { ASSET, CHAPTERS, CLOSE, CTA, DARES, FAQS, GALLERY, LINKS, SWIRL, USE_CASES, USE_CASES_ALSO, art, print } from './content';
 import { Invitation, Phone } from './phone';
 import { FESTOON, FIGURES, LATE, SUN, TABLE7, WORLD, figure, figureSize } from './world';
 
@@ -121,10 +121,6 @@ function CloseWorld() {
   );
 }
 
-function Note({ id, text }: { id: string; text: string }) {
-  return <p className="note" data-el={`note:${id}`}>{text}</p>;
-}
-
 function World() {
   return (
     <>
@@ -146,9 +142,7 @@ function World() {
       <div className="world world-top art" data-el="worldTop" aria-hidden="true">
         <Festoon />
         <div style={{ position: 'absolute', left: TABLE7.x, top: TABLE7.y }}>
-          <span className="tent" data-el="tent7">7</span>
         </div>
-        <Note id="table7" text={NOTES.table7} />
         {Array.from({ length: 11 }, (_, i) => <div key={i} className="flash" data-el={`flash:${i}`} />)}
       </div>
     </>
@@ -229,7 +223,6 @@ export function StoryMarkup() {
               <Prints />
               <svg className="goldline art" aria-hidden="true">
                 <path data-el="goldPath" pathLength={1} />
-                <circle data-el="goldDot" r="5" />
               </svg>
               <div className="inv-wrap art" aria-hidden="true">
                 <div data-el="invRoom" className="inv-room-w"><Invitation className="inv-room" /></div>
@@ -255,7 +248,6 @@ export function StoryMarkup() {
                   </div>
                 ))}
               </div>
-              <div className="white art" data-el="white" aria-hidden="true" />
 
               <Chapter name="s1" heading="h1" big poster="s1">
                 <div className="uc-hero" role="group" aria-label="Kinds of party">

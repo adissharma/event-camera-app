@@ -122,6 +122,9 @@ body { overflow: visible !important; margin: 0; }
 @media (min-width: 760px) and (min-aspect-ratio: 9/10) {
   .close-in .h-xl { font-size: clamp(38px, 5.4vw, 92px); }
 }
+@media (min-width: 760px) and (min-aspect-ratio: 9/10) {
+  .ch-s1 .cta::after { inset: 2px; }
+}
 .close-in .b-l { margin-top: 14px !important; max-width: 44em; font-size: clamp(15px, 1.4vw, 20px); }
 .close-in .cta { margin-top: clamp(22px, 3.6vh, 36px); }
 .nav.at-close .nav-get { display: none !important; }
@@ -437,9 +440,12 @@ body { overflow: visible !important; margin: 0; }
 @media (max-width: 1100px) and (min-width: 760px) {
   .story-live .ch-s8 { width: 42vw; }
 }
-/* The chapters need the room; below this the header's button is enough. */
+/* Smaller screens: the bar without its labels, up above a phone's toolbar so it's always in sight. */
 @media (max-width: 1099px) {
-  .story-live .chapters { display: none; }
+  .story-live .chapters { gap: 3px; padding: 22px 10px calc(100lvh - 100svh + 9px); background: linear-gradient(transparent, rgba(11, 8, 24, .82) 18px); pointer-events: none; }
+  .story-live .chapters::before, .story-live .chapters span { display: none; }
+  .story-live .chapters button { gap: 0; }
+  .story-live .chapters b { height: 3px; background: rgba(255, 255, 255, .34); border-radius: 2px; }
 }
 
 @media (max-width: 759px), (max-aspect-ratio: 9/10) {
@@ -460,7 +466,6 @@ body { overflow: visible !important; margin: 0; }
   .h-lg { font-size: clamp(27px, 8vw, 38px); }
   .b-l { font-size: 14px; line-height: 1.4; margin-top: 8px !important; }
   .ey-l { margin-bottom: 8px !important; }
-  .chapters { display: none !important; }
   .cta-row { margin-top: 16px; gap: 14px; }
   /* Any further and the headline would slide under the logo. */
   .cta { height: 54px; font-size: 17px; }
@@ -630,6 +635,7 @@ body { overflow: visible !important; margin: 0; }
   .nav-logo { width: 56px; height: 23px; }
   .nav-link { font-size: 14px; }
   .nav-faqs { display: none; }
+  .nav.started .nav-link { display: none; }
   .cta.cta-xl { padding: .72em 1.2em; font-size: clamp(21px, 6.6vw, 34px); }
   /* The hero on a phone: centred, and just the headline and the button above the mock. */
   .story-live .ch-s1 { text-align: center; }
@@ -685,6 +691,7 @@ body { overflow: visible !important; margin: 0; }
 }
 @media (max-height: 520px) and (min-aspect-ratio: 9/10) {
   .nav-faqs { display: none; }
+  .nav.started .nav-link { display: none; }
   .story-live .ch-s7 { width: 44vw; }
   .uc-setting { bottom: -45%; }
   .uc-sun { left: 54%; width: 26vh; bottom: 44%; }
