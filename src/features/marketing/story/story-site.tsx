@@ -211,7 +211,7 @@ export function StoryMarkup() {
           <img src={`${ASSET}/logo.webp`} alt="" width="104" height="42" />
         </a>
         <div className="nav-right">
-          <a className="nav-link" href="#faqs">FAQs</a>
+          <a className="nav-link nav-faqs" href="#faqs">FAQs</a>
           <a className="nav-link" href={LINKS.hostPortal}>Host login</a>
           <div className="nav-get" data-el="navGet">
             <CreateEvent small />
