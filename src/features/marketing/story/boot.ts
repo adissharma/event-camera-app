@@ -10,7 +10,9 @@ import { WORLD } from './world';
 
 const SMOOTHING = 7.5;
 /** Where the scroll nudge lands: the phone, with the App Clip card up. */
-const NUDGE_TO = 3.6;
+const NUDGE_TO = 1.6;
+/** Past a section's words on the sky, with the whole scene showing and nothing started yet. */
+const SECTION_LANDS = 0.9;
 /** How long a phone's mock stays on each party, in ms. */
 const UC_DWELL = 4500;
 /** Behind the FAQs, once the story's over. */
@@ -61,7 +63,7 @@ function loadImages(root: HTMLElement, plate: HTMLImageElement) {
 export function bootStory(root: HTMLElement): () => void {
   // Scroll per story unit, as a share of the viewport height. A wheel moves in big fixed steps,
   // so it covers more story per notch than a swipe does.
-  const UNIT_VH = window.matchMedia('(pointer: coarse)').matches ? 0.2 : 0.14;
+  const UNIT_VH = window.matchMedia('(pointer: coarse)').matches ? 0.24 : 0.16;
   const { els, group } = collect(root);
   const canvas = els.night as unknown as HTMLCanvasElement;
   const ctx = canvas.getContext('2d')!;
@@ -144,7 +146,6 @@ export function bootStory(root: HTMLElement): () => void {
 
   /** Fills each section's bar by how far through it the story is. */
   function syncChapterBars(t: number) {
-    if (layout.m) return;
     chapterFills.forEach((fill, i) => {
       const from = story.labels[nav[i].dataset.chapter!];
       const to = i + 1 < nav.length ? story.labels[nav[i + 1].dataset.chapter!] : story.T;
@@ -210,8 +211,8 @@ export function bootStory(root: HTMLElement): () => void {
     els.worldBack.style.transform = transform;
     els.worldFront.style.transform = transform;
     els.worldTop.style.transform = transform;
-    // The clouds are far away, so they barely follow the camera.
-    els.clouds.style.transform = `translate3d(${((story.home - cam.cx) * z * 0.05).toFixed(1)}px,${(-t * 0.3).toFixed(1)}px,0)`;
+    // Far away, so they ignore the camera: they're all that's showing when a new section's words arrive.
+    els.clouds.style.transform = `translate3d(0,${(-t * 0.3).toFixed(1)}px,0)`;
     drawNight();
 
     syncChrome();
@@ -220,6 +221,7 @@ export function bootStory(root: HTMLElement): () => void {
     els['ch:s8'].style.pointerEvents = t >= story.labels.s8 ? 'auto' : 'none';
     // The hero has its own button, so the header's waits until that one's gone.
     els.navGet.style.display = t >= 0.25 ? 'flex' : 'none';
+    els.nav.classList.toggle('started', t >= 0.25);
     // Hidden on the hero, where it would otherwise catch clicks meant for the nudge.
     els.chapters.style.pointerEvents = t < 0.25 ? 'none' : '';
 
@@ -363,7 +365,7 @@ export function bootStory(root: HTMLElement): () => void {
   };
   const onChapter = (e: Event) => {
     const name = (e.currentTarget as HTMLElement).dataset.chapter!;
-    scrollToTime(name === 's1' ? 0 : story.labels[name] + 0.8);
+    scrollToTime(name === 's1' ? 0 : story.labels[name] + SECTION_LANDS);
   };
   nav.forEach((b) => b.addEventListener('click', onChapter));
 

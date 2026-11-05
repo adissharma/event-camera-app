@@ -134,10 +134,6 @@ export const USE_CASES: {
 export const USE_CASES_ALSO = 'Plus engagements, anniversaries, graduations, baby showers, housewarmings and Christmas parties. There’s a challenge pack for each.';
 
 /** Beside a moment in the room, like someone pointing it out at the party. */
-export const NOTES = {
-  table7: 'Table 7. That’s you.',
-};
-
 /**
  * The photos swirling round the phone before they settle into the album. Parked for now:
  * the album's locked slots reveal themselves instead. Turn it back on here, and move the
