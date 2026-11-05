@@ -629,6 +629,7 @@ body { overflow: visible !important; margin: 0; }
 @media (max-width: 759px), (max-aspect-ratio: 9/10) {
   .nav-logo { width: 56px; height: 23px; }
   .nav-link { font-size: 14px; }
+  .nav-faqs { display: none; }
   .cta.cta-xl { padding: .72em 1.2em; font-size: clamp(21px, 6.6vw, 34px); }
   /* The hero on a phone: centred, and just the headline and the button above the mock. */
   .story-live .ch-s1 { text-align: center; }
@@ -683,6 +684,7 @@ body { overflow: visible !important; margin: 0; }
   .uc-setting { bottom: -24%; }
 }
 @media (max-height: 520px) and (min-aspect-ratio: 9/10) {
+  .nav-faqs { display: none; }
   .story-live .ch-s7 { width: 44vw; }
   .uc-setting { bottom: -45%; }
   .uc-sun { left: 54%; width: 26vh; bottom: 44%; }
