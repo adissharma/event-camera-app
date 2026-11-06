@@ -179,7 +179,11 @@ export function bootStory(root: HTMLElement): () => void {
     const z = layout.h / cam.vh;
     const tx = layout.w / 2 - cam.cx * z;
     const ty = layout.h / 2 - cam.cy * z;
-    const key = `${cam.cx.toFixed(1)},${cam.cy.toFixed(1)},${cam.vh.toFixed(1)},${night.v.toFixed(3)},${figureLights.map((l) => l.a.toFixed(3)).join()}`;
+    // A dancer swaps between two drawings, so only the one showing is lit, or there'd be a ghost of the other.
+    const showing = (img: HTMLImageElement) => getComputedStyle(img.parentElement!).opacity !== '0';
+    const lit = figureLights.filter((l) => l.a > 0.001);
+    const poses = lit.map((l) => imagesOf(l.id).map((img) => (showing(img) ? 1 : 0)).join('')).join();
+    const key = `${cam.cx.toFixed(1)},${cam.cy.toFixed(1)},${cam.vh.toFixed(1)},${night.v.toFixed(3)},${figureLights.map((l) => l.a.toFixed(3)).join()},${poses}`;
     if (key === lastLightKey) return;
     lastLightKey = key;
 
@@ -194,11 +198,10 @@ export function bootStory(root: HTMLElement): () => void {
     ctx.fillRect(0, 0, layout.w, layout.h);
 
     ctx.globalCompositeOperation = 'destination-out';
-    for (const light of figureLights) {
-      if (light.a <= 0.001) continue;
+    for (const light of lit) {
       const x = tx + light.x * z, y = ty + light.y * z, w = light.w * z, h = light.h * z;
       for (const img of imagesOf(light.id)) {
-        if (!img.complete || !img.naturalWidth) continue;
+        if (!img.complete || !img.naturalWidth || !showing(img)) continue;
         // A faint edge of light just past the outline, then the figure itself, fully lit.
         ctx.globalAlpha = light.a * 0.18;
         ctx.drawImage(img, x - w * 0.02, y - h * 0.015, w * 1.04, h * 1.03);
