@@ -26,6 +26,8 @@ const SKY_MORNING = '#5a3fc0';
 const GROUND = '#160a36';
 /** The night layer is only soft gradients, so it can draw at a fraction of the size. */
 const NIGHT_RES = 0.5;
+/** Rings of light round a lit figure: how much bigger than it, and how strong. */
+const HALO: [number, number][] = [[0.14, 0.12], [0.09, 0.2], [0.05, 0.32], [0.025, 0.5]];
 
 function collect(root: HTMLElement) {
   const els: Els = {};
@@ -202,9 +204,11 @@ export function bootStory(root: HTMLElement): () => void {
       const x = tx + light.x * z, y = ty + light.y * z, w = light.w * z, h = light.h * z;
       for (const img of imagesOf(light.id)) {
         if (!img.complete || !img.naturalWidth || !showing(img)) continue;
-        // A faint edge of light just past the outline, then the figure itself, fully lit.
-        ctx.globalAlpha = light.a * 0.18;
-        ctx.drawImage(img, x - w * 0.02, y - h * 0.015, w * 1.04, h * 1.03);
+        // The light spills a little past the outline, softening as it goes, then the figure is fully lit.
+        for (const [grow, alpha] of HALO) {
+          ctx.globalAlpha = light.a * alpha;
+          ctx.drawImage(img, x - (w * grow) / 2, y - (h * grow) / 2, w * (1 + grow), h * (1 + grow));
+        }
         ctx.globalAlpha = light.a;
         ctx.drawImage(img, x, y, w, h);
       }
