@@ -218,7 +218,6 @@ export function bootStory(root: HTMLElement): () => void {
     syncChrome();
     syncChapterBars(t);
     els['ch:s1'].style.pointerEvents = t < 0.25 ? 'auto' : 'none';
-    els['ch:s8'].style.pointerEvents = t >= story.labels.s8 ? 'auto' : 'none';
     // The hero has its own button, so the header's waits until that one's gone.
     els.navGet.style.display = t >= 0.25 ? 'flex' : 'none';
     els.nav.classList.toggle('started', t >= 0.25);

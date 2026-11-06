@@ -92,6 +92,14 @@ function Figure({ id, order }: { id: string; order: number }) {
           <img data-src={art(frame)} data-kind={LATE.includes(id) ? 'figure-late' : 'figure'} alt="" />
         </div>
       ))}
+      {id === 'easelQr' ? (
+        // Laid over the drawn board, so its words are sharp and the code is a real one.
+        <div className="qr-sign">
+          <p>Find your table</p>
+          <img src={`${ASSET}/qr-invite.svg`} alt="" width="120" height="120" />
+          <img className="qr-sign-logo" src={`${ASSET}/logo.webp`} alt="" width="104" height="42" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -144,6 +152,9 @@ function World() {
         <div style={{ position: 'absolute', left: TABLE7.x, top: TABLE7.y }}>
         </div>
         {Array.from({ length: 11 }, (_, i) => <div key={i} className="flash" data-el={`flash:${i}`} />)}
+        {Array.from({ length: 6 }, (_, i) => (
+          <svg key={i} className="sparkle" data-group="sparkle" viewBox="0 0 24 24"><path d="M12 0C13 8 16 11 24 12C16 13 13 16 12 24C11 16 8 13 0 12C8 11 11 8 12 0Z" /></svg>
+        ))}
       </div>
     </>
   );
@@ -193,7 +204,7 @@ function Chapter({ name, heading, big, poster, children }: {
 }
 
 export function StoryMarkup() {
-  const chapters = (['s2', 's3', 's4', 's5', 's6', 's7', 's8'] as const).map((k) => ({ k, label: CHAPTERS[k].label }));
+  const chapters = (['s2', 's3', 's4', 's5', 's6', 's7'] as const).map((k) => ({ k, label: CHAPTERS[k].label }));
 
   return (
     <div className="story">
@@ -221,9 +232,6 @@ export function StoryMarkup() {
               <div className="layer art dim-layer" data-el="dim" aria-hidden="true" />
               <div className="layer art copy-shade" data-el="copyShade" aria-hidden="true" />
               <Prints />
-              <svg className="goldline art" aria-hidden="true">
-                <path data-el="goldPath" pathLength={1} />
-              </svg>
               <div className="inv-wrap art" aria-hidden="true">
                 <div data-el="invRoom" className="inv-room-w"><Invitation className="inv-room" /></div>
               </div>

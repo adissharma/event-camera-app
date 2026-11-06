@@ -42,7 +42,7 @@ They scan your QR code and type their name. No download, no account, no password
 
 **A seating chart on every phone.**
 
-Guests type their name to find their table, then zoom into your floor plan.
+No crowd round the easel. Guests scan, find their table and zoom into your floor plan.
 
 ### 3. Photos
 
@@ -62,13 +62,13 @@ Set prompts like Happy Tears and Best Dressed, or pick a ready-made pack for you
 
 Guests leave private voice or video messages: your mum in tears, your best friend at 1am.
 
-*The picture should be the mother of the bride, laughing and crying into her phone. The prompt is `guest-voice` in `prompts.mjs`. Until it's generated, the scene lights the guest in the sari who's already on the terrace.*
+*A guest laughing and crying into her phone, from `guest-voice` in `prompts.mjs`, in a light only wide enough for her.*
 
 ### 6. Disposable
 
 **Turn every phone into a disposable camera.**
 
-Limited shots and a retro look, hidden until you choose. Or reveal photos live as guests snap.
+Limited shots, and photos that develop overnight. Or reveal them live as guests snap.
 
 ### 7. Album, the story's close
 

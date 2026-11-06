@@ -66,12 +66,11 @@ appearing in its viewfinder as it goes**: the same card in the same place at the
 seen through the phone, so it's obvious what's being scanned. Corners lock on, yellow pill → the
 **App Clip card** rises → tap Open → the real **join screen**. Rest.
 
-## 2. Seating (6.4 u)
+## 2. Seating (about 5.5 u)
 
-In on the easel, in the only light in the room, with Ayla's seat card on the phone. Swipe to the
-floor plan, pinch in on table 7. **The easel is thrown out of the frame**, then a pink line leaves
-the phone for the real table and Ayla walks to it. On a phone the mock slides down once, to show
-that. Rest.
+The problem first: in on a crowd of baffled guests jammed round the paper seating chart on its
+easel. Then the chart becomes one big QR code and the crowd is gone. The phone comes up with
+Ayla's seat card, swipes to the floor plan and pinches in on table 7. Rest.
 
 ## 3. Photos (about 13 u)
 
@@ -86,23 +85,22 @@ In on the crew, in the light. The event page comes up with the row of challenges
 dimmed. Tap → Happy Tears → Add Yours → the camera → one shutter, one flash, and the photo comes
 out of the phone with its dare. Then the same again, quicker to follow, for Best Dressed. Rest.
 
-## 5. Guestbook (about 23 u)
+## 5. Guestbook (about 23.5 u)
 
-In on one guest, and the recording screen comes up. The only thing moving is the waveform and its
-timer.
+In on one guest, laughing and teary into her phone, in a light only wide enough for her. The
+recording screen comes up, and the only thing moving is the waveform and its timer.
 
-## 6. Disposable (about 27.5 u)
+## 6. Disposable, and the morning after (about 28 u)
 
-The room falls away as the phone comes up on the camera, in black and white, at 24. The push in on
-the counter, and it runs down to 0, slowly and then quickly, with the flashes dying away early so
-it never strobes. Then the phone pulls back to the locked gallery ("Revealed in 8h 12m" on every
-cell). Rest.
+The story's last section. A disposable is two things together, the limited roll and the wait
+while it develops, so both are here. The room falls away as the phone comes up on the camera,
+in black and white, at 24. The push in on the counter, and it runs down to 0, slowly and then
+quickly, with the flashes dying away early so it never strobes. The phone pulls back to the
+locked gallery. Then the sun comes up: the sky lightens to morning, every guest has gone home,
+and on desktop it's just the couple on the empty terrace with their phone. The photos develop,
+coming out of their locks one at a time, and the story holds there.
 
-## 7. Album (about 34 u)
-
-Morning comes up under the words, and everyone's gone home. On desktop, in on the two of them on the
-empty terrace. The phone comes up with its locked photos, they open quickly one after another,
-and the page holds on the album with its button.
+The album slide that used to follow is now only on the linear page.
 
 ## After the story
 
