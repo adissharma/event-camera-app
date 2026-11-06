@@ -24,7 +24,7 @@ export interface FigureDef {
 export const CAST = ['girlDog', 'auntie', 'hug', 'singalong', 'dad', 'cake'];
 
 /** Who arrives later, only for their own scene: never in the opening frame. */
-export const LATE = ['ayla', 'easel', 'dareCrew', 'morning'];
+export const LATE = ['ayla', 'easelCrowd', 'easelQr', 'dareCrew', 'guestVoice', 'morning'];
 
 export const FIGURES: FigureDef[] = [
   { id: 'girlDog', frames: ['girl-dog'], x: 500, y: 1340, h: 300 },
@@ -34,7 +34,9 @@ export const FIGURES: FigureDef[] = [
   { id: 'singalong', frames: ['singalong'], x: 2620, y: 1130, h: 380 },
   { id: 'dad', frames: ['dad-a', 'dad-b'], x: 3010, y: 1190, h: 500, flip: true },
   { id: 'cake', frames: ['cake'], x: 3610, y: 1310, h: 530 },
-  { id: 'easel', frames: ['easel'], x: 1540, y: 1345, h: 650 },
+  { id: 'easelCrowd', frames: ['easel-crowd'], x: 1540, y: 1250, h: 600 },
+  { id: 'easelQr', frames: ['easel-qr'], x: 1560, y: 1245, h: 630 },
+  { id: 'guestVoice', frames: ['guest-voice'], x: 850, y: 1410, h: 520 },
   { id: 'dareCrew', frames: ['dare-crew'], x: 1420, y: 1435, h: 680, lens: [0.5, 0.2] },
   { id: 'morning', frames: ['morning-after'], x: 1640, y: 1340, h: 520 },
 ];

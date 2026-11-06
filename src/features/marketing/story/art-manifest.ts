@@ -71,5 +71,17 @@ export const ART_SIZES: Record<string, { w: number; h: number }> = {
   "uncle-scan": {
     "w": 610,
     "h": 1265
+  },
+  "easel-crowd": {
+    "w": 821,
+    "h": 549
+  },
+  "easel-qr": {
+    "w": 604,
+    "h": 1282
+  },
+  "guest-voice": {
+    "w": 508,
+    "h": 1218
   }
 };
