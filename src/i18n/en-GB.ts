@@ -68,8 +68,7 @@ export const enGB = {
 
     // Step 3
     coverHeading: 'Add a cover photo',
-    coverAddPhoto: 'Add photo',
-    coverAddLater: 'Add later',
+    coverAddPhoto: 'Add own photo',
     choosePhoto: 'Choose a photo',
     takePhoto: 'Take a photo',
     removePhoto: 'Remove',
@@ -102,8 +101,11 @@ export const enGB = {
     guestsCanViewGalleryDescription:
       'Including photos taken by other guests.',
     revealDuring: 'During the event',
-    revealHeading: 'When should your photos be revealed?',
+    revealHeading: 'When should photos be revealed to you?',
     guestRevealHeading: 'When should guests see photos?',
+    guestsNeverSeeTitle: 'Thanks for helping capture the day 🤍',
+    guestsNeverSeeBody:
+      'Your host is keeping these photos private, so every shot you take is a little gift just for them.',
     revealDuringDescription: 'Photos appear as guests take them.',
     revealAtClose: 'When the event closes',
     revealAtCloseDescription: 'Everything appears the moment your event ends.',

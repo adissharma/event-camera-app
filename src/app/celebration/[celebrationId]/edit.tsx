@@ -9,6 +9,7 @@ import { Screen } from '@/components/layout/screen';
 import { AppText } from '@/components/ui/text';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { decodeRevealMode } from '@/features/celebrations/draft/types';
+import type { RevealMode } from '@/types/database';
 import {
   celebrationDetailKeys,
   fetchCelebrationDetail,
@@ -19,16 +20,19 @@ import {
   type CelebrationSummary,
 } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
-import { colours, layout, spacing, radii } from '@/design';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { colours, fontFamilies, layout, spacing, radii, REVEAL_TRACK_GRADIENT } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
 import {
   upgradesForFeature,
-  upgradesForGuestLimit,
   type FeatureKey,
 } from '@/features/entitlements/event-entitlements';
 import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
-import { LockIcon } from '@/components/ui/icons';
+import { GuestLimitSheet } from '@/features/entitlements/guest-limit-sheet';
+import { effectiveGuestLimit } from '@/features/entitlements/guest-limit';
+import { eventGuestLimitKeys, fetchEventGuestLimit } from '@/services/event-guest-limit';
 import Svg, { Path } from 'react-native-svg';
 
 function ChevronRightIcon({ size = 16, color = '#6B7280' }) {
@@ -42,6 +46,20 @@ function ChevronRightIcon({ size = 16, color = '#6B7280' }) {
         strokeLinejoin="round" 
       />
     </Svg>
+  );
+}
+
+/** What a row's feature or allowance would take: tapping the row opens the upgrade. */
+function UpgradePill() {
+  return (
+    <LinearGradient
+      colors={[REVEAL_TRACK_GRADIENT[1], REVEAL_TRACK_GRADIENT[2]]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 0 }}
+      style={styles.upgradeChip}
+    >
+      <AppText variant="bodySmall" style={styles.upgradeChipText}>Upgrade</AppText>
+    </LinearGradient>
   );
 }
 
@@ -81,14 +99,15 @@ export default function EditEventScreen() {
     title: string;
     onUnlocked?: () => void;
   } | null>(null);
-  /**
-   * The guest-allowance sheet.
-   *
-   * Separate from `upgradeRequest` because it is not asking for a *feature* —
-   * it is asking for a bigger number, and more than one tier can satisfy that.
-   * Which ones is `upgradesForGuestLimit`'s answer, not this screen's.
-   */
   const [guestLimitOpen, setGuestLimitOpen] = useState(false);
+  const eventSessionId = data?.primarySession?.id;
+  const { data: hostGuestLimit = null } = useQuery({
+    queryKey: eventGuestLimitKeys.forSession(eventSessionId ?? ''),
+    queryFn: () => fetchEventGuestLimit(eventSessionId!),
+    enabled: Boolean(eventSessionId),
+    // A database without this column yet costs the host's number, not the screen.
+    retry: false,
+  });
 
   if (isLoading || !data?.primarySession) {
     return (
@@ -101,21 +120,40 @@ export default function EditEventScreen() {
   }
 
   const { celebration, primarySession } = data;
+  const guestLimit = effectiveGuestLimit(entitlements.plan, hostGuestLimit);
+  const canUpgradeGuests = Boolean(entitlements.plan) && entitlements.plan?.guestLimit !== 'unlimited';
 
 
   const handleEditField = (field: 'name' | 'closing' | 'cover' | 'photo-limit' | 'reveal' | 'treatment' | 'challenges' | 'guestbook') => {
-    // The database has one reveal setting for the whole session — nothing
-    // distinguishes a host's view from a guest's (see reveal/state.ts). Both
-    // tiers of the reveal step's UI are seeded from that single value, so
-    // reopening settings shows "Same time as me" rather than a stale split
-    // left over from a previous draft.
+    // `reveal_mode` is the guests' reveal. The host's own is `host_reveal_mode`,
+    // which sessions from before hosts had one do not carry: those seed both
+    // steps from the guests' time, as they always did.
+    const sessionEndsAt = primarySession.ends_at ?? celebration.ends_at;
     const { choice: revealChoice, customRevealAt } = decodeRevealMode(
       primarySession.reveal_mode,
       primarySession.reveal_at,
-      primarySession.ends_at ?? celebration.ends_at,
+      sessionEndsAt,
     );
     const guestRevealChoice =
       primarySession.gallery_visibility === 'hosts_only' ? 'never' : revealChoice;
+    const hostSession = primarySession as typeof primarySession & {
+      host_reveal_mode?: RevealMode | null;
+      host_reveal_at?: string | null;
+    };
+    const hostReveal = hostSession.host_reveal_mode
+      ? decodeRevealMode(hostSession.host_reveal_mode, hostSession.host_reveal_at ?? null, sessionEndsAt)
+      : { choice: revealChoice, customRevealAt };
+    // The guest step asks how long after the host, so it is seeded with the gap.
+    const guestDelayHours =
+      hostSession.host_reveal_at && primarySession.reveal_at
+        ? Math.max(
+            0,
+            Math.round(
+              (Date.parse(primarySession.reveal_at) - Date.parse(hostSession.host_reveal_at)) /
+                3_600_000,
+            ),
+          )
+        : 0;
 
     // Seed draft with ALL current settings of this celebration
     update({
@@ -137,10 +175,10 @@ export default function EditEventScreen() {
       cameraRollUploadsEnabled: (primarySession.capture_mode ?? 'camera_and_library') !== 'camera_only',
       galleryVisibility: primarySession.gallery_visibility,
       guestDownloadsEnabled: primarySession.guest_downloads_enabled,
-      hostRevealChoice: revealChoice,
-      hostCustomRevealAt: customRevealAt,
+      hostRevealChoice: hostReveal.choice,
+      hostCustomRevealAt: hostReveal.customRevealAt,
       guestRevealChoice,
-      guestRevealDelayHours: 0,
+      guestRevealDelayHours: guestDelayHours,
       guestCustomRevealAt: guestRevealChoice === 'never' ? null : customRevealAt,
       photoTreatment: primarySession.photo_treatment || 'original',
       editCelebrationId: celebration.id, // Mark that we are editing this event!
@@ -297,12 +335,16 @@ export default function EditEventScreen() {
             <View style={styles.separator} />
 
             {/*
-              Number of Guests. Read-only about the package rather than a
-              picker: the allowance is not a setting the host types, it is
-              what they bought — so the row reports it and offers the tiers
-              that would raise it.
+              Number of Guests. What the package allows, as the host has narrowed
+              it. Below the top package, the upgrade is called out on the row
+              itself, because this is where a host goes when they need more room.
             */}
-            <Pressable onPress={() => setGuestLimitOpen(true)} style={styles.row}>
+            <Pressable
+              onPress={() => {
+                if (!entitlements.isLoading) setGuestLimitOpen(true);
+              }}
+              style={styles.row}
+            >
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Number of Guests</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>
@@ -315,12 +357,18 @@ export default function EditEventScreen() {
                   */}
                   {entitlements.isLoading || !entitlements.plan
                     ? '—'
-                    : entitlements.guestLimit === 'unlimited'
-                      ? `Unlimited · ${entitlements.plan.displayName}`
-                      : `Up to ${entitlements.guestLimit} · ${entitlements.plan.displayName}`}
+                    : guestLimit === 'unlimited'
+                      ? `No limit · ${entitlements.plan.displayName}`
+                      : canUpgradeGuests
+                        ? `${data.metrics.guestsJoined} of ${guestLimit} joined · ${entitlements.plan.displayName}`
+                        : `Up to ${guestLimit} · ${entitlements.plan.displayName}`}
                 </AppText>
               </View>
-              <ChevronRightIcon />
+              {canUpgradeGuests ? (
+                <UpgradePill />
+              ) : (
+                <ChevronRightIcon />
+              )}
             </Pressable>
 
             <View style={styles.separator} />
@@ -388,7 +436,7 @@ export default function EditEventScreen() {
                   {entitlements.has('challenges') ? 'Manage Challenges' : topTierName()}
                 </AppText>
               </View>
-              {entitlements.has('challenges') ? <ChevronRightIcon /> : <LockIcon size={14} color={colours.textSecondary} />}
+              {entitlements.has('challenges') ? <ChevronRightIcon /> : <UpgradePill />}
             </Pressable>
 
             <View style={styles.separator} />
@@ -405,7 +453,7 @@ export default function EditEventScreen() {
                   {entitlements.has('guestbook') ? 'Edit message' : topTierName()}
                 </AppText>
               </View>
-              {entitlements.has('guestbook') ? <ChevronRightIcon /> : <LockIcon size={14} color={colours.textSecondary} />}
+              {entitlements.has('guestbook') ? <ChevronRightIcon /> : <UpgradePill />}
             </Pressable>
           </View>
         </View>
@@ -416,6 +464,7 @@ export default function EditEventScreen() {
             celebrationId={String(celebrationId)}
             currentPlan={entitlements.plan}
             options={upgradesForFeature(entitlements.plan, upgradeRequest.feature)}
+            feature={upgradeRequest.feature}
             title={upgradeRequest.title}
             onClose={() => setUpgradeRequest(null)}
             onUpgraded={() => {
@@ -426,24 +475,13 @@ export default function EditEventScreen() {
           />
         ) : null}
 
-        {/*
-          Raising the allowance. Every tier above the current one qualifies,
-          because any of them is more room — so unlike a feature lock this
-          legitimately offers a choice, and the host picks how far to go.
-        */}
         {guestLimitOpen ? (
-          <UpgradeSheet
-            visible
+          <GuestLimitSheet
             celebrationId={String(celebrationId)}
-            currentPlan={entitlements.plan}
-            options={upgradesForGuestLimit(entitlements.plan, 'unlimited').length > 0
-              ? upgradesForGuestLimit(entitlements.plan, (entitlements.guestLimit === 'unlimited'
-                  ? 'unlimited'
-                  : entitlements.guestLimit + 1))
-              : []}
-            title="More guests"
+            eventSessionId={primarySession.id}
+            plan={entitlements.plan}
+            guestsJoined={data.metrics.guestsJoined}
             onClose={() => setGuestLimitOpen(false)}
-            onUpgraded={() => setGuestLimitOpen(false)}
           />
         ) : null}
 
@@ -474,6 +512,15 @@ export default function EditEventScreen() {
 }
 
 const styles = StyleSheet.create({
+  upgradeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+  },
+  upgradeChipText: {
+    color: '#FFFFFF',
+    fontFamily: fontFamilies.textSemiBold,
+  },
   loadingContainer: {
     flex: 1,
     alignItems: 'center',

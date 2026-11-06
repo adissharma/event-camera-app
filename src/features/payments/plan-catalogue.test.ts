@@ -51,9 +51,9 @@ describe('hero entitlement rows', () => {
    * rows answer differently but never reorder or change count, so switching
    * plans does not reshuffle the layout.
    */
-  it('is always five rows for every plan', () => {
+  it('is always six rows for every plan', () => {
     for (const plan of PAYWALL_PLANS) {
-      expect(planFeatureRows(plan)).toHaveLength(5);
+      expect(planFeatureRows(plan)).toHaveLength(6);
     }
   });
 
@@ -62,6 +62,7 @@ describe('hero entitlement rows', () => {
     expect(rows.map((r) => r.label)).toEqual([
       'Unlimited guests',
       'Unlimited photos',
+      'Seating plan',
       'Unlimited videos',
       'Guestbook',
       'Challenges',
@@ -74,25 +75,33 @@ describe('hero entitlement rows', () => {
     expect(rows.map((r) => r.label)).toEqual([
       '100 guests',
       '20 photos per guest',
+      'Seating plan',
       'No videos',
       'No guestbook',
       'No challenges',
     ]);
-    expect(rows.map((r) => r.included)).toEqual([true, true, false, false, false]);
+    expect(rows.map((r) => r.included)).toEqual([true, true, true, false, false, false]);
   });
 
   it('describes Small Event on the same pattern', () => {
     const rows = planFeatureRows(getPaywallPlan('small_event')!);
     expect(rows[0]!.label).toBe('25 guests');
-    expect(rows.map((r) => r.included)).toEqual([true, true, false, false, false]);
+    expect(rows.map((r) => r.included)).toEqual([true, true, true, false, false, false]);
   });
 
   it('never marks an unavailable feature as included', () => {
     for (const plan of PAYWALL_PLANS) {
       const rows = planFeatureRows(plan);
-      expect(rows[2]!.included).toBe(plan.videos);
-      expect(rows[3]!.included).toBe(plan.guestbook);
-      expect(rows[4]!.included).toBe(plan.challenges);
+      expect(rows[3]!.included).toBe(plan.videos);
+      expect(rows[4]!.included).toBe(plan.guestbook);
+      expect(rows[5]!.included).toBe(plan.challenges);
+    }
+  });
+
+  it('includes the seating plan on every plan, free included', () => {
+    for (const plan of PAYWALL_PLANS) {
+      const seating = planFeatureRows(plan).find((row) => row.key === 'seating');
+      expect(seating).toEqual({ key: 'seating', label: 'Seating plan', included: true });
     }
   });
 });

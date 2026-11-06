@@ -75,6 +75,7 @@ import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design
  * than tighten, so on a short device the hero yields instead.
  */
 const MIN_SHEET_HEIGHT = 396;
+const SHORT_SCREEN_HEIGHT = 700;
 
 /** How far the sheet rides up over the photograph. */
 const SHEET_OVERLAP = 26;
@@ -223,14 +224,18 @@ function HeroFeatures({
   }, [plan, shown.id, opacity]);
 
   const rows = planFeatureRows(shown);
+  // On the shortest phones the sheet takes the room these need, and they would
+  // slide behind it.
+  const { height: screenHeight } = useWindowDimensions();
+  const rowGap = screenHeight < SHORT_SCREEN_HEIGHT ? 0 : 8;
 
   return (
-    <Animated.View style={{ opacity, gap: 8 }}>
+    <Animated.View style={{ opacity, gap: rowGap }}>
       {rows.map((row, index) => {
         // Each row's own window inside the single 0→1 sweep, derived from the
         // published step and fade rather than from a fraction picked by eye —
         // so changing either timing changes the sequence and nothing has to be
-        // recalculated here. Row 0 opens immediately; row 4 closes exactly as
+        // recalculated here. The first row opens immediately; the last closes exactly as
         // the driver lands.
         const step = REVEAL_TIMINGS.ENTITLEMENT_STAGGER_STEP;
         const fade = REVEAL_TIMINGS.ENTITLEMENT_FADE_DURATION;
@@ -372,10 +377,10 @@ export default function PackageScreen() {
    */
   const pageIn = useRef(new Animated.Value(settled ? 1 : 0)).current;
   /**
-   * The panel over everything below the hero: down for the preview, back up
-   * for the transition into pricing.
+   * The panel over everything below the hero, which only rises for the
+   * transition into pricing.
    */
-  const lowerMaskIn = useRef(new Animated.Value(1)).current;
+  const lowerMaskIn = useRef(new Animated.Value(settled ? 1 : 0)).current;
   /**
    * The cover's gradient direction. Split from `toPaywall` — which still
    * drives the title's travel — precisely so the two can be sequenced apart:
@@ -447,8 +452,6 @@ export default function PackageScreen() {
   // Until the event page has been laid out — and on a repeat visit, where it
   // is never mounted — the title simply starts where it will finish, so the
   // transition degrades to a fade rather than to a jump.
-  const titleLeft = galleryTitleRect?.x ?? HERO_GUTTER;
-  const titleWidth = galleryTitleRect?.width ?? undefined;
 
   /**
    * The travel, as a distance rather than as two layouts.
@@ -493,44 +496,34 @@ export default function PackageScreen() {
       });
 
     if (stage === 'ready') {
-      // The event page arrives whole, but masked below the hero — so what the
-      // host sees is their cover and their title, which is the beat this stage
-      // is for. The mask lifts at `preview`.
+      // The event page arrives whole: cover, title and gallery together.
       timing(pageIn, 1, REVEAL_TIMINGS.READY_REVEAL_DURATION).start();
       return;
     }
 
     if (stage === 'preview') {
-      const content = timing(lowerMaskIn, 0, REVEAL_TIMINGS.PREVIEW_REVEAL_DURATION);
-
       // Under reduce-motion the strip stays put. A repeating horizontal
       // translation is precisely the pattern that triggers people, and this
       // one is decoration — the strip is still there and still scrollable
       // without it.
-      if (reveal.reduceMotion) {
-        content.start();
-        return;
-      }
+      if (reveal.reduceMotion) return;
 
-      // Once the gallery has finished assembling, the strip slides and comes
-      // back to show it carries more than fits. Sequenced off the same clock
-      // as everything else, so it is over before the fade-out begins rather
-      // than being interrupted by it.
-      Animated.parallel([
-        content,
-        Animated.sequence([
-          Animated.delay(
-            reveal.ms(REVEAL_TIMINGS.PREVIEW_REVEAL_DURATION + REVEAL_TIMINGS.CHIP_NUDGE_DELAY),
-          ),
-          ...REVEAL_TIMINGS.CHIP_NUDGE_STEPS.map(([fraction, duration]) =>
-            Animated.timing(chipNudge, {
-              toValue: REVEAL_TIMINGS.CHIP_NUDGE_TRAVEL * fraction,
-              duration: reveal.ms(duration),
-              easing: Easing.bezier(0.4, 0, 0.2, 1),
-              useNativeDriver: true,
-            }),
-          ),
-        ]),
+      // Once the host has had a moment with the page, the strip slides and
+      // comes back to show it carries more than fits. Sequenced off the same
+      // clock as everything else, so it is over before the fade-out begins
+      // rather than being interrupted by it.
+      Animated.sequence([
+        Animated.delay(
+          reveal.ms(REVEAL_TIMINGS.PREVIEW_REVEAL_DURATION + REVEAL_TIMINGS.CHIP_NUDGE_DELAY),
+        ),
+        ...REVEAL_TIMINGS.CHIP_NUDGE_STEPS.map(([fraction, duration]) =>
+          Animated.timing(chipNudge, {
+            toValue: REVEAL_TIMINGS.CHIP_NUDGE_TRAVEL * fraction,
+            duration: reveal.ms(duration),
+            easing: Easing.bezier(0.4, 0, 0.2, 1),
+            useNativeDriver: true,
+          }),
+        ),
       ]).start();
       return;
     }
@@ -595,7 +588,7 @@ export default function PackageScreen() {
         Animated.timing(featuresIn, {
           toValue: 1,
           duration: reveal.ms(
-            T.ENTITLEMENT_FADE_DURATION + T.ENTITLEMENT_STAGGER_STEP * 4,
+            T.ENTITLEMENT_FADE_DURATION + T.ENTITLEMENT_STAGGER_STEP * 5,
           ),
           delay: reveal.ms(coordinated + T.ENTITLEMENT_START_OFFSET),
           easing: Easing.linear,
@@ -621,17 +614,16 @@ export default function PackageScreen() {
   /**
    * What the event page hands the reveal control of.
    *
-   * Note what is *not* here: the cover. The page's opacity is `pageIn`, which
-   * only ever runs 0 → 1 at `ready` and then stays there — so once the
+   * Note what is *not* here: the cover. The mask over the page lifts as `pageIn`
+   * runs 0 → 1 at `ready` and then stays there — so once the
    * photograph is on screen it is never faded, moved, scaled or recropped
    * again. Everything that changes on the way to the paywall changes *around*
    * it: the horizontal gradient arrives, and the chrome — nav row and the
    * content card over the foot of the cover — leaves so the purchase copy can
    * take its place.
    *
-   * The card's contents below the title follow the lower mask, so `ready`
-   * shows the cover and the event's name alone even though the card begins
-   * above the mask's edge.
+   * The card's contents below the title follow the lower mask, so they leave
+   * with the grid even though the card begins above the mask's edge.
    */
   const previewOverlays = useMemo(
     () => ({
@@ -639,6 +631,14 @@ export default function PackageScreen() {
       detailsOpacity: lowerMaskIn.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
     }),
     [galleryOut, lowerMaskIn],
+  );
+
+  const isPageVisible = stage !== 'creating';
+  const isGlassLeaving = stage === 'transitioningToPaywall' || stage === 'paywall';
+  const glassLeaveMs = reveal.ms(REVEAL_TIMINGS.GALLERY_FADE_OUT_DURATION);
+  const pageMaskOpacity = useMemo(
+    () => pageIn.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+    [pageIn],
   );
 
   const previewDetail = useMemo(() => buildPreviewDetail(draft), [draft]);
@@ -652,6 +652,9 @@ export default function PackageScreen() {
       challenges: PREVIEW_CHALLENGES.map((challenge) => ({ ...challenge })),
       overlays: previewOverlays,
       chipStripNudge: chipNudge,
+      isPageVisible,
+      isGlassLeaving,
+      glassLeaveMs,
       onHeroIdentityLayout: ({ x, y, width, height }: { x: number; y: number; width: number; height: number }) =>
         setGalleryTitleRect((current) =>
           current
@@ -663,7 +666,7 @@ export default function PackageScreen() {
             : { x, y, width, height },
         ),
     }),
-    [previewPhotos, previewOverlays, chipNudge],
+    [previewPhotos, previewOverlays, chipNudge, isPageVisible, isGlassLeaving, glassLeaveMs],
   );
 
   /**
@@ -786,16 +789,21 @@ export default function PackageScreen() {
         anywhere. That is what keeps the image *completely* still: nothing can
         drift against it when there is nothing else to drift.
       */}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: pageIn }]} pointerEvents="none">
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {previewElement}
-      </Animated.View>
+      </View>
+      {/* A mask lifting off the page, not the page fading up: Liquid Glass does not
+          render under a parent whose opacity has been zero. */}
+      <Animated.View
+        style={[S.pageMask, { opacity: pageMaskOpacity }]}
+        pointerEvents="none"
+      />
 
       {/*
         Covers the page below the hero.
 
-        Up before the preview (so `ready` shows the cover and the event's name
-        alone) and up again through the transition (so the grid and chips are
-        gone before the pricing sheet slides over where they were). One opaque
+        Rises through the transition, so the grid and chips are gone before the
+        pricing sheet slides over where they were. One opaque
         panel in the page's own background colour, rather than fading a dozen
         components separately — and, importantly, rather than fading the page
         itself, which would take the photograph with it.
@@ -1032,8 +1040,11 @@ export default function PackageScreen() {
         style={[
           S.identityLayer,
           {
-            left: titleLeft,
-            width: titleWidth,
+            // The screen's gutter, not the event page's title rect. That block
+            // spans the full width so its title can centre, and this one is
+            // left-aligned, so copying its edges puts the text on the bezel.
+            left: HERO_GUTTER,
+            right: HERO_GUTTER,
             top: titleStartTop,
             opacity: titleIn,
             transform: [
@@ -1170,6 +1181,14 @@ export default function PackageScreen() {
 
 const S = StyleSheet.create({
   screen: { flex: 1, backgroundColor: INK },
+  pageMask: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: INK,
+  },
 
   coverLayer: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
 

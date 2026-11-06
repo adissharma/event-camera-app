@@ -29,9 +29,19 @@ import { Image as ExpoImage } from 'expo-image';
 import { BRAND_CONFIG, PRIVACY_POLICY_URL } from '@/config/brand';
 import { LoadingState } from '@/components/feedback/loading-state';
 import { AppText } from '@/components/ui/text';
-import { DashboardButtonGlassBorder } from '@/components/ui/dashboard-button-glass-border';
 import { Button } from '@/components/ui/button';
-import { PersonIcon } from '@/components/ui/icons';
+import { EmptyEventsMark } from '@/components/ui/empty-events-mark';
+import {
+  DashboardPages,
+  dashboardHintClearance,
+} from '@/features/celebrations/cards/dashboard-pages';
+import {
+  PREVIOUS_ALBUMS_PEEK,
+  PreviousAlbumsSheet,
+} from '@/features/celebrations/cards/previous-albums-sheet';
+import { FLOATING_ICON_MENU_HEIGHT, FloatingIconMenu } from '@/components/ui/floating-icon-menu';
+import { ShimmerButton } from '@/components/ui/shimmer-button';
+import { CelebrationIcon, PersonIcon, PhotoGridIcon } from '@/components/ui/icons';
 import { SlideToConfirm } from '@/components/forms/slide-to-confirm';
 import { useAuth } from '@/features/auth/context';
 import { resetToUnauthenticatedRoot } from '@/lib/navigation/session-root';
@@ -42,7 +52,6 @@ import {
   restoreCelebrationFromTrash,
   type CelebrationSummary,
 } from '@/services/celebrations';
-import { listThemes, themeKeys } from '@/services/themes';
 import { fetchMyProfile, firstNameFrom, firstNameFromValue, profileKeys } from '@/services/profile';
 import {
   colours,
@@ -54,7 +63,6 @@ import {
 } from '@/design';
 import { AlbumPreviewCard } from '@/features/celebrations/cards/album-preview-card';
 import { useCoverSource } from '@/features/celebrations/cover-source';
-import { galleryHeroImageHeight } from '@/app/celebration/[celebrationId]/index';
 import { Toast } from '@/components/feedback/toast';
 import { clearDeletedAccountLocalState, deleteMyAccount } from '@/services/account';
 
@@ -253,67 +261,68 @@ function formatUpcomingTimeLeft(celebration: CelebrationSummary) {
   return `${totalHours === 1 ? '1 hour' : `${totalHours} hours`} to go!`;
 }
 
+/**
+ * How previous albums are reached: `swipe` is a vertical page, `menu` the floating
+ * two-option menu, and `sheet` the card peeking up from the foot of the screen. All
+ * three are kept while they are being compared. Widened so each branch compiles.
+ */
+const ALBUMS_NAVIGATION = 'swipe' as 'swipe' | 'menu' | 'sheet';
+
+type DashboardView = 'current' | 'previous';
+
+const DASHBOARD_VIEWS = [
+  { value: 'current', label: 'Current events', icon: CelebrationIcon },
+  { value: 'previous', label: 'Previous events', icon: PhotoGridIcon },
+] as const;
+
+/**
+ * An upcoming event as the whole dashboard: its cover runs the full height of the
+ * screen, with the header and the floating menu drawn on top of it.
+ */
 function HomeUpcomingEventCard({
   celebration,
-  themes,
-  width: cardWidth,
+  width,
+  height,
+  contentBottom,
+  onContentHeight,
   onPress,
 }: {
   celebration: CelebrationSummary;
-  themes?: Awaited<ReturnType<typeof listThemes>>;
   width: number;
+  height: number;
+  /** How far above the screen's foot the title and countdown sit. */
+  contentBottom: number;
+  /** How tall the title and countdown turned out, which depends on the title's length. */
+  onContentHeight?: (height: number) => void;
   onPress: () => void;
 }) {
   const coverSource = useCoverSource(celebration.coverStoragePath);
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-
-  /**
-   * Frame the cover the way the event's own hero frames it.
-   *
-   * Both surfaces cover-fit and centre, but they were centring inside boxes of
-   * different shapes — the hero's is 440×656, the card's 400×500 — so the same
-   * photograph was scaled by a different rule in each and the middle of one
-   * box was not the middle of the same part of the picture. The card was
-   * showing sky where the hero shows the building.
-   *
-   * The fix is to fit the image to a box of the hero's proportions, scaled to
-   * this card's width, and let the card show the middle of it. The card is a
-   * little less tight than the hero — it reveals about 84% of the fitted image
-   * where the hero shows 75% — but it is the same framing, centred on the same
-   * point of the photograph, which is what makes the two read as one cover.
-   */
-  const cardHeight = Math.round(cardWidth * 1.25);
-  const coverHeight = Math.round(galleryHeroImageHeight(screenHeight) * (cardWidth / screenWidth));
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Open ${celebration.title}`}
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.upcomingHeroCard,
-        { width: cardWidth, height: cardHeight },
-        pressed && styles.cardPressed,
-      ]}
+      style={({ pressed }) => [{ width, height }, pressed && styles.cardPressed]}
     >
-      <Image
-        source={coverSource}
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          height: coverHeight,
-          top: Math.round((cardHeight - coverHeight) / 2),
-        }}
-        resizeMode="cover"
-      />
+      <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      {/* Keeps the time, logo and profile button readable on a bright cover. */}
       <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.26)', 'rgba(0,0,0,0.88)']}
-        locations={[0.18, 0.62, 1]}
+        colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']}
+        style={styles.upcomingHeroTopFade}
+        pointerEvents="none"
+      />
+      {/* Only enough to hold the title: the photograph carries on to the foot. */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.65)']}
+        locations={[0.5, 0.74, 1]}
         style={StyleSheet.absoluteFill}
         pointerEvents="none"
       />
-      <View style={styles.upcomingHeroContent}>
+      <View
+        style={[styles.upcomingHeroContent, { bottom: contentBottom }]}
+        onLayout={(event) => onContentHeight?.(event.nativeEvent.layout.height)}
+      >
         <AppText
           variant="displayLarge"
           style={styles.upcomingHeroTitle}
@@ -343,33 +352,19 @@ function HomeUpcomingEventsEmptyState({
   onCreate: () => void;
 }) {
   return (
-    <View style={[styles.upcomingEmptyState, { width, height: Math.round(width * 1.13) }]}>
-      <ExpoImage
-        source={require('../../assets/images/empty-events-illustration.png')}
-        style={styles.upcomingEmptyIllustration}
-        contentFit="contain"
-        accessibilityLabel="Friends celebrating and capturing an event together"
-      />
+    <View style={[styles.upcomingEmptyState, { width }]}>
+      <EmptyEventsMark />
 
       <View style={styles.upcomingEmptyCopy}>
-        <AppText variant="titleLarge" align="center" style={styles.upcomingEmptyTitle}>
-          Make a little magic together
+        <AppText variant="button" align="center" style={styles.upcomingEmptyTitle}>
+          No events yet
         </AppText>
-        <AppText variant="bodySmall" tone="secondary" align="center" style={styles.upcomingEmptyBody}>
-          Keep every laugh, photo and memory{'\n'}together in one beautiful place.
+        <AppText variant="bodySmall" tone="secondary" align="center">
+          All your guests’ photos, in one album.
         </AppText>
       </View>
 
-      <Pressable
-        onPress={onCreate}
-        accessibilityRole="button"
-        accessibilityLabel="Create event"
-        style={({ pressed }) => [styles.upcomingEmptyCreateButton, pressed && styles.cardPressed]}
-      >
-        <View style={styles.upcomingEmptyCreateSurface}>
-          <AppText variant="button" style={styles.upcomingEmptyCreateLabel}>Create event</AppText>
-        </View>
-      </Pressable>
+      <ShimmerButton label="Create your event" onPress={onCreate} />
     </View>
   );
 }
@@ -493,7 +488,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ trashedEventId?: string; openProfile?: string }>();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const queryClient = useQueryClient();
   const { session, signOut, isSignedIn, isRestoring, isBackendConfigured } = useAuth();
   
@@ -524,17 +519,12 @@ export default function HomeScreen() {
   }, [isBackendConfigured, isRestoring, isSignedIn, router]);
 
   // Queries
-  const { data: celebrations, isLoading } = useQuery({
+  const { data: celebrations, isLoading: isLoadingCelebrations } = useQuery({
     queryKey: celebrationKeys.list(),
     queryFn: listCelebrations,
-    enabled: isBackendConfigured,
+    enabled: isBackendConfigured && isSignedIn,
   });
-
-  const { data: themes } = useQuery({
-    queryKey: themeKeys.list(),
-    queryFn: listThemes,
-    enabled: isBackendConfigured,
-  });
+  const isLoading = isRestoring || isLoadingCelebrations;
 
   const { data: profile } = useQuery({
     queryKey: profileKeys.me(),
@@ -556,9 +546,25 @@ export default function HomeScreen() {
     [list],
   );
   const upcomingHeroWidth = screenWidth - layout.gutter * 2;
-  /** How far the carousel travels per card — one dot's worth of scroll. */
-  const upcomingCarouselInterval = upcomingHeroWidth + spacing.md;
   const upcomingScrollX = useRef(new Animated.Value(0)).current;
+  const [upcomingContentHeights, setUpcomingContentHeights] = useState<Record<string, number>>({});
+  const isDashboardEmpty = !isLoading && upcomingEvents.length === 0;
+  const hasUpcomingEvents = !isLoading && upcomingEvents.length > 0;
+  const [view, setView] = useState<DashboardView>('current');
+  const [hasVisitedPrevious, setHasVisitedPrevious] = useState(false);
+  const isShowingPrevious = ALBUMS_NAVIGATION === 'menu' && view === 'previous';
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const changeView = (next: DashboardView) => {
+    setView(next);
+    if (next === 'previous') setHasVisitedPrevious(true);
+  };
+  const menuBottom = Math.max(insets.bottom, spacing.base);
+  /** What floats over the foot of the screen, which content has to stay clear of. */
+  const bottomChrome = {
+    swipe: dashboardHintClearance(insets.bottom),
+    menu: menuBottom + FLOATING_ICON_MENU_HEIGHT + spacing.md,
+    sheet: insets.bottom + PREVIOUS_ALBUMS_PEEK,
+  }[ALBUMS_NAVIGATION];
   const completedCardWidth = screenWidth - layout.gutter * 2;
   const firstName = firstNameFrom(profile);
 
@@ -679,10 +685,116 @@ export default function HomeScreen() {
   const profileName = firstName ?? firstNameFromValue(session?.user.displayName);
   const profileEmail = session?.user?.email ?? 'Host account';
 
+  const tallestUpcomingContent = Math.max(
+    0,
+    ...upcomingEvents.map((celebration) => upcomingContentHeights[celebration.id] ?? 0),
+  );
+
+  const upcomingEventCovers = hasUpcomingEvents ? (
+    // Hidden rather than unmounted, so the pager keeps its place between views.
+    <View style={[StyleSheet.absoluteFill, isShowingPrevious && styles.hidden]}>
+      {upcomingEvents.length === 1 ? (
+        <HomeUpcomingEventCard
+          celebration={upcomingEvents[0]}
+          width={screenWidth}
+          height={screenHeight}
+          contentBottom={bottomChrome + spacing.base}
+          onPress={() => router.push(`/celebration/${upcomingEvents[0].id}`)}
+        />
+      ) : (
+        <>
+          <Animated.ScrollView
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { x: upcomingScrollX } } }],
+              { useNativeDriver: true },
+            )}
+          >
+            {upcomingEvents.map((celebration) => (
+              <HomeUpcomingEventCard
+                key={celebration.id}
+                celebration={celebration}
+                width={screenWidth}
+                height={screenHeight}
+                contentBottom={bottomChrome + spacing.base}
+                onContentHeight={(height) =>
+                  setUpcomingContentHeights((heights) =>
+                    heights[celebration.id] === height
+                      ? heights
+                      : { ...heights, [celebration.id]: height },
+                  )
+                }
+                onPress={() => router.push(`/celebration/${celebration.id}`)}
+              />
+            ))}
+          </Animated.ScrollView>
+          {/* Outside the pager, so they stay put while the events swipe beneath them.
+              Above the tallest title, so that none of them ever runs into the dots. */}
+          {tallestUpcomingContent > 0 ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.upcomingDots,
+                { bottom: bottomChrome + spacing.base + tallestUpcomingContent + spacing.sm },
+              ]}
+            >
+              <CarouselDots
+                count={upcomingEvents.length}
+                scrollX={upcomingScrollX}
+                interval={screenWidth}
+              />
+            </View>
+          ) : null}
+        </>
+      )}
+    </View>
+  ) : null;
+
+  const currentEventsPlaceholder = isLoading ? (
+    <LoadingState
+      label="Loading your events"
+      detail="Getting your celebrations ready."
+    />
+  ) : (
+    <HomeUpcomingEventsEmptyState
+      width={upcomingHeroWidth}
+      onCreate={() => router.push('/create')}
+    />
+  );
+
   return (
     <View style={styles.container}>
+      {ALBUMS_NAVIGATION === 'swipe' ? (
+        <DashboardPages previous={albumsSection} headerHeight={headerHeight}>
+          {upcomingEventCovers}
+          {hasUpcomingEvents ? null : (
+            <View
+              style={[
+                styles.swipeEmptyPage,
+                { paddingTop: headerHeight, paddingBottom: bottomChrome },
+              ]}
+            >
+              {currentEventsPlaceholder}
+            </View>
+          )}
+        </DashboardPages>
+      ) : (
+        upcomingEventCovers
+      )}
+
       {/* 1. Header Toolbar (Separator border line removed) */}
-      <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+      <View
+        onLayout={(event) => setHeaderHeight(event.nativeEvent.layout.height)}
+        style={[
+          styles.header,
+          (ALBUMS_NAVIGATION === 'swipe' || (hasUpcomingEvents && !isShowingPrevious)) &&
+            styles.headerOverCover,
+          { paddingTop: insets.top + spacing.sm },
+        ]}
+      >
         <ExpoImage
           source={require('../../assets/brand/dashboard-logo.png')}
           style={styles.dashboardLogo}
@@ -711,98 +823,67 @@ export default function HomeScreen() {
             <PersonIcon size={22} color="#FFFFFF" />
           </Pressable>
 
-          <Pressable
-            onPress={() => router.push('/create')}
-            style={styles.headerPlusBtn}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="Create an event"
-          >
-            <ExpoImage
-              source={require('../../assets/brand/dashboard-create-cta.png')}
-              style={styles.headerPlusImage}
-              contentFit="contain"
-            />
-            <PlusIcon size={24} />
-            <DashboardButtonGlassBorder shape="create" />
-          </Pressable>
+          {/* The empty state's own button is the one way to create until then. */}
+          {upcomingEvents.length > 0 ? (
+            <Pressable
+              onPress={() => router.push('/create')}
+              style={styles.headerPlusBtn}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="Create an event"
+            >
+              <ExpoImage
+                source={require('../../assets/brand/dashboard-create-cta.png')}
+                style={styles.headerPlusImage}
+                contentFit="contain"
+              />
+              <PlusIcon size={24} />
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={[
-          styles.scrollContainer, 
-          // Nothing floats over this scroll any more — the bottom bar is
-          // gone and both its controls live in the header.
-          { paddingBottom: insets.bottom + spacing.lg }
-        ]}
-        showsVerticalScrollIndicator={false}
-      >
-        {isLoading ? (
-          <LoadingState
-            label="Loading your events"
-            detail="Getting your celebrations ready."
-          />
-        ) : (
-          <>
-            {upcomingEvents.length > 0 ? (
-              <View style={styles.dashboardSection}>
-                {upcomingEvents.length === 1 ? (
-                  <HomeUpcomingEventCard
-                    celebration={upcomingEvents[0]}
-                    themes={themes}
-                    width={upcomingHeroWidth}
-                    onPress={() => router.push(`/celebration/${upcomingEvents[0].id}`)}
-                  />
-                ) : (
-                  <>
-                    <Animated.ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      decelerationRate="fast"
-                      snapToInterval={upcomingCarouselInterval}
-                      snapToAlignment="start"
-                      contentContainerStyle={styles.upcomingCarouselContent}
-                      style={styles.edgeToEdgeCarousel}
-                      scrollEventThrottle={16}
-                      onScroll={Animated.event(
-                        [{ nativeEvent: { contentOffset: { x: upcomingScrollX } } }],
-                        { useNativeDriver: true },
-                      )}
-                    >
-                      {upcomingEvents.map((celebration) => (
-                        <HomeUpcomingEventCard
-                          key={celebration.id}
-                          celebration={celebration}
-                          themes={themes}
-                          width={upcomingHeroWidth}
-                          onPress={() => router.push(`/celebration/${celebration.id}`)}
-                        />
-                      ))}
-                    </Animated.ScrollView>
+      {/* Built on first visit, then hidden rather than unmounted to keep its scroll. */}
+      {ALBUMS_NAVIGATION === 'menu' && hasVisitedPrevious ? (
+        <ScrollView
+          style={isShowingPrevious ? null : styles.hidden}
+          contentContainerStyle={[
+            styles.scrollContainer,
+            { paddingBottom: bottomChrome + spacing.lg },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {albumsSection}
+        </ScrollView>
+      ) : null}
 
-                    <CarouselDots
-                      count={upcomingEvents.length}
-                      scrollX={upcomingScrollX}
-                      interval={upcomingCarouselInterval}
-                    />
-                  </>
-                )}
-              </View>
-            ) : (
-              <View style={styles.dashboardSection}>
-                <HomeUpcomingEventsEmptyState
-                  width={upcomingHeroWidth}
-                  onCreate={() => router.push('/create')}
-                />
-              </View>
-            )}
+      {ALBUMS_NAVIGATION === 'swipe' || isShowingPrevious || hasUpcomingEvents ? null : (
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContainer,
+            { paddingBottom: bottomChrome + spacing.lg },
+            // Centred in exactly the space between the top bar and the menu.
+            isDashboardEmpty && {
+              flexGrow: 1,
+              justifyContent: 'center',
+              paddingTop: 0,
+              paddingBottom: bottomChrome,
+            },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {currentEventsPlaceholder}
+        </ScrollView>
+      )}
 
-            {albumsSection}
-          </>
-        )}
-      </ScrollView>
-
+      {ALBUMS_NAVIGATION === 'sheet' ? (
+        <PreviousAlbumsSheet count={completedEvents.length}>{albumsSection}</PreviousAlbumsSheet>
+      ) : null}
+      {ALBUMS_NAVIGATION === 'menu' ? (
+        <View style={[styles.dashboardMenu, { bottom: menuBottom }]} pointerEvents="box-none">
+          <FloatingIconMenu options={DASHBOARD_VIEWS} value={view} onChange={changeView} />
+        </View>
+      ) : null}
 
       {/* 7. Profile Bottom Sheet Drawer */}
       <Modal
@@ -1024,6 +1105,25 @@ const styles = StyleSheet.create({
     // Separator line removed from header as requested
     borderBottomWidth: 0,
   },
+  hidden: { display: 'none' },
+  headerOverCover: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+  },
+  swipeEmptyPage: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: layout.gutter,
+  },
+  dashboardMenu: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1091,18 +1191,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.sm,
   },
-  dashboardSection: {
-    gap: spacing.md,
-    marginBottom: spacing.xxl,
-  },
-  edgeToEdgeCarousel: {
-    marginHorizontal: -layout.gutter,
-    overflow: 'visible',
-  },
-  upcomingCarouselContent: {
-    paddingHorizontal: layout.gutter,
-    gap: spacing.md,
-  },
   carouselDots: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -1114,23 +1202,26 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colours.textPrimary,
   },
-  upcomingHeroCard: {
-    borderRadius: radii.xl,
-    overflow: 'hidden',
-    backgroundColor: colours.surface,
-    position: 'relative',
-  },
   cardPressed: {
     opacity: 0.88,
   },
+  upcomingHeroTopFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 180,
+  },
   upcomingHeroContent: {
     position: 'absolute',
-    left: 30,
-    right: 24,
-    // The display font carries a little descent below its visible glyphs;
-    // this tighter inset makes the title read as genuinely card-anchored.
-    bottom: 22,
+    left: layout.gutter,
+    right: layout.gutter,
     gap: 6,
+  },
+  upcomingDots: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
   },
   upcomingHeroTitle: {
     color: '#FFFFFF',
@@ -1155,45 +1246,26 @@ const styles = StyleSheet.create({
     letterSpacing: 0,
   },
   previousAlbumsList: {
+    alignItems: 'center',
     gap: spacing.xxxl,
-    marginBottom: spacing.xxl,
   },
   upcomingEmptyState: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 0,
   },
-  upcomingEmptyIllustration: {
-    width: '82%',
-    aspectRatio: 1374 / 1145,
-    marginBottom: spacing.xs,
-  },
   upcomingEmptyCopy: {
     alignItems: 'center',
-    gap: spacing.xxs,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.xl,
+    gap: spacing.xs,
+    marginTop: spacing.lg,
+    marginBottom: spacing.xxl,
   },
   upcomingEmptyTitle: {
+    fontFamily: fontFamilies.textSemiBold,
+    fontSize: 20,
+    lineHeight: 26,
+    letterSpacing: -0.1,
     color: colours.textPrimary,
-  },
-  upcomingEmptyBody: {
-    maxWidth: 270,
-  },
-  upcomingEmptyCreateButton: {
-    alignSelf: 'stretch',
-    marginHorizontal: spacing.xl,
-    borderRadius: radii.pill,
-    overflow: 'hidden',
-  },
-  upcomingEmptyCreateSurface: {
-    minHeight: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  upcomingEmptyCreateLabel: {
-    color: '#090909',
   },
   floatingMenuContainer: {
     position: 'absolute',

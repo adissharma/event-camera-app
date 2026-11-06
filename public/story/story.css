@@ -210,13 +210,13 @@ body { overflow: visible !important; margin: 0; }
 .story-live .sr { display: block; position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 /* The prompt to scroll: a band across the bottom, solid at the foot. It hangs below the stage
    by more than the page ever lifts, so the lift can't bring the bottom of the art into view. */
-.scroll-hint { all: unset; box-sizing: border-box; position: absolute; left: 0; right: 0; bottom: 0; z-index: 21; display: none; flex-direction: column; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 16px calc(100lvh - 100svh + 22px); color: #fff; text-align: center; cursor: pointer; }
+.scroll-hint { all: unset; box-sizing: border-box; position: absolute; left: 0; right: 0; bottom: 0; z-index: 21; display: none; flex-direction: column-reverse; align-items: center; justify-content: flex-start; gap: 12px; padding: 0 16px calc(100lvh - 100svh + 22px); color: #fff; text-align: center; cursor: pointer; }
 /* The shade behind the prompt runs right across the page, and under the phone rather than over it. */
 .hint-band { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 9; height: calc(150px + 100lvh - 100svh); background: linear-gradient(transparent, rgba(22, 10, 54, .52) 60px, rgba(22, 10, 54, .76) 115px, rgba(22, 10, 54, .86) calc(100% - 20px)); opacity: 1; pointer-events: none; }
 .story-live .hint-band { display: block; }
 .story-live .scroll-hint { display: flex; }
 .story .scroll-hint:focus-visible { outline: 2px solid #fff; outline-offset: -6px; }
-.hint-text { text-shadow: 0 1px 14px rgba(22, 10, 54, .8); font-family: 'Isolde', Georgia, serif; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; }
+.hint-text { white-space: nowrap; text-shadow: 0 1px 14px rgba(22, 10, 54, .8); font-family: 'Isolde', Georgia, serif; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; }
 .hint-swipe { display: none; }
 .hint-arrow { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: #fff; color: var(--ink); box-shadow: 0 8px 24px rgba(10, 5, 25, .45); transition: translate .18s ease-out; }
 .hint-arrow svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }

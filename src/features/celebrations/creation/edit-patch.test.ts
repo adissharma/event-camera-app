@@ -77,7 +77,7 @@ describe('buildEditPatch', () => {
       const endsAt = new Date(Date.now() + 86_400_000).toISOString();
       expect(
         buildEditPatch('reveal', draftWith({ guestRevealChoice: 'at_close', endsAt })),
-      ).toEqual({ revealMode: 'scheduled', revealAt: endsAt, galleryVisibility: 'all_guests' });
+      ).toMatchObject({ revealMode: 'scheduled', revealAt: endsAt, galleryVisibility: 'all_guests' });
     });
 
     it('saves the guest reveal step from the relative guest timing', () => {
@@ -94,8 +94,20 @@ describe('buildEditPatch', () => {
       ).toEqual({
         revealMode: 'scheduled',
         revealAt: '2027-08-16T08:00:00.000Z',
+        hostRevealMode: 'scheduled',
+        hostRevealAt: '2027-08-15T20:00:00.000Z',
         galleryVisibility: 'all_guests',
       });
+    });
+
+    it("saves the host's own reveal, not only the guests'", () => {
+      const endsAt = '2027-08-15T18:00:00.000Z';
+      expect(
+        buildEditPatch('guest-reveal', draftWith({ hostRevealChoice: 'during', endsAt })),
+      ).toMatchObject({ hostRevealMode: 'instant', hostRevealAt: null });
+      expect(
+        buildEditPatch('guest-reveal', draftWith({ hostRevealChoice: 'at_close', endsAt })),
+      ).toMatchObject({ hostRevealMode: 'scheduled', hostRevealAt: endsAt });
     });
 
     it('saves host-only reveal visibility when guests should never see photos', () => {
@@ -104,7 +116,7 @@ describe('buildEditPatch', () => {
           'guest-reveal',
           draftWith({ guestRevealChoice: 'never', galleryVisibility: 'hosts_only' }),
         ),
-      ).toEqual({ revealMode: 'manual', revealAt: null, galleryVisibility: 'hosts_only' });
+      ).toMatchObject({ revealMode: 'manual', revealAt: null, galleryVisibility: 'hosts_only' });
     });
 
     it('saves the date stamp alongside the treatment', () => {

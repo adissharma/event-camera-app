@@ -16,6 +16,7 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from '@/components/ui/text';
 import { CelebrationIcon, ClockIcon, ImageIcon } from '@/components/ui/icons';
 import { useMotion } from '@/design/use-motion';
+import { copy } from '@/i18n';
 import { colours, fontFamilies, layout, radii, spacing } from '@/design';
 
 export interface EventRevealModalProps {
@@ -27,6 +28,8 @@ export interface EventRevealModalProps {
   photoCount: number;
   /** Countdown copy for the awaiting state, e.g. "2h 14m". */
   countdownLabel: string;
+  /** The host is keeping the photos private, so there is no reveal to wait for. */
+  guestsNeverSeePhotos?: boolean;
   /** Thumbnails to scatter. Four to eight; anything beyond eight is ignored. */
   thumbnails: ImageSourcePropType[];
   /** True while the post-countdown server confirmation is in flight. */
@@ -80,6 +83,7 @@ export function EventRevealModal({
   eventName,
   photoCount,
   countdownLabel,
+  guestsNeverSeePhotos = false,
   thumbnails,
   confirming = false,
   onDismiss,
@@ -211,11 +215,16 @@ export function EventRevealModal({
   }, [motion.reduceMotion, drift]);
 
   const label = revealed ? 'The moments are in' : 'Event complete';
-  const message = revealed
-    ? 'Your photos are ready for you to see.'
-    : confirming
-      ? 'Unlocking your photos…'
-      : `Photos reveal in ${countdownLabel}`;
+  const message = guestsNeverSeePhotos
+    ? copy.create.guestsNeverSeeBody
+    : revealed
+      ? 'Your photos are ready for you to see.'
+      : confirming
+        ? 'Unlocking your photos…'
+        : countdownLabel
+          ? `Photos reveal in ${countdownLabel}`
+          // A manual reveal has no time to count down to.
+          : 'Your host will share the photos soon.';
 
   return (
     <Modal
@@ -262,7 +271,7 @@ export function EventRevealModal({
         {/* ── The announcement ──────────────────────────────────── */}
         <View style={S.centre} pointerEvents="box-none">
           <View style={S.badge}>
-            {revealed ? (
+            {revealed || guestsNeverSeePhotos ? (
               <CelebrationIcon size={30} color={colours.accentWarm} />
             ) : (
               <ClockIcon size={26} color={colours.accentWarm} />
@@ -284,17 +293,26 @@ export function EventRevealModal({
             {eventName}
           </AppText>
 
-          <AppText
-            align="center"
-            style={S.count}
-            accessibilityLabel={`${photoCount} moments captured`}
-          >
-            {displayCount}
-          </AppText>
+          {/* These guests are sent no photos, so the count would read as nothing. */}
+          {guestsNeverSeePhotos ? (
+            <AppText variant="titleMedium" align="center" style={S.thanks}>
+              {copy.create.guestsNeverSeeTitle}
+            </AppText>
+          ) : (
+            <>
+              <AppText
+                align="center"
+                style={S.count}
+                accessibilityLabel={`${photoCount} moments captured`}
+              >
+                {displayCount}
+              </AppText>
 
-          <AppText variant="eyebrow" align="center" style={S.eyebrowGold}>
-            Moments captured
-          </AppText>
+              <AppText variant="eyebrow" align="center" style={S.eyebrowGold}>
+                Moments captured
+              </AppText>
+            </>
+          )}
 
           <View style={S.rule} />
 
@@ -483,6 +501,7 @@ function BackGlyph() {
    ──────────────────────────────────────────────────────────────── */
 
 const S = StyleSheet.create({
+  thanks: { marginTop: spacing.xl },
   root: { flex: 1, backgroundColor: colours.background },
 
   header: {

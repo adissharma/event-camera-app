@@ -5,7 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useQuery } from '@tanstack/react-query';
 
 import { Button } from '@/components/ui/button';
-import { ImageIcon } from '@/components/ui/icons';
+import { ImageIcon, PlusIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { ThemeCarousel } from '@/features/celebrations/creation/theme-carousel';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
@@ -123,7 +123,9 @@ export default function CoverStep() {
                   leading={
                     draft.coverLocalUri ? (
                       <ImageIcon size={16} color={colours.brandPrimary} />
-                    ) : undefined
+                    ) : (
+                      <PlusIcon size={16} color={colours.brandPrimary} />
+                    )
                   }
                   onPress={() => void pickImage()}
                   haptic
@@ -131,7 +133,7 @@ export default function CoverStep() {
               </View>
               <View style={{ flex: 1 }}>
                 <Button
-                  label={draft.coverLocalUri ? copy.common.next : copy.create.coverAddLater}
+                  label={copy.common.next}
                   onPress={() => router.push('/create/photo-limit')}
                   haptic
                 />

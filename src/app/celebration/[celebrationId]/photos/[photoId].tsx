@@ -35,6 +35,7 @@ import {
 import { pinHostPhoto, unpinHostPhoto } from '@/services/media-pin';
 import { sharePhotoToInstagram } from '@/features/sharing/share-to-instagram';
 import { galleryPresetSource } from '@/features/celebrations/gallery-preset-assets';
+import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 
 // ── Models ──
 
@@ -260,10 +261,17 @@ export default function PhotoViewerScreen() {
         const isHorizontalSwipe = Math.abs(gestureState.dx) > Math.abs(gestureState.dy);
         const isVerticalSwipe = Math.abs(gestureState.dy) > Math.abs(gestureState.dx);
 
-        // Vertical dismissal takes priority (swipe down to close)
-        if (isVerticalSwipe && (gestureState.dy > 100 || (gestureState.dy > 50 && gestureState.vy > 0.4))) {
+        // Vertical dismissal takes priority, up or down, and leaves the way it went.
+        const dismissDirection = isVerticalSwipe
+          ? swipeDismissDirection(gestureState.dy, gestureState.vy, {
+              distance: 100,
+              flickDistance: 50,
+              flickVelocity: 0.4,
+            })
+          : 0;
+        if (dismissDirection !== 0) {
           Animated.timing(panY, {
-            toValue: 600,
+            toValue: dismissDirection * 600,
             duration: 200,
             useNativeDriver: true,
           }).start(() => router.back());
@@ -610,14 +618,14 @@ export default function PhotoViewerScreen() {
 
   // Container drag scale & opacity interpolations
   const scale = panY.interpolate({
-    inputRange: [0, 300],
-    outputRange: [1, 0.92],
+    inputRange: [-300, 0, 300],
+    outputRange: [0.92, 1, 0.92],
     extrapolate: 'clamp',
   });
 
   const opacity = panY.interpolate({
-    inputRange: [0, 300],
-    outputRange: [1, 0.6],
+    inputRange: [-300, 0, 300],
+    outputRange: [0.6, 1, 0.6],
     extrapolate: 'clamp',
   });
 
