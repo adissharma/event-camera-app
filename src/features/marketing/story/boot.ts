@@ -26,6 +26,8 @@ const SKY_MORNING = '#5a3fc0';
 const GROUND = '#160a36';
 /** The night layer is only soft gradients, so it can draw at a fraction of the size. */
 const NIGHT_RES = 0.5;
+/** How much past its figure a light's soft blob reaches, as a share of the figure's size. */
+const BLOB_REACH = 0.08;
 
 function collect(root: HTMLElement) {
   const els: Els = {};
@@ -165,13 +167,45 @@ export function bootStory(root: HTMLElement): () => void {
     els.closeTerrace.style.transform = `translate(${x}px,${box.height + 4 - WORLD.h * z}px) scale(${z})`;
   }
 
-  /** Night, with a soft hole wherever a flash has lit the party. */
+  /** Each figure's drawings, which are also the shape of the light that falls on it. */
+  const figureImages = new Map<string, HTMLImageElement[]>();
+  const imagesOf = (id: string) => {
+    let list = figureImages.get(id);
+    if (!list) figureImages.set(id, (list = Array.from(root.querySelectorAll<HTMLImageElement>(`[data-el="fig:${id}"] img`))));
+    return list;
+  };
+
+  /**
+   * A soft blob in a drawing's rough shape: shrunk right down so its detail melts away, made
+   * solid, and later drawn back at full size, which smooths it into a blob.
+   */
+  const blobs = new Map<HTMLImageElement, HTMLCanvasElement>();
+  const blobOf = (img: HTMLImageElement) => {
+    let blob = blobs.get(img);
+    if (blob) return blob;
+    blob = document.createElement('canvas');
+    blob.width = 28;
+    blob.height = Math.max(8, Math.round((28 * img.naturalHeight) / img.naturalWidth));
+    const b = blob.getContext('2d')!;
+    b.drawImage(img, 1, 1, blob.width - 2, blob.height - 2);
+    const px = b.getImageData(0, 0, blob.width, blob.height);
+    for (let i = 3; i < px.data.length; i += 4) px.data[i] = Math.min(255, px.data[i] * 4);
+    b.putImageData(px, 0, 0);
+    blobs.set(img, blob);
+    return blob;
+  };
+
+  /** Night, with the lit figures cut out of it in their own shapes. */
   function drawNight() {
-    const { cam, lights, night } = story;
+    const { cam, figureLights, night } = story;
     const z = layout.h / cam.vh;
     const tx = layout.w / 2 - cam.cx * z;
     const ty = layout.h / 2 - cam.cy * z;
-    const key = `${cam.cx.toFixed(1)},${cam.cy.toFixed(1)},${cam.vh.toFixed(1)},${night.v.toFixed(3)},${lights.map((l) => `${l.x.toFixed(0)} ${l.y.toFixed(0)} ${l.r.toFixed(1)}`).join()}`;
+    // A dancer swaps between two drawings, so only the one showing is lit, or there'd be a ghost of the other.
+    const showing = (img: HTMLImageElement) => getComputedStyle(img.parentElement!).opacity !== '0';
+    const lit = figureLights.filter((l) => l.a > 0.001);
+    const poses = lit.map((l) => imagesOf(l.id).map((img) => (showing(img) ? 1 : 0)).join('')).join();
+    const key = `${cam.cx.toFixed(1)},${cam.cy.toFixed(1)},${cam.vh.toFixed(1)},${night.v.toFixed(3)},${figureLights.map((l) => l.a.toFixed(3)).join()},${poses}`;
     if (key === lastLightKey) return;
     lastLightKey = key;
 
@@ -184,22 +218,20 @@ export function bootStory(root: HTMLElement): () => void {
     ctx.globalAlpha = night.v;
     ctx.fillStyle = NIGHT;
     ctx.fillRect(0, 0, layout.w, layout.h);
-    ctx.globalAlpha = 1;
 
     ctx.globalCompositeOperation = 'destination-out';
-    for (const l of lights) {
-      if (l.r <= 0) continue;
-      const px = tx + l.x * z;
-      const py = ty + l.y * z;
-      const r = l.r * z;
-      // Flash falloff: flat in the middle, a quick drop at the edge.
-      const g = ctx.createRadialGradient(px, py, r * 0.62, px, py, r);
-      g.addColorStop(0, 'rgba(0,0,0,1)');
-      g.addColorStop(0.5, 'rgba(0,0,0,.62)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(px - r, py - r, r * 2, r * 2);
+    for (const light of lit) {
+      const x = tx + light.x * z, y = ty + light.y * z, w = light.w * z, h = light.h * z;
+      for (const img of imagesOf(light.id)) {
+        if (!img.complete || !img.naturalWidth || !showing(img)) continue;
+        // A soft blob of light round them, then the figure itself, fully lit.
+        ctx.globalAlpha = light.a;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(blobOf(img), x - w * BLOB_REACH, y - h * BLOB_REACH, w * (1 + 2 * BLOB_REACH), h * (1 + 2 * BLOB_REACH));
+        ctx.drawImage(img, x, y, w, h);
+      }
     }
+    ctx.globalAlpha = 1;
   }
 
   function apply(t: number) {

@@ -13,17 +13,28 @@ tables in front of the villa, checkerboard dance floor under festoon lights, and
 the head table.
 
 **Timing grammar: every section opens the same way.** The page used to read as one long
-shot, with nothing to say a new section had started. Now the opening itself is the signal:
+shot, with nothing to say a new section had started. Now the opening itself is the signal, and
+the scene never leaves:
 
-1. **Words on the sky.** The scene and phone fade away, leaving the sky and its clouds, and
-   the new headline arrives on them alone.
-2. **The whole scene.** The terrace fades back in behind the words, always from the same view,
-   the hero's, and holds for a moment. Anything that needs to change, such as who's on stage or
-   where the camera is, changes while nothing's showing.
-3. **In on the subject.** The camera zooms and pans to whoever the section's about, and the phone
-   comes up as it arrives.
+1. **Pull back into the dark.** The phone goes, the camera pulls back to the whole terrace, the
+   hero's view, and the room falls into shadow. The new headline arrives over it.
+2. **A light finds the subject.** A spotlight opens on whoever the section's about: the crowd at
+   the easel, the dare crew, the guest with her message. Photos is the exception, where the
+   whole party lights up flash by flash.
+3. **In on the subject.** The camera zooms and pans to them, and the phone comes up as it arrives.
 4. **One proof, then a rest.** The one thing that proves the headline, then everything stops for
    at least half a unit before the next section.
+
+**One cast, there all night.** Everyone is on the terrace from the hero onwards, laid out left
+to right so no two drawings overlap: the girl with the dog, the auntie, the guest with the
+message, the bride and her mother, the crowd at the easel, Ayla, the dare crew, the singalong,
+the dancing dad and the cake. Nobody comes or goes: the light and the camera pick out whoever
+each section is about. The only exceptions are the crowd bursting into the QR easel, and the
+morning, when everyone's gone home and the couple are left.
+
+**The venue sits back.** The terrace drawing has its finest carving smoothed away and its two
+tones softened a touch, towards ink-violet and warm paper (`ROOM_*` in `process-art.mjs`), so
+the people in pure black and white stand clear of the floor behind them.
 
 Time of day moves under the words: the sky goes dark as "Every guest is your photographer"
 arrives, and comes up to morning under the album's. Progress is a thin segmented bar along the

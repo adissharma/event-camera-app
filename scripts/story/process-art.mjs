@@ -22,6 +22,18 @@ const SOURCE = 'assets/story-source';
 const OUT = 'public/story/art';
 const PAPER = [255, 251, 246];
 const INK = [10, 9, 12];
+/**
+ * The venue sits back from the people: its finest carving smoothed away and its two tones a
+ * little softer, so a guest in pure black and white never gets lost in the floor behind them.
+ */
+const ROOM_PAPER = [238, 233, 236];
+const ROOM_INK = [40, 32, 58];
+const ROOM_SMOOTH = 5;
+/** The floor in front of the tables, where only the big shapes matter: smoothed much harder. */
+const FLOOR_FROM = 1110;
+const FLOOR_SMOOTH = 23;
+/** Big groups are shown large when the camera pushes in on them, so they keep their detail. */
+const FULL_SIZE = ['dare-crew', 'easel-crowd', 'morning-after'];
 
 const MANIFEST = 'src/features/marketing/story/art-manifest.ts';
 const only = process.argv.slice(2);
@@ -92,8 +104,16 @@ async function clouds(id) {
 async function run(id, { room }) {
   const file = join(SOURCE, `${id}.png`);
   const meta = await sharp(file).metadata();
-  const width = id === 'room' ? meta.width : room ? Math.min(meta.width, 2400) : Math.min(meta.width, 900);
-  const res = await sharp(file).flatten({ background: '#fff' }).greyscale().resize({ width }).raw().toBuffer({ resolveWithObject: true });
+  const width = id === 'room' || FULL_SIZE.includes(id) ? meta.width : room ? Math.min(meta.width, 2400) : Math.min(meta.width, 900);
+  let grey = sharp(file).flatten({ background: '#fff' }).greyscale().resize({ width });
+  if (id === 'room') grey = grey.median(ROOM_SMOOTH);
+  const res = await grey.raw().toBuffer({ resolveWithObject: true });
+  if (id === 'room') {
+    const { width: rw, height: rh } = res.info;
+    const raw1 = { raw: { width: rw, height: rh, channels: 1 } };
+    const floor = await sharp(res.data, raw1).extract({ left: 0, top: FLOOR_FROM, width: rw, height: rh - FLOOR_FROM }).median(FLOOR_SMOOTH).extractChannel(0).raw().toBuffer();
+    floor.copy(res.data, FLOOR_FROM * rw);
+  }
   const { data, info } = res;
   const w = info.width, h = info.height;
   const a = new Float32Array(w * h);
@@ -103,7 +123,7 @@ async function run(id, { room }) {
   const out = Buffer.alloc(w * h * 4);
   for (let i = 0; i < a.length; i++) {
     const t = a[i], o = i * 4;
-    for (let c = 0; c < 3; c++) out[o + c] = mix(PAPER[c], INK[c], t);
+    for (let c = 0; c < 3; c++) out[o + c] = id === 'room' ? mix(ROOM_PAPER[c], ROOM_INK[c], t) : mix(PAPER[c], INK[c], t);
     out[o + 3] = outside[i] ? 0 : 255;
   }
   const raw = { raw: { width: w, height: h, channels: 4 } };

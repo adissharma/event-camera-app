@@ -20,24 +20,28 @@ export interface FigureDef {
   lens?: [number, number];
 }
 
-/** Everyone at the party, who rise together when the page loads. */
-export const CAST = ['girlDog', 'auntie', 'hug', 'singalong', 'dad', 'cake'];
+/**
+ * Everyone at the party, on the terrace from the first frame to the morning. Nobody comes and
+ * goes: the light and the camera pick out whoever each part of the story is about. Laid out
+ * left to right so no two drawings overlap.
+ */
+export const CAST = ['girlDog', 'auntie', 'guestVoice', 'hug', 'easelCrowd', 'ayla', 'dareCrew', 'singalong', 'dad', 'cake'];
 
-/** Who arrives later, only for their own scene: never in the opening frame. */
-export const LATE = ['ayla', 'easelCrowd', 'easelQr', 'dareCrew', 'guestVoice', 'morning'];
+/** The two that aren't there at the start: the QR easel the crowd turns into, and the morning after. */
+export const LATE = ['easelQr', 'morning'];
 
 export const FIGURES: FigureDef[] = [
-  { id: 'girlDog', frames: ['girl-dog'], x: 500, y: 1340, h: 300 },
-  { id: 'auntie', frames: ['shooter-auntie'], x: 850, y: 1410, h: 510, lens: [0.7, 0.28] },
-  { id: 'hug', frames: ['hug'], x: 1260, y: 1290, h: 480 },
-  { id: 'ayla', frames: ['ayla-scan', 'ayla-walk-a', 'ayla-walk-b', 'ayla-shoot'], x: 1900, y: 1215, h: 480, lens: [0.62, 0.1] },
-  { id: 'singalong', frames: ['singalong'], x: 2620, y: 1130, h: 380 },
-  { id: 'dad', frames: ['dad-a', 'dad-b'], x: 3010, y: 1190, h: 500, flip: true },
-  { id: 'cake', frames: ['cake'], x: 3610, y: 1310, h: 530 },
-  { id: 'easelCrowd', frames: ['easel-crowd'], x: 1540, y: 1250, h: 600 },
-  { id: 'easelQr', frames: ['easel-qr'], x: 1560, y: 1245, h: 630 },
-  { id: 'guestVoice', frames: ['guest-voice'], x: 850, y: 1410, h: 520 },
-  { id: 'dareCrew', frames: ['dare-crew'], x: 1420, y: 1435, h: 680, lens: [0.5, 0.2] },
+  { id: 'girlDog', frames: ['girl-dog'], x: 470, y: 1360, h: 280 },
+  { id: 'auntie', frames: ['shooter-auntie'], x: 770, y: 1415, h: 470, lens: [0.7, 0.28] },
+  { id: 'guestVoice', frames: ['guest-voice'], x: 1010, y: 1405, h: 480 },
+  { id: 'hug', frames: ['hug'], x: 1255, y: 1300, h: 450 },
+  { id: 'easelCrowd', frames: ['easel-crowd'], x: 1755, y: 1265, h: 520 },
+  { id: 'easelQr', frames: ['easel-sign'], x: 1765, y: 1260, h: 540 },
+  { id: 'ayla', frames: ['ayla-shoot'], x: 2245, y: 1220, h: 450, lens: [0.62, 0.1] },
+  { id: 'dareCrew', frames: ['dare-crew'], x: 2610, y: 1435, h: 500, lens: [0.5, 0.2] },
+  { id: 'singalong', frames: ['singalong'], x: 3045, y: 1150, h: 350 },
+  { id: 'dad', frames: ['dad-a', 'dad-b'], x: 3345, y: 1200, h: 470, flip: true },
+  { id: 'cake', frames: ['cake'], x: 3650, y: 1320, h: 470 },
   { id: 'morning', frames: ['morning-after'], x: 1640, y: 1340, h: 520 },
 ];
 
@@ -56,7 +60,7 @@ export const PLACES = {
   welcomeTable: { x: 200, y: 900 },
   table7: TABLE7,
   aylaStart: { x: 1500, y: 1400 },
-  aylaSeat: { x: 1900, y: 1215 },
+  aylaSeat: { x: 2245, y: 1220 },
 };
 
 /** The sun's box, behind the cypress trees, and how far it drops to set. */

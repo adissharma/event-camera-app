@@ -19,10 +19,14 @@ export interface Layout {
   m: boolean;
 }
 
-export interface Light {
+/** Light that falls on one figure alone, in its exact shape: a world-space box and how bright, 0 to 1. */
+export interface FigureLight {
+  id: string;
+  a: number;
   x: number;
   y: number;
-  r: number;
+  w: number;
+  h: number;
 }
 
 export type Els = Record<string, HTMLElement>;
@@ -32,7 +36,8 @@ export interface Story {
   T: number;
   labels: Record<string, number>;
   cam: { cx: number; cy: number; vh: number };
-  lights: Light[];
+  /** Who's lit, in their own shape, wherever the night is drawn. */
+  figureLights: FigureLight[];
   /** How dark it is: 0 is the sunset, 1 is full night. */
   night: { v: number };
   /** When the use case tabs are on screen. */
@@ -153,13 +158,16 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const home = spot ? { ...widest, cy: widest.cy - (L.h * 0.07 * widest.vh) / L.h } : widest;
   const cam = { ...home };
   const night = { v: 0 };
-  const lights: Light[] = [];
-
-  const addLight = (x: number, y: number) => {
-    const light: Light = { x, y, r: 0 };
-    lights.push(light);
+  const figureLights: FigureLight[] = [];
+  /** A light shaped exactly like one figure, so nobody beside them is caught by it. */
+  const lightFigure = (id: string) => {
+    const def = figure(id);
+    const size = figureSize(def);
+    const light = { id, a: 0, x: def.x - size.w / 2, y: def.y - size.h, w: size.w, h: size.h };
+    figureLights.push(light);
     return light;
   };
+
 
   const ch = (name: string, at: number, dur = 0.5, y = 26) =>
     tl.fromTo(els[name], { alpha: 0, y }, { alpha: 1, y: 0 }, at, dur, 'out');
@@ -194,7 +202,6 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   };
   /** Out of sight below the frame until now, for whoever joins the scene late. */
   const OFFSTAGE = 1200;
-  const appear = (id: string, at: number) => tl.set(els[`fig:${id}`], { opacity: 1, y: standing(id).y }, at);
   /** A two-layer screen change: on at `at`. */
   const showScreen = (name: string, at: number, dur = 0.25) => {
     tl.set(screen(name), { opacity: 0 }, at - 0.01);
@@ -224,7 +231,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     const size = figureSize(def);
     tl.start(els[`fig:${def.id}`], { x: def.x - size.w / 2, y: def.y - size.h });
   }
-  for (const id of LATE.filter((name) => name !== 'ayla')) {
+  for (const id of LATE) {
     tl.start(els[`fig:${id}`], { y: standing(id).y + OFFSTAGE, opacity: 0, rot: 0 });
   }
   for (const n of ['s2', 's3', 's4', 's5', 's6', 's7', 's8']) tl.start(els[`ch:${n}`], { alpha: 0, y: 26 });
@@ -260,27 +267,25 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(screen('party'), { x: stillsIcon.x, y: stillsIcon.y, scale: stillsIcon.w / PHONE.w }, 0.04, 0.26, 'inOut');
   tl.to(screen('party'), { opacity: 0 }, 0.26, 0.05, 'none');
 
-  // ---- How one section hands over to the next. The scene fades away, leaving the sky and its
-  // clouds, and the new words arrive on them alone. Then the scene fades back in behind them,
-  // always from the same view of the whole terrace, and only then does the camera move in on
-  // whoever the section's about. That rhythm is the signal that something new has started.
+  // ---- How one section hands over to the next. The scene stays: the phone goes, the camera
+  // pulls back to the whole terrace and the room falls into shadow, and the new words arrive.
+  // Then a light finds whoever the section's about, and the camera moves in on them. That
+  // rhythm is the signal that something new has started.
   const LEAVE = 0.3;
-  const BEAT: { title: number; scene?: number; zoom: number; phone: number; ready: number } = { title: 0.2, scene: 0.65, zoom: 1.3, phone: 1.6, ready: 2.2 };
-  /** Out of the hero the scene's already showing and stays, so only the words and the phone change. */
-  const FROM_HERO = { title: 0.1, zoom: 0.55, phone: 0.75, ready: 1.35 };
+  /** How dark the room goes while it changes over, and stays around a spotlight. */
+  const DIM = SHADOW;
+  type Beat = { title: number; light: number; zoom: number; phone: number; ready: number };
+  const BEAT: Beat = { title: 0.35, light: 0.85, zoom: 1.15, phone: 1.55, ready: 2.15 };
   const ZOOM_FOR = 0.8;
-  const worldLayers = [els.worldBack, els.worldFront, els.worldTop];
-  const section = (name: string, at: number, leaving?: string, beat = BEAT) => {
+  /** Out of the hero the whole scene's already showing, so only the words and the phone change. */
+  const FROM_HERO: Beat = { title: 0.1, light: 0.4, zoom: 0.55, phone: 0.75, ready: 1.35 };
+  const section = (name: string, at: number, leaving?: string, beat = BEAT, dim?: number) => {
     if (leaving) chOut(`ch:${leaving}`, at, 0.2);
-    const blank = at + LEAVE;
-    if (beat.scene !== undefined) {
-      worldLayers.forEach((el) => tl.to(el, { opacity: 0 }, at, LEAVE, 'none'));
-      tl.set(cam, home, blank);
-      worldLayers.forEach((el) => tl.to(el, { opacity: 1 }, at + beat.scene!, 0.35, 'none'));
-    }
+    if (beat !== FROM_HERO) tl.to(cam, home, at, 0.7, 'inOut');
+    if (dim !== undefined) tl.to(night, { v: dim }, at, 0.45, 'none');
     ch(`ch:${name}`, at + beat.title, 0.25, 14);
     labels[name] = at + beat.title;
-    return { at, blank, zoom: at + beat.zoom, phone: at + beat.phone, ready: at + beat.ready };
+    return { at, blank: at + LEAVE + 0.05, light: at + beat.light, zoom: at + beat.zoom, phone: at + beat.phone, ready: at + beat.ready };
   };
   const camTo = (s: { cx: number; cy: number; vh: number }, at: number) => tl.to(cam, s, at, ZOOM_FOR, 'inOut');
   const phoneOut = (at: number) => tl.to(els.phone, { opacity: 0 }, at, LEAVE - 0.05, 'none');
@@ -359,19 +364,14 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   showScreen('join', CARD + 1.05, 0.25);
 
   // ---- S3. Seating: the crowd round the paper chart, gone the moment it's a QR code.
-  const s3 = section('s3', CARD + 1.95, 's2');
+  const s3 = section('s3', CARD + 1.95, 's2', BEAT, DIM);
   phoneOut(s3.at);
-  if (spot) tl.to(night, { v: 0 }, s3.at, LEAVE, 'none');
   const crowd = figure('easelCrowd');
   // The whole crowd in frame: on a phone that needs the wider view.
   const crowdShot = m ? wide(L, crowd.x) : spot ? framed(L, crowd.x, crowd.y - crowd.h / 2, 1300, 0.5) : closer(L, crowd.x);
   camTo(crowdShot, s3.zoom);
-  appear('easelCrowd', s3.blank);
-  const seatPool = addLight(crowd.x, crowd.y - crowd.h * 0.45);
-  if (spot) {
-    tl.to(night, { v: SHADOW }, s3.zoom, ZOOM_FOR, 'none');
-    tl.to(seatPool, { r: 620 }, s3.zoom + 0.2, 0.6, 'out3');
-  }
+  const crowdLight = lightFigure('easelCrowd');
+  tl.to(crowdLight, { a: 1 }, s3.light, 0.5, 'out3');
   shadeIn(s3);
   // What's underneath is done with. Left showing, Safari can paint it over the new screen.
   for (const name of ['home', 'ios', 'join']) tl.set(screen(name), { opacity: 0 }, s3.blank);
@@ -413,7 +413,9 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
       tl.set(el, { opacity: 0 }, at + 0.37);
     });
   });
-  if (spot) tl.to(seatPool, { x: qrBox.x + qrBox.w / 2, r: 480 }, SWAP, 0.5, 'inOut');
+  tl.to(crowdLight, { a: 0 }, SWAP, 0.14, 'out');
+  const qrLight = lightFigure('easelQr');
+  tl.to(qrLight, { a: 1 }, SWAP + 0.08, 0.3, 'out');
   // And the answer is on the phone: her table, then the floor plan.
   phoneIn(anchor, { blank: s3.blank, phone: SWAP + 0.55 });
   const PLAN = SWAP + 1.45;
@@ -429,12 +431,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const seatedAt = PLAN + 2;
 
   // Ayla, who'll be shooting from her seat in the next scene.
-  const ayla = figure('ayla');
-  const aylaSize = figureSize(ayla);
-  const place = (p: { x: number; y: number }) => ({ x: p.x - aylaSize.w / 2, y: p.y - aylaSize.h });
-  const frames = group('frame:ayla');
-  tl.start(els['fig:ayla'], { ...place(PLACES.aylaSeat), opacity: 0 });
-  hidden(frames[1], frames[2], frames[3]);
+  const aylaSize = figureSize(figure('ayla'));
 
   // The floor plan: a swipe left brings it in, and two fingers pinch in on her table.
   const toggle = inPhone(els.seatToggle, els.screen);
@@ -478,15 +475,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
 
   // ---- S4. Photos: night falls under the words, the phone's put away, and the whole party is shooting.
   const s4 = section('s4', seatedAt + 0.6, 's3');
-  tl.set(els['fig:ayla'], { opacity: 1 }, s4.blank);
-  tl.set(frames[0], { opacity: 0 }, s4.blank);
-  tl.set(frames[3], { opacity: 1 }, s4.blank);
   phoneOut(s4.at);
   shadeOut(s4.at);
   tl.to(night, { v: 1 }, s4.at, 0.7, 'none');
-  if (spot) tl.to(seatPool, { r: 0 }, s4.at, LEAVE, 'none');
-  tl.set(els.sun, { y: SUN_DOWN }, s4.blank);
-  tl.set(els.festoonGlow, { glow: 1 }, s4.blank);
+  tl.to(qrLight, { a: 0 }, s4.at, LEAVE, 'none');
+  tl.to(els.sun, { y: SUN_DOWN }, s4.at, 0.6, 'in');
+  tl.to(els.festoonGlow, { glow: 1 }, s4.at + 0.3, 0.6, 'none');
   const aylaLens = { x: PLACES.aylaSeat.x - aylaSize.w / 2 + aylaSize.w * 0.62, y: PLACES.aylaSeat.y - aylaSize.h * 0.9 };
   // The party is the subject, so desktop stays on the whole terrace. A phone moves along to the far end of it.
   const partyShot = m ? shot(L, figure('dad').x + 60, WORLD.h - 1050, 2100) : home;
@@ -509,15 +503,15 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   type FlashRecord = { t: number; x: number; y: number; to: { x: number; y: number }; s: number; rot: number };
   const records: FlashRecord[] = [];
   let at = s4.ready - 0.2;
-  const momentPools: Light[] = [];
+  const momentLights: FigureLight[] = [];
   SHOTS.forEach((s, i) => {
     const moment = figure(s.moment);
     // Whoever's holding the camera on a phone is out of frame, so the flash goes off over the moment itself.
     const l = m ? { x: moment.x, y: moment.y - moment.h * 0.7 } : (s.lensAt ?? lens(s.who));
     flashAt(els[`flash:${i + 2}`], l.x, l.y, at);
-    const pool = addLight(moment.x, moment.y - moment.h * 0.4);
-    tl.to(pool, { r: m ? 400 : 430 }, at, 0.4, 'out3');
-    momentPools.push(pool);
+    const glow = lightFigure(s.moment);
+    tl.to(glow, { a: 1 }, at, 0.4, 'out3');
+    momentLights.push(glow);
     const face = toScreen(L, partyShot, moment.x, moment.y - moment.h);
     const source = toScreen(L, partyShot, moment.x, moment.y - moment.h * 0.5);
     const printScale = (m ? 0.46 : Math.min(0.66, L.w / 2000)) * Math.min(1, L.h / 760);
@@ -533,22 +527,20 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   });
 
   // ---- S5. Challenges: the row of them lit on the event page, one tapped, one photo taken.
-  const s5 = section('s5', at + 0.8, 's4');
+  const s5 = section('s5', at + 0.8, 's4', BEAT, 1);
   // The fresh camera waits underneath the event page, until the disposable scene needs it.
   tl.set(screen('camera'), { opacity: 1 }, s5.blank);
   tl.set(screen('dare'), { opacity: 1 }, s5.blank);
   tl.set(screen('table'), { opacity: 0 }, s5.blank);
   tl.set(els.seatView, { opacity: 0 }, s5.blank);
   phoneIn(anchor, s5);
-  momentPools.forEach((pool) => tl.to(pool, { r: 0 }, s5.at, LEAVE, 'none'));
+  momentLights.forEach((glow) => tl.to(glow, { a: 0 }, s5.at, LEAVE, 'none'));
   const crew = figure('dareCrew');
   if (m) camTo(closer(L, crew.x), s5.zoom);
   if (spot) camTo(framed(L, crew.x, crew.y - 300, 1140, 0.27), s5.zoom);
   shadeIn(s5);
-  appear('dareCrew', s5.blank);
-  tl.set(els['fig:easelQr'], { opacity: 0 }, s5.blank);
-  const crewPool = addLight(crew.x, crew.y - crew.h * 0.45);
-  tl.to(crewPool, { r: m ? 560 : 600 }, s5.zoom + 0.2, 0.6, 'out3');
+  const crewLight = lightFigure('dareCrew');
+  tl.to(crewLight, { a: 1 }, s5.light, 0.5, 'out3');
 
   const tiles = group('dareTile');
   const slides = group('dareSlide');
@@ -613,18 +605,14 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   phoneOut(s6.at);
   shadeOut(s6.at);
   darePrints.forEach((el) => tl.to(el, { opacity: 0 }, s6.at, LEAVE - 0.05, 'none'));
-  tl.to(crewPool, { r: 0 }, s6.at, LEAVE, 'none');
-  tl.set(els['fig:dareCrew'], { opacity: 0 }, s6.blank);
-  // Where the auntie was shooting earlier: the one guest on stage for her message.
+  tl.to(crewLight, { a: 0 }, s6.at, LEAVE, 'none');
+  // She's been on the terrace all night: now she's the one in the light.
   const speaker = figure('guestVoice');
-  tl.set(els['fig:auntie'], { opacity: 0 }, s6.blank);
-  appear('guestVoice', s6.blank);
   if (m) camTo(closer(L, speaker.x), s6.zoom);
   if (spot) camTo(framed(L, speaker.x, speaker.y - 300, 1280, 0.28), s6.zoom);
   shadeIn(s6);
-  const speakerPool = addLight(speaker.x, speaker.y - speaker.h * 0.5);
-  // Just her: any wider and it lights the guests either side.
-  tl.to(speakerPool, { r: speaker.h * 0.6 }, s6.zoom + 0.2, 0.6, 'out3');
+  const speakerLight = lightFigure('guestVoice');
+  tl.to(speakerLight, { a: 1 }, s6.light, 0.5, 'out3');
   tl.set(screen('guestbook'), { opacity: 1 }, s6.blank);
   for (const el of [screen('dare'), els.dareViewer, els.dareCam]) tl.set(el, { opacity: 0 }, s6.blank);
   phoneIn(anchor, s6);
@@ -646,9 +634,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const s7 = section('s7', SPEAK + 2.5, 's6');
   phoneOut(s7.at);
   shadeOut(s7.at);
-  tl.to(speakerPool, { r: 0 }, s7.at, LEAVE, 'none');
+  tl.to(speakerLight, { a: 0 }, s7.at, LEAVE, 'none');
   tl.set(screen('guestbook'), { opacity: 0 }, s7.blank);
-  tl.set(els['fig:guestVoice'], { opacity: 0 }, s7.blank);
   tl.to(els.dim, { opacity: 0.86 }, s7.zoom, ZOOM_FOR, 'none');
 
   const cells = group('cell');
@@ -747,7 +734,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   // Not so high on desktop that it comes up behind the words.
   tl.to(els.sun, { y: spot ? 240 : 90 }, OVERNIGHT + 0.3, 1.1, 'out');
   tl.to(els.dim, { opacity: 0.12 }, OVERNIGHT, 1.1, 'none');
-  [...CAST, 'ayla'].forEach((id) => tl.to(els[`fig:${id}`], { opacity: 0 }, OVERNIGHT + 0.1, 0.5, 'none'));
+  [...CAST, 'easelQr'].forEach((id) => tl.to(els[`fig:${id}`], { opacity: 0 }, OVERNIGHT + 0.1, 0.5, 'none'));
   // A phone's screen would cover them, so only where there's room beside it.
   if (!m) {
     tl.set(els['fig:morning'], { y: standing('morning').y }, s7.blank);
@@ -860,6 +847,19 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     });
   }
 
+  // While the camera's in on someone, the venue behind them goes soft, like a lens with them in
+  // focus. Wide screens only: on a phone the mock covers most of it, and the blur costs too much.
+  if (spot) {
+    const inFocus: [number, number][] = [[s2.zoom, s3.at], [s3.light, s4.at], [s5.light, s6.at], [s6.light, s7.at], [OVERNIGHT + 0.5, Infinity]];
+    let focused = false;
+    tl.onRender((t) => {
+      const next = inFocus.some(([a, b]) => t >= a && t < b);
+      if (next === focused) return;
+      focused = next;
+      els.stage.classList.toggle('in-focus', next);
+    });
+  }
+
   // The album's the last thing in the story: from here the page just scrolls on to the FAQs.
   const T = revealAt(REVEALED - 1) + 1.6;
 
@@ -874,5 +874,5 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     s8: T - 0.3,
   };
 
-  return { tl, T, labels, cam, lights, night, heroCam: home, stills };
+  return { tl, T, labels, cam, figureLights, night, heroCam: home, stills };
 }
