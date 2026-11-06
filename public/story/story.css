@@ -144,6 +144,11 @@ body { overflow: visible !important; margin: 0; }
 .sun { position: absolute; border-radius: 50%; background: #fffdf8; box-shadow: 0 0 120px 40px rgba(255, 236, 220, .35); }
 .world { position: absolute; left: 0; top: 0; width: 3840px; height: 1440px; transform-origin: 0 0; will-change: transform; }
 .world-back { z-index: 1; }
+/* Soft focus on the venue while the camera's in on someone. Wide screens only. */
+@media (min-width: 760px) and (min-aspect-ratio: 9/10) and (min-height: 560px) {
+  .story-live .world-back { transition: filter .5s ease-out; }
+  .story-live .stage.in-focus .world-back { filter: blur(3.5px); }
+}
 .world-back img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .world-front { z-index: 3; pointer-events: none; }
 /* Night: multiplied over everything, so white falls to violet and black stays black. */
@@ -155,11 +160,6 @@ body { overflow: visible !important; margin: 0; }
 .fig { position: absolute; left: 0; top: 0; transform-origin: 50% 100%; }
 .fig img { position: absolute; inset: 0; width: 100%; height: 100%; }
 .fig-frame { position: absolute; inset: 0; }
-/* The QR easel's board: ink on paper like the drawing, tilted to match it. */
-.qr-sign { position: absolute; left: 17.5%; top: 15.3%; width: 65.5%; height: 41.6%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 7% 6% 5%; background: var(--paper); box-shadow: inset 0 0 0 3px var(--ink), inset 0 0 0 7px var(--paper), inset 0 0 0 8px var(--ink); transform: rotate(1.2deg); color: var(--ink); }
-.qr-sign p { margin: 0; font-family: 'Isolde', Georgia, serif; font-size: 25px; line-height: 1; white-space: nowrap; text-shadow: none; }
-.fig .qr-sign img { position: static; display: block; width: 82%; height: auto; aspect-ratio: 1; }
-.fig .qr-sign img.qr-sign-logo { width: 34%; aspect-ratio: 104 / 42; filter: brightness(0); }
 .flip-a, .flip-b { animation: flipA .9s steps(1) infinite; }
 .flip-b { animation-name: flipB; }
 @keyframes flipA { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
@@ -212,11 +212,11 @@ body { overflow: visible !important; margin: 0; }
    by more than the page ever lifts, so the lift can't bring the bottom of the art into view. */
 .scroll-hint { all: unset; box-sizing: border-box; position: absolute; left: 0; right: 0; bottom: 0; z-index: 21; display: none; flex-direction: column; align-items: center; justify-content: flex-end; gap: 12px; padding: 0 16px calc(100lvh - 100svh + 22px); color: #fff; text-align: center; cursor: pointer; }
 /* The shade behind the prompt runs right across the page, and under the phone rather than over it. */
-.hint-band { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 9; height: calc(186px + 100lvh - 100svh); background: linear-gradient(transparent, rgba(22, 10, 54, .86) 58px, rgba(22, 10, 54, .94) 120px, #160a36 calc(100% - 40px)); opacity: 1; pointer-events: none; }
+.hint-band { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 9; height: calc(150px + 100lvh - 100svh); background: linear-gradient(transparent, rgba(22, 10, 54, .52) 60px, rgba(22, 10, 54, .76) 115px, rgba(22, 10, 54, .86) calc(100% - 20px)); opacity: 1; pointer-events: none; }
 .story-live .hint-band { display: block; }
 .story-live .scroll-hint { display: flex; }
 .story .scroll-hint:focus-visible { outline: 2px solid #fff; outline-offset: -6px; }
-.hint-text { font-family: 'Isolde', Georgia, serif; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; }
+.hint-text { text-shadow: 0 1px 14px rgba(22, 10, 54, .8); font-family: 'Isolde', Georgia, serif; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; }
 .hint-swipe { display: none; }
 .hint-arrow { display: grid; place-items: center; width: 50px; height: 50px; border-radius: 50%; background: #fff; color: var(--ink); box-shadow: 0 8px 24px rgba(10, 5, 25, .45); transition: translate .18s ease-out; }
 .hint-arrow svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -651,7 +651,7 @@ body { overflow: visible !important; margin: 0; }
   .story-live .ch-s8 .cta-row { display: none; }
   /* The prompt on one line, to leave the phone showing above it. */
   .scroll-hint { flex-direction: row; justify-content: center; align-items: center; gap: 12px; }
-  .hint-band { height: calc(126px + 100lvh - 100svh); }
+  .hint-band { height: calc(104px + 100lvh - 100svh); }
   .hint-text { font-size: 22px; }
   .hint-arrow { width: 40px; height: 40px; }
   .hint-arrow svg { width: 20px; height: 20px; }

@@ -165,13 +165,21 @@ export function bootStory(root: HTMLElement): () => void {
     els.closeTerrace.style.transform = `translate(${x}px,${box.height + 4 - WORLD.h * z}px) scale(${z})`;
   }
 
-  /** Night, with a soft hole wherever a flash has lit the party. */
+  /** Each figure's drawings, which are also the shape of the light that falls on it. */
+  const figureImages = new Map<string, HTMLImageElement[]>();
+  const imagesOf = (id: string) => {
+    let list = figureImages.get(id);
+    if (!list) figureImages.set(id, (list = Array.from(root.querySelectorAll<HTMLImageElement>(`[data-el="fig:${id}"] img`))));
+    return list;
+  };
+
+  /** Night, with the lit figures cut out of it in their own shapes. */
   function drawNight() {
-    const { cam, lights, night } = story;
+    const { cam, figureLights, night } = story;
     const z = layout.h / cam.vh;
     const tx = layout.w / 2 - cam.cx * z;
     const ty = layout.h / 2 - cam.cy * z;
-    const key = `${cam.cx.toFixed(1)},${cam.cy.toFixed(1)},${cam.vh.toFixed(1)},${night.v.toFixed(3)},${lights.map((l) => `${l.x.toFixed(0)} ${l.y.toFixed(0)} ${l.r.toFixed(1)}`).join()}`;
+    const key = `${cam.cx.toFixed(1)},${cam.cy.toFixed(1)},${cam.vh.toFixed(1)},${night.v.toFixed(3)},${figureLights.map((l) => l.a.toFixed(3)).join()}`;
     if (key === lastLightKey) return;
     lastLightKey = key;
 
@@ -184,22 +192,21 @@ export function bootStory(root: HTMLElement): () => void {
     ctx.globalAlpha = night.v;
     ctx.fillStyle = NIGHT;
     ctx.fillRect(0, 0, layout.w, layout.h);
-    ctx.globalAlpha = 1;
 
     ctx.globalCompositeOperation = 'destination-out';
-    for (const l of lights) {
-      if (l.r <= 0) continue;
-      const px = tx + l.x * z;
-      const py = ty + l.y * z;
-      const r = l.r * z;
-      // Flash falloff: flat in the middle, a quick drop at the edge.
-      const g = ctx.createRadialGradient(px, py, r * 0.62, px, py, r);
-      g.addColorStop(0, 'rgba(0,0,0,1)');
-      g.addColorStop(0.5, 'rgba(0,0,0,.62)');
-      g.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(px - r, py - r, r * 2, r * 2);
+    for (const light of figureLights) {
+      if (light.a <= 0.001) continue;
+      const x = tx + light.x * z, y = ty + light.y * z, w = light.w * z, h = light.h * z;
+      for (const img of imagesOf(light.id)) {
+        if (!img.complete || !img.naturalWidth) continue;
+        // A faint edge of light just past the outline, then the figure itself, fully lit.
+        ctx.globalAlpha = light.a * 0.18;
+        ctx.drawImage(img, x - w * 0.02, y - h * 0.015, w * 1.04, h * 1.03);
+        ctx.globalAlpha = light.a;
+        ctx.drawImage(img, x, y, w, h);
+      }
     }
+    ctx.globalAlpha = 1;
   }
 
   function apply(t: number) {

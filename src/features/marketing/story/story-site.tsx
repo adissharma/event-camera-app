@@ -92,14 +92,6 @@ function Figure({ id, order }: { id: string; order: number }) {
           <img data-src={art(frame)} data-kind={LATE.includes(id) ? 'figure-late' : 'figure'} alt="" />
         </div>
       ))}
-      {id === 'easelQr' ? (
-        // Laid over the drawn board, so its words are sharp and the code is a real one.
-        <div className="qr-sign">
-          <p>Find your table</p>
-          <img src={`${ASSET}/qr-invite.svg`} alt="" width="120" height="120" />
-          <img className="qr-sign-logo" src={`${ASSET}/logo.webp`} alt="" width="104" height="42" />
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -53,8 +53,8 @@ export const ART_SIZES: Record<string, { w: number; h: number }> = {
     "h": 1210
   },
   "dare-crew": {
-    "w": 576,
-    "h": 576
+    "w": 983,
+    "h": 982
   },
   "easel": {
     "w": 604,
@@ -65,16 +65,16 @@ export const ART_SIZES: Record<string, { w: number; h: number }> = {
     "h": 1109
   },
   "morning-after": {
-    "w": 620,
-    "h": 547
+    "w": 1058,
+    "h": 932
   },
   "uncle-scan": {
     "w": 610,
     "h": 1265
   },
   "easel-crowd": {
-    "w": 821,
-    "h": 549
+    "w": 1400,
+    "h": 936
   },
   "easel-qr": {
     "w": 604,
@@ -83,5 +83,9 @@ export const ART_SIZES: Record<string, { w: number; h: number }> = {
   "guest-voice": {
     "w": 508,
     "h": 1218
+  },
+  "easel-sign": {
+    "w": 604,
+    "h": 1282
   }
 };
