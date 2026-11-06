@@ -23,6 +23,7 @@ import { UploadStatus, type UploadPhase } from '@/components/feedback/upload-sta
 import { CameraIcon, ClockIcon, LockIcon, CloseIcon, ShareIcon, PinIcon } from '@/components/ui/icons';
 import { InviteShareSheet } from '@/features/sharing/invite-share-sheet';
 import { BRAND_CONFIG } from '@/config/brand';
+import { copy } from '@/i18n';
 import { colours, radii, spacing, layout } from '@/design';
 import {
   fetchGuestGallery,
@@ -388,10 +389,14 @@ export default function GuestGalleryScreen() {
         <View style={[S.content, S.centred, S.lockedPanel]}>
           <LockIcon size={44} color={colours.textSecondary} />
           <AppText variant="bodyLarge" align="center" style={S.lockedTitle}>
-            The gallery is currently locked
+            {session.gallery_visibility === 'hosts_only'
+              ? copy.create.guestsNeverSeeTitle
+              : 'The gallery is currently locked'}
           </AppText>
           <AppText variant="bodyMedium" tone="secondary" align="center">
-            Photos will be revealed automatically when the countdown ends.
+            {session.gallery_visibility === 'hosts_only'
+              ? copy.create.guestsNeverSeeBody
+              : 'Photos will be revealed automatically when the countdown ends.'}
           </AppText>
         </View>
       ) : (

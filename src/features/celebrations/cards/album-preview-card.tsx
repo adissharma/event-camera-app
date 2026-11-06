@@ -1,17 +1,77 @@
+import { canHostSeePhotos } from '@/features/celebrations/reveal/state';
+import { serverNow } from '@/services/server-time';
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Image } from 'expo-image';
-import { Pressable, View } from 'react-native';
+import { Pressable, View, type ViewStyle } from 'react-native';
 
 import { AppText } from '@/components/ui/text';
 import { colours, fontFamilies, radii, spacing } from '@/design';
 import { fetchAlbumPreview } from '@/services/album-previews';
 import type { CelebrationSummary } from '@/services/celebrations';
 
-const PHOTO_TILTS = ['-5deg', '3deg', '-3deg', '4deg'] as const;
+/** The gap between photos in the mosaic. */
+const MOSAIC_GAP = 6;
 
-function sourceKey(source: number | { uri: string }): string {
+type AlbumPhoto = number | { uri: string };
+
+function sourceKey(source: AlbumPhoto): string {
   return typeof source === 'number' ? String(source) : source.uri;
+}
+
+function MosaicPhoto({
+  source,
+  style,
+  moreCount = 0,
+  isLocked = false,
+  onError,
+}: {
+  source: AlbumPhoto;
+  style: ViewStyle;
+  moreCount?: number;
+  /** Before the host's own reveal: shows there are photos without showing them. */
+  isLocked?: boolean;
+  onError: (source: AlbumPhoto) => void;
+}) {
+  return (
+    <View
+      style={[
+        { borderRadius: radii.lg, overflow: 'hidden', backgroundColor: colours.surfaceMuted },
+        style,
+      ]}
+    >
+      <Image
+        source={source}
+        contentFit="cover"
+        blurRadius={isLocked ? 45 : moreCount > 0 ? 28 : 0}
+        style={{ width: '100%', height: '100%' }}
+        onError={() => onError(source)}
+      />
+      {moreCount > 0 ? (
+        <View
+          style={{
+            position: 'absolute',
+            width: '100%',
+            height: '100%',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <AppText
+            variant="button"
+            style={{
+              color: colours.textPrimary,
+              fontFamily: fontFamilies.textSemiBold,
+              fontSize: 18,
+              lineHeight: 24,
+            }}
+          >
+            +{moreCount}
+          </AppText>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 export function AlbumPreviewCard({
@@ -24,21 +84,30 @@ export function AlbumPreviewCard({
   onPress: () => void;
 }) {
   const [failedSources, setFailedSources] = useState<Set<string>>(() => new Set());
-  const [loadedSources, setLoadedSources] = useState<Set<string>>(() => new Set());
   const { data, isError } = useQuery({
     queryKey: ['celebrations', 'album-preview', celebration.id, 2],
     queryFn: () => fetchAlbumPreview(celebration.id, celebration.primarySession?.id ?? null),
     staleTime: 5 * 60_000,
   });
 
+  const markFailed = (source: AlbumPhoto) => {
+    const key = sourceKey(source);
+    setFailedSources((current) => current.has(key) ? current : new Set(current).add(key));
+  };
+
   const photos = (data?.photos ?? []).filter((source) => !failedSources.has(sourceKey(source)));
-  const hasMore = photos.length === 4
-    && (data?.remainingCount ?? 0) > 0
-    && photos.every((source) => loadedSources.has(sourceKey(source)));
-  const slotCount = photos.length;
-  const photoWidth = Math.min(112, (width + Math.max(0, slotCount - 1) * 9) / Math.max(4, slotCount));
+  // The mosaic shows three, so anything past that is counted on the last of them.
+  const shown = photos.slice(0, 3);
+  const hiddenCount = (data?.remainingCount ?? 0) + photos.length - shown.length;
+  const mainSize = (width - MOSAIC_GAP / 2) / 1.5;
+  const sideSize = (mainSize - MOSAIC_GAP) / 2;
   const endsAt = celebration.primarySession?.ends_at ?? celebration.endsAt;
   const endDate = endsAt ? formatAlbumDate(new Date(endsAt)) : null;
+  const isLocked = !canHostSeePhotos({
+    now: serverNow(),
+    hostRevealMode: celebration.primarySession?.host_reveal_mode,
+    hostRevealAt: celebration.primarySession?.host_reveal_at,
+  });
 
   return (
     <Pressable
@@ -50,12 +119,55 @@ export function AlbumPreviewCard({
         gap: spacing.md,
       }}
     >
+      {shown.length > 0 ? (
+        <View style={{ height: mainSize, flexDirection: 'row', gap: MOSAIC_GAP }}>
+          <MosaicPhoto
+            source={shown[0]}
+            style={{ flex: 1 }}
+            isLocked={isLocked}
+            onError={markFailed}
+          />
+          {shown.length > 1 ? (
+            <View style={{ width: shown.length > 2 ? sideSize : mainSize / 2, gap: MOSAIC_GAP }}>
+              <MosaicPhoto
+                source={shown[1]}
+                style={{ flex: 1 }}
+                isLocked={isLocked}
+                onError={markFailed}
+              />
+              {shown.length > 2 ? (
+                <MosaicPhoto
+                  source={shown[2]}
+                  style={{ flex: 1 }}
+                  moreCount={hiddenCount}
+                  isLocked={isLocked}
+                  onError={markFailed}
+                />
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <View style={{ height: data || isError ? 40 : mainSize, justifyContent: 'center' }}>
+          {data || isError ? (
+            <AppText variant="bodySmall" tone="secondary">
+              {isError ? 'Photos unavailable' : 'No photos'}
+            </AppText>
+          ) : null}
+        </View>
+      )}
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.base }}>
         <AppText
           variant="titleMedium"
           numberOfLines={1}
           ellipsizeMode="tail"
-          style={{ color: colours.textPrimary, fontSize: 20, lineHeight: 24, maxWidth: width * 0.58, flexShrink: 1 }}
+          style={{
+            color: colours.textPrimary,
+            fontSize: 20,
+            lineHeight: 24,
+            maxWidth: width * 0.62,
+            flexShrink: 1,
+          }}
         >
           {celebration.title}
         </AppText>
@@ -78,50 +190,6 @@ export function AlbumPreviewCard({
         ) : null}
       </View>
 
-      <View style={{ height: slotCount > 0 || (!data && !isError) ? 158 : 40, flexDirection: 'row', alignItems: 'center' }}>
-        {photos.map((source, index) => (
-          <View
-            key={sourceKey(source)}
-            style={{
-              width: photoWidth,
-              height: 146,
-              marginLeft: index === 0 ? 0 : -9,
-              borderRadius: radii.lg,
-              overflow: 'hidden',
-              backgroundColor: colours.surfaceRaised,
-              transform: [{ rotate: PHOTO_TILTS[index] }],
-              zIndex: index,
-            }}
-          >
-            <Image
-              source={source}
-              contentFit="cover"
-              blurRadius={index === 3 && hasMore ? 28 : 0}
-              style={{ width: '100%', height: '100%' }}
-              onLoad={() => {
-                const key = sourceKey(source);
-                setLoadedSources((current) => current.has(key) ? current : new Set(current).add(key));
-              }}
-              onError={() => {
-                const key = sourceKey(source);
-                setFailedSources((current) => current.has(key) ? current : new Set(current).add(key));
-              }}
-            />
-            {index === 3 && hasMore ? (
-              <View style={{ position: 'absolute', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.18)' }}>
-                <AppText variant="titleMedium" style={{ color: colours.textPrimary }}>
-                  +{data?.remainingCount}
-                </AppText>
-              </View>
-            ) : null}
-          </View>
-        ))}
-        {(data || isError) && slotCount === 0 ? (
-          <AppText variant="bodySmall" tone="secondary">
-            {isError ? 'Photos unavailable' : 'No photos'}
-          </AppText>
-        ) : null}
-      </View>
     </Pressable>
   );
 }

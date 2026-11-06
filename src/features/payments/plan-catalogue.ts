@@ -207,10 +207,10 @@ export interface PlanFeatureRow {
 }
 
 /**
- * The five entitlement rows shown in the hero, derived from the plan rather
- * than written out per tier.
+ * The entitlement rows shown in the hero, derived from the plan rather than
+ * written out per tier.
  *
- * Always five, always in this order, whichever plan is selected — the rows
+ * Always the same six, in this order, whichever plan is selected — the rows
  * change wording and state but never count or position, so switching plans
  * reads as the same list answering differently rather than as the layout
  * rearranging itself.
@@ -230,6 +230,8 @@ export function planFeatureRows(plan: PaywallPlan): PlanFeatureRow[] {
           : `${plan.photoAllowance} photos per guest`,
       included: true,
     },
+    // Every plan, free included, so there is nothing on the plan to read.
+    { key: 'seating', label: 'Seating plan', included: true },
     { key: 'videos', label: plan.videos ? 'Unlimited videos' : 'No videos', included: plan.videos },
     { key: 'guestbook', label: plan.guestbook ? 'Guestbook' : 'No guestbook', included: plan.guestbook },
     {

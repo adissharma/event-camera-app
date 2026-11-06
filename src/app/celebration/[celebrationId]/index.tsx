@@ -5,10 +5,12 @@
  * Inspired by Leica, Kinfolk Magazine, Apple Photos, and luxury wedding albums.
  */
 
+import type { RevealMode } from '@/types/database';
 import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, type ReactNode } from 'react';
 import {
   Animated,
   ActivityIndicator,
+  Easing,
   FlatList,
   InteractionManager,
   View,
@@ -30,10 +32,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Asset as ExpoAsset } from 'expo-asset';
-import { requireOptionalNativeModule, useEventListener } from 'expo';
+import { useEventListener } from 'expo';
 import * as FileSystem from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
-import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import Svg, {
@@ -87,6 +88,8 @@ import { deleteHostPhoto } from '@/services/media-delete';
 import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
+import { EventGlass, EVENT_GLASS_RADIUS } from '@/components/ui/event-glass';
+import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 import { TreatedPhoto } from '@/components/media/treated-photo';
 import { DisposablePhoto } from '@/components/media/disposable-photo';
 import { GALLERY_PRESETS } from '@/features/celebrations/gallery-preset-assets';
@@ -94,13 +97,18 @@ import { loadSourceImage } from '@/features/media/disposable-cache';
 import { renderDisposablePhotoToFile } from '@/features/media/disposable-render';
 import { resolveSignedUrls } from '@/features/media/signed-url-cache';
 import { normalisePhotoTreatment } from '@/features/media/photo-treatment';
-import { canViewerSeePhotos, msUntilReveal, formatRevealCountdownWords } from '@/features/celebrations/reveal/state';
+import {
+  canHostSeePhotos,
+  canViewerSeePhotos,
+  msUntilReveal,
+  formatRevealCountdownWords,
+} from '@/features/celebrations/reveal/state';
 import { useRevealModal } from '@/features/celebrations/reveal/use-reveal-modal';
 import { serverNow } from '@/services/server-time';
 import { IS_APP_CLIP, LOCALE_CONFIG } from '@/config/app-config';
 import { syncLiveActivity } from '@/services/live-activity';
 import { BRAND_CONFIG } from '@/config/brand';
-import { colours, fontFamilies, radii, spacing, layout } from '@/design';
+import { colours, fontFamilies, radii, spacing, layout, useMotion } from '@/design';
 import { copy } from '@/i18n';
 import {
   resolveChallengeBrief,
@@ -370,39 +378,14 @@ const HERO_PARALLAX_FRACTION = 0.35;
 // The hero itself runs to `GALLERY_HERO_RATIO` (0.49) plus a 24pt bleed, so
 // this must stay below that for the card to overlap the cover at all.
 const EVENT_CARD_TOP_RATIO = 0.45;
-const EVENT_CARD_RADIUS = 32;
+const EVENT_CARD_RADIUS = EVENT_GLASS_RADIUS;
 
 /** Photos / Videos tab icons: white when selected, the same white dimmed when not. */
 const GALLERY_TAB_ACTIVE = '#FFFFFF';
 const GALLERY_TAB_INACTIVE = 'rgba(255, 255, 255, 0.4)';
 
-/**
- * The card's glass.
- *
- * A real backdrop blur, so the card shows whatever is genuinely behind it: the
- * cover near its top edge, black further down. A moderate blur, so the
- * photograph keeps a little of its shape, under a heavy wash that pulls the
- * material well towards the page's black so the type holds on a bright
- * cover. The plain `dark` style rather than a system material: the materials
- * lay a grey film over the backdrop, which read as a grey cast on the card.
- * A short ramp at the foot lands on exactly `colours.background`, which is
- * what the tabs and gallery below are drawn on, so the glass fades into them
- * rather than stopping on a hard edge. It is kept to the bottom of the card so
- * the title area stays clear glass.
- */
-const EVENT_CARD_BLUR_INTENSITY = 10;
 /** How far under the card's top edge the cover is drawn for the glass to blur. */
 const EVENT_CARD_GLASS_REACH = 200;
-const EVENT_CARD_GLASS_WASH = 'rgba(11, 11, 12, 0.7)';
-const EVENT_CARD_GLASS_FOOT = ['rgba(11, 11, 12, 0)', 'rgba(11, 11, 12, 1)'] as const;
-/** Where, down the card, the foot ramp starts. */
-const EVENT_CARD_GLASS_FOOT_START = 0.7;
-/**
- * Neutral specular reflections, strongest at the shoulders and softer across
- * the face. The wider low-opacity stroke gives the hairline a refracted inner
- * edge. Both sit under the foot ramp so the pane dissolves into the gallery.
- */
-const EVENT_CARD_GLASS_EDGE = '#F0F2F5';
 /**
  * The cover stops partway down the card — at its own foot, or at the hero's
  * clip once the parallax has carried it past that — and the glass would show
@@ -413,19 +396,6 @@ const HERO_EDGE_FADE = 90;
 const HERO_EDGE_FADE_COLORS = ['rgba(11, 11, 12, 0)', 'rgba(11, 11, 12, 1)'] as const;
 /** The same fade, flipped, for the cover's top edge. */
 const HERO_TOP_FADE_COLORS = ['rgba(11, 11, 12, 1)', 'rgba(11, 11, 12, 0)'] as const;
-/**
- * Whether this binary can draw the glass at all.
- *
- * `expo-blur` is native, and the runtime version follows the app version, so
- * an update carrying this screen can land on a build that predates it — as
- * can a dev client that has not been rebuilt. Rendering `BlurView` there is a
- * red screen, not a missing effect. Without it the card falls back to
- * `EVENT_CARD_FALLBACK_FILL`: no blur, but the same dark sheet. Web draws the
- * blur in CSS and needs no native module.
- */
-const CAN_BLUR = Platform.OS === 'web' || requireOptionalNativeModule('ExpoBlur') != null;
-const EVENT_CARD_FALLBACK_FILL = 'rgba(28, 28, 30, 0.72)';
-
 /**
  * How much of the page's scroll the cover follows.
  *
@@ -1420,6 +1390,11 @@ export default function CelebrationDashboard({ celebrationId: propCelebrationId 
  *     preview non-interactive — one property rather than a disabled prop on
  *     every tile, chip and control that a later edit could forget.
  */
+/** Long enough for the screen's push transition to finish first. */
+const CARD_BOUNCE_DELAY_MS = 420;
+const CARD_BOUNCE_HEIGHT = 16;
+const CARD_BOUNCE_RISE_MS = 200;
+
 export interface EventPreviewMode {
   /** Stand-in gallery media. `GALLERY_PRESETS` ids resolve to bundled assets. */
   photos: PhotoItem[];
@@ -1466,6 +1441,11 @@ export interface EventPreviewMode {
    * carousel already do on arrival, with the same travel and the same timing.
    */
   chipStripNudge?: Animated.AnimatedInterpolation<number> | Animated.Value;
+  /** Whether the page can be seen yet, so the card's bounce is not spent behind the reveal. */
+  isPageVisible?: boolean;
+  /** Whether the reveal has begun taking the card away, and how long its glass has to go. */
+  isGlassLeaving?: boolean;
+  glassLeaveMs?: number;
 }
 
 /**
@@ -1776,9 +1756,29 @@ export function EventDetailView({
    * needs this same list to know what "the next photo" or "the last video"
    * means — see `heroPhotosOnly`/`heroVideosOnly` below.
    */
+  /**
+   * The host chose to wait for their own reveal, so their photos stay blurred until
+   * then. Nothing is withheld from them: it is their surprise, and they can change
+   * the time in settings whenever they like.
+   */
+  const hostSession = primarySession as
+    | (typeof primarySession & { host_reveal_mode?: RevealMode | null; host_reveal_at?: string | null })
+    | null;
+  const hostRevealPending =
+    viewerRole === 'host' &&
+    !canHostSeePhotos({
+      now: serverNow(),
+      hostRevealMode: hostSession?.host_reveal_mode,
+      hostRevealAt: hostSession?.host_reveal_at,
+    });
+  // What the end-of-event countdown and the locked tiles count down to.
+  const viewerRevealMode = hostRevealPending ? hostSession?.host_reveal_mode : primarySession?.reveal_mode;
+  const viewerRevealAt = hostRevealPending ? hostSession?.host_reveal_at : primarySession?.reveal_at;
+
   const visibleGalleryItems = useMemo(
     () =>
       photos
+        .map((p) => (hostRevealPending ? { ...p, locked: true } : p))
         .filter((p) => {
           if (isHost) return true;
           if (p.isMine) return true;
@@ -2623,14 +2623,16 @@ export function EventDetailView({
   // is how the modal ended up able to announce photos the gallery still hid.
   const isHostOnlyGallery = primarySession?.gallery_visibility === 'hosts_only';
   const viewerCanSeePhotos =
-    viewerRole === 'host' ||
-    (!isHostOnlyGallery &&
+    (viewerRole === 'host' && !hostRevealPending) ||
+    (viewerRole !== 'host' &&
+      !isHostOnlyGallery &&
       canViewerSeePhotos({
         now: serverNow(),
         revealAt: primarySession?.reveal_at,
         revealMode: primarySession?.reveal_mode,
       }));
   const isGalleryLocked = !viewerCanSeePhotos;
+  const guestsNeverSeePhotos = isHostOnlyGallery && viewerRole !== 'host';
 
   // Copy for the lock overlay — "3 days" / "5 hours" / "20 minutes" until
   // reveal. Null when there's nothing to count down to (e.g. manual reveal
@@ -2641,8 +2643,8 @@ export function EventDetailView({
     : (() => {
         const remainingMs = msUntilReveal({
           now: serverNow(),
-          revealAt: primarySession?.reveal_at,
-          revealMode: primarySession?.reveal_mode,
+          revealAt: viewerRevealAt,
+          revealMode: viewerRevealMode,
         });
         return remainingMs === null ? null : formatRevealCountdownWords(remainingMs);
       })();
@@ -2687,8 +2689,8 @@ export function EventDetailView({
     celebrationId: celebration.id,
     viewerId,
     endsAt: primarySession?.ends_at ?? celebration.ends_at,
-    revealAt: primarySession?.reveal_at,
-    revealMode: primarySession?.reveal_mode,
+    revealAt: viewerRevealAt,
+    revealMode: viewerRevealMode,
     viewerCanSeePhotos,
     ready: Boolean(primarySession),
     refresh: () =>
@@ -2696,6 +2698,40 @@ export function EventDetailView({
         queryKey: celebrationDetailKeys.detail(celebration.id),
       }),
   });
+
+  // One small lift and settle on the way in, which shows the glass warping the
+  // cover behind it. Once per visit: coming back from the camera does not repeat it.
+  const { reduceMotion } = useMotion();
+  const cardBounce = useRef(new Animated.Value(0)).current;
+  const hasCardBounced = useRef(false);
+  const canCardBounce = previewMode ? Boolean(previewMode.isPageVisible) : !reveal.visible;
+  useEffect(() => {
+    if (!canCardBounce || reduceMotion || hasCardBounced.current) return;
+    const bounce = Animated.sequence([
+      Animated.delay(CARD_BOUNCE_DELAY_MS),
+      Animated.timing(cardBounce, {
+        toValue: -CARD_BOUNCE_HEIGHT,
+        duration: CARD_BOUNCE_RISE_MS,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardBounce, {
+        toValue: 0,
+        friction: 5,
+        tension: 110,
+        useNativeDriver: true,
+      }),
+    ]);
+    const timer = setTimeout(() => {
+      hasCardBounced.current = true;
+    }, CARD_BOUNCE_DELAY_MS);
+    bounce.start();
+    return () => {
+      clearTimeout(timer);
+      // Only a bounce still waiting to begin is called off. One under way finishes.
+      if (!hasCardBounced.current) bounce.stop();
+    };
+  }, [canCardBounce, cardBounce, reduceMotion]);
 
   const activeChallengeSubmission = activeSlideIndex > 0 ? storySubmissions[activeSlideIndex - 1] : null;
   const activeChallengeMediaLabel = activeChallengeSubmission?.mediaType === 'video' ? 'video' : 'photo';
@@ -3238,7 +3274,7 @@ export function EventDetailView({
       onPanResponderMove: (_, gestureState) => {
         const { dx, dy } = gestureState;
 
-        if (dy > 0 && Math.abs(dy) > Math.abs(dx)) {
+        if (Math.abs(dy) > Math.abs(dx)) {
           heroPanY.setValue(dy);
           return;
         }
@@ -3255,7 +3291,14 @@ export function EventDetailView({
         const { dx, dy } = gestureState;
 
         heroPanX.flattenOffset();
-        if (dy > 100 || (dy > 50 && gestureState.vy > 0.5)) {
+        const dismisses =
+          Math.abs(dy) > Math.abs(dx) &&
+          swipeDismissDirection(dy, gestureState.vy, {
+            distance: 100,
+            flickDistance: 50,
+            flickVelocity: 0.5,
+          }) !== 0;
+        if (dismisses) {
           closeHeroViewer();
           return;
         }
@@ -3318,6 +3361,11 @@ export function EventDetailView({
   }
 
   async function handleChallengePhotoPress(challenge: Challenge) {
+    // Entries are photos too, and the host is waiting to see them.
+    if (hostRevealPending) {
+      Alert.alert('Not yet', 'You will see the entries when your photos are revealed.');
+      return;
+    }
     const viewerSession = ++challengeViewerSessionRef.current;
     setChallengeMenuVisible(false);
     if (challengeStoryCloseTimerRef.current !== null) {
@@ -4295,7 +4343,7 @@ export function EventDetailView({
         style={S.scroll}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 130 }}
-        stickyHeaderIndices={showMediaTabs ? [1] : undefined}
+        stickyHeaderIndices={showMediaTabs && !guestsNeverSeePhotos ? [1] : undefined}
         bounces
         onScroll={Animated.event(
           [{ nativeEvent: { contentOffset: { y: scrollY } } }],
@@ -4419,72 +4467,23 @@ export function EventDetailView({
         <Animated.View
           style={[
             S.card,
-            { marginTop: -(HERO_CLIP_H - CARD_TOP) },
-            previewMode?.overlays?.chromeOpacity
-              ? { opacity: previewMode.overlays.chromeOpacity }
-              : null,
+            { marginTop: -(HERO_CLIP_H - CARD_TOP), transform: [{ translateY: cardBounce }] },
           ]}
         >
-          <View pointerEvents="none" style={S.cardGlass}>
-            {CAN_BLUR ? (
-              <BlurView
-                intensity={EVENT_CARD_BLUR_INTENSITY}
-                tint="dark"
-                style={ABSOLUTE_FILL}
-              />
-            ) : (
-              <View style={[ABSOLUTE_FILL, { backgroundColor: EVENT_CARD_FALLBACK_FILL }]} />
-            )}
-            <View style={[ABSOLUTE_FILL, { backgroundColor: EVENT_CARD_GLASS_WASH }]} />
-            <Svg width="100%" height="100%" style={ABSOLUTE_FILL}>
-              <Defs>
-                <SvgLinearGradient id="eventGlassRim" gradientUnits="userSpaceOnUse" x1={0} y1={0} x2={screenWidth} y2={0}>
-                  <Stop offset="0" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.12} />
-                  <Stop offset="0.07" stopColor="#D6E8FF" stopOpacity={0.65} />
-                  <Stop offset="0.13" stopColor="#FFFFFF" stopOpacity={0.95} />
-                  <Stop offset="0.24" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.18} />
-                  <Stop offset="0.44" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.04} />
-                  <Stop offset="0.64" stopColor="#D6E8FF" stopOpacity={0.25} />
-                  <Stop offset="0.74" stopColor="#FFFFFF" stopOpacity={0.85} />
-                  <Stop offset="0.83" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.14} />
-                  <Stop offset="0.95" stopColor="#E1EDFF" stopOpacity={0.62} />
-                  <Stop offset="1" stopColor={EVENT_CARD_GLASS_EDGE} stopOpacity={0.12} />
-                </SvgLinearGradient>
-                {/* SVG on web needs r + a transform; rx/ry are native-only.
-                    An implicit browser radius spills tint to the rectangle's edge. */}
-                <SvgRadialGradient id="eventGlassLeftGlint" gradientUnits="userSpaceOnUse" cx={0} cy={0} r={1} gradientTransform={`translate(${screenWidth * 0.13} 2) scale(65 24)`}>
-                  <Stop offset="0" stopColor="#E1EDFF" stopOpacity={0.22} />
-                  <Stop offset="0.35" stopColor="#D6E8FF" stopOpacity={0.08} />
-                  <Stop offset="1" stopColor="#D6E8FF" stopOpacity={0} />
-                </SvgRadialGradient>
-                <SvgRadialGradient id="eventGlassRightGlint" gradientUnits="userSpaceOnUse" cx={0} cy={0} r={1} gradientTransform={`translate(${screenWidth * 0.74} 0) scale(48 18)`}>
-                  <Stop offset="0" stopColor="#FFFFFF" stopOpacity={0.2} />
-                  <Stop offset="0.4" stopColor="#E1EDFF" stopOpacity={0.06} />
-                  <Stop offset="1" stopColor="#E1EDFF" stopOpacity={0} />
-                </SvgRadialGradient>
-              </Defs>
-              <Rect width="100%" height={60} fill="url(#eventGlassLeftGlint)" />
-              <Rect width="100%" height={60} fill="url(#eventGlassRightGlint)" />
-              <Path
-                d={`M1.5 1000 V${EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 1.5} ${EVENT_CARD_RADIUS - 1.5} 0 0 1 ${EVENT_CARD_RADIUS} 1.5 H${screenWidth - EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 1.5} ${EVENT_CARD_RADIUS - 1.5} 0 0 1 ${screenWidth - 1.5} ${EVENT_CARD_RADIUS} V1000`}
-                fill="none"
-                stroke="url(#eventGlassRim)"
-                strokeWidth={2}
-                opacity={0.24}
-              />
-              <Path
-                d={`M0.5 1000 V${EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 0.5} ${EVENT_CARD_RADIUS - 0.5} 0 0 1 ${EVENT_CARD_RADIUS} 0.5 H${screenWidth - EVENT_CARD_RADIUS} A${EVENT_CARD_RADIUS - 0.5} ${EVENT_CARD_RADIUS - 0.5} 0 0 1 ${screenWidth - 0.5} ${EVENT_CARD_RADIUS} V1000`}
-                fill="none"
-                stroke="url(#eventGlassRim)"
-                strokeWidth={1}
-              />
-            </Svg>
-            <LinearGradient
-              colors={EVENT_CARD_GLASS_FOOT}
-              locations={[EVENT_CARD_GLASS_FOOT_START, 1]}
-              style={ABSOLUTE_FILL}
-            />
-          </View>
+          <EventGlass
+            isLeaving={previewMode?.isGlassLeaving}
+            leaveDurationMs={previewMode?.glassLeaveMs}
+            leaveOpacity={previewMode?.overlays?.chromeOpacity}
+          />
+
+          {/* Fades on its own, not with the card: the glass cannot have a fading parent. */}
+          <Animated.View
+            style={
+              previewMode?.overlays?.chromeOpacity
+                ? { opacity: previewMode.overlays.chromeOpacity }
+                : undefined
+            }
+          >
 
           {/* Measured for the creation reveal, which crossfades its own title in over this one. */}
           <View
@@ -4507,7 +4506,7 @@ export function EventDetailView({
           >
           <View style={S.cardStats}>
             <EventStatStrip
-              photoCount={photos.length}
+              photoCount={guestsNeverSeePhotos ? metrics.photos : photos.length}
               joinedCount={guestsJoined}
               countdown={countdown}
             />
@@ -4673,10 +4672,11 @@ export function EventDetailView({
             </Animated.View>
           ) : null}
           </Animated.View>
+          </Animated.View>
         </Animated.View>
         </View>
 
-        {showMediaTabs ? (
+        {showMediaTabs && !guestsNeverSeePhotos ? (
           // Pulled up by the status-bar height so that, once pinned, the
           // tab row lands below the status bar / Dynamic Island rather than
           // under it. The strip above that it overlaps at rest is left alone:
@@ -4728,7 +4728,18 @@ export function EventDetailView({
         ) : null}
 
         <View {...(showMediaTabs ? galleryTabSwipeResponder.panHandlers : {})}>
-          {visibleGalleryItems.length === 0 ? (
+          {guestsNeverSeePhotos ? (
+            // The server sends these guests nothing, and "be the first to add one"
+            // would have them waiting for a gallery that is never coming.
+            <View style={S.privateGallery}>
+              <AppText variant="titleMedium" align="center">
+                {copy.create.guestsNeverSeeTitle}
+              </AppText>
+              <AppText variant="bodySmall" tone="secondary" align="center">
+                {copy.create.guestsNeverSeeBody}
+              </AppText>
+            </View>
+          ) : visibleGalleryItems.length === 0 ? (
             <View style={S.emptyGallery}>
               <AppText variant="bodySmall" tone="secondary" align="center">
                 No moments yet.{'\n'}Be the first to add one.
@@ -5226,7 +5237,8 @@ export function EventDetailView({
       {/* ══════════════════════════════════════════════════════
           FLOATING CAMERA PILL FAB
           ══════════════════════════════════════════════════════ */}
-      {(!heroVisible) && (
+      {/* After the event this saves the gallery, and these guests have none to save. */}
+      {!heroVisible && !(eventHasEnded && (guestsNeverSeePhotos || hostRevealPending)) && (
         <View style={[S.fabWrap, { bottom: insets.bottom + 28 }]}>
           <Pressable
             style={({ pressed }) => [pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
@@ -5768,6 +5780,7 @@ export function EventDetailView({
           celebrationId={celebration.id}
           currentPlan={entitlements.plan}
           options={upgradesForFeature(entitlements.plan, upgradeRequest.feature)}
+          feature={upgradeRequest.feature}
           title={upgradeRequest.title}
           onClose={() => setUpgradeRequest(null)}
           onUpgraded={() => {
@@ -5786,6 +5799,7 @@ export function EventDetailView({
         eventName={celebration.title}
         photoCount={photos.length}
         countdownLabel={reveal.countdownLabel}
+        guestsNeverSeePhotos={guestsNeverSeePhotos}
         thumbnails={revealThumbnails}
         confirming={reveal.confirming}
         onDismiss={reveal.dismiss}
@@ -5927,13 +5941,6 @@ const S = StyleSheet.create({
     borderTopLeftRadius: EVENT_CARD_RADIUS,
     borderTopRightRadius: EVENT_CARD_RADIUS,
     paddingTop: 26,
-  },
-  /** Clipped here: `BlurView` ignores `borderRadius` on its own. */
-  cardGlass: {
-    ...ABSOLUTE_FILL,
-    borderTopLeftRadius: EVENT_CARD_RADIUS,
-    borderTopRightRadius: EVENT_CARD_RADIUS,
-    overflow: 'hidden',
   },
   cardTitleWrap: {
     paddingHorizontal: layout.gutter + spacing.xs,
@@ -6159,6 +6166,12 @@ const S = StyleSheet.create({
     fontFamily: 'InstrumentSans_600SemiBold',
     fontSize: 10,
     letterSpacing: 0.3,
+  },
+  privateGallery: {
+    paddingHorizontal: layout.gutter + spacing.base,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    gap: spacing.sm,
   },
   emptyGallery: {
     marginTop: spacing.xxl,

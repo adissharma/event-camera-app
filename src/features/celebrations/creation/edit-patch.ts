@@ -1,4 +1,4 @@
-import { resolveGuestReveal, type CreationDraft, type CreationStep } from '../draft/types';
+import { resolveGuestReveal, resolveHostReveal, type CreationDraft, type CreationStep } from '../draft/types';
 import type { EventSettingsPatch } from '@/services/celebration-detail';
 
 /**
@@ -38,9 +38,12 @@ export function buildEditPatch(step: CreationStep, draft: CreationDraft): EventS
     case 'reveal':
     case 'guest-reveal': {
       const { mode, revealAt } = resolveGuestReveal(draft);
+      const host = resolveHostReveal(draft);
       return {
         revealMode: mode,
         revealAt,
+        hostRevealMode: host.mode,
+        hostRevealAt: host.revealAt,
         galleryVisibility: draft.galleryVisibility,
       };
     }

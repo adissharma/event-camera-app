@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
-import type { CelebrationRow, EventSessionRow } from '@/types/database';
+import type { CelebrationRow, EventSessionRow, RevealMode } from '@/types/database';
 import {
   SAMPLE_EVENT,
   SAMPLE_CELEBRATION_ID,
@@ -34,7 +34,11 @@ export interface CelebrationSummary {
   primarySession: Pick<
     EventSessionRow,
     'id' | 'name' | 'status' | 'ends_at' | 'reveal_at' | 'reveal_mode' | 'shot_limit_per_guest'
-  > | null;
+  > & {
+    /** The host's own reveal. Null on sessions from before hosts had one. */
+    host_reveal_mode?: RevealMode | null;
+    host_reveal_at?: string | null;
+  } | null;
 }
 
 export interface TrashedCelebrationSummary extends CelebrationSummary {
@@ -95,7 +99,7 @@ export async function listCelebrations(): Promise<CelebrationSummary[]> {
       .from('celebrations')
       .select(
         `id, title, status, cover_storage_path, public_slug, starts_at, ends_at, timezone, default_theme_id,
-         event_sessions ( id, name, status, ends_at, reveal_at, reveal_mode, sequence_number, shot_limit_per_guest )`,
+         event_sessions ( * )`,
       )
       .is('deleted_at', null)
       // Unpublished drafts are journey state, not events. Publication creates
@@ -133,6 +137,8 @@ export async function listCelebrations(): Promise<CelebrationSummary[]> {
               ends_at: primary.ends_at,
               reveal_at: primary.reveal_at,
               reveal_mode: primary.reveal_mode,
+              host_reveal_mode: (primary as any).host_reveal_mode ?? null,
+              host_reveal_at: (primary as any).host_reveal_at ?? null,
               shot_limit_per_guest: primary.shot_limit_per_guest,
             }
           : null,

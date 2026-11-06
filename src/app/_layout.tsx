@@ -124,8 +124,8 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <LiveActivitySyncManager />
           <AuthContextProvider>
+            <LiveActivitySyncManager />
             <CreationDraftProvider>
               {/* Light glyphs — the canvas is near-black on every screen. */}
               <StatusBar style="light" />

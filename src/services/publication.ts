@@ -14,8 +14,14 @@ import { resolveDraftAllowedMediaTypes } from '@/features/media/event-media';
 import { getPaymentProvider } from '@/features/payments';
 import type { PaymentProvider, PurchaseReceipt } from '@/features/payments/types';
 import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchase-verification';
-import { isFreePlanKey } from '@/features/payments/plan-catalogue';
-import { resolveGuestReveal, type CreationDraft } from '@/features/celebrations/draft/types';
+import { isFreePlanKey, planForCatalogueKey } from '@/features/payments/plan-catalogue';
+import { shotLimitForPlan } from '@/features/entitlements/guest-limit';
+import {
+  resolveGuestReveal,
+  resolveHostReveal,
+  type CreationDraft,
+} from '@/features/celebrations/draft/types';
+import { saveHostReveal } from './celebration-detail';
 import { assertCreatedCelebration } from '@/types/database';
 
 export interface PublishedEvent {
@@ -149,6 +155,49 @@ async function resolveThemeId(themeKey: string | null | undefined): Promise<stri
 }
 
 /**
+ * Creates the server-side draft: celebration, first session and guest link, in
+ * one transaction.
+ *
+ * Shared by the app's publish flow and the web's checkout flow, so an event
+ * created in a browser is configured by exactly the same mapping as one
+ * created on a phone.
+ */
+export async function createServerDraft(draft: CreationDraft) {
+  const client = requireSupabase();
+  const reveal = resolveGuestReveal(draft);
+  const themeId = await resolveThemeId(draft.themeSlug);
+  const allowedMediaTypes = resolveDraftAllowedMediaTypes(draft);
+
+  const { data, error } = await client.rpc('create_celebration_with_default_session', {
+    p_title: draft.title.trim(),
+    p_session_name: 'Main event',
+    p_celebration_type: draft.celebrationType,
+    p_inspiration_pack: draft.inspirationPack,
+    p_timezone: draft.timezone,
+    // The generated RPC types use optional params, not nullable ones, so a
+    // null has to become an omission rather than an explicit null.
+    p_ends_at: draft.endsAt ?? undefined,
+    p_capture_mode: draft.captureMode,
+    // Sent even when null, which means unlimited. Leaving it out is not the
+    // same thing: the server's default for a missing limit is 20.
+    p_shot_limit_per_guest: shotLimitForPlan(
+      planForCatalogueKey(draft.planKey),
+      draft.shotLimitPerGuest ?? null,
+    ) as number,
+    p_camera_roll_upload_limit: draft.cameraRollUploadLimit,
+    p_allowed_media_types: allowedMediaTypes,
+    p_reveal_mode: reveal.mode,
+    p_reveal_at: reveal.revealAt ?? undefined,
+    p_gallery_visibility: draft.galleryVisibility,
+    p_photo_treatment: draft.photoTreatment,
+    p_theme_id: themeId,
+  });
+
+  if (error) throw new PublicationError(error.message, 'draft');
+  return assertCreatedCelebration(data as never);
+}
+
+/**
  * Publishes a draft.
  *
  * Ordered so that nothing irreversible happens before the server has the draft:
@@ -179,9 +228,6 @@ export async function publishDraft(
       throw new Error('Supabase not configured');
     }
     const client = requireSupabase();
-    const reveal = resolveGuestReveal(draft);
-    const themeId = await resolveThemeId(draft.themeSlug);
-    const allowedMediaTypes = resolveDraftAllowedMediaTypes(draft);
 
     let celebrationId = existingCelebrationId;
     let eventSessionId: string | undefined;
@@ -192,33 +238,14 @@ export async function publishDraft(
 
     // 1. Server-side draft.
     if (!celebrationId) {
-      const { data, error } = await client.rpc('create_celebration_with_default_session', {
-        p_title: draft.title.trim(),
-        p_session_name: 'Main event',
-        p_celebration_type: draft.celebrationType,
-        p_inspiration_pack: draft.inspirationPack,
-        p_timezone: draft.timezone,
-        // The generated RPC types use optional params, not nullable ones, so a
-        // null has to become an omission rather than an explicit null.
-        p_ends_at: draft.endsAt ?? undefined,
-        p_capture_mode: draft.captureMode,
-        p_shot_limit_per_guest: draft.shotLimitPerGuest ?? undefined,
-        p_camera_roll_upload_limit: draft.cameraRollUploadLimit,
-        p_allowed_media_types: allowedMediaTypes,
-        p_reveal_mode: reveal.mode,
-        p_reveal_at: reveal.revealAt ?? undefined,
-        p_gallery_visibility: draft.galleryVisibility,
-        p_photo_treatment: draft.photoTreatment,
-        p_theme_id: themeId,
-      });
-
-      if (error) throw new PublicationError(error.message, 'draft');
-
-      const created = assertCreatedCelebration(data as never);
+      const created = await createServerDraft(draft);
       celebrationId = created.celebrationId;
       onCelebrationCreated?.(created.celebrationId);
       eventSessionId = created.eventSessionId;
       publicSlug = created.publicSlug;
+      // The create function only knows the guests' reveal.
+      const hostReveal = resolveHostReveal(draft);
+      await saveHostReveal(created.eventSessionId, hostReveal.mode, hostReveal.revealAt);
       // The ONLY moment this exists in plaintext. Only its digest is stored.
       guestToken = created.guestAccessToken;
     }

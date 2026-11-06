@@ -52,11 +52,11 @@ export const REVEAL_TIMINGS = {
    * rather than being cut off at a quarter.
    */
   TARGET_CREATING_DURATION: 1900,
-  /** The cover and the event's name fading up out of the creation state. */
+  /** The whole event page fading up out of the creation state. */
   READY_REVEAL_DURATION: 500,
-  /** How long the cover and name hold alone before the gallery assembles. */
+  /** How long the page holds before the preview stage begins. */
   READY_DWELL_DURATION: 420,
-  /** Gallery content and challenges fading up. */
+  /** The hold at the start of the preview stage, before the strip's nudge. */
   PREVIEW_REVEAL_DURATION: 600,
   /**
    * How long the preview holds after it has finished assembling.
@@ -150,7 +150,7 @@ export const REVEAL_TIMINGS = {
    * rather than as a block with a slight lean. At 110ms apart with a 240ms
    * fade each, a row is roughly half-way in when the next one starts — which
    * reads as a list being written, not as five things blinking on together
-   * and not as five separate events either.
+   * and not as six separate events either.
    */
   ENTITLEMENT_FADE_DURATION: 240,
   ENTITLEMENT_STAGGER_STEP: 110,

@@ -79,6 +79,7 @@ export function FeatureGate({
         celebrationId={celebrationId}
         currentPlan={entitlements.plan}
         options={upgradesForFeature(entitlements.plan, feature)}
+        feature={feature}
         title={title}
         // Closing without buying means they did not want it. `back` when
         // there is somewhere to go back to, so a host who opened this from

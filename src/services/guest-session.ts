@@ -419,7 +419,13 @@ export async function joinEventSession(options: {
       });
     }
 
-    if (rpcResult.error) throw new GuestJoinError(rpcResult.error.message);
+    if (rpcResult.error) {
+      throw new GuestJoinError(
+        rpcResult.error.message === 'event_guest_limit_reached'
+          ? 'This event is full. Ask your host if they can make room.'
+          : rpcResult.error.message,
+      );
+    }
 
     const joined = rpcResult.data as unknown as {
       guest_session_id: string;
