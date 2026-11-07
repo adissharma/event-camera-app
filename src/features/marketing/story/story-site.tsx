@@ -209,7 +209,6 @@ export function StoryMarkup() {
         </a>
         <div className="nav-right">
           <a className="nav-link nav-faqs" href="#faqs">FAQs</a>
-          <a className="nav-link" href={LINKS.hostPortal}>Host login</a>
           <div className="nav-get" data-el="navGet">
             <CreateEvent small />
           </div>
@@ -310,7 +309,10 @@ export function StoryMarkup() {
                   {item.q}
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
                 </summary>
-                <p>{item.a}</p>
+                <p>
+                  {item.a}
+                  {'link' in item && item.link ? <> <a href={item.link.href}>{item.link.label}</a>.</> : null}
+                </p>
               </details>
             ))}
           </div>
@@ -330,7 +332,6 @@ export function StoryMarkup() {
         <img src={`${ASSET}/logo.webp`} alt="Stills." width="112" height="45" />
         <div className="foot-links">
           <a href={LINKS.appStore}>Get the app</a>
-          <a href={LINKS.hostPortal}>Host login</a>
           <a href={LINKS.privacy}>Privacy Policy</a>
         </div>
       </footer>

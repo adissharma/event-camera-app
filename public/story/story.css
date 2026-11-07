@@ -107,6 +107,7 @@ body { overflow: visible !important; margin: 0; }
 .faq-item summary svg { flex: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; transition: rotate .2s ease-out; }
 .faq-item[open] summary svg { rotate: 45deg; }
 .faq-item p { padding: 0 42px 24px 0; font-size: clamp(15px, 1.25vw, 18px); line-height: 1.55; color: rgba(255, 255, 255, .86); }
+.faq-item p a { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 /* The last slide: the first slide's terrace, the words, and one very big button in the middle. */
 .close { position: relative; z-index: 2; display: flex; align-items: flex-start; justify-content: center; min-height: 100vh; min-height: 100svh; overflow: hidden; background: #7a22b8; padding: clamp(84px, 13vh, 132px) var(--gutter) 0; text-align: center; }
 .close-art { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 100%; }

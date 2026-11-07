@@ -61,12 +61,16 @@ export const CLOSE = {
 /** Checked against the code: see the fact check in docs/story-site/07-storyline-and-copy.md. */
 export const FAQS = [
   { q: 'Do my guests need to download anything?', a: 'No. On a recent iPhone the QR code opens Stills as an App Clip, with nothing to install. On other phones it opens in the browser. Guests type their name and start shooting, with no account and no password.' },
-  { q: 'What do I need to create an event?', a: 'The Stills app for iPhone, which is free to download. An Android app is coming soon. Once your event is made, you can also look after its photos, guests and seating from the web portal.' },
-  { q: 'How much does it cost?', a: 'Free for up to 5 guests. Bigger events are a one-off payment from £14.99 per event, with no subscription. Stills+ is £49.99 for unlimited guests, and adds videos, challenges and the guestbook.' },
+  { q: 'What do I need to create an event?', a: 'The Stills app for iPhone, which is free to download. An Android app is coming soon.' },
+  {
+    q: 'How much does it cost?',
+    a: 'Free for up to 5 guests. Bigger events are a one-off payment from $14.99 per event, with no subscription. Stills+ is $49.99 for unlimited guests, and adds videos, challenges and the guestbook. All currencies are supported. For the exact price where you are,',
+    link: { label: 'download the app', href: LINKS.appStore },
+  },
   { q: 'When do guests see the photos?', a: 'You choose. Share every photo live as it’s taken, or keep them locked until the event closes or until a day and time you pick. Then they reveal themselves.' },
   { q: 'Can guests leave audio and video messages?', a: 'Yes, with Stills+. Guests record a message for your guestbook, out loud or on camera. Only you get to hear it.' },
   { q: 'Can Stills really replace my seating chart?', a: 'It can. Seating comes with every plan. Guests type their name to find their table, and if you add a floor plan as a PNG, JPEG or PDF, they can zoom in to find it.' },
-  { q: 'Can I download everything afterwards?', a: 'Yes. Sign in to the web portal and download the lot as ZIP files.' },
+  { q: 'Can I download everything afterwards?', a: 'Yes. Every photo and video is yours to keep, and you can save any of them to your phone straight from the app.' },
 ];
 
 /** Real challenges, word for word from `challenge-packs.ts`. */
