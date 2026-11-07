@@ -32,7 +32,7 @@ Guests scan a QR code and start shooting. Every photo lands in one album.
 
 **Guests join with one scan.**
 
-They scan your QR code and type their name. No download, no account, no password.
+No app download, no account, no password needed. They scan your QR code and they’re in.
 
 *On the phone, the App Clip card: "You're invited", "Find your seat and grab the camera". Those words need checking against what's set in App Store Connect.*
 
@@ -48,7 +48,7 @@ No crowd round the easel. Guests scan, find their table and zoom into your floor
 
 **Every guest is your photographer.**
 
-Everyone shoots on their own phone, so you get the moments your photographer can't.
+Your photographer can’t be everywhere. Your guests are, catching the moments you miss.
 
 ### 4. Challenges
 

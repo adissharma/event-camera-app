@@ -515,7 +515,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     momentLights.push(glow);
     const face = toScreen(L, partyShot, moment.x, moment.y - moment.h);
     const source = toScreen(L, partyShot, moment.x, moment.y - moment.h * 0.5);
-    const printScale = (m ? 0.46 : Math.min(0.66, L.w / 2000)) * Math.min(1, L.h / 760);
+    // Larger where there's room: a wide screen has the whole sky above the terrace to fill.
+    const printScale = (m ? 0.46 : Math.min(1, L.w / 1500)) * Math.min(1, L.h / 760);
     records.push({
       t: at,
       x: source.x,
@@ -526,6 +527,22 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     });
     at += m ? 0.55 : 0.42;
   });
+  // Spread out so no two overlap, keeping each near the moment it caught, and all on screen.
+  if (!m) {
+    const order = [...records].sort((a, b) => a.to.x - b.to.x);
+    const gap = (r: FlashRecord) => 220 * r.s * 1.06;
+    for (let i = 1; i < order.length; i++) order[i].to.x = Math.max(order[i].to.x, order[i - 1].to.x + (gap(order[i - 1]) + gap(order[i])) / 2);
+    const last = order[order.length - 1];
+    const over = last.to.x + gap(last) / 2 - (L.w - 24);
+    if (over > 0) for (const r of order) r.to.x -= over;
+    // Still too long for the screen: share it out evenly, edge to edge.
+    const first = order[0];
+    if (first.to.x - gap(first) / 2 < 24) {
+      const from = 24 + gap(first) / 2;
+      const to = L.w - 24 - gap(last) / 2;
+      order.forEach((r, i) => (r.to.x = from + ((to - from) * i) / Math.max(1, order.length - 1)));
+    }
+  }
 
   // ---- S5. Challenges: the row of them lit on the event page, one tapped, one photo taken.
   const s5 = section('s5', at + 0.8, 's4', BEAT, 1);
@@ -585,8 +602,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     const pose = m
       ? { x: (L.w - printSize) / 2 + (i - 1) * 12, y: L.h * 0.3, rot: [-3, 2][i] }
       : spot
-        // Stacked beside the phone, clear of the crew and of the copy.
-        ? { x: L.w * 0.47 + i * 12, y: L.h * 0.09 + i * 16, rot: [-5, 3][i] }
+        // Beside the phone, clear of the crew and of the copy: the second one below the first.
+        ? { x: L.w * 0.47, y: L.h * 0.09 + i * (el.offsetHeight * (printSize / 300) + 14), rot: [-4, 3][i] }
         : { x: L.w * (0.09 + i * 0.135), y: L.h * (0.42 + i * 0.05), rot: [-5, 3][i] };
     tl.start(el, { x: anchor.x + 60, y: anchor.y + 300, scale: 0.3, rot: 0, opacity: 0 });
     tl.to(el, { opacity: 1 }, fire + 0.02, 0.1, 'none');
