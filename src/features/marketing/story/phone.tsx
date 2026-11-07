@@ -378,7 +378,7 @@ function EventHead({ title, cover, blurred, tint, stats, last, strip, children }
       </div>
       <div className="ev-card">
         <div className="ev-glass">
-          {blurred ? <img data-src={blurred} alt="" /> : <i style={{ background: tint }} />}
+          {cover ? <img data-src={cover} data-kind={tint ? 'print' : undefined} alt="" /> : blurred ? <img data-src={blurred} alt="" /> : <i style={{ background: tint }} />}
           <b />
         </div>
         <div className="ev-rim" />
@@ -573,6 +573,13 @@ export function Phone() {
       <div className="ph-body">
         <div className="ph-screen" data-el="screen">
           <BlobDefs />
+          {/* iOS 26's Liquid Glass bends the cover at the card's rim; this does the same to the card's copy of it. */}
+          <svg className="glass-defs" width="0" height="0" aria-hidden="true">
+            <filter id="liquid-glass" x="0" y="0" width="1" height="1" primitiveUnits="objectBoundingBox" colorInterpolationFilters="sRGB">
+              <feImage href={`${ASSET}/glass-map.png`} x="0" y="0" width="1" height="1" preserveAspectRatio="none" result="map" />
+              <feDisplacementMap in="SourceGraphic" in2="map" scale="0.11" xChannelSelector="R" yChannelSelector="G" />
+            </filter>
+          </svg>
           <div className="ph-bg" />
           <HomeScreen />
           <IosCamera />

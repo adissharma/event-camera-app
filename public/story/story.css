@@ -392,10 +392,12 @@ body { overflow: visible !important; margin: 0; }
 .ev-nav { position: absolute; left: 16px; right: 16px; top: 58px; display: flex; justify-content: space-between; color: #fff; }
 .ev-nav span { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: rgba(11, 11, 12, .35); }
 .ev-card { position: relative; margin-top: -34px; border-radius: 32px 32px 0 0; overflow: hidden; text-align: center; }
-/* The glass: the cover blurred under a wash, and solid by the time it reaches the stats. */
-.ev-glass { position: absolute; inset: 0; background: var(--ink); }
+/* The glass: iOS 26's Liquid Glass as the app draws it (EventGlass): the cover shows through a light wash, which turns solid lower down. */
+.ev-glass { position: absolute; inset: 0; background: var(--ink); filter: url(#liquid-glass); }
+.ev-glass img { filter: blur(3px); }
+.glass-defs { position: absolute; width: 0; height: 0; }
 .ev-glass img, .ev-glass > i { position: absolute; left: 0; top: -382px; display: block; width: 100%; height: 540px; object-fit: cover; object-position: 50% 28%; }
-.ev-glass > b { position: absolute; inset: 0; background: linear-gradient(rgba(11, 11, 12, .6) 0, rgba(11, 11, 12, .82) 70px, var(--ink) 150px); }
+.ev-glass > b { position: absolute; inset: 0; background: linear-gradient(rgba(11, 11, 12, .35) 0, rgba(11, 11, 12, .35) 30%, var(--ink) 64%); }
 /* The rim: bright at two points along the top, fading to nothing down the sides. */
 .ev-rim { position: absolute; left: 0; right: 0; top: 0; height: 110px; -webkit-mask-image: linear-gradient(#000 36%, transparent); mask-image: linear-gradient(#000 36%, transparent); }
 .ev-rim::before { content: ''; position: absolute; inset: 0 0 -40px; border-radius: 32px 32px 0 0; padding: 1px 1px 0; background: linear-gradient(90deg, rgba(240, 242, 245, .12) 0, rgba(214, 232, 255, .65) 7%, #fff 13%, rgba(240, 242, 245, .18) 24%, rgba(240, 242, 245, .04) 44%, rgba(214, 232, 255, .25) 64%, rgba(255, 255, 255, .85) 74%, rgba(240, 242, 245, .14) 83%, rgba(225, 237, 255, .62) 95%, rgba(240, 242, 245, .12) 100%); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask-composite: exclude; }
