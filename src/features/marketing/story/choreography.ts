@@ -307,6 +307,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const s2 = section('s2', 0.2, undefined, FROM_HERO);
   tl.to(els.phone, { opacity: 0 }, 0.32, 0.16, 'none');
   camTo(closer(L, m ? PLACES.entrance.x + 120 : PLACES.entrance.x), s2.zoom);
+  // The festoon lights come on as the guests arrive, and stay on all night.
+  tl.to(els.festoonGlow, { glow: 1 }, s2.at + 0.1, 0.6, 'none');
   // The room falls away, and the invitation and the phone have the stage.
   if (spot) tl.to(night, { v: 0.74 }, s2.zoom, ZOOM_FOR, 'inOut');
   const anchor = phonePose(L, 'anchor');
@@ -480,7 +482,6 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(night, { v: 1 }, s4.at, 0.7, 'none');
   tl.to(qrLight, { a: 0 }, s4.at, LEAVE, 'none');
   tl.to(els.sun, { y: SUN_DOWN }, s4.at, 0.6, 'in');
-  tl.to(els.festoonGlow, { glow: 1 }, s4.at + 0.3, 0.6, 'none');
   const aylaLens = { x: PLACES.aylaSeat.x - aylaSize.w / 2 + aylaSize.w * 0.62, y: PLACES.aylaSeat.y - aylaSize.h * 0.9 };
   // The party is the subject, so desktop stays on the whole terrace. A phone moves along to the far end of it.
   const partyShot = m ? shot(L, figure('dad').x + 60, WORLD.h - 1050, 2100) : home;
