@@ -166,7 +166,7 @@ select is(
 );
 
 reset role;
-select private.activate_verified_purchase('apple_app_store', 'txn-discount');
+select private.activate_verified_purchase('apple_app_store', 'txn-discount', p_verified_product_id => 'test.stills_plus_promo_75');
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"eeee0000-0000-0000-0000-000000000004","role":"authenticated"}';
 
