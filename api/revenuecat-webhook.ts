@@ -108,11 +108,20 @@ export default async function handler(request: any, response: any) {
           ? Math.round(event.price_in_purchased_currency * 100)
           : null,
         p_currency: typeof event.currency === 'string' ? event.currency : null,
+        // The database refuses a product that does not buy the recorded plan,
+        // and refuses a missing one.
+        p_verified_product_id: typeof event.product_id === 'string' ? event.product_id : null,
       });
       if (error) {
         // A transaction we have no row for is not our problem to retry.
         if (error.message?.includes('no purchase recorded')) {
           response.status(200).json({ ignored: true, reason: 'unknown_transaction' });
+          return;
+        }
+        // Retrying cannot change what was bought.
+        if (error.message?.includes('product does not grant')) {
+          console.error('[revenuecat-webhook] product mismatch', { transactionId, product: event.product_id });
+          response.status(200).json({ ignored: true, reason: 'product_mismatch' });
           return;
         }
         throw new Error(error.message);

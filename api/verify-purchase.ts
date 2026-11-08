@@ -118,7 +118,7 @@ export default async function handler(request: any, response: any) {
   // own event.
   const { data: purchase } = await supabase
     .from('purchases')
-    .select('id, celebration_id, purchased_by, platform, platform_product_id, status')
+    .select('id, celebration_id, purchased_by, platform, status')
     .eq('platform', platform)
     .eq('platform_transaction_id', transactionId)
     .maybeSingle();
@@ -155,21 +155,22 @@ export default async function handler(request: any, response: any) {
     return;
   }
 
-  // The product RevenueCat confirms must be the product we recorded, or a
-  // cheap transaction could be redeemed against an expensive tier.
-  if (purchase.platform_product_id && match.productId !== purchase.platform_product_id) {
+  // The product comes from RevenueCat, not the purchase row: the row holds
+  // what the client claimed. The database decides whether it buys that plan.
+  const { error: activateError } = await supabase.rpc('activate_verified_purchase', {
+    p_platform: platform,
+    p_platform_transaction_id: transactionId,
+    p_verified_product_id: match.productId,
+  });
+
+  if (activateError?.message?.includes('product does not grant')) {
     console.error('[verify-purchase] product mismatch', {
-      recorded: purchase.platform_product_id,
+      purchase: purchase.id,
       verified: match.productId,
     });
     response.status(409).json({ error: 'product_mismatch' });
     return;
   }
-
-  const { error: activateError } = await supabase.rpc('activate_verified_purchase', {
-    p_platform: platform,
-    p_platform_transaction_id: transactionId,
-  });
 
   if (activateError) {
     console.error('[verify-purchase] activation', activateError.message);
