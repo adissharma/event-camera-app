@@ -121,3 +121,40 @@ describe('what the upgrade screen promises', () => {
     expect(upgradeSummary(stories, plus)).toContain(' and ');
   });
 });
+
+describe('the free package', () => {
+  const free = entitlementsForPlanKey('guests_5');
+
+  it('gives each guest ten photos and one video', () => {
+    expect(free.photoAllowance).toBe(10);
+    expect(free.videosPerGuest).toBe(1);
+    expect(free.has('video')).toBe(true);
+    expect(free.has('unlimitedVideos')).toBe(false);
+  });
+
+  it('includes challenges and the guestbook, but not guests recording on it', () => {
+    expect(free.has('challenges')).toBe(true);
+    expect(free.has('guestbook')).toBe(true);
+    expect(free.has('guestbookMessages')).toBe(false);
+  });
+
+  it('leaves the paid packages below Stills+ as they were', () => {
+    for (const key of ['guests_25', 'guests_100']) {
+      const paid = entitlementsForPlanKey(key);
+      expect(paid.has('video')).toBe(false);
+      expect(paid.videosPerGuest).toBe(0);
+      expect(paid.has('guestbook')).toBe(false);
+      expect(paid.has('challenges')).toBe(false);
+    }
+  });
+
+  it('sells guestbook messages and more videos as the step up', () => {
+    const freePlan = free.plan!;
+    expect(upgradesForFeature(freePlan, 'guestbookMessages').map((p) => p.id)).toEqual(['stories_plus']);
+    expect(upgradeGains(freePlan, plus)).toEqual(
+      expect.arrayContaining(['unlimited videos', 'guestbook messages']),
+    );
+    expect(upgradeGains(freePlan, plus)).not.toContain('guestbook');
+    expect(upgradeGains(freePlan, plus)).not.toContain('challenges');
+  });
+});

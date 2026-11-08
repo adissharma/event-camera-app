@@ -1,0 +1,79 @@
+import { ART_SIZES } from './art-manifest';
+
+/**
+ * Where everything stands on the terrace, in the panorama's own pixels (3840×1440).
+ *
+ * `x` is a figure's centre, `y` the line its feet stand on, and `h` its height.
+ * Everyone stays put; the camera moves over them.
+ */
+
+export const WORLD = { w: 3840, h: 1440 };
+
+export interface FigureDef {
+  id: string;
+  frames: string[];
+  x: number;
+  y: number;
+  h: number;
+  flip?: boolean;
+  /** Spot the guest's phone sits at, relative to the figure's box (0 to 1). */
+  lens?: [number, number];
+}
+
+/**
+ * Everyone at the party, on the terrace from the first frame to the morning. Nobody comes and
+ * goes: the light and the camera pick out whoever each part of the story is about. Laid out
+ * left to right so no two drawings overlap.
+ */
+export const CAST = ['girlDog', 'auntie', 'guestVoice', 'hug', 'easelCrowd', 'ayla', 'dareCrew', 'singalong', 'dad', 'cake'];
+
+/** The two that aren't there at the start: the QR easel the crowd turns into, and the morning after. */
+export const LATE = ['easelQr', 'morning'];
+
+export const FIGURES: FigureDef[] = [
+  { id: 'girlDog', frames: ['girl-dog'], x: 470, y: 1360, h: 280 },
+  { id: 'auntie', frames: ['shooter-auntie'], x: 770, y: 1415, h: 470, lens: [0.7, 0.28] },
+  { id: 'guestVoice', frames: ['guest-voice'], x: 1010, y: 1405, h: 480 },
+  { id: 'hug', frames: ['hug'], x: 1255, y: 1300, h: 450 },
+  { id: 'easelCrowd', frames: ['easel-crowd'], x: 1755, y: 1265, h: 520 },
+  { id: 'easelQr', frames: ['easel-sign'], x: 1765, y: 1260, h: 540 },
+  { id: 'ayla', frames: ['ayla-shoot'], x: 2245, y: 1220, h: 450, lens: [0.62, 0.1] },
+  { id: 'dareCrew', frames: ['dare-crew'], x: 2610, y: 1435, h: 500, lens: [0.5, 0.2] },
+  { id: 'singalong', frames: ['singalong'], x: 3045, y: 1150, h: 350 },
+  { id: 'dad', frames: ['dad-a', 'dad-b'], x: 3345, y: 1200, h: 470, flip: true },
+  { id: 'cake', frames: ['cake'], x: 3650, y: 1320, h: 470 },
+  { id: 'morning', frames: ['morning-after'], x: 1640, y: 1340, h: 520 },
+];
+
+export const figure = (id: string) => FIGURES.find((f) => f.id === id)!;
+
+export function figureSize(def: FigureDef): { w: number; h: number } {
+  const size = ART_SIZES[def.frames[0]] ?? { w: 2, h: 3 };
+  return { w: (def.h * size.w) / size.h, h: def.h };
+}
+
+/** The sign that lights up on Table 7, laid over the tablecloth in the drawing. */
+export const TABLE7 = { x: 1710, y: 950 };
+
+export const PLACES = {
+  entrance: { x: 300, y: 900 },
+  welcomeTable: { x: 200, y: 900 },
+  table7: TABLE7,
+  aylaStart: { x: 1500, y: 1400 },
+  aylaSeat: { x: 2245, y: 1220 },
+};
+
+/** The sun's box, behind the cypress trees, and how far it drops to set. */
+export const SUN = { x: 2200, y: 70, d: 720 };
+export const SUN_DOWN = 1000;
+/** Where the sun's centre comes back up the next morning, on the other side. */
+export const DAWN_X = { wide: 420, narrow: 2000 };
+
+/** Festoon spans: each wire hangs between the terrace's stone piers. */
+export const FESTOON: { x0: number; y0: number; x1: number; y1: number; sag: number }[] = [
+  { x0: -40, y0: 470, x1: 816, y1: 470, sag: 100 },
+  { x0: 816, y0: 470, x1: 1810, y1: 470, sag: 120 },
+  { x0: 1810, y0: 470, x1: 2640, y1: 470, sag: 110 },
+  { x0: 2640, y0: 470, x1: 3780, y1: 470, sag: 130 },
+  { x0: 3780, y0: 470, x1: 3880, y1: 470, sag: 16 },
+];

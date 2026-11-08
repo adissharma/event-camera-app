@@ -8,6 +8,12 @@ import { CentredState, PORTAL_CSS } from './ui';
 const SIGN_IN_PATH = '/host/sign-in';
 
 /**
+ * Pages a signed-out visitor may see. Creating an event asks for an account at
+ * the end, once the host has something worth saving, not at the door.
+ */
+const PUBLIC_PATHS = new Set([SIGN_IN_PATH, '/host/new']);
+
+/**
  * The host web portal's root: the one gate between the public web and every
  * `/host` page. Guests never come through here; their routes are `/j`, `/e` and
  * `/celebration`, and they keep working with no account at all.
@@ -24,9 +30,15 @@ export default function HostPortalLayout() {
   const pathname = usePathname();
 
   let content;
-  if (isRestoring) {
+  if (PUBLIC_PATHS.has(pathname)) {
+    // Rendered straight away, restoring or not. Both pages cope with a
+    // signed-out visitor, and swapping them for the spinner unmounts the
+    // child navigator — on a fresh load that collapsed the route to `/host`,
+    // which the gate below then sent to sign-in.
+    content = <Slot />;
+  } else if (isRestoring) {
     content = <CentredState busy />;
-  } else if (!isSignedIn && pathname !== SIGN_IN_PATH) {
+  } else if (!isSignedIn && !PUBLIC_PATHS.has(pathname)) {
     content = <Redirect href={SIGN_IN_PATH} />;
   } else {
     content = <Slot />;

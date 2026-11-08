@@ -1,10 +1,12 @@
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import * as WebBrowser from 'expo-web-browser';
 import * as Crypto from 'expo-crypto';
-import { makeRedirectUri } from 'expo-auth-session';
+import * as AppleAuth from 'expo-apple-authentication';
 
 import { requireSupabase, supabase } from '@/lib/supabase/client';
+import { captureException, captureMessage } from '@/lib/monitoring';
 import type {
   AuthErrorCode,
   AuthProvider,
@@ -14,6 +16,27 @@ import type {
 
 // Complete any pending web browser auth sessions on web/mobile
 WebBrowser.maybeCompleteAuthSession();
+
+/**
+ * Session tokens live in the Keychain (see `src/lib/supabase/client.ts`),
+ * which iOS does NOT clear when an app is deleted — so a real fresh install
+ * on a device that has run this app before silently restores the previous
+ * owner's session. AsyncStorage, unlike the Keychain, IS cleared on
+ * uninstall, so its absence is a reliable "this install has never launched
+ * before" signal. Only relevant in release builds: dev clients get reinstalled
+ * on every native rebuild and relying on the Keychain there to skip
+ * re-authenticating is the whole point of that persistence.
+ */
+const FRESH_INSTALL_FLAG = 'stills.hasLaunchedBefore';
+
+async function clearStaleKeychainSessionOnFreshInstall(): Promise<void> {
+  if (__DEV__ || !supabase) return;
+  const hasLaunchedBefore = await AsyncStorage.getItem(FRESH_INSTALL_FLAG);
+  if (hasLaunchedBefore === null) {
+    await supabase.auth.signOut();
+    await AsyncStorage.setItem(FRESH_INSTALL_FLAG, '1');
+  }
+}
 
 function toSession(session: Session | null): AuthSession | null {
   if (!session?.user) return null;
@@ -73,6 +96,18 @@ function classify(error: unknown): { code: AuthErrorCode; message: string } {
       message: 'Too many attempts. Wait a minute and try again.',
     };
   }
+  if (
+    raw.includes('network request failed') ||
+    raw.includes('failed to fetch') ||
+    raw.includes('fetch failed') ||
+    raw.includes('networkerror') ||
+    raw.includes('timeout')
+  ) {
+    return {
+      code: 'network',
+      message: 'We could not reach the sign-in service. Check your connection and try again.',
+    };
+  }
   if (raw.includes('expired')) {
     return { code: 'expired_code', message: 'That code has expired. Request a new one.' };
   }
@@ -81,6 +116,25 @@ function classify(error: unknown): { code: AuthErrorCode; message: string } {
   }
   if (raw.includes('email') && raw.includes('invalid')) {
     return { code: 'invalid_email', message: 'That email address does not look right.' };
+  }
+  if (
+    raw.includes('email address not authorized') ||
+    raw.includes('email not authorized')
+  ) {
+    return {
+      code: 'provider_error',
+      message: 'This project is not allowed to email that address yet. Configure a custom SMTP provider in Supabase Auth to send sign-in codes to guests.',
+    };
+  }
+  if (
+    raw.includes('error sending magic link email') ||
+    raw.includes('error sending email') ||
+    raw.includes('failed to send email')
+  ) {
+    return {
+      code: 'provider_error',
+      message: 'Supabase could not send your sign-in email. Check Authentication → Email SMTP settings and Auth logs in your Supabase project.',
+    };
   }
   if (
     raw.includes('unsupported provider') ||
@@ -138,6 +192,13 @@ function parseUrlParams(url: string): Record<string, string> {
  * the host arrives where they were. Must be in the Supabase project's redirect
  * allowlist; a URL that is not falls back to the project's Site URL.
  */
+/**
+ * Must match an entry in Supabase's Redirect URLs exactly. Anything else, even
+ * the bare `eventcamera://`, sends the browser to the Site URL instead of back
+ * to the app, in development and release alike.
+ */
+const NATIVE_OAUTH_RETURN_URL = 'eventcamera://auth/callback';
+
 function webOAuthReturnUrl(): string {
   return `${window.location.origin}${window.location.pathname}`;
 }
@@ -165,16 +226,31 @@ async function repairWorkspaceIfNeeded() {
 export const supabaseAuthProvider: AuthProvider = {
   async requestCode(email) {
     if (!supabase) return notConfigured;
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          shouldCreateUser: true,
+        },
+      });
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim().toLowerCase(),
-      options: {
-        shouldCreateUser: true,
-      },
-    });
-
-    if (error) return { ok: false, error: classify(error) };
-    return { ok: true, value: undefined };
+      if (error) {
+        const failure = classify(error);
+        captureException(error, { stage: 'email_otp_request' });
+        captureMessage('Email sign in code request failed', 'warning', {
+          stage: 'email_otp_request', code: failure.code,
+        });
+        return { ok: false, error: failure };
+      }
+      return { ok: true, value: undefined };
+    } catch (error) {
+      const failure = classify(error);
+      captureException(error, { stage: 'email_otp_request' });
+      captureMessage('Email sign in code request threw', 'warning', {
+        stage: 'email_otp_request', code: failure.code,
+      });
+      return { ok: false, error: failure };
+    }
   },
 
   async verifyCode(email, code) {
@@ -203,7 +279,6 @@ export const supabaseAuthProvider: AuthProvider = {
   async isAppleAuthAvailable() {
     if (Platform.OS !== 'ios') return false;
     try {
-      const AppleAuth = await import('expo-apple-authentication');
       return await AppleAuth.isAvailableAsync();
     } catch {
       return false;
@@ -213,72 +288,90 @@ export const supabaseAuthProvider: AuthProvider = {
   async signInWithApple() {
     if (!supabase) return notConfigured;
 
+    let stage = 'availability';
     try {
       // 1. Native iOS Apple Sign-In
       if (Platform.OS === 'ios') {
-        const AppleAuth = await import('expo-apple-authentication');
         const isAvailable = await AppleAuth.isAvailableAsync();
 
-        if (isAvailable) {
-          const rawNonce = Crypto.randomUUID();
-          const hashedNonce = await Crypto.digestStringAsync(
-            Crypto.CryptoDigestAlgorithm.SHA256,
-            rawNonce,
-          );
-
-          const credential = await AppleAuth.signInAsync({
-            requestedScopes: [
-              AppleAuth.AppleAuthenticationScope.FULL_NAME,
-              AppleAuth.AppleAuthenticationScope.EMAIL,
-            ],
-            nonce: hashedNonce,
-          });
-
-          if (!credential.identityToken) {
-            return {
-              ok: false,
-              error: { code: 'unknown', message: 'Apple sign-in did not return an identity token.' },
-            };
-          }
-
-          const { data, error } = await supabase.auth.signInWithIdToken({
-            provider: 'apple',
-            token: credential.identityToken,
-            nonce: rawNonce,
-          });
-
-          if (error) return { ok: false, error: classify(error) };
-
-          const session = toSession(data.session);
-          if (!session) {
-            return {
-              ok: false,
-              error: { code: 'unknown', message: 'Signed in with Apple, but no session returned.' },
-            };
-          }
-
-          // Apple provides this only on the initial native authorisation.
-          // Keep the first name as Stories.' display name and persist it.
-          const givenName = credential.fullName?.givenName ?? '';
-          if (givenName && data.session?.user) {
-            try {
-              await supabase.auth.updateUser({ data: { display_name: givenName } });
-              await supabase.from('profiles').update({ display_name: givenName }).eq('id', data.session.user.id);
-              session.user.displayName = givenName;
-            } catch {
-              // Ignore profile update error
-            }
-          }
-
-          await repairWorkspaceIfNeeded();
-          return { ok: true, value: session };
+        if (!isAvailable) {
+          return {
+            ok: false,
+            error: {
+              code: 'provider_error',
+              message: 'Apple sign in is unavailable on this device. Please try again later.',
+            },
+          };
         }
+
+        const rawNonce = Crypto.randomUUID();
+        const hashedNonce = await Crypto.digestStringAsync(
+          Crypto.CryptoDigestAlgorithm.SHA256,
+          rawNonce,
+        );
+
+        stage = 'apple_sheet';
+        captureMessage('Apple sign in started', 'info', { stage });
+        const credential = await AppleAuth.signInAsync({
+          requestedScopes: [
+            AppleAuth.AppleAuthenticationScope.FULL_NAME,
+            AppleAuth.AppleAuthenticationScope.EMAIL,
+          ],
+          nonce: hashedNonce,
+        });
+
+        if (!credential.identityToken) {
+          return {
+            ok: false,
+            error: { code: 'unknown', message: 'Apple sign-in did not return an identity token.' },
+          };
+        }
+
+        stage = 'token_exchange';
+        captureMessage('Apple sign in continued', 'info', { stage });
+        const { data, error } = await supabase.auth.signInWithIdToken({
+          provider: 'apple',
+          token: credential.identityToken,
+          nonce: rawNonce,
+        });
+
+        if (error) {
+          const failure = classify(error);
+          captureException(error, { stage });
+          captureMessage('Apple sign in failed', 'warning', { stage, code: failure.code });
+          return { ok: false, error: failure };
+        }
+
+        const session = toSession(data.session);
+        if (!session) {
+          return {
+            ok: false,
+            error: { code: 'unknown', message: 'Signed in with Apple, but no session returned.' },
+          };
+        }
+
+        // Apple provides this only on the initial native authorisation.
+        // Keep the first name as Stories.' display name and persist it.
+        const givenName = credential.fullName?.givenName ?? '';
+        if (givenName && data.session?.user) {
+          try {
+            await supabase.auth.updateUser({ data: { display_name: givenName } });
+            await supabase.from('profiles').update({ display_name: givenName }).eq('id', data.session.user.id);
+            session.user.displayName = givenName;
+          } catch {
+            // Ignore profile update error
+          }
+        }
+
+        await repairWorkspaceIfNeeded();
+        captureMessage('Apple sign in complete', 'info', { stage: 'complete' });
+        return { ok: true, value: session };
       }
 
       // 2. Web or Non-iOS OAuth
       const redirectUri = Platform.OS === 'web' && typeof window !== 'undefined'
         ? webOAuthReturnUrl()
-        : makeRedirectUri({ scheme: 'eventcamera' });
+        : NATIVE_OAUTH_RETURN_URL;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'apple',
@@ -326,9 +419,26 @@ export const supabaseAuthProvider: AuthProvider = {
       const session = toSession(currentSession.session);
       if (session) return { ok: true, value: session };
 
-      return { ok: true, value: { user: { id: '', email: null, displayName: null }, expiresAt: null } };
+      return {
+        ok: false,
+        error: {
+          code: 'provider_error',
+          message: 'Apple sign in did not complete. Please try again.',
+        },
+      };
     } catch (e) {
-      return { ok: false, error: classify(e) };
+      const failure = classify(e);
+      if (failure.code !== 'cancelled') captureException(e, { stage });
+      captureMessage('Apple sign in failed', 'warning', { stage, code: failure.code });
+      return {
+        ok: false,
+        error: stage === 'apple_sheet' && failure.code === 'unknown'
+          ? {
+              code: 'provider_error',
+              message: 'Apple sign in could not start. Check your Apple Account in Settings, then try again.',
+            }
+          : failure,
+      };
     }
   },
 
@@ -338,7 +448,7 @@ export const supabaseAuthProvider: AuthProvider = {
     try {
       const redirectUri = Platform.OS === 'web' && typeof window !== 'undefined'
         ? webOAuthReturnUrl()
-        : makeRedirectUri({ scheme: 'eventcamera' });
+        : NATIVE_OAUTH_RETURN_URL;
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -398,6 +508,7 @@ export const supabaseAuthProvider: AuthProvider = {
 
   async restoreSession() {
     if (!supabase) return null;
+    await clearStaleKeychainSessionOnFreshInstall();
     const { data } = await supabase.auth.getSession();
     return toSession(data.session);
   },

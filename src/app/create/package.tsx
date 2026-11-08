@@ -4,9 +4,11 @@ import {
   Animated,
   Easing,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   StyleSheet,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
@@ -21,6 +23,7 @@ import { AppText } from '@/components/ui/text';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { useCoverSource } from '@/features/celebrations/cover-source';
 import { publishDraft, PublicationError } from '@/services/publication';
+import { checkPromoCode, type PromoCodeTerms } from '@/services/promo-codes';
 import { setPublicationResult } from '@/features/celebrations/creation/publication-result';
 import { celebrationKeys } from '@/services/celebrations';
 import {
@@ -57,7 +60,10 @@ import {
   type PaywallPlan,
   type PaywallPlanId,
 } from '@/features/payments/plan-catalogue';
-import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design';
+import { useAuth } from '@/features/auth/context';
+import { SignInSheet } from '@/features/auth/sign-in-sheet';
+import { colours, fontFamilies, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design';
+import { getPaymentProvider } from '@/features/payments';
 
 /**
  * The paywall hero is exactly as tall as the event screen's hero.
@@ -75,6 +81,7 @@ import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design
  * than tighten, so on a short device the hero yields instead.
  */
 const MIN_SHEET_HEIGHT = 396;
+const SHORT_SCREEN_HEIGHT = 700;
 
 /** How far the sheet rides up over the photograph. */
 const SHEET_OVERLAP = 26;
@@ -116,6 +123,15 @@ const CROSS_GREY = 'rgba(255, 255, 255, 0.34)';
 const FEATURE_OFF_TEXT = 'rgba(255, 255, 255, 0.46)';
 
 const FEATURE_FADE_MS = 190;
+const PROMO_SHEET_DELAY_MS = 450;
+
+type AppliedPromo = PromoCodeTerms & { code: string };
+
+/** What a plan costs with the code, or null if the code doesn't cover it. */
+function promoPriceFor(promo: AppliedPromo | null, plan: PaywallPlan): string | null {
+  if (!promo || (promo.planKey && promo.planKey !== plan.catalogueKey)) return null;
+  return promo.discountedPriceLabel ?? 'Free';
+}
 
 function TickIcon({ premium = false, size = 18 }: { premium?: boolean; size?: number }) {
   return (
@@ -223,14 +239,18 @@ function HeroFeatures({
   }, [plan, shown.id, opacity]);
 
   const rows = planFeatureRows(shown);
+  // On the shortest phones the sheet takes the room these need, and they would
+  // slide behind it.
+  const { height: screenHeight } = useWindowDimensions();
+  const rowGap = screenHeight < SHORT_SCREEN_HEIGHT ? 0 : 8;
 
   return (
-    <Animated.View style={{ opacity, gap: 8 }}>
+    <Animated.View style={{ opacity, gap: rowGap }}>
       {rows.map((row, index) => {
         // Each row's own window inside the single 0→1 sweep, derived from the
         // published step and fade rather than from a fraction picked by eye —
         // so changing either timing changes the sequence and nothing has to be
-        // recalculated here. Row 0 opens immediately; row 4 closes exactly as
+        // recalculated here. The first row opens immediately; the last closes exactly as
         // the driver lands.
         const step = REVEAL_TIMINGS.ENTITLEMENT_STAGGER_STEP;
         const fade = REVEAL_TIMINGS.ENTITLEMENT_FADE_DURATION;
@@ -284,9 +304,47 @@ export default function PackageScreen() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [freeConfirmVisible, setFreeConfirmVisible] = useState(false);
+  const [promoSheetVisible, setPromoSheetVisible] = useState(false);
+  const [promoInput, setPromoInput] = useState('');
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [isCheckingPromo, setIsCheckingPromo] = useState(false);
+  /** A code the server has accepted, redeemed when the event publishes. */
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [signInForPromo, setSignInForPromo] = useState(false);
+
+  /**
+   * What the store will charge this customer, by plan key. Catalogue prices
+   * show until these arrive, and wherever there is no real store.
+   */
+  const [storePrices, setStorePrices] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const products = await getPaymentProvider().getProducts(
+          PAID_PAYWALL_PLANS.map((plan) => plan.catalogueKey),
+        );
+        if (cancelled) return;
+        setStorePrices(
+          Object.fromEntries(
+            products.flatMap((product) =>
+              product.priceLabel ? [[product.planKey, product.priceLabel]] : [],
+            ),
+          ),
+        );
+      } catch {
+        // The catalogue prices stay on screen.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const selectedPlan =
     getPaywallPlan(selectedId) ?? PAID_PAYWALL_PLANS[PAID_PAYWALL_PLANS.length - 1]!;
+  const selectedPromoPrice = promoPriceFor(appliedPromo, selectedPlan);
+  const continueLabel = selectedPromoPrice === 'Free' ? 'Create event' : 'Continue';
 
   // The hero describes the selected plan, so a plan is only truly selected
   // once the draft agrees — this keeps `draft.planKey` the single source of
@@ -372,10 +430,10 @@ export default function PackageScreen() {
    */
   const pageIn = useRef(new Animated.Value(settled ? 1 : 0)).current;
   /**
-   * The panel over everything below the hero: down for the preview, back up
-   * for the transition into pricing.
+   * The panel over everything below the hero, which only rises for the
+   * transition into pricing.
    */
-  const lowerMaskIn = useRef(new Animated.Value(1)).current;
+  const lowerMaskIn = useRef(new Animated.Value(settled ? 1 : 0)).current;
   /**
    * The cover's gradient direction. Split from `toPaywall` — which still
    * drives the title's travel — precisely so the two can be sequenced apart:
@@ -447,8 +505,6 @@ export default function PackageScreen() {
   // Until the event page has been laid out — and on a repeat visit, where it
   // is never mounted — the title simply starts where it will finish, so the
   // transition degrades to a fade rather than to a jump.
-  const titleLeft = galleryTitleRect?.x ?? HERO_GUTTER;
-  const titleWidth = galleryTitleRect?.width ?? undefined;
 
   /**
    * The travel, as a distance rather than as two layouts.
@@ -493,44 +549,34 @@ export default function PackageScreen() {
       });
 
     if (stage === 'ready') {
-      // The event page arrives whole, but masked below the hero — so what the
-      // host sees is their cover and their title, which is the beat this stage
-      // is for. The mask lifts at `preview`.
+      // The event page arrives whole: cover, title and gallery together.
       timing(pageIn, 1, REVEAL_TIMINGS.READY_REVEAL_DURATION).start();
       return;
     }
 
     if (stage === 'preview') {
-      const content = timing(lowerMaskIn, 0, REVEAL_TIMINGS.PREVIEW_REVEAL_DURATION);
-
       // Under reduce-motion the strip stays put. A repeating horizontal
       // translation is precisely the pattern that triggers people, and this
       // one is decoration — the strip is still there and still scrollable
       // without it.
-      if (reveal.reduceMotion) {
-        content.start();
-        return;
-      }
+      if (reveal.reduceMotion) return;
 
-      // Once the gallery has finished assembling, the strip slides and comes
-      // back to show it carries more than fits. Sequenced off the same clock
-      // as everything else, so it is over before the fade-out begins rather
-      // than being interrupted by it.
-      Animated.parallel([
-        content,
-        Animated.sequence([
-          Animated.delay(
-            reveal.ms(REVEAL_TIMINGS.PREVIEW_REVEAL_DURATION + REVEAL_TIMINGS.CHIP_NUDGE_DELAY),
-          ),
-          ...REVEAL_TIMINGS.CHIP_NUDGE_STEPS.map(([fraction, duration]) =>
-            Animated.timing(chipNudge, {
-              toValue: REVEAL_TIMINGS.CHIP_NUDGE_TRAVEL * fraction,
-              duration: reveal.ms(duration),
-              easing: Easing.bezier(0.4, 0, 0.2, 1),
-              useNativeDriver: true,
-            }),
-          ),
-        ]),
+      // Once the host has had a moment with the page, the strip slides and
+      // comes back to show it carries more than fits. Sequenced off the same
+      // clock as everything else, so it is over before the fade-out begins
+      // rather than being interrupted by it.
+      Animated.sequence([
+        Animated.delay(
+          reveal.ms(REVEAL_TIMINGS.PREVIEW_REVEAL_DURATION + REVEAL_TIMINGS.CHIP_NUDGE_DELAY),
+        ),
+        ...REVEAL_TIMINGS.CHIP_NUDGE_STEPS.map(([fraction, duration]) =>
+          Animated.timing(chipNudge, {
+            toValue: REVEAL_TIMINGS.CHIP_NUDGE_TRAVEL * fraction,
+            duration: reveal.ms(duration),
+            easing: Easing.bezier(0.4, 0, 0.2, 1),
+            useNativeDriver: true,
+          }),
+        ),
       ]).start();
       return;
     }
@@ -595,7 +641,7 @@ export default function PackageScreen() {
         Animated.timing(featuresIn, {
           toValue: 1,
           duration: reveal.ms(
-            T.ENTITLEMENT_FADE_DURATION + T.ENTITLEMENT_STAGGER_STEP * 4,
+            T.ENTITLEMENT_FADE_DURATION + T.ENTITLEMENT_STAGGER_STEP * 5,
           ),
           delay: reveal.ms(coordinated + T.ENTITLEMENT_START_OFFSET),
           easing: Easing.linear,
@@ -621,17 +667,16 @@ export default function PackageScreen() {
   /**
    * What the event page hands the reveal control of.
    *
-   * Note what is *not* here: the cover. The page's opacity is `pageIn`, which
-   * only ever runs 0 → 1 at `ready` and then stays there — so once the
+   * Note what is *not* here: the cover. The mask over the page lifts as `pageIn`
+   * runs 0 → 1 at `ready` and then stays there — so once the
    * photograph is on screen it is never faded, moved, scaled or recropped
    * again. Everything that changes on the way to the paywall changes *around*
    * it: the horizontal gradient arrives, and the chrome — nav row and the
    * content card over the foot of the cover — leaves so the purchase copy can
    * take its place.
    *
-   * The card's contents below the title follow the lower mask, so `ready`
-   * shows the cover and the event's name alone even though the card begins
-   * above the mask's edge.
+   * The card's contents below the title follow the lower mask, so they leave
+   * with the grid even though the card begins above the mask's edge.
    */
   const previewOverlays = useMemo(
     () => ({
@@ -639,6 +684,14 @@ export default function PackageScreen() {
       detailsOpacity: lowerMaskIn.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
     }),
     [galleryOut, lowerMaskIn],
+  );
+
+  const isPageVisible = stage !== 'creating';
+  const isGlassLeaving = stage === 'transitioningToPaywall' || stage === 'paywall';
+  const glassLeaveMs = reveal.ms(REVEAL_TIMINGS.GALLERY_FADE_OUT_DURATION);
+  const pageMaskOpacity = useMemo(
+    () => pageIn.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+    [pageIn],
   );
 
   const previewDetail = useMemo(() => buildPreviewDetail(draft), [draft]);
@@ -652,6 +705,9 @@ export default function PackageScreen() {
       challenges: PREVIEW_CHALLENGES.map((challenge) => ({ ...challenge })),
       overlays: previewOverlays,
       chipStripNudge: chipNudge,
+      isPageVisible,
+      isGlassLeaving,
+      glassLeaveMs,
       onHeroIdentityLayout: ({ x, y, width, height }: { x: number; y: number; width: number; height: number }) =>
         setGalleryTitleRect((current) =>
           current
@@ -663,7 +719,7 @@ export default function PackageScreen() {
             : { x, y, width, height },
         ),
     }),
-    [previewPhotos, previewOverlays, chipNudge],
+    [previewPhotos, previewOverlays, chipNudge, isPageVisible, isGlassLeaving, glassLeaveMs],
   );
 
   /**
@@ -695,6 +751,10 @@ export default function PackageScreen() {
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
+  // An event only needs an owner once it exists on the server, so this is where
+  // the host is asked to sign in: with the plan chosen and the purchase next.
+  const { isSignedIn } = useAuth();
+  const [signInPlan, setSignInPlan] = useState<PaywallPlan | null>(null);
   const selectPlan = useCallback(
     (id: PaywallPlanId) => {
       if (!isInteractive) return;
@@ -709,7 +769,19 @@ export default function PackageScreen() {
       if (isPublishing) return;
       setIsPublishing(true);
       setPublishError(null);
+      const promo = promoPriceFor(appliedPromo, plan) ? appliedPromo : null;
       try {
+        // A discount is charged before it is redeemed, so a code revoked since
+        // it was applied has to be caught before the host pays.
+        if (promo?.discountedProductId) {
+          const recheck = await checkPromoCode(promo.code);
+          if (!recheck.usable) {
+            setAppliedPromo(null);
+            setPublishError(recheck.message);
+            return;
+          }
+        }
+
         // The purchase itself lives in `publishDraft`, which walks the
         // existing draft → cover → purchase → publish sequence. The free tier
         // is skipped at the purchase stage by `isFreePlanKey`, so this call is
@@ -720,6 +792,7 @@ export default function PackageScreen() {
           // retrying a declined payment does not leave a trail of events.
           draft.serverCelebrationId ?? undefined,
           (celebrationId) => update({ serverCelebrationId: celebrationId }),
+          promo ?? undefined,
         );
         setPublicationResult(result);
         await queryClient.invalidateQueries({ queryKey: celebrationKeys.all });
@@ -729,6 +802,10 @@ export default function PackageScreen() {
         // A host who tapped Cancel on the store sheet did not hit a problem
         // and must not be told they did.
         if (failure?.cancelled) return;
+        // The server refused the code, so the prices must stop saying Free.
+        if (failure?.stage === 'purchase' && promo && !promo.discountedProductId) {
+          setAppliedPromo(null);
+        }
         setPublishError(
           failure?.stage === 'purchase'
             ? // The purchase-stage messages are already written for the host,
@@ -745,7 +822,7 @@ export default function PackageScreen() {
         setIsPublishing(false);
       }
     },
-    [draft, isPublishing, queryClient, router],
+    [appliedPromo, draft, isPublishing, queryClient, router],
   );
 
   const chooseFree = useCallback(() => {
@@ -754,18 +831,63 @@ export default function PackageScreen() {
     setFreeConfirmVisible(true);
   }, [isInteractive]);
 
+  const publishSignedIn = useCallback(
+    (plan: PaywallPlan) => {
+      if (isSignedIn) void publish(plan);
+      else setSignInPlan(plan);
+    },
+    [isSignedIn, publish],
+  );
+
   const continueWithFree = useCallback(() => {
     setFreeConfirmVisible(false);
     setSelectedId(FREE_PAYWALL_PLAN.id);
     void Haptics.selectionAsync().catch(() => {});
-    void publish(FREE_PAYWALL_PLAN);
-  }, [publish]);
+    publishSignedIn(FREE_PAYWALL_PLAN);
+  }, [publishSignedIn]);
 
   const upgradeToUnlimited = useCallback(() => {
     setFreeConfirmVisible(false);
     setSelectedId(RECOMMENDED_PLAN_ID);
     void Haptics.selectionAsync().catch(() => {});
   }, []);
+
+  // Checking a code needs an account, so wrong guesses can be counted per host.
+  const openPromoSheet = useCallback(() => {
+    if (!isInteractive) return;
+    void Haptics.selectionAsync().catch(() => {});
+    if (isSignedIn) setPromoSheetVisible(true);
+    else setSignInForPromo(true);
+  }, [isInteractive, isSignedIn]);
+
+  const applyPromo = useCallback(async () => {
+    const code = promoInput.trim();
+    if (!code || isCheckingPromo) return;
+    setIsCheckingPromo(true);
+    setPromoError(null);
+    try {
+      const result = await checkPromoCode(code);
+      if (!result.usable) {
+        setPromoError(result.message);
+        return;
+      }
+      setAppliedPromo({ ...result.terms, code: code.toUpperCase() });
+      setPublishError(null);
+      setPromoSheetVisible(false);
+      setPromoInput('');
+      // Land on the package the code is for. Any code is for a paid package,
+      // so Free cannot stay selected under it either.
+      const codePlan = planForCatalogueKey(result.terms.planKey);
+      setSelectedId((current) =>
+        codePlan?.id ?? (current === FREE_PAYWALL_PLAN.id ? RECOMMENDED_PLAN_ID : current),
+      );
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch {
+      setPromoError('We could not check that code. Check your connection and try again.');
+    } finally {
+      setIsCheckingPromo(false);
+    }
+  }, [promoInput, isCheckingPromo]);
 
   const locked = !isInteractive || isPublishing;
 
@@ -786,16 +908,21 @@ export default function PackageScreen() {
         anywhere. That is what keeps the image *completely* still: nothing can
         drift against it when there is nothing else to drift.
       */}
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: pageIn }]} pointerEvents="none">
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {previewElement}
-      </Animated.View>
+      </View>
+      {/* A mask lifting off the page, not the page fading up: Liquid Glass does not
+          render under a parent whose opacity has been zero. */}
+      <Animated.View
+        style={[S.pageMask, { opacity: pageMaskOpacity }]}
+        pointerEvents="none"
+      />
 
       {/*
         Covers the page below the hero.
 
-        Up before the preview (so `ready` shows the cover and the event's name
-        alone) and up again through the transition (so the grid and chips are
-        gone before the pricing sheet slides over where they were). One opaque
+        Rises through the transition, so the grid and chips are gone before the
+        pricing sheet slides over where they were. One opaque
         panel in the page's own background colour, rather than fading a dozen
         components separately — and, importantly, rather than fading the page
         itself, which would take the photograph with it.
@@ -902,6 +1029,8 @@ export default function PackageScreen() {
         <View style={S.cardsColumn}>
           {PAID_PAYWALL_PLANS.map((plan) => {
             const selected = plan.id === selectedId;
+            const promoPrice = promoPriceFor(appliedPromo, plan);
+            const fullPrice = storePrices[plan.catalogueKey] ?? planPriceLabel(plan);
             return (
               <Pressable
                 key={plan.id}
@@ -909,7 +1038,11 @@ export default function PackageScreen() {
                 disabled={locked}
                 accessibilityRole="radio"
                 accessibilityState={{ selected, disabled: locked }}
-                accessibilityLabel={planAccessibilityLabel(plan)}
+                accessibilityLabel={
+                  promoPrice
+                    ? `${planAccessibilityLabel(plan, fullPrice)}. ${promoPrice} with your promo code.`
+                    : planAccessibilityLabel(plan, fullPrice)
+                }
                 style={[
                   S.card,
                   selected && S.cardSelected,
@@ -967,28 +1100,81 @@ export default function PackageScreen() {
                   the serif's old-style figures, set tabular so the three
                   prices align down the column.
                 */}
-                <AppText variant="numericLarge" style={S.cardPrice} numberOfLines={1}>
-                  {planPriceLabel(plan)}
-                </AppText>
+                <View style={S.cardPriceColumn}>
+                  {promoPrice ? (
+                    <AppText variant="bodySmall" style={S.cardPriceWas} numberOfLines={1}>
+                      {fullPrice}
+                    </AppText>
+                  ) : null}
+                  <AppText variant="numericLarge" style={S.cardPrice} numberOfLines={1}>
+                    {promoPrice ?? fullPrice}
+                  </AppText>
+                </View>
               </Pressable>
             );
           })}
         </View>
 
-        <Pressable
-          onPress={chooseFree}
-          disabled={locked}
-          accessibilityRole="button"
-          accessibilityLabel={`Try for free with ${FREE_PAYWALL_PLAN.guestLimit} guests`}
-          // Reads as a link but needs a real target: the row is short text, so
-          // the tappable area is padded out rather than left at the glyph.
-          hitSlop={10}
-          style={S.freeCta}
-        >
-          <AppText variant="labelLarge" style={S.freeCtaText}>
-            Continue free with {FREE_PAYWALL_PLAN.guestLimit} guests
-          </AppText>
-        </Pressable>
+        {/*
+          The two ways of not paying share one quiet row, so neither competes
+          with Continue. Once a code is applied, Free has nothing left to offer
+          and the row becomes the code itself.
+        */}
+        {appliedPromo ? (
+          <View style={S.linkRow}>
+            <View style={S.appliedPromo}>
+              {selectedPromoPrice ? <TickIcon size={15} /> : null}
+              <AppText variant="labelLarge" style={S.linkText} numberOfLines={1}>
+                {selectedPromoPrice
+                  ? `${appliedPromo.code} applied`
+                  : `${appliedPromo.code} is for ${planForCatalogueKey(appliedPromo.planKey)?.displayName} only`}
+              </AppText>
+            </View>
+            <View style={S.linkDivider} />
+            <Pressable
+              onPress={() => setAppliedPromo(null)}
+              disabled={locked}
+              accessibilityRole="button"
+              accessibilityLabel="Remove promo code"
+              hitSlop={10}
+              style={S.linkButton}
+            >
+              <AppText variant="labelLarge" style={S.linkText}>
+                Remove
+              </AppText>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={S.linkRow}>
+            <Pressable
+              onPress={chooseFree}
+              disabled={locked}
+              accessibilityRole="button"
+              accessibilityLabel={`Try for free with ${FREE_PAYWALL_PLAN.guestLimit} guests`}
+              // Reads as a link but needs a real target: the row is short text,
+              // so the tappable area is padded out rather than left at the glyph.
+              hitSlop={10}
+              style={S.linkButton}
+            >
+              <AppText variant="labelLarge" style={[S.linkText, S.linkUnderline]} numberOfLines={1}>
+                Free for {FREE_PAYWALL_PLAN.guestLimit} guests
+              </AppText>
+            </Pressable>
+            <View style={S.linkDivider} />
+            <Pressable
+              onPress={openPromoSheet}
+              disabled={locked}
+              accessibilityRole="button"
+              accessibilityLabel="Add a promo code"
+              hitSlop={10}
+              style={S.linkButton}
+            >
+              <AppText variant="labelLarge" style={[S.linkText, S.linkUnderline]} numberOfLines={1}>
+                Promo code
+              </AppText>
+            </Pressable>
+          </View>
+        )}
 
         {publishError && (
           <AppText variant="bodySmall" tone="error" align="center" style={S.errorText}>
@@ -997,10 +1183,10 @@ export default function PackageScreen() {
         )}
 
         <Pressable
-          onPress={() => void publish(selectedPlan)}
+          onPress={() => publishSignedIn(selectedPlan)}
           disabled={locked}
           accessibilityRole="button"
-          accessibilityLabel="Continue"
+          accessibilityLabel={continueLabel}
           accessibilityState={{ disabled: locked }}
           style={({ pressed }) => [S.continueButton, pressed && !locked && { opacity: 0.86 }]}
         >
@@ -1008,7 +1194,7 @@ export default function PackageScreen() {
             <ActivityIndicator color={INK} />
           ) : (
             <AppText variant="button" style={S.continueLabel}>
-              Continue
+              {continueLabel}
             </AppText>
           )}
         </Pressable>
@@ -1032,8 +1218,11 @@ export default function PackageScreen() {
         style={[
           S.identityLayer,
           {
-            left: titleLeft,
-            width: titleWidth,
+            // The screen's gutter, not the event page's title rect. That block
+            // spans the full width so its title can centre, and this one is
+            // left-aligned, so copying its edges puts the text on the bezel.
+            left: HERO_GUTTER,
+            right: HERO_GUTTER,
             top: titleStartTop,
             opacity: titleIn,
             transform: [
@@ -1107,6 +1296,99 @@ export default function PackageScreen() {
         </Pressable>
       </Animated.View>
 
+      <SignInSheet
+        visible={signInPlan !== null || signInForPromo}
+        reason="publish"
+        onClose={() => {
+          setSignInPlan(null);
+          setSignInForPromo(false);
+        }}
+        onSignedIn={() => {
+          const plan = signInPlan;
+          setSignInPlan(null);
+          if (signInForPromo) {
+            setSignInForPromo(false);
+            // iOS drops a modal presented while another is still sliding away.
+            setTimeout(() => setPromoSheetVisible(true), PROMO_SHEET_DELAY_MS);
+            return;
+          }
+          if (plan) void publish(plan);
+        }}
+      />
+
+      <Modal
+        visible={promoSheetVisible}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setPromoSheetVisible(false)}
+      >
+        <KeyboardAvoidingView behavior="padding" style={S.flex}>
+          <Pressable style={S.modalOverlay} onPress={() => setPromoSheetVisible(false)}>
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              style={[S.confirmSheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}
+            >
+              <View style={S.sheetHandle} />
+              <View style={S.confirmCopy}>
+                <AppText variant="titleLarge" style={S.confirmTitle}>
+                  Add a promo code
+                </AppText>
+                <AppText variant="bodySmall" tone="secondary" style={S.confirmSubtitle}>
+                  Your discount will show on the package it applies to.
+                </AppText>
+              </View>
+
+              <TextInput
+                value={promoInput}
+                onChangeText={(text) => {
+                  setPromoInput(text.toUpperCase());
+                  setPromoError(null);
+                }}
+                onSubmitEditing={() => void applyPromo()}
+                placeholder="Enter code"
+                placeholderTextColor={SUBTITLE_GREY}
+                accessibilityLabel="Promo code"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                autoFocus
+                keyboardAppearance="dark"
+                maxLength={40}
+                returnKeyType="done"
+                selectionColor="#FFFFFF"
+                style={[S.promoInput, promoError ? S.promoInputError : null]}
+              />
+              {promoError ? (
+                <AppText variant="bodySmall" tone="error">
+                  {promoError}
+                </AppText>
+              ) : null}
+
+              <Pressable
+                onPress={() => void applyPromo()}
+                disabled={!promoInput.trim() || isCheckingPromo}
+                accessibilityRole="button"
+                accessibilityLabel="Apply promo code"
+                accessibilityState={{ disabled: !promoInput.trim() || isCheckingPromo }}
+                style={({ pressed }) => [
+                  S.continueButton,
+                  !promoInput.trim() && { opacity: 0.45 },
+                  pressed && { opacity: 0.86 },
+                ]}
+              >
+                {isCheckingPromo ? (
+                  <ActivityIndicator color={INK} />
+                ) : (
+                  <AppText variant="button" style={S.continueLabel}>
+                    Apply
+                  </AppText>
+                )}
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Modal
         visible={freeConfirmVisible}
         animationType="slide"
@@ -1123,9 +1405,6 @@ export default function PackageScreen() {
             <View style={S.confirmCopy}>
               <AppText variant="titleLarge" style={S.confirmTitle}>
                 Continue free?
-              </AppText>
-              <AppText variant="bodySmall" tone="secondary" style={S.confirmSubtitle}>
-                No videos, challenges or guestbook.
               </AppText>
             </View>
 
@@ -1170,6 +1449,15 @@ export default function PackageScreen() {
 
 const S = StyleSheet.create({
   screen: { flex: 1, backgroundColor: INK },
+  flex: { flex: 1 },
+  pageMask: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: INK,
+  },
 
   coverLayer: { position: 'absolute', top: 0, left: 0, right: 0, overflow: 'hidden' },
 
@@ -1278,16 +1566,37 @@ const S = StyleSheet.create({
   cardCopy: { flex: 1, gap: 1 },
   cardName: { color: '#FFFFFF' },
   cardSubtitle: { color: SUBTITLE_GREY },
+  cardPriceColumn: { alignItems: 'flex-end' },
   cardPrice: { color: '#FFFFFF', fontSize: 26, lineHeight: 31 },
+  cardPriceWas: { color: SUBTITLE_GREY, textDecorationLine: 'line-through' },
 
-  freeCta: {
-    alignSelf: 'center',
-    paddingVertical: 13,
-    paddingHorizontal: spacing.md,
-    minHeight: layout.minTouchTarget,
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
+    minHeight: layout.minTouchTarget,
+    marginVertical: 2,
   },
-  freeCtaText: { color: '#FFFFFF', textDecorationLine: 'underline' },
+  linkButton: { minHeight: layout.minTouchTarget, justifyContent: 'center', flexShrink: 1 },
+  linkText: { color: 'rgba(255, 255, 255, 0.78)' },
+  linkUnderline: { textDecorationLine: 'underline' },
+  linkDivider: { width: StyleSheet.hairlineWidth, height: 14, backgroundColor: 'rgba(255, 255, 255, 0.3)' },
+  appliedPromo: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
+
+  promoInput: {
+    minHeight: 54,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    backgroundColor: CARD_BG,
+    color: '#FFFFFF',
+    fontFamily: fontFamilies.textRegular,
+    fontSize: 17,
+    letterSpacing: 1,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  promoInputError: { borderColor: colours.error },
 
   errorText: { marginBottom: 8 },
 

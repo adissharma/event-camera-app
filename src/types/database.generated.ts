@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.15"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -284,6 +279,7 @@ export type Database = {
           created_at: string
           created_by: string
           default_theme_id: string | null
+          delete_after: string | null
           deleted_at: string | null
           description: string | null
           ends_at: string | null
@@ -307,6 +303,7 @@ export type Database = {
           created_at?: string
           created_by: string
           default_theme_id?: string | null
+          delete_after?: string | null
           deleted_at?: string | null
           description?: string | null
           ends_at?: string | null
@@ -330,6 +327,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           default_theme_id?: string | null
+          delete_after?: string | null
           deleted_at?: string | null
           description?: string | null
           ends_at?: string | null
@@ -566,6 +564,35 @@ export type Database = {
           },
         ]
       }
+      event_seating: {
+        Row: {
+          celebration_id: string
+          floorplan_path: string | null
+          guests: Json
+          updated_at: string
+        }
+        Insert: {
+          celebration_id: string
+          floorplan_path?: string | null
+          guests?: Json
+          updated_at?: string
+        }
+        Update: {
+          celebration_id?: string
+          floorplan_path?: string | null
+          guests?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_seating_celebration_id_fkey"
+            columns: ["celebration_id"]
+            isOneToOne: true
+            referencedRelation: "celebrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_sessions: {
         Row: {
           allow_media_from_any_date: boolean
@@ -580,6 +607,9 @@ export type Database = {
           ends_at: string | null
           gallery_visibility: Database["public"]["Enums"]["gallery_visibility"]
           guest_downloads_enabled: boolean
+          guest_limit: number | null
+          host_reveal_at: string | null
+          host_reveal_mode: Database["public"]["Enums"]["reveal_mode"] | null
           id: string
           location_address: string | null
           location_name: string | null
@@ -611,6 +641,9 @@ export type Database = {
           ends_at?: string | null
           gallery_visibility?: Database["public"]["Enums"]["gallery_visibility"]
           guest_downloads_enabled?: boolean
+          guest_limit?: number | null
+          host_reveal_at?: string | null
+          host_reveal_mode?: Database["public"]["Enums"]["reveal_mode"] | null
           id?: string
           location_address?: string | null
           location_name?: string | null
@@ -642,6 +675,9 @@ export type Database = {
           ends_at?: string | null
           gallery_visibility?: Database["public"]["Enums"]["gallery_visibility"]
           guest_downloads_enabled?: boolean
+          guest_limit?: number | null
+          host_reveal_at?: string | null
+          host_reveal_mode?: Database["public"]["Enums"]["reveal_mode"] | null
           id?: string
           location_address?: string | null
           location_name?: string | null
@@ -1481,6 +1517,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      activate_verified_purchase: {
+        Args: {
+          p_currency?: string
+          p_platform: Database["public"]["Enums"]["purchase_platform"]
+          p_platform_transaction_id: string
+          p_price_minor_units?: number
+        }
+        Returns: string
+      }
+      celebration_plan_key: {
+        Args: { p_celebration_id: string }
+        Returns: string
+      }
+      check_promo_code: { Args: { p_code: string }; Returns: Json }
       claim_event_recap_job: {
         Args: { p_lease_seconds?: number; p_worker_id: string }
         Returns: {
@@ -1526,6 +1576,38 @@ export type Database = {
           p_worker_id: string
         }
         Returns: boolean
+      }
+      complete_my_profile: {
+        Args: { p_display_name: string }
+        Returns: {
+          avatar_path: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          onboarding_completed_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "profiles"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      complete_web_checkout: {
+        Args: {
+          p_amount_minor_units: number
+          p_celebration_id: string
+          p_checkout_session_id: string
+          p_currency: string
+          p_plan_key: string
+          p_user_id: string
+        }
+        Returns: {
+          celebration_id: string
+          event_code: string
+          plan_key: string
+        }[]
       }
       create_celebration_with_default_session:
         | {
@@ -1638,6 +1720,7 @@ export type Database = {
         Args: { p_media_item_id: string }
         Returns: Json
       }
+      delete_my_account: { Args: never; Returns: Json }
       enqueue_due_event_recaps: { Args: { p_now?: string }; Returns: number }
       ensure_personal_workspace: { Args: never; Returns: string }
       fail_event_recap_job: {
@@ -1863,9 +1946,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      list_trashed_celebrations: {
+        Args: never
+        Returns: {
+          cover_storage_path: string
+          default_theme_id: string
+          delete_after: string
+          deleted_at: string
+          ends_at: string
+          id: string
+          primary_session: Json
+          public_slug: string
+          starts_at: string
+          status: Database["public"]["Enums"]["celebration_status"]
+          timezone: string
+          title: string
+        }[]
+      }
       mark_event_recap_start_failed: {
         Args: { p_error_message: string; p_event_session_id: string }
         Returns: boolean
+      }
+      move_celebration_to_trash: {
+        Args: { p_celebration_id: string }
+        Returns: {
+          celebration_id: string
+          delete_after: string
+          trashed_at: string
+        }[]
+      }
+      permanently_delete_celebration: {
+        Args: { p_celebration_id: string }
+        Returns: {
+          celebration_id: string
+        }[]
       }
       pin_host_media_item: { Args: { p_media_item_id: string }; Returns: Json }
       publish_celebration: {
@@ -1873,6 +1987,26 @@ export type Database = {
           p_add_on_keys?: string[]
           p_celebration_id: string
           p_plan_key?: string
+          p_platform?: Database["public"]["Enums"]["purchase_platform"]
+          p_platform_product_id?: string
+          p_platform_transaction_id?: string
+        }
+        Returns: Database["public"]["CompositeTypes"]["published_celebration"]
+        SetofOptions: {
+          from: "*"
+          to: "published_celebration"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      publish_celebration_with_promo: {
+        Args: {
+          p_celebration_id: string
+          p_code: string
+          p_plan_key: string
+          p_platform?: Database["public"]["Enums"]["purchase_platform"]
+          p_platform_product_id?: string
+          p_platform_transaction_id?: string
         }
         Returns: Database["public"]["CompositeTypes"]["published_celebration"]
         SetofOptions: {
@@ -1895,6 +2029,28 @@ export type Database = {
             }
             Returns: Json
           }
+      restore_celebration_from_trash: {
+        Args: { p_celebration_id: string }
+        Returns: {
+          celebration_id: string
+        }[]
+      }
+      reverse_purchase: {
+        Args: {
+          p_platform: Database["public"]["Enums"]["purchase_platform"]
+          p_platform_transaction_id: string
+          p_status: Database["public"]["Enums"]["purchase_status"]
+        }
+        Returns: string
+      }
+      search_event_seating_by_code: {
+        Args: { p_event_code: string; p_query: string }
+        Returns: Json
+      }
+      search_guest_seating: {
+        Args: { p_event_code: string; p_guest_token: string; p_query: string }
+        Returns: Json
+      }
       seed_event_challenges_if_empty: {
         Args: { p_celebration_id: string; p_challenges: Json }
         Returns: Json
@@ -1902,6 +2058,16 @@ export type Database = {
       unpin_host_media_item: {
         Args: { p_media_item_id: string }
         Returns: Json
+      }
+      upgrade_celebration_plan: {
+        Args: {
+          p_celebration_id: string
+          p_plan_key: string
+          p_platform?: Database["public"]["Enums"]["purchase_platform"]
+          p_platform_product_id?: string
+          p_platform_transaction_id?: string
+        }
+        Returns: string
       }
       upsert_event_guestbook:
         | {
@@ -1942,6 +2108,20 @@ export type Database = {
               isSetofReturn: false
             }
           }
+      web_checkout_quote: {
+        Args: {
+          p_celebration_id: string
+          p_plan_key: string
+          p_user_id: string
+        }
+        Returns: {
+          currency: string
+          plan_key: string
+          plan_name: string
+          price_minor_units: number
+          title: string
+        }[]
+      }
     }
     Enums: {
       access_link_kind: "guest" | "host_preview" | "cohost_invite"
@@ -2320,3 +2500,4 @@ export const Constants = {
     },
   },
 } as const
+

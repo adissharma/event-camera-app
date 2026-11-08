@@ -22,6 +22,8 @@ export interface PurchaseProduct {
   platformProductId: string;
   priceMinorUnits: number;
   currency: string;
+  /** The price as the store displays it to this customer. Absent without a real store. */
+  priceLabel?: string;
 }
 
 export interface PurchaseReceipt {

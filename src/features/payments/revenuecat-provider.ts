@@ -9,7 +9,7 @@ import Purchases, {
 
 import { REVENUECAT_CONFIG } from '@/config/app-config';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
-import { PAYWALL_PLANS } from './plan-catalogue';
+import { PAYWALL_PLANS, PROMO_STORE_PRODUCTS } from './plan-catalogue';
 import { UPGRADE_PATHS } from './upgrade-catalogue';
 import type { PaymentProvider, PurchaseProduct, PurchaseReceipt } from './types';
 
@@ -35,6 +35,7 @@ const productByPlanKey = new Map<string, string>([
     plan.storeProductId ? [[plan.catalogueKey, plan.storeProductId] as const] : [],
   ),
   ...UPGRADE_PATHS.map((path) => [path.storeProductId, path.storeProductId] as const),
+  ...PROMO_STORE_PRODUCTS.map((promo) => [promo.storeProductId, promo.storeProductId] as const),
 ]);
 
 /**
@@ -49,6 +50,7 @@ const planKeyByProductId = new Map<string, string>([
     plan.storeProductId ? [[plan.storeProductId, plan.catalogueKey] as const] : [],
   ),
   ...UPGRADE_PATHS.map((path) => [path.storeProductId, path.grantsCatalogueKey] as const),
+  ...PROMO_STORE_PRODUCTS.map((promo) => [promo.storeProductId, promo.grantsCatalogueKey] as const),
 ]);
 
 const productCache = new Map<string, PurchasesStoreProduct>();
@@ -144,6 +146,7 @@ function toPurchaseProduct(planKey: string, product: PurchasesStoreProduct): Pur
     platformProductId: product.identifier,
     priceMinorUnits: Math.round(product.price * 100),
     currency: product.currencyCode,
+    priceLabel: product.priceString,
   };
 }
 

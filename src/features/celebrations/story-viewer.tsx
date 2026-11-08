@@ -2,7 +2,7 @@
  * The full-screen story viewer shared by Challenges and the Guestbook.
  *
  * Both features present the same thing: an intro slide that explains the brief,
- * followed by one slide per submission, with tap-to-advance, swipe-down to
+ * followed by one slide per submission, with tap-to-advance, swipe up or down to
  * dismiss, and a per-slide overflow menu. They differ only in their backdrop
  * (Challenges blur a cover photo, the Guestbook is flat black) and their copy,
  * so everything else lives here rather than in two places.
@@ -40,6 +40,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { AppText } from '@/components/ui/text';
 import { CloseIcon } from '@/components/ui/icons';
 import { fontFamilies, radii, spacing } from '@/design';
+import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 
 const ABSOLUTE_FILL = {
   position: 'absolute',
@@ -352,19 +353,22 @@ export function StoryViewer({
   );
 
   const handlePanEvent = (event: any) => {
-    if (event.translationY !== undefined && event.translationY > 0) {
-      dragY.value = event.translationY;
-    }
+    dragY.value = event.nativeEvent.translationY;
   };
 
   const handlePanStateChange = (event: any) => {
     // 5 = END, 3 = FAILED.
     if (event.nativeEvent.state === 5) {
       const { height } = Dimensions.get('window');
-      if (event.nativeEvent.translationY > 60 || event.nativeEvent.velocityY > 1.2) {
+      const direction = swipeDismissDirection(
+        event.nativeEvent.translationY,
+        event.nativeEvent.velocityY,
+        { distance: 60, flickDistance: 12, flickVelocity: 500 },
+      );
+      if (direction !== 0) {
         // Slide the rest of the way out before unmounting, so the story does
         // not vanish from under the finger.
-        dragY.value = withTiming(height, { duration: 200 });
+        dragY.value = withTiming(direction * height, { duration: 200 });
         dismissTimerRef.current = setTimeout(onDismiss, 220);
       } else {
         dragY.value = withSpring(0, { damping: 10, mass: 1, stiffness: 100 });

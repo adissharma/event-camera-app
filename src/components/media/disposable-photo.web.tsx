@@ -36,9 +36,17 @@ export interface DisposablePhotoProps {
  * proper Skia-web support: this file is a safety net, not a substitute.
  */
 export function DisposablePhoto({ source, style, resizeMode = 'cover' }: DisposablePhotoProps) {
+  // Sized explicitly, not only pinned to the edges: react-native-web gives an
+  // Image with no width or height the photo's intrinsic size, so in the 92pt
+  // treatment swatch it drew at full resolution and showed only a dark corner.
   return (
-    <View style={style}>
-      <Image source={source} style={StyleSheet.absoluteFill} resizeMode={resizeMode} />
+    <View style={[style, S.clip]}>
+      <Image source={source} style={[StyleSheet.absoluteFill, S.fill]} resizeMode={resizeMode} />
     </View>
   );
 }
+
+const S = StyleSheet.create({
+  clip: { overflow: 'hidden' },
+  fill: { width: '100%', height: '100%' },
+});

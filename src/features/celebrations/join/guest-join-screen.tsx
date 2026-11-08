@@ -85,16 +85,6 @@ export interface GuestJoinScreenProps {
   onJoin?: () => void;
 
   /**
-   * Replaces the join form, keeping the template's own cover, identity,
-   * typography and spacing exactly as a guest sees them.
-   *
-   * This is what lets the post-publication confirmation reuse the real
-   * template instead of approximating it: the host gets their actual cover,
-   * with "here is your link" where the guest gets "enter your name".
-   */
-  footer?: ReactNode;
-
-  /**
    * False renders the screen as a picture of itself: everything is visible but
    * nothing takes focus or submits. Used by the creation preview.
    */
@@ -141,7 +131,6 @@ function ClassicJoinScreen({
   ctaLabel = 'Join the event',
   interactive = true,
   scrollable = true,
-  footer,
 }: GuestJoinScreenProps) {
   const { height: liveHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -172,21 +161,32 @@ function ClassicJoinScreen({
    * the first paint, before layout has reported.
    */
   const [measuredHeight, setMeasuredHeight] = useState(0);
-  const pageHeight = viewportHeight ?? (measuredHeight || liveHeight);
+  // On iOS the scroll view below starts its content beneath the status bar, so
+  // a page as tall as the box would leave its last 59pt, and the button in
+  // them, off the bottom of the screen.
+  const scrollInsetTop = scrollable && viewportHeight == null && Platform.OS === 'ios' ? insets.top : 0;
+  const pageHeight = viewportHeight ?? (measuredHeight || liveHeight) - scrollInsetTop;
 
   const handleRootLayout = useCallback((event: LayoutChangeEvent) => {
     const next = Math.round(event.nativeEvent.layout.height);
     if (next > 0) setMeasuredHeight((current) => (current === next ? current : next));
   }, []);
-  // The publication confirmation has more controls than the guest form. Give
-  // those controls room before sizing the photograph from the viewport.
-  const coverHeight = Math.round(pageHeight * (footer ? 0.44 : COVER_HEIGHT_RATIO));
+  const coverHeight = Math.round(pageHeight * COVER_HEIGHT_RATIO);
   const bottomInset = viewportHeight == null ? Math.max(insets.bottom, spacing.lg) : spacing.lg;
 
   const body = (
     <View style={[S.page, { minHeight: pageHeight, paddingBottom: bottomInset }]}>
       {/* ── Cover ─────────────────────────────────────────────── */}
-      <View style={[S.cover, { height: coverHeight }]}>
+      {/* With no name to ask for, the photograph takes the room the field would
+          have used, so the copy sits just above the button. */}
+      <View
+        style={[
+          S.cover,
+          showNameInput || welcomeName
+            ? { height: coverHeight }
+            : { minHeight: coverHeight, flexGrow: 1 },
+        ]}
+      >
         <Image
           source={coverSource}
           style={S.coverImage}
@@ -234,7 +234,6 @@ function ClassicJoinScreen({
 
       {/* ── Form ──────────────────────────────────────────────── */}
       <View style={S.form}>
-        {footer ?? <>
         {welcomeName ? (
           <View style={{ alignItems: 'center', gap: spacing.xs, paddingVertical: spacing.md }}>
             <AppText variant="bodyLarge" style={{ color: colours.textPrimary }}>
@@ -309,12 +308,11 @@ function ClassicJoinScreen({
             <>
               <CameraSparkleIcon size={22} color={colours.textOnBrand} />
               <AppText variant="labelLarge" style={S.ctaLabel}>
-                Join the event
+                {ctaLabel}
               </AppText>
             </>
           )}
         </Pressable>
-        </>}
       </View>
     </View>
   );

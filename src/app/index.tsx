@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { AppText } from '@/components/ui/text';
 import { AppleSignInButton, GoogleSignInButton } from '@/components/auth/auth-buttons';
 import { useAuth } from '@/features/auth/context';
-import { fetchMyProfile } from '@/services/profile';
+import { fetchMyProfile, firstNameFrom, updateDisplayName } from '@/services/profile';
 import { resetToAuthenticatedRoot } from '@/lib/navigation/session-root';
 import {
   CONTINUE_HINT,
@@ -183,8 +183,18 @@ function LegacyWelcomeScreen({
     useAuth();
 
   const [isAppleLoading, setIsAppleLoading] = useState(false);
+  const [appleIsTakingLong, setAppleIsTakingLong] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!isAppleLoading) {
+      setAppleIsTakingLong(false);
+      return;
+    }
+    const timer = setTimeout(() => setAppleIsTakingLong(true), 12000);
+    return () => clearTimeout(timer);
+  }, [isAppleLoading]);
 
   // ── Intro state ───────────────────────────────────────────────────────────
 
@@ -560,9 +570,19 @@ function LegacyWelcomeScreen({
       const profile = await fetchMyProfile();
       if (profile?.onboarding_completed_at) {
         resetToAuthenticatedRoot(router);
-      } else {
-        router.replace('/your-name');
+        return;
       }
+
+      // Google and Apple accounts arrive with a name, so don't ask for it again.
+      // It can still be changed from the profile.
+      const providerName = firstNameFrom(profile);
+      if (providerName) {
+        await updateDisplayName(providerName);
+        resetToAuthenticatedRoot(router);
+        return;
+      }
+
+      router.replace('/your-name');
     } catch {
       // A profile read failure should never silently bypass onboarding.
       router.replace('/your-name');
@@ -584,9 +604,9 @@ function LegacyWelcomeScreen({
     try {
       const result = await signInWithApple();
       if (!result.ok) {
-        if (result.error.code !== 'cancelled') {
-          setError(result.error.message);
-        }
+        setError(result.error.code === 'cancelled'
+          ? 'Apple sign in was cancelled. Tap Continue with Apple to try again.'
+          : result.error.message);
         return;
       }
     } catch {
@@ -938,10 +958,12 @@ function LegacyWelcomeScreen({
           onControlsTopLayout?.(y);
         }}
       >
-        {error ? (
+        {error || !isBackendConfigured || appleIsTakingLong ? (
           <View style={S.errorBanner}>
             <AppText variant="bodySmall" style={S.errorText}>
-              {error}
+              {error ?? (!isBackendConfigured
+                ? 'Sign in is temporarily unavailable. Please try again later.'
+                : 'Still waiting for Apple sign in. You can cancel and try again.')}
             </AppText>
           </View>
         ) : null}
@@ -1106,8 +1128,18 @@ const S = StyleSheet.create({
  * wrapper; only the video mark is active today.
  */
 export default function WelcomeScreen() {
+  const router = useRouter();
+  const { isSignedIn, isRestoring } = useAuth();
   const [showVideoSplash, setShowVideoSplash] = useState<boolean | null>(null);
   const [authVisible, setAuthVisible] = useState(false);
+
+  // No account is asked for at the door. Someone signed out goes straight to the
+  // dashboard, and is asked to sign in when publishing needs it or when they tap
+  // the profile button. A signed-in host is routed on by the screen below.
+  const introDone = showVideoSplash === false || authVisible;
+  useEffect(() => {
+    if (introDone && !isRestoring && !isSignedIn) router.replace('/home');
+  }, [introDone, isRestoring, isSignedIn, router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1132,7 +1164,7 @@ export default function WelcomeScreen() {
           disableIntro
           transparent
           hideWordmark
-          showAuthControls={authVisible}
+          showAuthControls={authVisible && isSignedIn}
         />
       </View>
     );
@@ -1145,7 +1177,13 @@ export default function WelcomeScreen() {
     return <View style={{ flex: 1, backgroundColor: BLACK }} />;
   }
 
-  // Keep the established welcome/authentication UI and signed-in redirect
-  // behaviour, while explicitly suppressing the legacy prose intro.
+  // Signed out, this is on its way to the dashboard: drawing the sign-in buttons
+  // would flash them for a frame on the way past.
+  if (isRestoring || !isSignedIn) {
+    return <View style={{ flex: 1, backgroundColor: BLACK }} />;
+  }
+
+  // Keep the established signed-in redirect behaviour, while explicitly
+  // suppressing the legacy prose intro.
   return <LegacyWelcomeScreen disableIntro />;
 }

@@ -14,8 +14,14 @@ import { resolveDraftAllowedMediaTypes } from '@/features/media/event-media';
 import { getPaymentProvider } from '@/features/payments';
 import type { PaymentProvider, PurchaseReceipt } from '@/features/payments/types';
 import { verifyPurchase, VerificationError, toDatabasePlatform } from './purchase-verification';
-import { isFreePlanKey } from '@/features/payments/plan-catalogue';
-import { resolveGuestReveal, type CreationDraft } from '@/features/celebrations/draft/types';
+import { isFreePlanKey, planForCatalogueKey } from '@/features/payments/plan-catalogue';
+import { shotLimitForPlan } from '@/features/entitlements/guest-limit';
+import {
+  resolveGuestReveal,
+  resolveHostReveal,
+  type CreationDraft,
+} from '@/features/celebrations/draft/types';
+import { saveHostReveal } from './celebration-detail';
 import { assertCreatedCelebration } from '@/types/database';
 
 export interface PublishedEvent {
@@ -149,6 +155,51 @@ async function resolveThemeId(themeKey: string | null | undefined): Promise<stri
 }
 
 /**
+ * Creates the server-side draft: celebration, first session and guest link, in
+ * one transaction.
+ *
+ * Shared by the app's publish flow and the web's checkout flow, so an event
+ * created in a browser is configured by exactly the same mapping as one
+ * created on a phone.
+ */
+export async function createServerDraft(draft: CreationDraft) {
+  const client = requireSupabase();
+  const reveal = resolveGuestReveal(draft);
+  const themeId = await resolveThemeId(draft.themeSlug);
+  const allowedMediaTypes = resolveDraftAllowedMediaTypes(draft);
+
+  const { data, error } = await client.rpc('create_celebration_with_default_session', {
+    p_title: draft.title.trim(),
+    p_session_name: 'Main event',
+    p_celebration_type: draft.celebrationType,
+    p_inspiration_pack: draft.inspirationPack,
+    p_timezone: draft.timezone,
+    // The generated RPC types use optional params, not nullable ones, so a
+    // null has to become an omission rather than an explicit null.
+    p_ends_at: draft.endsAt ?? undefined,
+    p_capture_mode: draft.captureMode,
+    // Sent even when null, which means unlimited. Leaving it out is not the
+    // same thing: the server's default for a missing limit is 20.
+    p_shot_limit_per_guest: shotLimitForPlan(
+      planForCatalogueKey(draft.planKey),
+      draft.shotLimitPerGuest ?? null,
+    ) as number,
+    // The package's allowance, which the draft's fixed default knew nothing of.
+    p_camera_roll_upload_limit:
+      planForCatalogueKey(draft.planKey)?.cameraRollUploadLimit ?? draft.cameraRollUploadLimit,
+    p_allowed_media_types: allowedMediaTypes,
+    p_reveal_mode: reveal.mode,
+    p_reveal_at: reveal.revealAt ?? undefined,
+    p_gallery_visibility: draft.galleryVisibility,
+    p_photo_treatment: draft.photoTreatment,
+    p_theme_id: themeId,
+  });
+
+  if (error) throw new PublicationError(error.message, 'draft');
+  return assertCreatedCelebration(data as never);
+}
+
+/**
  * Publishes a draft.
  *
  * Ordered so that nothing irreversible happens before the server has the draft:
@@ -173,15 +224,17 @@ export async function publishDraft(
    * are exactly the ones where this function throws.
    */
   onCelebrationCreated?: (celebrationId: string) => void,
+  /**
+   * A code the server has accepted for this package. With a discounted product
+   * the store charges that instead; without one the store is skipped.
+   */
+  promo?: { code: string; discountedProductId: string | null },
 ): Promise<PublishedEvent> {
   try {
     if (!isBackendConfigured) {
       throw new Error('Supabase not configured');
     }
     const client = requireSupabase();
-    const reveal = resolveGuestReveal(draft);
-    const themeId = await resolveThemeId(draft.themeSlug);
-    const allowedMediaTypes = resolveDraftAllowedMediaTypes(draft);
 
     let celebrationId = existingCelebrationId;
     let eventSessionId: string | undefined;
@@ -192,33 +245,14 @@ export async function publishDraft(
 
     // 1. Server-side draft.
     if (!celebrationId) {
-      const { data, error } = await client.rpc('create_celebration_with_default_session', {
-        p_title: draft.title.trim(),
-        p_session_name: 'Main event',
-        p_celebration_type: draft.celebrationType,
-        p_inspiration_pack: draft.inspirationPack,
-        p_timezone: draft.timezone,
-        // The generated RPC types use optional params, not nullable ones, so a
-        // null has to become an omission rather than an explicit null.
-        p_ends_at: draft.endsAt ?? undefined,
-        p_capture_mode: draft.captureMode,
-        p_shot_limit_per_guest: draft.shotLimitPerGuest ?? undefined,
-        p_camera_roll_upload_limit: draft.cameraRollUploadLimit,
-        p_allowed_media_types: allowedMediaTypes,
-        p_reveal_mode: reveal.mode,
-        p_reveal_at: reveal.revealAt ?? undefined,
-        p_gallery_visibility: draft.galleryVisibility,
-        p_photo_treatment: draft.photoTreatment,
-        p_theme_id: themeId,
-      });
-
-      if (error) throw new PublicationError(error.message, 'draft');
-
-      const created = assertCreatedCelebration(data as never);
+      const created = await createServerDraft(draft);
       celebrationId = created.celebrationId;
       onCelebrationCreated?.(created.celebrationId);
       eventSessionId = created.eventSessionId;
       publicSlug = created.publicSlug;
+      // The create function only knows the guests' reveal.
+      const hostReveal = resolveHostReveal(draft);
+      await saveHostReveal(created.eventSessionId, hostReveal.mode, hostReveal.revealAt);
       // The ONLY moment this exists in plaintext. Only its digest is stored.
       guestToken = created.guestAccessToken;
     }
@@ -238,10 +272,20 @@ export async function publishDraft(
     // records the entitlement. The publish call below is unchanged either
     // way — a free event is published against its plan key exactly like a
     // paid one, so entitlements resolve through the same path.
+    //
+    // A code that makes the package free skips it too: the code, checked by
+    // the server below, stands in for the receipt. A discount still pays, for
+    // its own cheaper product.
     const provider = getPaymentProvider();
+    const isPaidPlan = Boolean(draft.planKey && !isFreePlanKey(draft.planKey));
+    const promoForPlan = isPaidPlan ? promo : undefined;
+    const isFreeWithPromo = Boolean(promoForPlan && !promoForPlan.discountedProductId);
     let planReceipt: PurchaseReceipt | null = null;
-    if (draft.planKey && !isFreePlanKey(draft.planKey)) {
-      planReceipt = await purchaseOrThrow(provider, draft.planKey);
+    if (isPaidPlan && !isFreeWithPromo) {
+      planReceipt = await purchaseOrThrow(
+        provider,
+        promoForPlan?.discountedProductId ?? draft.planKey!,
+      );
     }
     const addOnReceipts: (PurchaseReceipt | null)[] = [];
     for (const addOnKey of draft.addOnKeys) {
@@ -254,16 +298,45 @@ export async function publishDraft(
     // bought against the transaction that bought it. It records only —
     // entitlements stay inactive until step 5 verifies the receipt with the
     // store, so this call alone can no longer grant a paid tier.
-    const { data: publishData, error: publishError } = await client.rpc('publish_celebration', {
-      p_celebration_id: celebrationId!,
-      p_plan_key: draft.planKey ?? undefined,
-      p_add_on_keys: draft.addOnKeys,
+    const receiptFields = {
       p_platform: toDatabasePlatform(planReceipt?.platform ?? provider.platform),
       p_platform_product_id: planReceipt?.platformProductId ?? undefined,
       p_platform_transaction_id: planReceipt?.platformTransactionId ?? undefined,
-    });
+    };
+    const publishWithoutPromo = () =>
+      client.rpc('publish_celebration', {
+        p_celebration_id: celebrationId!,
+        p_plan_key: draft.planKey ?? undefined,
+        p_add_on_keys: draft.addOnKeys,
+        ...receiptFields,
+      });
+
+    // A deferred discounted purchase has no receipt to redeem the code with.
+    const redeemsPromo = Boolean(promoForPlan && (isFreeWithPromo || planReceipt));
+    let { data: publishData, error: publishError } = redeemsPromo
+      ? await client.rpc('publish_celebration_with_promo', {
+          p_celebration_id: celebrationId!,
+          p_plan_key: draft.planKey!,
+          p_code: promoForPlan!.code,
+          ...receiptFields,
+        })
+      : await publishWithoutPromo();
 
     if (publishError) throw new PublicationError(publishError.message, 'publish');
+
+    if (redeemsPromo && !(publishData as { celebration_id?: string } | null)?.celebration_id) {
+      // The code stopped working after it was applied, e.g. its last use went.
+      if (isFreeWithPromo) {
+        throw new PublicationError(
+          'That promo code can no longer be used. Choose a package to continue.',
+          'purchase',
+        );
+      }
+      // The host has already paid the discounted price, so they get what they
+      // paid for. Verification below still confirms the receipt.
+      ({ data: publishData, error: publishError } = await publishWithoutPromo());
+      if (publishError) throw new PublicationError(publishError.message, 'publish');
+    }
 
     // 5. Verify the receipt. Until this succeeds the event is published on
     // the free tier, because the server refuses to grant a paid tier on the

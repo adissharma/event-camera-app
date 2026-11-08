@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/features/auth/context';
 import { celebrationKeys, listCelebrations } from '@/services/celebrations';
 import { endLiveActivity, syncLiveActivity } from '@/services/live-activity';
 
@@ -10,9 +11,16 @@ function debug(message: string): void {
 }
 
 export function LiveActivitySyncManager() {
+  const { isBackendConfigured, isSignedIn } = useAuth();
+  // A signed-out caller is denied this table, and `listCelebrations` turns that
+  // denial into an empty list. The home screen shares this query, so caching
+  // that result would show a host who has just signed in no events until the
+  // next refetch. Without a backend the list comes from local data instead.
+  const canListCelebrations = !isBackendConfigured || isSignedIn;
   const { data: celebrations } = useQuery({
     queryKey: celebrationKeys.list(),
     queryFn: listCelebrations,
+    enabled: canListCelebrations,
     // The dashboard/event realtime paths cover normal updates. This only
     // reconciles eligibility after a dropped connection or passage of time.
     refetchInterval: 60_000,

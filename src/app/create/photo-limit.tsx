@@ -10,7 +10,7 @@ import { MOMENT_LIMIT_VALUES, MomentLimit, SteppedSlider } from '@/components/fo
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { copy } from '@/i18n';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
-import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
+import { allowanceSatisfies, upgradesForFeature } from '@/features/entitlements/event-entitlements';
 import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 
 const LIMIT_COPY: Record<'5' | '10' | '16' | '24' | '36' | 'unlimited', string> = {
@@ -33,8 +33,15 @@ export default function PhotoLimitStep() {
    */
   const { celebrationId } = useLocalSearchParams<{ celebrationId?: string }>();
   const entitlements = useEventEntitlements(celebrationId ?? null);
-  const unlimitedGated = Boolean(celebrationId) && !entitlements.has('unlimitedPhotos');
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const isGated = (limit: MomentLimit) =>
+    Boolean(celebrationId) &&
+    !allowanceSatisfies(entitlements.photoAllowance, limit ?? 'unlimited');
+  const unlimitedGated = isGated(null);
+  /**
+   * A locked number the host let go on. It stays on the slider behind the upgrade,
+   * so the sheet is answering what they can see they chose, and leaves when they do.
+   */
+  const [gatedLimit, setGatedLimit] = useState<MomentLimit | undefined>(undefined);
 
   const storedCount = draft.shotLimitPerGuest;
   const selectedLimit: MomentLimit =
@@ -59,12 +66,13 @@ export default function PhotoLimitStep() {
    * leave a stale number showing after a change from anywhere else.
    */
   const [previewLimit, setPreviewLimit] = useState<MomentLimit | undefined>(undefined);
-  const shownLimit = previewLimit === undefined ? selectedLimit : previewLimit;
+  const sliderLimit = gatedLimit === undefined ? selectedLimit : gatedLimit;
+  const shownLimit = previewLimit === undefined ? sliderLimit : previewLimit;
 
   function selectLimit(value: MomentLimit) {
     setPreviewLimit(undefined);
-    if (value === null && unlimitedGated) {
-      setUpgradeOpen(true);
+    if (isGated(value)) {
+      setGatedLimit(value);
       return;
     }
     update({ shotLimitPerGuest: value });
@@ -91,7 +99,7 @@ export default function PhotoLimitStep() {
         }}
       >
         <View style={{ alignItems: 'center' }}>
-          <CaptureLimitPreview limit={storedCount} />
+          <CaptureLimitPreview limit={gatedLimit === undefined ? storedCount : gatedLimit} />
         </View>
 
         <View style={{ alignItems: 'center', gap: spacing.xs }}>
@@ -101,7 +109,7 @@ export default function PhotoLimitStep() {
           <LimitCopy text={limitCopy} />
           <View style={{ width: '100%', marginTop: spacing.base }}>
             <SteppedSlider
-              value={selectedLimit}
+              value={sliderLimit}
               onValueChange={selectLimit}
               onPreviewChange={setPreviewLimit}
             />
@@ -111,17 +119,17 @@ export default function PhotoLimitStep() {
 
       {/* The same upgrade surface every other locked feature opens. On
           success the choice the host was making is applied for them. */}
-      {upgradeOpen && celebrationId ? (
+      {gatedLimit !== undefined && celebrationId ? (
         <UpgradeSheet
           visible
           celebrationId={String(celebrationId)}
           currentPlan={entitlements.plan}
           options={upgradesForFeature(entitlements.plan, 'unlimitedPhotos')}
-          title="Unlock unlimited photos"
-          onClose={() => setUpgradeOpen(false)}
+          title="Unlock more photos"
+          onClose={() => setGatedLimit(undefined)}
           onUpgraded={() => {
-            setUpgradeOpen(false);
-            update({ shotLimitPerGuest: null });
+            update({ shotLimitPerGuest: gatedLimit });
+            setGatedLimit(undefined);
           }}
         />
       ) : null}

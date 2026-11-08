@@ -1,5 +1,14 @@
-import { useCallback, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useState, type ReactNode } from 'react';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,7 +24,8 @@ import {
 import { upgradePriceLabel } from '@/features/payments/upgrade-catalogue';
 import { UpgradeError, eventPlanKeys, upgradeEventPlan } from '@/services/event-plan';
 import { celebrationKeys } from '@/services/celebrations';
-import { upgradeSummary } from './event-entitlements';
+import { upgradeSummary, type FeatureKey } from './event-entitlements';
+import { FEATURE_PITCHES, PitchHighlights } from './feature-pitch';
 import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design';
 
 const UPGRADE_SHADER = [
@@ -68,6 +78,14 @@ export interface UpgradeSheetProps {
   options: PaywallPlan[];
   /** e.g. `Unlock Guestbook`. Says what the host was reaching for. */
   title: string;
+  /** For a host who came for something more specific than the package's name. */
+  heading?: string;
+  /** Why the package on offer answers that. Depends on which one is selected. */
+  summaryFor?: (plan: PaywallPlan) => string;
+  /** The locked feature this is selling, which shows it off if it has a pitch. */
+  feature?: FeatureKey;
+  /** Below the upgrade button, for what a host can do instead of buying. */
+  footer?: ReactNode;
   onClose: () => void;
   /**
    * Called after the tier is active, so the caller can resume what the host
@@ -82,6 +100,10 @@ export function UpgradeSheet({
   currentPlan,
   options,
   title,
+  heading: headingOverride,
+  summaryFor,
+  feature,
+  footer,
   onClose,
   onUpgraded,
 }: UpgradeSheetProps) {
@@ -95,12 +117,18 @@ export function UpgradeSheet({
   const selected = options.find((plan) => plan.id === selectedId) ?? options[0] ?? null;
   const isSingleOption = options.length === 1;
   const isStillsPlus = selected?.isRecommended ?? false;
-  const heading = isStillsPlus ? 'Upgrade to Stills+' : `Upgrade to ${selected?.displayName ?? ''}`;
-  const supportingCopy = isStillsPlus
+  const pitch = feature ? FEATURE_PITCHES[feature] : undefined;
+  const heading =
+    pitch?.heading ??
+    headingOverride ??
+    (isStillsPlus ? 'Upgrade to Stills+' : `Upgrade to ${selected?.displayName ?? ''}`);
+  const defaultCopy = isStillsPlus
     ? 'Unlock premium features for your event.'
     : selected
       ? upgradeSummary(currentPlan, selected)
       : title;
+  const supportingCopy =
+    pitch?.summary ?? (selected && summaryFor ? summaryFor(selected) : defaultCopy);
 
   const buy = useCallback(async () => {
     if (!selected || busy) return;
@@ -133,13 +161,25 @@ export function UpgradeSheet({
     }
   }, [selected, busy, celebrationId, currentPlan, queryClient, onClose, onUpgraded]);
 
+  // Nothing above this package means nothing to sell. Without this it would be a
+  // sheet titled "Upgrade to" with a button that does nothing.
+  if (options.length === 0) return null;
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={S.backdrop}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={S.backdrop}
+      >
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
 
         <View style={[S.sheet, { paddingBottom: insets.bottom + spacing.base }]}>
-          <View style={S.sheetHandle} />
+          {pitch ? (
+            <View style={S.pitchHero}>
+              <pitch.Hero />
+            </View>
+          ) : null}
+          <View style={[S.sheetHandle, pitch && S.sheetHandleOverHero]} />
           <View style={S.copy}>
             <AppText variant="titleLarge" style={S.title}>
               {heading}
@@ -150,6 +190,8 @@ export function UpgradeSheet({
               </AppText>
             ) : null}
           </View>
+
+          {pitch ? <PitchHighlights items={pitch.highlights} /> : null}
 
           <ScrollView style={S.scroll} showsVerticalScrollIndicator={false}>
             <View style={S.cards}>
@@ -237,6 +279,7 @@ export function UpgradeSheet({
               </AppText>
             )}
           </Pressable>
+          {footer}
           <Pressable
             onPress={onClose}
             disabled={busy}
@@ -249,12 +292,22 @@ export function UpgradeSheet({
             </AppText>
           </Pressable>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
 
 const S = StyleSheet.create({
+  pitchHero: {
+    marginTop: -spacing.md,
+    marginBottom: -spacing.xl,
+    marginHorizontal: -layout.gutter,
+  },
+  sheetHandleOverHero: {
+    position: 'absolute',
+    top: spacing.sm,
+    zIndex: 1,
+  },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.48)' },
   sheet: {
     backgroundColor: '#0D0D0F',
@@ -263,7 +316,8 @@ const S = StyleSheet.create({
     paddingHorizontal: layout.gutter,
     paddingTop: spacing.md,
     gap: spacing.md,
-    maxHeight: '72%',
+    maxHeight: '85%',
+    overflow: 'hidden',
   },
   sheetHandle: {
     width: 38,

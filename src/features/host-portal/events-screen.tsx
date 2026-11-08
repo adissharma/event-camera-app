@@ -81,7 +81,14 @@ export default function HostEventsScreen() {
       </View>
 
       <Page style={S.page}>
-        <AppText variant="displayLarge">Your events</AppText>
+        <View style={S.heading}>
+          <AppText variant="displayLarge">Your events</AppText>
+          <PortalLink href="/host/new" style={S.create} hoverStyle={S.createHovered}>
+            <AppText variant="button" tone="onBrand">
+              Create an event
+            </AppText>
+          </PortalLink>
+        </View>
 
         {isLoading ? (
           <CentredState busy />
@@ -101,7 +108,7 @@ export default function HostEventsScreen() {
         ) : (
           <CentredState
             title="No events yet"
-            body="Events are created in the Stills. app on your iPhone. Once you've made one, it appears here, signed in with this same account."
+            body="Create one here, or in the Stills. app on your iPhone. Either way it appears in both, signed in with this same account."
           />
         )}
       </Page>
@@ -131,6 +138,24 @@ const S = StyleSheet.create({
   },
   accountEmail: {
     flexShrink: 1,
+  },
+  heading: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.base,
+  },
+  create: {
+    height: 44,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colours.brandPrimary,
+  },
+  createHovered: {
+    backgroundColor: colours.brandPressed,
   },
   page: {
     width: '100%',

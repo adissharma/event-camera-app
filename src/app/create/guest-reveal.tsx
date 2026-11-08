@@ -10,7 +10,6 @@ import {
   RevealPreview,
   useRevealPreviewHeight,
 } from '@/features/celebrations/creation/reveal-step-shared';
-import { WORDMARK } from '@/features/onboarding/still-intro';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
@@ -143,17 +142,18 @@ export default function GuestRevealStep() {
           {/*
             With guests never seeing the gallery there is nothing to preview,
             and a locked collage would promise photos that are never coming.
-            The wordmark and a thank-you stand in its place — the guest's
-            side of this choice is that they contribute and go, so the screen
-            shows what they are left with.
+            What guests will be told stands in its place, so the host can see
+            how their choice lands.
           */}
           {isAfterMe ? (
             <RevealPreview locked={isLocked} />
           ) : (
             <View style={[S.neverState, { height: previewHeight }]}>
-              <AppText style={S.neverWordmark}>{WORDMARK}</AppText>
-              <AppText variant="bodySmall" tone="secondary" align="center">
-                Thanks for helping capture the day 🤍
+              <AppText variant="titleLarge" align="center">
+                {copy.create.guestsNeverSeeTitle}
+              </AppText>
+              <AppText variant="bodyLarge" tone="secondary" align="center">
+                {copy.create.guestsNeverSeeBody}
               </AppText>
             </View>
           )}
@@ -212,13 +212,7 @@ const S = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-  },
-  neverWordmark: {
-    fontFamily: fontFamilies.display,
-    color: colours.textPrimary,
-    fontSize: 32,
-    lineHeight: 38,
-    letterSpacing: -0.4,
+    paddingHorizontal: layout.gutter,
   },
   summarySlot: {
     height: 20,

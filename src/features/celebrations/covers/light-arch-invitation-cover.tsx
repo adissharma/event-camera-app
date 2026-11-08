@@ -35,8 +35,6 @@ const MIN_ARCH_TO_COPY_GAP = spacing.md;
 const ESTIMATED_BOTTOM_CONTENT_HEIGHT = 300;
 
 export interface LightArchInvitationCoverProps {
-  /** Replaces the join form. See `GuestJoinScreenProps.footer`. */
-  footer?: ReactNode;
   coverSource: ImageSourcePropType;
   title: string;
   countdownLabel: string;
@@ -89,7 +87,6 @@ export function LightArchInvitationCover({
   isJoining = false,
   ctaLabel = 'Join the event',
   onJoin,
-  footer,
   interactive = true,
   scrollable = true,
 }: LightArchInvitationCoverProps) {
@@ -108,7 +105,10 @@ export function LightArchInvitationCover({
     requestAnimationFrame(() => scrollRef.current?.scrollToEnd({ animated: true }));
   }, []);
 
-  const pageHeight = viewportHeight ?? (measuredHeight || windowHeight);
+  // iOS starts the scroll view's content beneath the status bar, so a page as
+  // tall as the box would run its button off the bottom of the screen.
+  const scrollInsetTop = scrollable && viewportHeight == null && Platform.OS === 'ios' ? insets.top : 0;
+  const pageHeight = viewportHeight ?? (measuredHeight || windowHeight) - scrollInsetTop;
   const contentWidth = Math.min(width - spacing.xl * 2, 335);
   const topInset =
     viewportHeight == null
@@ -207,7 +207,6 @@ export function LightArchInvitationCover({
         </View>
 
         <View style={S.form}>
-          {footer ?? <>
           {welcomeName ? (
           <View style={S.welcome}>
             <AppText variant="bodyLarge" align="center" style={S.welcomeText}>
@@ -289,7 +288,6 @@ export function LightArchInvitationCover({
             </>
           )}
         </Pressable>
-          </>}
         </View>
       </View>
     </View>

@@ -29,13 +29,23 @@ import {
  * type error everywhere that switches on one, not a silent no-op in the three
  * places nobody remembered to update.
  */
-export type FeatureKey = 'video' | 'guestbook' | 'challenges' | 'unlimitedPhotos';
+export type FeatureKey =
+  | 'video'
+  | 'unlimitedVideos'
+  | 'guestbook'
+  | 'guestbookMessages'
+  | 'challenges'
+  | 'seating'
+  | 'unlimitedPhotos';
 
 /** How each capability is described where a host is asked to pay for it. */
 export const FEATURE_LABELS: Record<FeatureKey, string> = {
   video: 'Video',
+  unlimitedVideos: 'Unlimited videos',
   guestbook: 'Guestbook',
+  guestbookMessages: 'Guestbook messages',
   challenges: 'Challenges',
+  seating: 'Seating plan',
   unlimitedPhotos: 'Unlimited photos',
 };
 
@@ -44,10 +54,16 @@ function planIncludes(plan: PaywallPlan, feature: FeatureKey): boolean {
   switch (feature) {
     case 'video':
       return plan.videos;
+    case 'unlimitedVideos':
+      return plan.videosPerGuest === 'unlimited';
     case 'guestbook':
       return plan.guestbook;
+    case 'guestbookMessages':
+      return plan.guestbookMessages;
     case 'challenges':
       return plan.challenges;
+    case 'seating':
+      return plan.seating;
     case 'unlimitedPhotos':
       return plan.photoAllowance === 'unlimited';
   }
@@ -61,6 +77,8 @@ export interface EventEntitlements {
   plan: PaywallPlan | null;
   guestLimit: Allowance;
   photoAllowance: Allowance;
+  /** Videos each guest can post. `0` when the event has no video. */
+  videosPerGuest: Allowance;
   /** Whether the event includes a capability. Unknown plans include nothing. */
   has: (feature: FeatureKey) => boolean;
   /** True while the package is still being resolved. */
@@ -151,10 +169,24 @@ export function upgradeGains(from: PaywallPlan | null, to: PaywallPlan): string[
         : `${to.photoAllowance} photos per guest`,
     );
   }
-  for (const feature of ['video', 'guestbook', 'challenges'] as const) {
+  if (to.videos && (!from || !allowanceSatisfies(from.videosPerGuest, to.videosPerGuest))) {
+    // A plan that already had a video or two gains *more* of them, not video.
+    gains.push(
+      from?.videos
+        ? to.videosPerGuest === 'unlimited'
+          ? 'unlimited videos'
+          : `${to.videosPerGuest} videos per guest`
+        : 'video',
+    );
+  }
+  for (const feature of ['guestbook', 'challenges', 'seating'] as const) {
     if (planIncludes(to, feature) && !(from && planIncludes(from, feature))) {
       gains.push(FEATURE_LABELS[feature].toLowerCase());
     }
+  }
+  // A Guestbook guests can only look at gains the part where they speak.
+  if (to.guestbookMessages && from?.guestbook && !from.guestbookMessages) {
+    gains.push('guestbook messages');
   }
   return gains;
 }
@@ -186,6 +218,7 @@ export function entitlementsForPlan(
     plan,
     guestLimit: plan?.guestLimit ?? 0,
     photoAllowance: plan?.photoAllowance ?? 0,
+    videosPerGuest: plan?.videosPerGuest ?? 0,
     has: (feature) => (plan ? planIncludes(plan, feature) : false),
     isLoading,
   };

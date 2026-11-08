@@ -9,6 +9,7 @@ import { CreationStepScreen } from '@/features/celebrations/creation/step-screen
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import {
   GENERIC_SUGGESTIONS,
+  isFillingGap,
   suggestionsFor,
   type NameSuggestion,
 } from '@/features/celebrations/creation/name-suggestions';
@@ -68,7 +69,7 @@ export default function NameStep() {
           onSelectionChange={() => setSelection(undefined)}
           editorial
           hideBorderWhenUnfocused
-          autoCapitalize="sentences"
+          autoCapitalize={isFillingGap(draft.title, suggestions) ? 'words' : 'sentences'}
           maxLength={200}
           returnKeyType="done"
         />

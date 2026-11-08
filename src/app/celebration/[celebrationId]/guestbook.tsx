@@ -49,11 +49,17 @@ import {
 } from '@/features/celebrations/story-viewer';
 import { AudioWaveformPlayer } from '@/features/celebrations/audio-playback';
 import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
+import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
+import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
 import { SAMPLE_COVER, isSampleCelebrationId } from '@/features/celebrations/sample-event';
 import { resolveSignedUrls } from '@/features/media/signed-url-cache';
 
 type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
+
+/** What `fetch*Guestbook` fills in when the host has not written their own. */
+const GUESTBOOK_DEFAULT_INSTRUCTIONS = 'Leave a message for the host.';
 
 /** Thickness of the gradient frame around the Guestbook. */
 const BORDER_WIDTH = 2;
@@ -119,6 +125,8 @@ function GuestbookScreenContent() {
   const [isSigningUrls, setIsSigningUrls] = useState(false);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [menuVisible, setMenuVisible] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const entitlements = useEventEntitlements(String(celebrationId));
 
   const { data: detail, isLoading: isDetailLoading } = useQuery({
     queryKey: celebrationDetailKeys.detail(String(celebrationId)),
@@ -128,6 +136,9 @@ function GuestbookScreenContent() {
 
   const isHost = (detail?.viewerRole ?? 'guest') === 'host';
   const isSample = isSampleCelebrationId(String(celebrationId));
+  // Free includes the Guestbook page but not guests recording on it: they can
+  // open the cover full screen and read the host's message, nothing more.
+  const messagesOpen = isSample || entitlements.has('guestbookMessages');
 
   const hostQuery = useQuery({
     queryKey: ['guestbook', 'host', String(celebrationId)],
@@ -217,10 +228,21 @@ function GuestbookScreenContent() {
 
   const description = isSample
     ? 'Guests record a short video message for the couple. Each one is private — only the host ever sees them.'
-    : payload?.guestbook.instructions?.trim() || 'Leave a message for the host.';
+    : messagesOpen
+    ? payload?.guestbook.instructions?.trim() || GUESTBOOK_DEFAULT_INSTRUCTIONS
+    : // Without messages, the stock invitation to leave one would be a promise
+      // with no button behind it. A host's own words are kept as they wrote them.
+      payload?.guestbook.instructions?.trim() &&
+        payload.guestbook.instructions.trim() !== GUESTBOOK_DEFAULT_INSTRUCTIONS
+      ? payload.guestbook.instructions.trim()
+      : 'Thank you for celebrating with us.';
 
   const footnote = isSample
     ? 'Sample album — messages from this event are not shown.'
+    : !messagesOpen
+    ? isHost
+      ? 'Guests can open this page. Upgrade and they can leave you a video message too.'
+      : undefined
     : isHost
     ? resolvedMessages.length === 0
       ? 'No one has left a message yet. Messages here are private to you.'
@@ -322,7 +344,19 @@ function GuestbookScreenContent() {
             }}
             onDismiss={() => router.back()}
             // No CTA on the example: there is nothing to record into.
-            cta={isHost || isSample ? undefined : { label: 'Leave a message', onPress: openRecorder }}
+            // Guests record only where the package lets them; a host whose
+            // package does not is shown the way to it instead.
+            cta={
+              isSample || entitlements.isLoading
+                ? undefined
+                : isHost
+                ? messagesOpen
+                  ? undefined
+                  : { label: 'Let guests leave messages', onPress: () => setUpgradeOpen(true) }
+                : messagesOpen
+                ? { label: 'Leave a message', onPress: openRecorder }
+                : undefined
+            }
             canDeleteActive={canDeleteActive}
             onPressOverflow={() => setMenuVisible(true)}
             renderSlideCaption={(item) =>
@@ -378,6 +412,19 @@ function GuestbookScreenContent() {
           />
         )}
       </View>
+
+      {upgradeOpen ? (
+        <UpgradeSheet
+          visible
+          celebrationId={String(celebrationId)}
+          currentPlan={entitlements.plan}
+          options={upgradesForFeature(entitlements.plan, 'guestbookMessages')}
+          feature="guestbookMessages"
+          title="Unlock Guestbook Messages"
+          onClose={() => setUpgradeOpen(false)}
+          onUpgraded={() => setUpgradeOpen(false)}
+        />
+      ) : null}
 
       <Modal
         visible={menuVisible}

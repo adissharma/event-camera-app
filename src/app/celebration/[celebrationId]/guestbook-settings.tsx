@@ -16,6 +16,8 @@ import {
 } from '@/services/guestbook';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
+import { topTierName } from '@/features/payments/plan-catalogue';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
 
 function BackChevron({ size = 20, color = '#FFFFFF' }) {
@@ -42,6 +44,9 @@ function GuestbookSettingsScreenContent() {
   const [instructions, setInstructions] = useState('');
   const [icon, setIcon] = useState('💌');
   const [isSaving, setIsSaving] = useState(false);
+  // Free has the page but not guests recording on it, so the copy here should
+  // not promise them a button they will not get.
+  const messagesOpen = useEventEntitlements(String(celebrationId)).has('guestbookMessages');
 
   useEffect(() => {
     if (shouldBlockHostRouteOnWeb(Platform.OS)) {
@@ -144,7 +149,7 @@ function GuestbookSettingsScreenContent() {
           label="Guest message"
           value={instructions}
           onChangeText={(value) => setInstructions(value)}
-          placeholder="Leave a message for the host."
+          placeholder={messagesOpen ? 'Leave a message for the host.' : 'Thank you for celebrating with us.'}
           multiline
           maxLength={MAX_INSTRUCTIONS}
           hint={`${instructions.length} of ${MAX_INSTRUCTIONS} characters`}
@@ -155,7 +160,9 @@ function GuestbookSettingsScreenContent() {
 
       <View style={styles.note}>
         <AppText variant="caption" tone="secondary">
-          Guests will always see the title “Guestbook” and the CTA “Leave a message”.
+          {messagesOpen
+            ? 'Guests will always see the title “Guestbook” and the CTA “Leave a message”.'
+            : `Guests can open your Guestbook and read this. Upgrade to ${topTierName()} and they can leave you a video message too.`}
         </AppText>
       </View>
     </Screen>

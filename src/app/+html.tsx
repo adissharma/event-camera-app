@@ -34,25 +34,8 @@ export default function Root({ children }: PropsWithChildren) {
           content="Stills. turns your guests into your photographers. Every guest, every angle, one shared album."
         />
 
-        {/*
-          The Smart App Banner, and with it App Clip invocation from Safari
-          and from links shared in Messages.
-
-          `app-id` is the App Store id; `app-clip-bundle-id` is what makes the
-          banner offer the Clip rather than the full app. Both are identifiers
-          rather than brand names, so they are literal here — the App Store id
-          comes from App Store Connect and the bundle id from `app.config.js`.
-
-          Deliberately without `app-clip-display=card` at this level: that
-          shows the App Clip card over the page on first visit, which is right
-          for an invitation and wrong for the privacy policy, a page reviewers
-          and readers open to read. `scripts/add-app-clip-card.mjs` adds it to
-          the guest routes alone, after the export.
-        */}
-        <meta
-          name="apple-itunes-app"
-          content="app-id=6797053710, app-clip-bundle-id=com.potoevents.eventcamera.Clip"
-        />
+        {/* No Smart App Banner here: the site shows none. The invitation routes
+            alone get the App Clip card, from `scripts/add-app-clip-card.mjs`. */}
 
         {/* The canvas behind the app, so a slow bundle does not flash white
             before the near-black page paints. */}

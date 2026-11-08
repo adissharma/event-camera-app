@@ -21,7 +21,6 @@ if (process.env.APP_VARIANT === 'clip') {
     ['@/features/celebrations/gallery-preset-assets', 'gallery-preset-assets.ts'],
     ['@/features/entitlements/upgrade-sheet', 'upgrade-sheet.tsx'],
     ['@react-native-masked-view/masked-view', 'masked-view.tsx'],
-    ['expo-glass-effect', 'glass-effect.tsx'],
   ]);
 
   config.resolver.resolveRequest = (context, moduleName, platform) => {

@@ -66,7 +66,8 @@ export function MidnightInvitationCover({
   isNameValid = true,
   isJoining = false,
   onJoin,
-  footer,
+  showNameInput = true,
+  ctaLabel = 'Join',
 }: GuestJoinScreenProps) {
   const accent = providedAccent ?? GOLD;
   const disabled = !isNameValid || isJoining || !interactive;
@@ -83,22 +84,15 @@ export function MidnightInvitationCover({
    * point of a preview.
    */
   const [boxWidth, setBoxWidth] = useState(0);
-  const [boxHeight, setBoxHeight] = useState(0);
   const handleLayout = (event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
+    const { width } = event.nativeEvent.layout;
     if (width > 0 && width !== boxWidth) setBoxWidth(width);
-    if (height > 0 && height !== boxHeight) setBoxHeight(height);
   };
 
   // 375 is the reference width the type scale was drawn against.
   const measured = boxWidth || 375;
   const scale = Math.min(1, measured / 375);
-  // The confirmation has extra copy below the photograph. Scale the print
-  // against the space above its fixed bottom action on compact phones.
-  const heroWidth = Math.min(
-    measured * 0.78,
-    footer ? Math.max(160, (boxHeight || 812) * 0.32) : measured * 0.78,
-  );
+  const heroWidth = measured * 0.78;
 
   // The title is the loudest element, so it fills the measure and is allowed
   // to wrap rather than shrink — two balanced serif lines read as an
@@ -194,7 +188,7 @@ export function MidnightInvitationCover({
 
         {/* ── Form ── */}
         <View style={[S.form, { width: heroWidth, marginTop: Math.round(spacing.xl * scale) }]}>
-          {footer ?? <>
+          {showNameInput ? (
           <Pressable
               onPress={onNameFieldPress}
               disabled={!onNameFieldPress || !interactive}
@@ -224,6 +218,7 @@ export function MidnightInvitationCover({
                 accessibilityLabel="Your name"
               />
             </Pressable>
+          ) : null}
 
           {error || (showValidation && !isNameValid) ? (
             <AppText align="center" style={S.error} accessibilityLiveRegion="polite">
@@ -235,7 +230,7 @@ export function MidnightInvitationCover({
               onPress={onJoin}
               disabled={disabled}
               accessibilityRole="button"
-              accessibilityLabel="Join the event"
+              accessibilityLabel={ctaLabel}
               accessibilityState={{ disabled, busy: isJoining }}
               style={({ pressed }) => [
                 S.cta,
@@ -251,11 +246,10 @@ export function MidnightInvitationCover({
                 <ActivityIndicator color={INK} />
               ) : (
                 <AppText style={[S.ctaLabel, { fontSize: Math.round(15 * scale) }]}>
-                  JOIN
+                  {ctaLabel.toUpperCase()}
                 </AppText>
               )}
             </Pressable>
-          </>}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

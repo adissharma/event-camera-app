@@ -4,6 +4,7 @@ import {
   isEventEnded,
   msUntilReveal,
   resolveRevealModalState,
+  canHostSeePhotos,
 } from './state';
 
 /** A fixed clock, so nothing here depends on when it runs. */
@@ -159,5 +160,27 @@ describe('formatRevealCountdown', () => {
   it('handles having already arrived', () => {
     expect(formatRevealCountdown(0)).toBe('any moment now');
     expect(formatRevealCountdown(-5000)).toBe('any moment now');
+  });
+});
+
+describe('canHostSeePhotos', () => {
+  const now = Date.parse('2026-11-06T12:00:00Z');
+
+  it('holds photos back until a scheduled time arrives', () => {
+    expect(canHostSeePhotos({ now, hostRevealMode: 'scheduled', hostRevealAt: '2026-11-06T13:00:00Z' })).toBe(false);
+    expect(canHostSeePhotos({ now, hostRevealMode: 'scheduled', hostRevealAt: '2026-11-06T11:00:00Z' })).toBe(true);
+  });
+
+  it('shows photos straight away when revealed immediately', () => {
+    expect(canHostSeePhotos({ now, hostRevealMode: 'instant', hostRevealAt: null })).toBe(true);
+  });
+
+  it('never locks out a host from before they had a time of their own', () => {
+    expect(canHostSeePhotos({ now, hostRevealMode: null, hostRevealAt: null })).toBe(true);
+    expect(canHostSeePhotos({ now, hostRevealMode: undefined, hostRevealAt: undefined })).toBe(true);
+  });
+
+  it('does not lock a host out with nothing to wait for', () => {
+    expect(canHostSeePhotos({ now, hostRevealMode: 'manual', hostRevealAt: null })).toBe(true);
   });
 });

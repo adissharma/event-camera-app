@@ -86,7 +86,7 @@ export function RevealDelaySheet({
   onConfirm,
 }: {
   visible: boolean;
-  /** The event's closing time — the default answer, and where custom starts. */
+  /** The event's closing time — one of the answers, and where custom starts. */
   eventEndsAt: Date | null;
   /** Reveal window, from the same rules the rest of the flow uses. */
   earliest: Date;
@@ -225,7 +225,7 @@ export function RevealDelaySheet({
               onPress={selectEventEnd}
             />
             <ModePill
-              label="Custom date"
+              label="Custom"
               icon
               selected={mode === 'custom'}
               onPress={() => setMode('custom')}

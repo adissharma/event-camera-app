@@ -30,6 +30,7 @@ import { GuestCoverPreview, parseCoverTheme } from './guest-cover-preview';
 import { colours, easing, spacing, useMotion } from '@/design';
 import type { CreationDraft } from '../draft/types';
 import type { ThemeRow } from '@/types/database';
+import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 
 export interface ThemeCarouselProps {
   draft: CreationDraft;
@@ -326,8 +327,7 @@ function FullScreenCoverPreviewPager({
   }, [initialIndex, translateY, visible, width]);
 
   function handlePanEvent(event: { nativeEvent: { translationY?: number } }) {
-    const translationY = event.nativeEvent.translationY ?? 0;
-    if (translationY > 0) translateY.value = translationY;
+    translateY.value = event.nativeEvent.translationY ?? 0;
   }
 
   function handlePanStateChange(event: {
@@ -337,8 +337,13 @@ function FullScreenCoverPreviewPager({
     if (event.nativeEvent.state === 5) {
       const translationY = event.nativeEvent.translationY ?? 0;
       const velocityY = event.nativeEvent.velocityY ?? 0;
-      if (translationY > 120 || velocityY > 0.5) {
-        translateY.value = withTiming(height, { duration: 200 });
+      const direction = swipeDismissDirection(translationY, velocityY, {
+        distance: 120,
+        flickDistance: 12,
+        flickVelocity: 500,
+      });
+      if (direction !== 0) {
+        translateY.value = withTiming(direction * height, { duration: 200 });
         dismissTimerRef.current = setTimeout(() => {
           onClose();
           translateY.value = 0;

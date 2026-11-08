@@ -299,6 +299,11 @@ export function deriveGuestRevealFields(draft: CreationDraft): {
   };
 }
 
+/** The host's own reveal, as the session stores it. */
+export function resolveHostReveal(draft: CreationDraft): { mode: RevealMode; revealAt: string | null } {
+  return resolveReveal(draft.hostRevealChoice, draft.endsAt, draft.hostCustomRevealAt);
+}
+
 export function resolveGuestReveal(draft: CreationDraft): {
   mode: RevealMode;
   revealAt: string | null;

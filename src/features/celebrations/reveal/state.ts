@@ -73,6 +73,28 @@ export function canViewerSeePhotos({ now, revealAt, revealMode }: Omit<RevealInp
 }
 
 /**
+ * Whether the host can see the photos yet, by their own reveal time.
+ *
+ * Only a scheduled time still to come holds them back. Anything else shows them,
+ * including no time at all, which is every session from before hosts had one. A
+ * manual reveal would otherwise lock a host out of their own event with nothing
+ * to wait for.
+ */
+export function canHostSeePhotos({
+  now,
+  hostRevealMode,
+  hostRevealAt,
+}: {
+  now: number;
+  hostRevealMode: RevealMode | null | undefined;
+  hostRevealAt: string | null | undefined;
+}): boolean {
+  if (hostRevealMode !== 'scheduled') return true;
+  const reveal = timestamp(hostRevealAt);
+  return reveal === null || now >= reveal;
+}
+
+/**
  * Milliseconds until the photos unlock, or null when there is nothing to wait
  * for — either they are already visible, or no reveal time exists to count to.
  */

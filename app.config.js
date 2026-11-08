@@ -50,7 +50,14 @@ module.exports = ({ config }) => {
   };
 
   if (!IS_CLIP) {
-    return variantConfig;
+    return {
+      ...variantConfig,
+      ios: {
+        ...variantConfig.ios,
+        usesAppleSignIn: true,
+      },
+      plugins: [...plugins, 'expo-apple-authentication'],
+    };
   }
 
   return {

@@ -6,6 +6,8 @@
  * platform. Resolving the platform here instead is what actually keeps the portal
  * out of the native app: iOS and Android get `routes.ts`.
  */
+export { default as HostCreateScreen } from '@/features/web-create/create-screen';
+export { default as HostCreatedScreen } from '@/features/web-create/created-screen';
 export { default as HostEventLayout } from './event-layout';
 export { default as HostEventsScreen } from './events-screen';
 export { default as HostGuestbookScreen } from './guestbook-screen';

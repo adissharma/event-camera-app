@@ -475,6 +475,8 @@ export async function fetchCelebrationDetail(celebrationId: string): Promise<Cel
           ends_at: found.primarySession.ends_at,
           reveal_at: found.primarySession.reveal_at,
           reveal_mode: found.primarySession.reveal_mode,
+          host_reveal_mode: (found.primarySession as any).host_reveal_mode ?? null,
+          host_reveal_at: (found.primarySession as any).host_reveal_at ?? null,
           photo_treatment: found.primarySession.photo_treatment ?? 'original',
           date_stamp_enabled: found.primarySession.date_stamp_enabled ?? false,
           gallery_visibility: found.primarySession.gallery_visibility ?? 'all_guests',
@@ -669,6 +671,8 @@ async function tryFetchCelebrationDetailAsGuest(
     ends_at: s.ends_at ?? c.ends_at ?? null,
     reveal_at: s.reveal_at ?? null,
     reveal_mode: s.reveal_mode ?? 'instant',
+    host_reveal_mode: s.host_reveal_mode ?? null,
+    host_reveal_at: s.host_reveal_at ?? null,
     photo_treatment: s.photo_treatment ?? 'original',
     date_stamp_enabled: s.date_stamp_enabled ?? false,
     gallery_visibility: s.gallery_visibility ?? 'all_guests',
@@ -808,6 +812,9 @@ export interface EventSettingsPatch {
   endsAt?: string | null;
   revealMode?: RevealMode;
   revealAt?: string | null;
+  /** The host's own reveal, which `revealMode` and `revealAt` are not: those are the guests'. */
+  hostRevealMode?: RevealMode;
+  hostRevealAt?: string | null;
   galleryVisibility?: GalleryVisibility;
   guestDownloadsEnabled?: boolean;
   shotLimitPerGuest?: number | null;
@@ -862,6 +869,12 @@ export async function updateEventSettings(
         }
         if (patch.revealMode !== undefined) {
           if (item.primarySession) item.primarySession.reveal_mode = patch.revealMode;
+        }
+        if (patch.hostRevealMode !== undefined && item.primarySession) {
+          const session = item.primarySession as any;
+          session.host_reveal_mode = patch.hostRevealMode;
+          session.host_reveal_at =
+            patch.hostRevealMode === 'scheduled' ? patch.hostRevealAt ?? null : null;
         }
         if (patch.revealAt !== undefined) {
           if (item.primarySession) item.primarySession.reveal_at = patch.revealAt;
@@ -954,6 +967,29 @@ export async function updateEventSettings(
       .eq('id', eventSessionId);
     if (error) throw error;
   }
+
+  if (patch.hostRevealMode !== undefined) {
+    await saveHostReveal(eventSessionId, patch.hostRevealMode, patch.hostRevealAt ?? null);
+  }
+}
+
+/**
+ * Saves the host's own reveal.
+ *
+ * Its own update, after everything else, so a database without these columns yet
+ * costs only this: the host keeps seeing photos as they arrive, as before.
+ */
+export async function saveHostReveal(
+  eventSessionId: string,
+  mode: RevealMode,
+  revealAt: string | null,
+): Promise<void> {
+  const { error } = await (requireSupabase() as any)
+    .from('event_sessions')
+    .update({ host_reveal_mode: mode, host_reveal_at: mode === 'scheduled' ? revealAt : null })
+    .eq('id', eventSessionId);
+  // PGRST204: the columns do not exist yet.
+  if (error && error.code !== 'PGRST204') throw error;
 }
 
 /** Soft-deletes. Recoverable, and media cleanup is queued rather than immediate. */

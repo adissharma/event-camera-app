@@ -135,6 +135,15 @@ type PendingChallengePost = {
 function formatUploadFailure(mediaType: 'photo' | 'video' | 'audio', error: unknown) {
   const fallback = `Your ${mediaType} could not be uploaded. Please try again.`;
   if (!(error instanceof Error) || !error.message) return fallback;
+  if (error.message.includes('camera_roll_limit_reached')) {
+    return "You've added as many photos from your camera roll as this event allows. Photos you take here still count.";
+  }
+  if (error.message.includes('video_limit_reached')) {
+    return "You've posted all the videos this event allows. You can still take photos.";
+  }
+  if (error.message.includes('guestbook_messages_unavailable')) {
+    return "This event's Guestbook isn't taking messages.";
+  }
   return `${fallback}\n\n${error.message}`;
 }
 
@@ -417,6 +426,37 @@ export default function CameraScreen() {
   const entitlements = useEventEntitlements(celebrationId);
   const videoUnlocked = entitlements.has('video');
   const showVideoOption = videoCaptureEnabled && (videoUnlocked || !isGuest);
+
+  /*
+   * Videos per guest. Free allows one; Stills+ any number. A guest's own
+   * uploads always come back to them in the event detail, whatever the reveal
+   * settings, so the ones they have posted can be counted from there.
+   * `videosPostedHere` covers the gap between finishing an upload and the
+   * detail refreshing, so a second recording is refused up front rather than
+   * by the server after the guest has filmed it. The server enforces the same
+   * limit either way.
+   */
+  const [videosPostedHere, setVideosPostedHere] = useState(0);
+  const videosUsed = Math.max(
+    videosPostedHere,
+    (detail?.mediaPhotos ?? []).filter((item) => item.isMine && item.mediaType === 'video').length,
+  );
+  const videosLeft =
+    isGuest && typeof entitlements.videosPerGuest === 'number'
+      ? Math.max(0, entitlements.videosPerGuest - videosUsed)
+      : null;
+  const outOfVideos = videosLeft !== null && videosLeft <= 0;
+
+  // The Guestbook recorder is only for events whose package lets guests leave
+  // messages. Its button is hidden otherwise; this covers the other ways in.
+  const guestbookClosed =
+    isGuestbookCapture &&
+    isGuest &&
+    !entitlements.isLoading &&
+    !entitlements.has('guestbookMessages');
+  useEffect(() => {
+    if (guestbookClosed) returnFromCamera();
+  }, [guestbookClosed, returnFromCamera]);
   const [videoUpgradeOpen, setVideoUpgradeOpen] = useState(false);
   const captureMode = primarySession?.capture_mode ?? 'camera_and_library';
   const showCameraRollAction = captureMode !== 'camera_only' && !isGuestbookCapture;
@@ -613,8 +653,14 @@ export default function CameraScreen() {
     }
     if (!videoCaptureEnabled && captureType !== 'photo') {
       setCaptureType('photo');
+      return;
     }
-  }, [videoCaptureEnabled, captureType, isGuestbookCapture, isWeb]);
+    // The last video allowed has gone: back to photos rather than leaving the
+    // guest in a mode that would be refused.
+    if (outOfVideos && captureType === 'video' && !isRecording) {
+      setCaptureType('photo');
+    }
+  }, [videoCaptureEnabled, captureType, isGuestbookCapture, isWeb, outOfVideos, isRecording]);
 
   useEffect(() => {
     Animated.timing(captureModeAnim, {
@@ -880,6 +926,15 @@ export default function CameraScreen() {
     // having it — instead of nothing.
     if (next === 'video' && !videoUnlocked) {
       setVideoUpgradeOpen(true);
+      return;
+    }
+    if (next === 'video' && outOfVideos) {
+      Alert.alert(
+        'Your video is in',
+        videosLeft === 0 && entitlements.videosPerGuest === 1
+          ? "You've posted your video for this event. Keep the photos coming!"
+          : "You've posted all the videos this event allows. Keep the photos coming!",
+      );
       return;
     }
     setCaptureType(next);
@@ -1232,6 +1287,7 @@ export default function CameraScreen() {
         // allowance, so `shotsUsed` here would be misleading if surfaced.
         if (!effectivePreview.guestbook) {
           maybeShowGuestLimitMilestone(uploadResult.shotsUsed);
+          if (mediaKind === 'video') setVideosPostedHere(videosUsed + 1);
         }
       } else if (!isGuest && celebrationId) {
         const uploadResult = await uploadHostMedia({
@@ -2711,7 +2767,7 @@ export default function CameraScreen() {
                       isRecording && { opacity: 0.45 },
                       // Visible but quieter — the host can see the mode
                       // exists, and tapping it says how to get it.
-                      option.key === 'video' && !videoUnlocked && { opacity: 0.5 },
+                      option.key === 'video' && (!videoUnlocked || outOfVideos) && { opacity: 0.5 },
                     ]}
                   >
                     {option.label}
@@ -2734,6 +2790,7 @@ export default function CameraScreen() {
           celebrationId={String(celebrationId)}
           currentPlan={entitlements.plan}
           options={upgradesForFeature(entitlements.plan, 'video')}
+          feature="video"
           title="Unlock Video"
           onClose={() => setVideoUpgradeOpen(false)}
           onUpgraded={() => {

@@ -54,6 +54,7 @@ export default function RevealStep() {
           at: draft.hostCustomRevealAt,
         },
   );
+  const choseEventEnd = useRef(false);
   const hostReveal = resolveReveal(
     draft.hostRevealChoice,
     draft.endsAt,
@@ -197,6 +198,7 @@ export default function RevealStep() {
 
   function handleDelayConfirm(mode: DelayMode, revealAt: Date) {
     setDelaySheetOpen(false);
+    choseEventEnd.current = mode === 'at_close';
     lastDelay.current = {
       mode,
       at: mode === 'custom' ? clampToWindow(revealAt).toISOString() : null,
@@ -373,7 +375,12 @@ export default function RevealStep() {
                   <PencilIcon size={13} color={colours.textSecondary} />
                 </Pressable>
               </View>
-            ) : null}
+            ) : (
+              // Nothing to change here, so plain text: no pencil, no tap.
+              <AppText variant="bodySmall" align="center" style={{ color: '#FFFFFF' }}>
+                Reveals as photos are taken
+              </AppText>
+            )}
           </View>
         </View>
 
@@ -399,9 +406,9 @@ export default function RevealStep() {
         eventEndsAt={draft.endsAt ? new Date(draft.endsAt) : null}
         earliest={revealWindow.earliest}
         latest={revealWindow.latest}
-        // Defaults to the event's own closing time. Only a delay that was
-        // actually saved as a custom moment opens on the wheels.
-        initialMode={lastDelay.current?.mode ?? 'at_close'}
+        // A new draft already sits on the event's close, so that alone cannot
+        // mean the host picked it. Opens on the wheels until they have.
+        initialMode={choseEventEnd.current ? 'at_close' : 'custom'}
         initialCustomAt={
           lastDelay.current?.at ? new Date(lastDelay.current.at) : null
         }

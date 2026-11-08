@@ -65,6 +65,7 @@ export function buildPreviewDetail(draft: CreationDraft): CelebrationDetail {
     location_address: null,
     created_at: draft.createdAt,
     updated_at: now,
+    delete_after: null,
     deleted_at: null,
   };
 
@@ -86,6 +87,9 @@ export function buildPreviewDetail(draft: CreationDraft): CelebrationDetail {
     gallery_visibility: draft.galleryVisibility,
     guest_downloads_enabled: draft.guestDownloadsEnabled,
     reveal_mode: reveal.mode,
+    guest_limit: null,
+    host_reveal_at: null,
+    host_reveal_mode: null,
     reveal_at: reveal.revealAt,
     ends_at: draft.endsAt,
     starts_at: null,

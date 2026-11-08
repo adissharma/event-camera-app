@@ -121,5 +121,13 @@ export async function upgradeEventPlan({
     );
   }
 
+  // The session holds its own copy of the camera-roll allowance, and the grant
+  // does not touch it. Raising it here is what the host just paid for; failing to
+  // only leaves the old number, so it does not fail the upgrade.
+  const { error: limitError } = await client
+    .from('event_sessions')
+    .update({ camera_roll_upload_limit: to.cameraRollUploadLimit })
+    .eq('celebration_id', celebrationId);
+  if (limitError) console.warn('[upgrade] could not raise the camera-roll allowance', limitError);
   return to.catalogueKey;
 }

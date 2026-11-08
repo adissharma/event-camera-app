@@ -51,12 +51,32 @@ export function suggestionsFor(firstName: string): NameSuggestion[] {
       label: engagementPrefix,
       gapLabel: 'name',
       labelSuffix: engagementSuffix,
-      value: `${engagementPrefix}engagement`,
-      // Drops the cursor between "and " and " engagement".
+      value: `${engagementPrefix}${engagementSuffix}`,
+      // Drops the cursor between the two spaces, so the host types only the
+      // name and never a space of their own.
       cursorAt: engagementPrefix.length,
     },
     { label: `${owned} wedding`, value: `${owned} wedding` },
   ];
+}
+
+/**
+ * Whether the host is filling in a suggestion's gap, empty or part-written.
+ *
+ * The name going there is a proper noun in the middle of a sentence, so the
+ * keyboard needs telling to capitalise it. That has to be the keyboard's job:
+ * iOS ignores text set by the app while it holds a word for autocorrect, so
+ * rewriting the letter afterwards leaves it lowercase.
+ */
+export function isFillingGap(title: string, suggestions: NameSuggestion[]): boolean {
+  return suggestions.some(({ value, cursorAt }) => {
+    if (cursorAt === undefined) return false;
+    return (
+      title.length >= value.length &&
+      title.startsWith(value.slice(0, cursorAt)) &&
+      title.endsWith(value.slice(cursorAt))
+    );
+  });
 }
 
 /**

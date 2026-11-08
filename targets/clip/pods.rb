@@ -20,7 +20,6 @@ clip_excluded_packages = [
   "expo-dev-menu-interface",
   "expo-device",
   "expo-eas-client",
-  "expo-glass-effect",
   "expo-image",
   "expo-log-box",
   "expo-keep-awake",

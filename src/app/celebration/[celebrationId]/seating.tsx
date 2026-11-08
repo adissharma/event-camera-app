@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { useIsEventHost } from '@/features/entitlements/use-event-role';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, View, type TextInput } from 'react-native';
 import { requireOptionalNativeModule } from 'expo';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -65,7 +67,7 @@ function importSummary(added: number, updated: number) {
 /** `null` index means the sheet is adding a new guest rather than editing one. */
 type Draft = { index: number | null; name: string; seat: string };
 
-export default function SeatingPlanScreen() {
+function SeatingPlanScreenContent() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -641,3 +643,23 @@ const styles = StyleSheet.create({
     color: colours.error,
   },
 });
+
+/**
+ * Seating is not on Free or Small Event, so the screen checks before it renders
+ * rather than trusting whatever opened it.
+ */
+export default function SeatingPlanScreen() {
+  const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
+  const { isHost } = useIsEventHost(String(celebrationId));
+
+  return (
+    <FeatureGate
+      celebrationId={String(celebrationId)}
+      feature="seating"
+      title="Unlock Seating Plan"
+      isHost={isHost}
+    >
+      <SeatingPlanScreenContent />
+    </FeatureGate>
+  );
+}

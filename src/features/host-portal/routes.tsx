@@ -10,6 +10,8 @@ function HostPortalNativeRedirect() {
 }
 
 export {
+  HostPortalNativeRedirect as HostCreateScreen,
+  HostPortalNativeRedirect as HostCreatedScreen,
   HostPortalNativeRedirect as HostEventLayout,
   HostPortalNativeRedirect as HostEventsScreen,
   HostPortalNativeRedirect as HostGuestbookScreen,

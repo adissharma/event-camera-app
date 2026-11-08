@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
 const root = process.cwd();
 const fromRoot = (path) => resolve(root, path);
@@ -13,6 +13,7 @@ const requiredRoutes = [
   'src/app-clip/celebration/[celebrationId]/challenges/index.tsx',
   'src/app-clip/celebration/[celebrationId]/challenges/[challengeId].tsx',
   'src/app-clip/celebration/[celebrationId]/photos/[photoId].tsx',
+  'src/app-clip/celebration/[celebrationId]/find-seat.tsx',
 ];
 
 const forbiddenRoutes = [
@@ -44,7 +45,6 @@ for (const moduleName of [
   '@/features/celebrations/sample-event',
   '@/features/entitlements/upgrade-sheet',
   '@react-native-masked-view/masked-view',
-  'expo-glass-effect',
 ]) {
   if (!metro.includes(moduleName)) errors.push(`Missing Clip runtime replacement: ${moduleName}`);
 }
@@ -106,6 +106,59 @@ if (
 }
 if (!layout.includes('useSystemEntryCoordinator()')) {
   errors.push('The Clip layout must mount the system entry coordinator.');
+}
+
+// ── Native modules the Clip leaves out must not be imported on its routes ──
+// The pods.rb list keeps these out of the Clip binary; importing one from any
+// screen the Clip reaches is a crash on that screen ("Cannot find native
+// module"), which no type check or web build notices. Follow every import from
+// the Clip's routes, through the same replacements Metro makes for the Clip,
+// and fail on any excluded package.
+{
+  const excluded = [...pods.matchAll(/^\s*"([^"]+)",\s*$/gm)].map((match) => match[1]);
+  const replaced = new Map(
+    [...metro.matchAll(/\['([^']+)',\s*'([^']+)'\]/g)].map((match) => [
+      match[1],
+      fromRoot(`src/app-clip-runtime/${match[2]}`),
+    ]),
+  );
+  const extensions = ['.ios.tsx', '.native.tsx', '.tsx', '.ios.ts', '.native.ts', '.ts', '.js'];
+  const resolveFile = (base) => {
+    for (const candidate of [base, ...extensions.map((ext) => base + ext), ...extensions.map((ext) => join(base, 'index' + ext))]) {
+      if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
+    }
+    return null;
+  };
+  const walk = (dir) =>
+    readdirSync(dir).flatMap((name) => {
+      const path = join(dir, name);
+      return statSync(path).isDirectory() ? walk(path) : [path];
+    });
+
+  const seen = new Set();
+  const queue = walk(fromRoot('src/app-clip')).map((path) => [path, 'src/app-clip']);
+  while (queue.length > 0) {
+    const [file, via] = queue.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const source = readFileSync(file, 'utf8');
+    for (const match of source.matchAll(/(?:^|\n)\s*(?:import|export)[^'"]*?from\s+['"]([^'"]+)['"]|(?:^|\n)\s*import\s+['"]([^'"]+)['"]|require\(\s*['"]([^'"]+)['"]\s*\)/g)) {
+      const spec = match[1] ?? match[2] ?? match[3];
+      if (replaced.has(spec)) {
+        queue.push([replaced.get(spec), file]);
+        continue;
+      }
+      const pkg = spec.startsWith('@') && !spec.startsWith('@/') ? spec.split('/').slice(0, 2).join('/') : spec.split('/')[0];
+      if (excluded.includes(pkg)) {
+        errors.push(`${file.replace(root + '/', '')} imports "${spec}", which the Clip leaves out (targets/clip/pods.rb).`);
+        continue;
+      }
+      let target = null;
+      if (spec.startsWith('@/')) target = resolveFile(fromRoot('src/' + spec.slice(2)));
+      else if (spec.startsWith('.')) target = resolveFile(resolve(dirname(file), spec));
+      if (target) queue.push([target, file]);
+    }
+  }
 }
 
 if (errors.length > 0) {

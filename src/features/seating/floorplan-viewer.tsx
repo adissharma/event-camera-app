@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
@@ -9,7 +10,6 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { Image } from 'expo-image';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -19,7 +19,7 @@ import { AppText } from '@/components/ui/text';
 import { colours, layout, radii, spacing } from '@/design';
 
 const MAX_SCALE = 6;
-const DOUBLE_TAP_SCALE = 2.5;
+const MIN_PINCH_SCALE = 0.8;
 
 type Size = { width: number; height: number };
 
@@ -29,8 +29,8 @@ function clamp(value: number, min: number, max: number) {
 }
 
 /**
- * The host's floor plan, fitted to the space it is given, with pinch to
- * zoom around the fingers, drag to pan, and double-tap to zoom in or back out.
+ * The host's floor plan, fitted to the space it is given. Pinching is the only
+ * thing that changes its size; dragging with one finger moves it around.
  *
  * Panning is bounded so the plan can never be dragged off screen, and a pinch
  * below its fitted size springs back rather than leaving a postage stamp.
@@ -61,11 +61,11 @@ export function FloorplanViewer({
   const fittedHeight = fitted?.height ?? 0;
 
   const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
   const x = useSharedValue(0);
   const y = useSharedValue(0);
-  const savedX = useSharedValue(0);
-  const savedY = useSharedValue(0);
+  // Each gesture keeps its own starting point, so neither can disturb the other.
+  const pinchStart = useSharedValue({ scale: 1, x: 0, y: 0, focalX: 0, focalY: 0 });
+  const panStart = useSharedValue({ x: 0, y: 0 });
 
   const bounds = (atScale: number) => {
     'worklet';
@@ -75,76 +75,51 @@ export function FloorplanViewer({
     };
   };
 
-  const settle = () => {
-    'worklet';
-    const nextScale = clamp(scale.value, 1, MAX_SCALE);
-    const limit = bounds(nextScale);
-    scale.value = withTiming(nextScale);
-    x.value = withTiming(clamp(x.value, -limit.x, limit.x));
-    y.value = withTiming(clamp(y.value, -limit.y, limit.y));
-    savedScale.value = nextScale;
-    savedX.value = clamp(x.value, -limit.x, limit.x);
-    savedY.value = clamp(y.value, -limit.y, limit.y);
-  };
-
   const pinch = Gesture.Pinch()
     .enabled(interactive)
-    .onStart(() => {
-      savedScale.value = scale.value;
-      savedX.value = x.value;
-      savedY.value = y.value;
+    .onStart((event) => {
+      pinchStart.value = {
+        scale: scale.value,
+        x: x.value,
+        y: y.value,
+        focalX: event.focalX - frameWidth / 2,
+        focalY: event.focalY - frameHeight / 2,
+      };
     })
     .onUpdate((event) => {
-      const next = clamp(savedScale.value * event.scale, 0.8, MAX_SCALE);
-      const ratio = next / savedScale.value;
-      // Keep the point between the fingers fixed while the plan grows.
-      const focalX = event.focalX - frameWidth / 2;
-      const focalY = event.focalY - frameHeight / 2;
+      // Once a finger lifts, the focal point jumps to the one left behind.
+      if (event.numberOfPointers !== 2) return;
+      const start = pinchStart.value;
+      const next = clamp(start.scale * event.scale, MIN_PINCH_SCALE, MAX_SCALE);
+      const ratio = next / start.scale;
+      // The point first pinched stays under the fingers as they move and spread.
       scale.value = next;
-      x.value = focalX - (focalX - savedX.value) * ratio;
-      y.value = focalY - (focalY - savedY.value) * ratio;
+      x.value = event.focalX - frameWidth / 2 - (start.focalX - start.x) * ratio;
+      y.value = event.focalY - frameHeight / 2 - (start.focalY - start.y) * ratio;
     })
-    .onEnd(settle);
+    .onEnd(() => {
+      const nextScale = Math.max(scale.value, 1);
+      const limit = bounds(nextScale);
+      if (nextScale !== scale.value) scale.value = withTiming(nextScale);
+      x.value = withTiming(clamp(x.value, -limit.x, limit.x));
+      y.value = withTiming(clamp(y.value, -limit.y, limit.y));
+    });
 
+  // One finger only, and it only ever moves the plan: reaching an edge stops
+  // the drag and leaves the zoom exactly as the guest set it.
   const pan = Gesture.Pan()
     .enabled(interactive)
-    .averageTouches(true)
+    .maxPointers(1)
     .onStart(() => {
-      savedX.value = x.value;
-      savedY.value = y.value;
+      panStart.value = { x: x.value, y: y.value };
     })
     .onUpdate((event) => {
       const limit = bounds(scale.value);
-      x.value = clamp(savedX.value + event.translationX, -limit.x, limit.x);
-      y.value = clamp(savedY.value + event.translationY, -limit.y, limit.y);
-    })
-    .onEnd(settle);
-
-  const doubleTap = Gesture.Tap()
-    .enabled(interactive)
-    .numberOfTaps(2)
-    .onEnd((event) => {
-      if (scale.value > 1.05) {
-        scale.value = withTiming(1);
-        x.value = withTiming(0);
-        y.value = withTiming(0);
-        savedScale.value = 1;
-        savedX.value = 0;
-        savedY.value = 0;
-        return;
-      }
-      const limit = bounds(DOUBLE_TAP_SCALE);
-      const nextX = clamp(-(event.x - frameWidth / 2) * (DOUBLE_TAP_SCALE - 1), -limit.x, limit.x);
-      const nextY = clamp(-(event.y - frameHeight / 2) * (DOUBLE_TAP_SCALE - 1), -limit.y, limit.y);
-      scale.value = withTiming(DOUBLE_TAP_SCALE);
-      x.value = withTiming(nextX);
-      y.value = withTiming(nextY);
-      savedScale.value = DOUBLE_TAP_SCALE;
-      savedX.value = nextX;
-      savedY.value = nextY;
+      x.value = clamp(panStart.value.x + event.translationX, -limit.x, limit.x);
+      y.value = clamp(panStart.value.y + event.translationY, -limit.y, limit.y);
     });
 
-  const gesture = Gesture.Simultaneous(pinch, pan, doubleTap);
+  const gesture = Gesture.Simultaneous(pinch, pan);
 
   const planStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: scale.value }],
@@ -173,11 +148,14 @@ export function FloorplanViewer({
               ]}
             >
               <Image
+                // React Native's own Image rather than expo-image: the App Clip
+                // leaves expo-image out, and guests reach this from the join screen.
                 source={{ uri }}
                 style={StyleSheet.absoluteFill}
-                contentFit="contain"
-                transition={150}
-                onLoad={(event) => setNatural({ width: event.source.width, height: event.source.height })}
+                resizeMode="contain"
+                onLoad={(event) =>
+                  setNatural({ width: event.nativeEvent.source.width, height: event.nativeEvent.source.height })
+                }
               />
             </Animated.View>
           ) : null}
@@ -223,7 +201,7 @@ export function FloorplanModal({
         <FloorplanViewer uri={uri} style={styles.modalViewer} />
         <View style={[styles.modalFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
           <AppText variant="bodySmall" tone="secondary" align="center">
-            {caption || 'Pinch to zoom. Double-tap to zoom in or out.'}
+            {caption || 'Pinch to zoom and drag to look around.'}
           </AppText>
         </View>
       </GestureHandlerRootView>
