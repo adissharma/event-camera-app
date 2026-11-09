@@ -88,6 +88,7 @@ import { deleteHostPhoto } from '@/services/media-delete';
 import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
+import { CoverGlass } from '@/components/ui/cover-glass';
 import { EventGlass, EVENT_GLASS_RADIUS } from '@/components/ui/event-glass';
 import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 import { TreatedPhoto } from '@/components/media/treated-photo';
@@ -4470,11 +4471,21 @@ export function EventDetailView({
             { marginTop: -(HERO_CLIP_H - CARD_TOP), transform: [{ translateY: cardBounce }] },
           ]}
         >
-          <EventGlass
-            isLeaving={previewMode?.isGlassLeaving}
-            leaveDurationMs={previewMode?.glassLeaveMs}
-            leaveOpacity={previewMode?.overlays?.chromeOpacity}
-          />
+          {Platform.OS === 'web' && !previewMode ? (
+            <CoverGlass
+              cover={getCoverSource()}
+              coverTop={IMG_TOP - CARD_TOP}
+              coverHeight={IMG_H}
+              reach={HERO_CLIP_H - CARD_TOP}
+              motion={{ distance: HERO_TOTAL, follow: HERO_COVER_FOLLOW }}
+            />
+          ) : (
+            <EventGlass
+              isLeaving={previewMode?.isGlassLeaving}
+              leaveDurationMs={previewMode?.glassLeaveMs}
+              leaveOpacity={previewMode?.overlays?.chromeOpacity}
+            />
+          )}
 
           {/* Fades on its own, not with the card: the glass cannot have a fading parent. */}
           <Animated.View
