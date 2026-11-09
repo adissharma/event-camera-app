@@ -287,6 +287,10 @@ export function StoryMarkup() {
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
                 </span>
               </button>
+              <button type="button" className="keep-going" data-el="keepGoing">
+                <span data-el="keepGoingText" />
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
+              </button>
               <nav className="chapters" data-el="chapters" aria-label="Chapters">
                 {chapters.map(({ k, label }) => (
                   <button key={k} type="button" data-group="chapter" data-chapter={k}>

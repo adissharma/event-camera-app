@@ -1,4 +1,5 @@
 import { buildStory, type Els, type Layout, type Story } from './choreography';
+import { KEEP_GOING } from './content';
 import { WORLD } from './world';
 
 /**
@@ -6,11 +7,34 @@ import { WORLD } from './world';
  *
  * State lives here and in the DOM rather than in React, so nothing re-renders
  * per frame (and see the React Compiler note in the memory on module state).
+ *
+ * One scroll, swipe or key press plays a whole slide at its own pace and stops, because
+ * people scroll far too fast to take in a story that moves only as far as they do. The
+ * page's real scroll position jumps to the end of the slide straight away, under the
+ * pinned stage, so the scrollbar, the browser's own jumps and the FAQs all keep working.
  */
 
 const SMOOTHING = 7.5;
-/** Where the scroll nudge lands: the phone, with the App Clip card up. */
-const NUDGE_TO = 1.6;
+/** Another scroll while a slide is playing hurries it along. */
+const HURRY = 3;
+/** Going back is navigation, not a second viewing: any slide, in this many seconds. */
+const BACK_SECONDS = 0.3;
+/** The last slide has the most to get through. */
+const LAST_SLIDE = 1.3;
+/** How long a finished slide sits before teasing the next one. */
+const PROMPT_AFTER = 1000;
+/** A pause this long between wheel events starts a new gesture; a trackpad's momentum never leaves one. */
+const WHEEL_QUIET = 180;
+/** Going back is quick navigation, so a mouse wheel's separate notches each count. */
+const WHEEL_QUIET_BACK = 90;
+/** While a trackpad's momentum dies away, a clear jump in speed is a new flick. Not straight after one, as a flick starts by ramping up. */
+const WHEEL_RISE = 1.6;
+const WHEEL_RISE_MARGIN = 8;
+const WHEEL_RISE_AFTER = 300;
+/** Just into the FAQs still counts as on the last slide, so going back doesn't take two tries. */
+const NEAR_END_VH = 0.25;
+/** How far a finger travels before it counts as a swipe. */
+const SWIPE = 16;
 /** Past a section's words on the sky, with the whole scene showing and nothing started yet. */
 const SECTION_LANDS = 0.9;
 /** How long a phone's mock stays on each party, in ms. */
@@ -87,7 +111,7 @@ export function bootStory(root: HTMLElement): () => void {
   }
   /** Phones show just a gradient behind every party but the wedding, while the hero's up. */
   function syncPlain() {
-    root.classList.toggle('uc-plain', ucShown !== 0 && window.scrollY <= 4);
+    root.classList.toggle('uc-plain', ucShown !== 0 && window.scrollY <= 4 && (!story || target() < 0.02));
     if (story) syncChrome();
   }
   const onUcClick = (e: Event) => showUseCase(ucTabs.indexOf(e.currentTarget as HTMLButtonElement));
@@ -118,6 +142,12 @@ export function bootStory(root: HTMLElement): () => void {
   let chapter = '';
   let lastLightKey = '';
   let repaintTimer: ReturnType<typeof setTimeout> | undefined;
+  /** A slide playing by itself: where it's heading, how fast and which way. */
+  let play: { to: number; rate: number; dir: 1 | -1 } | null = null;
+  let playhead = 0;
+  /** Where the page should be while a slide plays. Anywhere else, and something else moved it. */
+  let playingAt = 0;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   function measure() {
     const rect = els.stage.getBoundingClientRect();
@@ -299,6 +329,7 @@ export function bootStory(root: HTMLElement): () => void {
   }
 
   function target() {
+    if (play) return playhead;
     const start = track.getBoundingClientRect().top + window.scrollY;
     return Math.max(0, Math.min(story.T, (window.scrollY - start) / (UNIT_VH * layout.h)));
   }
@@ -307,6 +338,23 @@ export function bootStory(root: HTMLElement): () => void {
     raf = 0;
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
+    if (play) {
+      playhead += dt * play.rate * play.dir;
+      const arrived = play.dir > 0 ? playhead >= play.to : playhead <= play.to;
+      if (arrived) playhead = play.to;
+      current = playhead;
+      apply(current);
+      dirty = false;
+      if (arrived) {
+        const stop = story.stops.indexOf(play.to);
+        play = null;
+        if (stop > 0) schedulePrompt(stop);
+        syncPlain();
+        syncChrome();
+      }
+      kick();
+      return;
+    }
     const goal = target();
     const diff = goal - current;
     const settled = Math.abs(diff) < 0.001;
@@ -323,6 +371,11 @@ export function bootStory(root: HTMLElement): () => void {
   }
 
   const onScroll = () => {
+    // The scrollbar, Home and End, an anchor, find in page: whoever moved it, they win.
+    if (Math.abs(window.scrollY - playingAt) > 2) {
+      play = null;
+      hidePrompt();
+    }
     if (window.scrollY > 4) {
       els.stage.classList.remove('nudging');
       root.classList.add('in-phone');
@@ -346,11 +399,14 @@ export function bootStory(root: HTMLElement): () => void {
       lastW = w;
       lastH = h;
       const progress = current;
+      const wasPlaying = play !== null;
+      play = null;
       measure();
       window.scrollTo(0, track.getBoundingClientRect().top + window.scrollY + progress * UNIT_VH * layout.h);
       current = progress;
       dirty = true;
       kick();
+      if (wasPlaying) scrollGesture(1);
     }, 150);
   };
 
@@ -390,13 +446,144 @@ export function bootStory(root: HTMLElement): () => void {
     if (!introStopped && window.scrollY <= 4) els.stage.classList.add('nudging');
   }
 
+  const pageTop = (t: number) => track.getBoundingClientRect().top + window.scrollY + t * UNIT_VH * layout.h;
   const scrollToTime = (t: number) => {
-    const start = track.getBoundingClientRect().top + window.scrollY;
-    window.scrollTo({ top: start + t * UNIT_VH * layout.h, behavior: 'auto' });
+    play = null;
+    hidePrompt();
+    window.scrollTo({ top: pageTop(t), behavior: 'auto' });
   };
+  /** Once a slide has finished, a glowing line teases the next one. It's also a button. */
+  let promptTimer: ReturnType<typeof setTimeout> | undefined;
+  const swipes = window.matchMedia('(pointer: coarse)').matches;
+  function hidePrompt() {
+    clearTimeout(promptTimer);
+    els.keepGoing.classList.remove('on');
+  }
+  function schedulePrompt(stop: number) {
+    hidePrompt();
+    promptTimer = setTimeout(() => {
+      els.keepGoingText.textContent = KEEP_GOING[stop - 1].replace('{verb}', swipes ? 'swiping' : 'scrolling');
+      els.keepGoing.classList.add('on');
+    }, PROMPT_AFTER);
+  }
+  const onKeepGoing = () => {
+    if (scrollGesture(1)) return;
+    hidePrompt();
+    window.scrollBy({ top: window.innerHeight * 0.8, behavior: 'smooth' });
+  };
+
+  const playTo = (to: number, rate: number, dir: 1 | -1) => {
+    hidePrompt();
+    if (!play) playhead = current;
+    playingAt = pageTop(to);
+    play = { to, rate, dir };
+    window.scrollTo({ top: playingAt, behavior: 'auto' });
+    kick();
+  };
+  const paceTo = (to: number, dir: 1 | -1, from: number) => (dir < 0 ? (from - to) / BACK_SECONDS : to === story.T ? LAST_SLIDE : 1);
+  /** One gesture's worth of story: on to the next stop or back to the last. False if there's none that way. */
+  function scrollGesture(dir: 1 | -1) {
+    if (play?.dir === 1 && dir === 1) {
+      play.rate = Math.max(play.rate, HURRY);
+      return true;
+    }
+    // Already going back: each further gesture goes back one more.
+    const from = play?.dir === -1 && dir === -1 ? play.to : play ? playhead : current;
+    const to = dir > 0 ? story.stops.find((t) => t > from + 0.05) : [...story.stops].reverse().find((t) => t < from - 0.05);
+    if (to === undefined) return false;
+    playTo(to, paceTo(to, dir, play ? playhead : current), dir);
+    return true;
+  }
+  /** Whether the story should answer a scroll this way, rather than the page. */
+  function storyTakes(dir: 1 | -1) {
+    if (reducedMotion.matches) return false;
+    if (play) return true;
+    const pastEnd = window.scrollY - pageTop(story.T);
+    if (pastEnd > (dir < 0 ? layout.h * NEAR_END_VH : 2)) return false;
+    const t = target();
+    return dir > 0 ? t < story.T - 0.02 : t > 0.02;
+  }
+
+  let lastWheel = 0;
+  let wheelDir = 0;
+  let wheelTrough = 0;
+  let lastFired = 0;
+  const onWheel = (e: WheelEvent) => {
+    if (e.ctrlKey || Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.deltaY === 0) return;
+    hidePrompt();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    const speed = Math.abs(e.deltaY);
+    const quiet = e.timeStamp - lastWheel > (dir < 0 ? WHEEL_QUIET_BACK : WHEEL_QUIET);
+    // Only going back needs this: one flick after another, faster than the last one's momentum fades.
+    const settled = e.timeStamp - lastFired > WHEEL_RISE_AFTER;
+    const flickedAgain = dir < 0 && settled && speed > wheelTrough * WHEEL_RISE + WHEEL_RISE_MARGIN;
+    const fresh = quiet || dir !== wheelDir || flickedAgain;
+    // Measured from once the flick has got going, or its own momentum looks like a second flick.
+    wheelTrough = fresh || !settled ? speed : Math.min(wheelTrough, speed);
+    lastWheel = e.timeStamp;
+    wheelDir = dir;
+    if (!storyTakes(dir)) return;
+    e.preventDefault();
+    if (fresh) {
+      lastFired = e.timeStamp;
+      scrollGesture(dir);
+    }
+  };
+
+  let touch: { x: number; y: number; used: boolean; page: boolean } | null = null;
+  const onTouchStart = (e: TouchEvent) => {
+    hidePrompt();
+    touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY, used: false, page: false } : null;
+  };
+  const onTouchMove = (e: TouchEvent) => {
+    if (!touch || e.touches.length !== 1 || touch.page) return;
+    const dx = e.touches[0].clientX - touch.x;
+    const dy = e.touches[0].clientY - touch.y;
+    if (touch.used) {
+      if (e.cancelable) e.preventDefault();
+      return;
+    }
+    // Decided on the first movement: the browser won't hand a scroll back once it's begun.
+    const dir = dy < 0 ? 1 : -1;
+    if (!storyTakes(dir)) {
+      touch.page = true;
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+    if (Math.abs(dy) >= SWIPE && Math.abs(dy) > Math.abs(dx)) {
+      touch.used = true;
+      scrollGesture(dir);
+    }
+  };
+
+  const SCROLL_KEYS: Record<string, 1 | -1> = { ArrowDown: 1, PageDown: 1, ArrowUp: -1, PageUp: -1 };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const onControl = (e.target as HTMLElement).closest?.('a, button, input, select, textarea, summary');
+    const dir = e.key === ' ' && !onControl ? (e.shiftKey ? -1 : 1) : SCROLL_KEYS[e.key];
+    if (!dir) return;
+    hidePrompt();
+    if (!storyTakes(dir)) return;
+    e.preventDefault();
+    if (!e.repeat) scrollGesture(dir);
+  };
+
   const onChapter = (e: Event) => {
     const name = (e.currentTarget as HTMLElement).dataset.chapter!;
-    scrollToTime(name === 's1' ? 0 : story.labels[name] + SECTION_LANDS);
+    if (name === 's1') {
+      scrollToTime(0);
+      return;
+    }
+    const lands = story.labels[name] + SECTION_LANDS;
+    if (reducedMotion.matches) {
+      scrollToTime(lands);
+      return;
+    }
+    // Straight to that slide, and it plays from there.
+    play = null;
+    current = lands;
+    const to = story.stops.find((t) => t > lands)!;
+    playTo(to, paceTo(to, 1, lands), 1);
   };
   nav.forEach((b) => b.addEventListener('click', onChapter));
 
@@ -407,10 +594,11 @@ export function bootStory(root: HTMLElement): () => void {
 
   // The prompt is a real control: it takes you to the first thing worth seeing.
   const onHint = () => {
-    const start = track.getBoundingClientRect().top + window.scrollY;
-    window.scrollTo({ top: start + NUDGE_TO * UNIT_VH * layout.h, behavior: 'smooth' });
+    if (!reducedMotion.matches && scrollGesture(1)) return;
+    scrollToTime(1.6);
   };
   els.hint.addEventListener('click', onHint);
+  els.keepGoing.addEventListener('click', onKeepGoing);
 
   lastW = window.innerWidth;
   lastH = window.innerHeight;
@@ -436,6 +624,10 @@ export function bootStory(root: HTMLElement): () => void {
 
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
+  window.addEventListener('wheel', onWheel, { passive: false });
+  window.addEventListener('touchstart', onTouchStart, { passive: true });
+  window.addEventListener('touchmove', onTouchMove, { passive: false });
+  window.addEventListener('keydown', onKey);
   kick();
 
   return () => {
@@ -445,11 +637,17 @@ export function bootStory(root: HTMLElement): () => void {
     clearInterval(ucClock);
     clearTimeout(resizeTimer);
     clearTimeout(repaintTimer);
+    hidePrompt();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('wheel', onWheel);
+    window.removeEventListener('touchstart', onTouchStart);
+    window.removeEventListener('touchmove', onTouchMove);
+    window.removeEventListener('keydown', onKey);
     nav.forEach((b) => b.removeEventListener('click', onChapter));
     heroCtas.forEach((a) => a.removeEventListener('focus', onHeroFocus));
     els.hint.removeEventListener('click', onHint);
+    els.keepGoing.removeEventListener('click', onKeepGoing);
     ucTabs.forEach((tab) => {
       tab.removeEventListener('click', onUcClick);
       tab.removeEventListener('focus', onUcFocus);

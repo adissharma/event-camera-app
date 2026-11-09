@@ -68,7 +68,7 @@ Guests leave private voice or video messages: your mum in tears, your best frien
 
 **Make every shot count. The reveal’s worth it.**
 
-Everyone gets one roll, and no peeking. Wake up to the whole night, developed.
+Go disposable: one roll each, no peeking till morning. Or share every shot live. Your call.
 
 ### 7. Album, the story's close
 
