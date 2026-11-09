@@ -18,9 +18,9 @@ Stills is new and nobody's heard of it, so the page says what it is first: a sha
 
 ### 0. Hero
 
-**The shared camera app for weddings and parties.**
+**Turn every phone into a disposable camera.**
 
-Guests scan a QR code and start shooting. Every photo lands in one album.
+The shared camera app for weddings and parties.
 
 *On phones the hero is centred, with no description, just the headline, the button and the mock.*
 
@@ -66,9 +66,9 @@ Guests leave private voice or video messages: your mum in tears, your best frien
 
 ### 6. Disposable
 
-**Turn every phone into a disposable camera.**
+**Make every shot count. The reveal’s worth it.**
 
-Limited shots, and photos that develop overnight. Or reveal them live as guests snap.
+Everyone gets one roll, and no peeking. Wake up to the whole night, developed.
 
 ### 7. Album, the story's close
 
@@ -137,7 +137,7 @@ Checked against the code on 3 Nov 2026, not by using a live event.
 | Limited roll | `stepped-slider-values.ts` | 5 to 36 shots. Copy avoids a number, because the paywall promises 20 per guest, which isn't a choice in the flow |
 | Reveal on a chosen moment | `src/i18n/en-GB.ts` | When the event closes, or a custom day and time |
 | Save photos | `celebration/[celebrationId]/index.tsx`, `photos/[photoId].tsx` | One at a time to the phone, from the app. The portal ZIP download exists but is kept off the homepage until the portal launches |
-| Locked cell wording | Event screen in the app | "Revealed in" and the lock are the app's own. "Unlocking…" is shortened from "Unlocking your photos…" |
+| Locked cell wording | Event screen in the app | "Reveals in" and the lock are the app's own. "Unlocking…" is shortened from "Unlocking your photos…" |
 | Prices | `plan-catalogue.ts` | Shown in dollars: $14.99, $29.99, $49.99, one-off per event, matching the App Store US prices for the £ catalogue. The FAQ sends people to the app for their local price. Check before launch |
 | Use case list | `challenge-packs.ts` | A pack exists for each one named |
 
