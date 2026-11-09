@@ -4,7 +4,7 @@ import { Asset } from 'expo-asset';
 
 import { colours } from '@/design';
 import { useWebCoverMotion } from '@/features/celebrations/use-web-cover-motion';
-import { EVENT_GLASS_RADIUS } from '@/components/ui/event-glass';
+import { EventGlass, EVENT_GLASS_RADIUS } from '@/components/ui/event-glass';
 import type { CoverGlassProps } from '@/components/ui/cover-glass';
 
 /** Baked by scripts/story/bake-glass-map.mjs, and shared with the homepage. */
@@ -28,8 +28,26 @@ function uriOf(source: unknown): string | null {
   return typeof uri === 'string' ? uri : null;
 }
 
+/** Phones and tablets, and any window narrower than a tablet. */
+const MOBILE_WEB_MAX_WIDTH = 768;
+
+function isMobileWeb(width: number): boolean {
+  if (width < MOBILE_WEB_MAX_WIDTH) return true;
+  return typeof window === 'undefined' || window.matchMedia('(pointer: coarse)').matches;
+}
+
 /**
- * iOS 26's Liquid Glass, as near as a browser gets.
+ * Mobile web always gets `EventGlass`'s tinted blur, by the owner's decision: the
+ * bent-glass filter below did not hold up on phones. Do not extend it to mobile web
+ * unless the owner explicitly asks. See AGENTS.md.
+ */
+export function CoverGlass(props: CoverGlassProps) {
+  const { width } = useWindowDimensions();
+  return isMobileWeb(width) ? <EventGlass /> : <DesktopCoverGlass {...props} />;
+}
+
+/**
+ * iOS 26's Liquid Glass, as near as a desktop browser gets.
  *
  * A displacement filter can't read what is behind an element in Safari, so this
  * bends its own blurred copy of the cover, lined up with the real one and moved by
@@ -38,7 +56,7 @@ function uriOf(source: unknown): string | null {
  * The foot is measured from where the picture ends, so it lands first however tall
  * the card grows.
  */
-export function CoverGlass({ cover, coverTop, coverHeight, reach, motion }: CoverGlassProps) {
+function DesktopCoverGlass({ cover, coverTop, coverHeight, reach, motion }: CoverGlassProps) {
   const { width } = useWindowDimensions();
   const coverRef = useWebCoverMotion(motion.distance, motion.follow) as unknown as (el: HTMLDivElement | null) => void;
   const coverUri = uriOf(cover);
