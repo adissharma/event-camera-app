@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Animated,
   Dimensions,
+  Easing,
   Image,
   Platform,
   Pressable,
@@ -39,7 +40,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
 import { CloseIcon } from '@/components/ui/icons';
-import { fontFamilies, radii, spacing } from '@/design';
+import { fontFamilies, radii, spacing, useMotion } from '@/design';
 import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 
 const ABSOLUTE_FILL = {
@@ -255,6 +256,68 @@ export function StoryVideoSlide({
   );
 }
 
+// ── Backdrop ──
+
+/** Enlarged so the picture's edges stay off screen wherever it wanders. */
+const DRIFT_SCALE = 1.4;
+const DRIFT_X = 44;
+const DRIFT_Y = 72;
+/** Unequal, so the path keeps changing rather than tracing one line. */
+const DRIFT_X_HALF_MS = 5200;
+const DRIFT_Y_HALF_MS = 7400;
+
+function useDrift(value: Animated.Value, halfCycleMs: number, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled) return;
+    const swing = (toValue: number) =>
+      Animated.timing(value, {
+        toValue,
+        duration: halfCycleMs,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true,
+      });
+    const loop = Animated.loop(Animated.sequence([swing(1), swing(0)]));
+    loop.start();
+    return () => loop.stop();
+  }, [enabled, halfCycleMs, value]);
+}
+
+function BlurredBackdrop({
+  source,
+  blurRadius,
+  drift,
+}: {
+  source: ImageSourcePropType;
+  blurRadius: number;
+  drift: boolean;
+}) {
+  const { reduceMotion } = useMotion();
+  const isDrifting = drift && !reduceMotion;
+  const [x] = useState(() => new Animated.Value(0));
+  const [y] = useState(() => new Animated.Value(0));
+  useDrift(x, DRIFT_X_HALF_MS, isDrifting);
+  useDrift(y, DRIFT_Y_HALF_MS, isDrifting);
+
+  return (
+    <Animated.Image
+      source={source}
+      style={[
+        ABSOLUTE_FILL,
+        { width: '100%', height: '100%' },
+        isDrifting && {
+          transform: [
+            { translateX: x.interpolate({ inputRange: [0, 1], outputRange: [-DRIFT_X, DRIFT_X] }) },
+            { translateY: y.interpolate({ inputRange: [0, 1], outputRange: [-DRIFT_Y, DRIFT_Y] }) },
+            { scale: DRIFT_SCALE },
+          ],
+        },
+      ]}
+      resizeMode="cover"
+      blurRadius={blurRadius}
+    />
+  );
+}
+
 // ── Viewer ──
 
 export type StorySlideItem = {
@@ -272,11 +335,19 @@ export type StorySlideItem = {
  * Guestbook has no cover of its own and uses flat black instead.
  */
 export type StoryBackdrop =
-  | { kind: 'blurredImage'; source: ImageSourcePropType }
+  | {
+      kind: 'blurredImage';
+      source: ImageSourcePropType;
+      blurRadius?: number;
+      /** Wanders slowly, so glass drawn over it has something to bend. */
+      drift?: boolean;
+    }
   | { kind: 'solid'; color: string };
 
 export type StoryViewerProps = {
   backdrop: StoryBackdrop;
+  /** Drawn over the intro slide's backdrop, beneath its text. */
+  introFrame?: ReactNode;
   /** Rendered inside the hero's ring on the intro slide. */
   icon: ReactNode;
   title: string;
@@ -307,6 +378,7 @@ export type StoryViewerProps = {
 
 export function StoryViewer({
   backdrop,
+  introFrame,
   icon,
   title,
   description,
@@ -415,11 +487,10 @@ export function StoryViewer({
       <ReanimatedAnimated.View style={[S.overlay, overlayAnimatedStyle]}>
         {activeSlideIndex === 0 ? (
           backdrop.kind === 'blurredImage' ? (
-            <Image
+            <BlurredBackdrop
               source={backdrop.source}
-              style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
-              resizeMode="cover"
-              blurRadius={35}
+              blurRadius={backdrop.blurRadius ?? 35}
+              drift={backdrop.drift ?? false}
             />
           ) : (
             <View style={[ABSOLUTE_FILL, { backgroundColor: backdrop.color }]} />
@@ -452,10 +523,18 @@ export function StoryViewer({
             ABSOLUTE_FILL,
             {
               backgroundColor:
-                activeSlideIndex === 0 ? 'rgba(0, 0, 0, 0.40)' : 'rgba(11, 11, 12, 0.25)',
+                activeSlideIndex === 0
+                  ? // Drifting means glass is drawn over it, which brings its own
+                    // wash. The usual scrim on top of that hides what it bends.
+                    backdrop.kind === 'blurredImage' && backdrop.drift
+                    ? 'rgba(0, 0, 0, 0.08)'
+                    : 'rgba(0, 0, 0, 0.40)'
+                  : 'rgba(11, 11, 12, 0.25)',
             },
           ]}
         />
+
+        {activeSlideIndex === 0 ? introFrame : null}
 
         <View style={ABSOLUTE_FILL} pointerEvents="box-none">
           <View style={{ flex: 1, flexDirection: 'row' }} pointerEvents="box-none">

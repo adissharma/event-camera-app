@@ -16,8 +16,12 @@ import {
 } from '@/services/guestbook';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
 import { FeatureGate } from '@/features/entitlements/feature-gate';
+import { AppSwitch } from '@/components/forms/app-switch';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
-import { topTierName } from '@/features/payments/plan-catalogue';
+import {
+  useEventFeatureSwitches,
+  useSaveEventFeatureSwitch,
+} from '@/features/entitlements/use-event-feature-switches';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
 
 function BackChevron({ size = 20, color = '#FFFFFF' }) {
@@ -44,9 +48,12 @@ function GuestbookSettingsScreenContent() {
   const [instructions, setInstructions] = useState('');
   const [icon, setIcon] = useState('💌');
   const [isSaving, setIsSaving] = useState(false);
-  // Free has the page but not guests recording on it, so the copy here should
-  // not promise them a button they will not get.
+  // Guests only ever see a Guestbook they can leave a message in.
   const messagesOpen = useEventEntitlements(String(celebrationId)).has('guestbookMessages');
+  const featureSwitches = useEventFeatureSwitches(String(celebrationId));
+  const saveFeatureSwitch = useSaveEventFeatureSwitch(String(celebrationId));
+  // Not greyed out while the answer is on its way, only once it is known to be off.
+  const isOn = !messagesOpen || featureSwitches.guestbook || featureSwitches.isLoading;
 
   useEffect(() => {
     if (shouldBlockHostRouteOnWeb(Platform.OS)) {
@@ -109,8 +116,8 @@ function GuestbookSettingsScreenContent() {
           label={isSaving ? 'Saving…' : 'Save'}
           loading={isSaving}
           onPress={() => void handleSave()}
-          disabled={!hasChanges}
-          disabledReason="Make a change before saving."
+          disabled={!hasChanges || !isOn}
+          disabledReason={isOn ? 'Make a change before saving.' : 'Turn on the Guestbook to edit it.'}
           haptic
         />
       }
@@ -130,13 +137,31 @@ function GuestbookSettingsScreenContent() {
         </AppText>
       </View>
 
-      <View style={styles.card}>
+      {messagesOpen ? (
+        <View style={[styles.card, styles.toggleCard]}>
+          <View style={styles.toggleLabel}>
+            <AppText variant="labelLarge" style={styles.toggleTitle}>Show Guestbook</AppText>
+            <AppText variant="bodySmall" tone="secondary">
+              {isOn ? 'On for guests' : 'Hidden from guests'}
+            </AppText>
+          </View>
+          <AppSwitch
+            accessibilityLabel="Show Guestbook"
+            value={isOn}
+            disabled={featureSwitches.isLoading}
+            onValueChange={(guestbook) => saveFeatureSwitch.mutate({ guestbook })}
+          />
+        </View>
+      ) : null}
+
+      <View style={[styles.card, !isOn && styles.off]}>
         <AppText variant="labelLarge" style={styles.fieldLabel}>Guestbook icon</AppText>
         <View style={styles.iconRow}>
           {GUESTBOOK_ICONS.map((option) => (
             <Pressable
               key={option}
               onPress={() => setIcon(option)}
+              disabled={!isOn}
               style={[styles.iconOption, icon === option && styles.iconOptionSelected]}
               accessibilityRole="button"
               accessibilityLabel={`Use ${option} as the Guestbook icon`}
@@ -149,6 +174,7 @@ function GuestbookSettingsScreenContent() {
           label="Guest message"
           value={instructions}
           onChangeText={(value) => setInstructions(value)}
+          editable={isOn}
           placeholder={messagesOpen ? 'Leave a message for the host.' : 'Thank you for celebrating with us.'}
           multiline
           maxLength={MAX_INSTRUCTIONS}
@@ -158,13 +184,13 @@ function GuestbookSettingsScreenContent() {
         />
       </View>
 
-      <View style={styles.note}>
-        <AppText variant="caption" tone="secondary">
-          {messagesOpen
-            ? 'Guests will always see the title “Guestbook” and the CTA “Leave a message”.'
-            : `Guests can open your Guestbook and read this. Upgrade to ${topTierName()} and they can leave you a video message too.`}
-        </AppText>
-      </View>
+      {messagesOpen ? (
+        <View style={[styles.note, !isOn && styles.off]}>
+          <AppText variant="caption" tone="secondary">
+            Guests will always see the title “Guestbook” and the CTA “Leave a message”.
+          </AppText>
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -204,6 +230,22 @@ const styles = StyleSheet.create({
     borderWidth: layout.hairline,
     borderColor: colours.borderSubtle,
     padding: spacing.base,
+  },
+  toggleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.base,
+    marginBottom: spacing.base,
+  },
+  toggleLabel: {
+    flex: 1,
+    gap: 4,
+  },
+  toggleTitle: {
+    color: colours.textPrimary,
+  },
+  off: {
+    opacity: 0.4,
   },
   fieldLabel: {
     color: colours.textPrimary,

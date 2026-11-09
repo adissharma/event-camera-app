@@ -20,7 +20,8 @@ import {
   fetchEventGuestLimit,
   saveEventGuestLimit,
 } from '@/services/event-guest-limit';
-import { upgradeGains, upgradesForGuestLimit } from './event-entitlements';
+import { guestUpgradeHighlights, upgradesForGuestLimit } from './event-entitlements';
+import { GUESTS_PITCH_HERO, type FeaturePitch } from './feature-pitch';
 import { GuestLimitStepper } from './guest-limit-control';
 import { guestCapacityState, hostLimitToSave } from './guest-limit';
 import { UpgradeSheet } from './upgrade-sheet';
@@ -185,8 +186,9 @@ function UpgradeForGuestsSheet({
   const { query, save } = useHostGuestLimit(eventSessionId, plan);
   const ceiling = typeof plan?.guestLimit === 'number' ? plan.guestLimit : null;
 
-  // Most generous first, and selected: the package that removes the problem for good.
-  const options = upgradesForGuestLimit(plan, ceiling === null ? 1 : ceiling + 1).reverse();
+  // Cheapest first, like every other list of packages, with the most generous
+  // selected: the one that removes the problem for good.
+  const options = upgradesForGuestLimit(plan, ceiling === null ? 1 : ceiling + 1);
 
   const [isSettingLimit, setIsSettingLimit] = useState(false);
   const [value, setValue] = useState<number | null>(null);
@@ -196,26 +198,21 @@ function UpgradeForGuestsSheet({
 
   const state = ceiling === null ? 'room' : guestCapacityState(guestsJoined, ceiling);
   const remaining = ceiling === null ? 0 : Math.max(ceiling - guestsJoined, 0);
-  const summaryFor = (to: PaywallPlan) => {
-    const name = plan?.displayName;
-    const limitFact =
+  // The art carries the numbers, so this is one line: how close the event is to
+  // full when that matters, and otherwise what the move gets them.
+  const pitchFor = (to: PaywallPlan): FeaturePitch => ({
+    heading: 'Room for everyone',
+    summary:
       state === 'full'
-        ? `All ${ceiling} guest places on ${name} are taken.`
+        ? `All ${ceiling} places are taken.`
         : state === 'nearlyFull'
-          ? `${name} stops at ${ceiling} guests, and only ${remaining} ${remaining === 1 ? 'place is' : 'places are'} left.`
-          : ceiling !== null
-            ? `${name} stops at ${ceiling} guests.`
-            : '';
-    if (to.guestLimit !== 'unlimited') {
-      return `${limitFact} ${to.displayName} takes you to ${to.guestLimit} guests.`.trim();
-    }
-    const extras = upgradeGains(plan, to).filter((gain) => gain !== 'unlimited guests');
-    const andMore =
-      extras.length > 0
-        ? `, with ${extras.slice(0, -1).join(', ')}${extras.length > 1 ? ' and ' : ''}${extras[extras.length - 1]} too`
-        : '';
-    return `${limitFact} Go unlimited with ${to.displayName} and invite everyone without counting${andMore}.`.trim();
-  };
+          ? `Only ${remaining} ${remaining === 1 ? 'place' : 'places'} left.`
+          : to.guestLimit === 'unlimited'
+            ? 'Invite everyone, without counting.'
+            : `Invite up to ${to.guestLimit} guests.`,
+    highlights: guestUpgradeHighlights(plan, to),
+    Hero: GUESTS_PITCH_HERO,
+  });
 
   return (
     <UpgradeSheet
@@ -223,9 +220,9 @@ function UpgradeForGuestsSheet({
       celebrationId={celebrationId}
       currentPlan={plan}
       options={options}
+      defaultPlanId={options[options.length - 1]?.id}
       title="More guests"
-      heading="Never worry about guest limits"
-      summaryFor={summaryFor}
+      pitchFor={pitchFor}
       onClose={onClose}
       footer={
         ceiling !== null && query.isSuccess ? (

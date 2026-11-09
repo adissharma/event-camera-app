@@ -88,6 +88,7 @@ import { deleteHostPhoto } from '@/services/media-delete';
 import { celebrationKeys } from '@/services/celebrations';
 import { listThemes, themeKeys } from '@/services/themes';
 import { EventRevealModal } from '@/components/feedback/event-reveal-modal';
+import { CoverGlass } from '@/components/ui/cover-glass';
 import { EventGlass, EVENT_GLASS_RADIUS } from '@/components/ui/event-glass';
 import { swipeDismissDirection } from '@/lib/gestures/swipe-dismiss';
 import { TreatedPhoto } from '@/components/media/treated-photo';
@@ -139,6 +140,7 @@ import { useEventCountdown } from '@/features/celebrations/event-countdown';
 import { EventStatStrip } from '@/features/celebrations/event-stat-strip';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
+import { useEventFeatureSwitches } from '@/features/entitlements/use-event-feature-switches';
 import {
   entitlementsForPlan,
   upgradesForFeature,
@@ -495,7 +497,7 @@ export interface PhotoItem {
   id?: string;
   /**
    * `uri` stays the real image URL even while locked — this flag alone
-   * drives the blur + lock icon (see `visiblePhotos`), so what's blurred is
+   * drives the blur + lock icon (see `visibleGalleryItems`), so what's blurred is
    * genuinely the photo itself, not a substituted placeholder.
    */
   locked?: boolean;
@@ -1654,9 +1656,17 @@ export function EventDetailView({
    */
   const guestbookUnlocked = entitlements.has('guestbook');
   const challengesUnlocked = entitlements.has('challenges');
-  const showGuestbook = isHost
-    ? detail.hasAudioGuestbook !== false || !guestbookUnlocked
-    : guestbookUnlocked && detail.hasAudioGuestbook !== false;
+  // What the package allows is one question; whether the host wants it at this
+  // event is another, and switching it off hides it from them too.
+  const featureSwitches = useEventFeatureSwitches(celebration.id);
+  const showGuestbook =
+    (featureSwitches.guestbook || !guestbookUnlocked) &&
+    (isHost
+      ? detail.hasAudioGuestbook !== false || !guestbookUnlocked
+      : // A Guestbook guests can't write in is only a cover page, so they don't get one.
+        (entitlements.has('guestbookMessages') || detail.isSample === true) &&
+        guestbookUnlocked &&
+        detail.hasAudioGuestbook !== false);
 
   // Guests only, and only once the host has seated someone or added a floor
   // plan: hosts manage seating from Manage Event, and an empty lookup is a
@@ -1776,10 +1786,22 @@ export function EventDetailView({
   const viewerRevealMode = hostRevealPending ? hostSession?.host_reveal_mode : primarySession?.reveal_mode;
   const viewerRevealAt = hostRevealPending ? hostSession?.host_reveal_at : primarySession?.reveal_at;
 
+  // Until the reveal, a photo is obscured for everyone who can see it at all,
+  // including the guest who took it. The server only sends a guest their own
+  // photos during that time, so blurring the real image is safe.
+  const guestRevealPending =
+    viewerRole !== 'host' &&
+    !canViewerSeePhotos({
+      now: serverNow(),
+      revealAt: primarySession?.reveal_at,
+      revealMode: primarySession?.reveal_mode,
+    });
+  const revealPending = hostRevealPending || guestRevealPending;
+
   const visibleGalleryItems = useMemo(
     () =>
       photos
-        .map((p) => (hostRevealPending ? { ...p, locked: true } : p))
+        .map((p) => (revealPending ? { ...p, locked: true } : p))
         .filter((p) => {
           if (isHost) return true;
           if (p.isMine) return true;
@@ -1794,7 +1816,7 @@ export function EventDetailView({
           if (aPin && bPin && aTime !== bTime) return bTime - aTime;
           return 0;
         }),
-    [photos, isHost, primarySession?.reveal_at],
+    [photos, isHost, primarySession?.reveal_at, revealPending],
   );
   const heroPhotosOnly = useMemo(
     () => visibleGalleryItems.filter((p) => p.mediaType !== 'video'),
@@ -1812,9 +1834,15 @@ export function EventDetailView({
    * they find out what they are missing. A guest never sees a paywall: they have
    * nothing to buy, so the tab only appears when the event takes video or already
    * has some, and is never locked for them.
+   *
+   * Switched off, guests lose the tab outright, including any videos already
+   * posted. The host keeps it only while there are videos to look after.
    */
   const videosLocked = isHost && !entitlements.has('video');
-  const showMediaTabs = isHost || entitlements.has('video') || heroVideosOnly.length > 0;
+  const videosSwitchedOff = entitlements.has('video') && !featureSwitches.videos;
+  const showMediaTabs = videosSwitchedOff
+    ? isHost && heroVideosOnly.length > 0
+    : isHost || entitlements.has('video') || heroVideosOnly.length > 0;
   /**
    * Which of the two lists above the hero viewer is currently paging
    * through. Set once, when a photo is tapped open (see `handlePhotoPress`),
@@ -2656,18 +2684,6 @@ export function EventDetailView({
         });
         return remainingMs === null ? null : formatRevealCountdownWords(remainingMs);
       })();
-
-  // For a guest, get_guest_gallery already applies the real rule
-  // server-side: while locked, the only rows it ever returns are that
-  // guest's own (see the RPC's WHERE clause — everyone else's are excluded
-  // outright, not filtered here). For a host, RLS already scoped the read to
-  // their own event, and seeing your own event's photos early is exactly
-  // what being the host means. Either way, blurring the real image rather
-  // than substituting a placeholder is correct and safe for both roles now
-  // that both load real data — see the loader effect above.
-  const visiblePhotos = isGalleryLocked
-    ? photos.map((p) => ({ ...p, locked: true }))
-    : photos;
 
   // ── End-of-event reveal ───────────────────────────────────────────
 
@@ -4100,6 +4116,11 @@ export function EventDetailView({
     [galleryPageX, galleryTab, screenWidth],
   );
 
+  // Videos switched off while they were being looked at.
+  useEffect(() => {
+    if (!showMediaTabs && galleryTab === 'videos') settleGalleryPager('photos', { haptic: false });
+  }, [galleryTab, settleGalleryPager, showMediaTabs]);
+
   const selectGalleryTab = useCallback(
     (next: 'photos' | 'videos') => {
       if (!showMediaTabs || galleryTab === next) return;
@@ -4320,7 +4341,7 @@ export function EventDetailView({
                         </View>
                         {revealCountdownWords && (
                           <AppText style={S.lockCountdownText}>
-                            Revealed in {revealCountdownWords}
+                            Reveals in {revealCountdownWords}
                           </AppText>
                         )}
                       </View>
@@ -4492,11 +4513,21 @@ export function EventDetailView({
             { marginTop: -(HERO_CLIP_H - CARD_TOP), transform: [{ translateY: cardBounce }] },
           ]}
         >
-          <EventGlass
-            isLeaving={previewMode?.isGlassLeaving}
-            leaveDurationMs={previewMode?.glassLeaveMs}
-            leaveOpacity={previewMode?.overlays?.chromeOpacity}
-          />
+          {Platform.OS === 'web' && !previewMode ? (
+            <CoverGlass
+              cover={getCoverSource()}
+              coverTop={IMG_TOP - CARD_TOP}
+              coverHeight={IMG_H}
+              reach={HERO_CLIP_H - CARD_TOP}
+              motion={{ distance: HERO_TOTAL, follow: HERO_COVER_FOLLOW }}
+            />
+          ) : (
+            <EventGlass
+              isLeaving={previewMode?.isGlassLeaving}
+              leaveDurationMs={previewMode?.glassLeaveMs}
+              leaveOpacity={previewMode?.overlays?.chromeOpacity}
+            />
+          )}
 
           {/* Fades on its own, not with the card: the glass cannot have a fading parent. */}
           <Animated.View
@@ -4526,7 +4557,18 @@ export function EventDetailView({
                 : undefined
             }
           >
-          <View style={S.cardStats}>
+          <View
+            style={[
+              S.cardStats,
+              !isHost &&
+                !showGuestbook &&
+                !showSeating &&
+                challenges.length === 0 &&
+                !showRecapBanner &&
+                !guestName &&
+                S.cardStatsAlone,
+            ]}
+          >
             <EventStatStrip
               photoCount={guestsNeverSeePhotos ? metrics.photos : photos.length}
               joinedCount={guestsJoined}
@@ -4804,8 +4846,8 @@ export function EventDetailView({
             </Animated.View>
           ) : (
             renderGalleryGrid(
-              heroPhotosOnly.length > 0 ? heroPhotosOnly : heroVideosOnly,
-              heroPhotosOnly.length > 0 ? 'No photos yet.' : 'No videos yet.',
+              heroPhotosOnly.length > 0 || videosSwitchedOff ? heroPhotosOnly : heroVideosOnly,
+              heroPhotosOnly.length > 0 || videosSwitchedOff ? 'No photos yet.' : 'No videos yet.',
             )
           )}
         </View>
@@ -5315,7 +5357,13 @@ export function EventDetailView({
           // from a photo. A video URI handed to `Image` decodes to nothing and
           // renders black, so fall back through the photo submissions and then
           // to the event cover.
-          const backdropSubmission = [...storySubmissions]
+          // Challenge entries follow the same rules as the gallery. Anyone can
+          // add one; what they can see of them depends on the event's settings.
+          const entriesArePrivate = guestsNeverSeePhotos;
+          const entriesAreLocked = isGalleryLocked && !entriesArePrivate;
+          const visibleEntries = entriesArePrivate ? [] : storySubmissions;
+
+          const backdropSubmission = [...visibleEntries]
             .reverse()
             .find((item) => item.mediaType !== 'video');
           const coverPhoto = backdropSubmission
@@ -5339,8 +5387,34 @@ export function EventDetailView({
                 resolveChallengeBrief(selectedChallenge.icon)?.instr ||
                 'Locate the subject, frame your shot carefully, and tap Submit to complete this challenge.'
               }
-              submissions={storySubmissions}
-              activeSlideIndex={activeSlideIndex}
+              footnote={entriesArePrivate ? 'Only your host will see the entries.' : undefined}
+              submissions={visibleEntries}
+              activeSlideIndex={entriesArePrivate ? 0 : activeSlideIndex}
+              renderSlideCaption={entriesAreLocked ? () => null : undefined}
+              renderSlideMedia={
+                entriesAreLocked
+                  ? (item) => (
+                      <View style={StyleSheet.absoluteFill}>
+                        <Image
+                          // A video's address is not an image, so its slide
+                          // blurs the event cover instead.
+                          source={item.mediaType === 'video' ? getCoverSource() : { uri: item.uri }}
+                          style={StyleSheet.absoluteFill}
+                          resizeMode="cover"
+                          blurRadius={45}
+                        />
+                        <View style={S.lockOverlay}>
+                          <View style={S.lockCircle}>
+                            <LockIcon size={18} color="#FFFFFF" />
+                          </View>
+                          <AppText style={S.lockCountdownText}>
+                            {revealCountdownWords ? `Reveals in ${revealCountdownWords}` : 'Reveals later'}
+                          </AppText>
+                        </View>
+                      </View>
+                    )
+                  : undefined
+              }
               onChangeSlideIndex={(index) => {
                 setChallengeMenuVisible(false);
                 setActiveSlideIndex(index);
@@ -5987,6 +6061,11 @@ const S = StyleSheet.create({
     marginTop: spacing.xs,
     paddingHorizontal: layout.gutter,
   },
+  // Nothing between the strip and what follows it, so it brings its own space,
+  // to match the title above it.
+  cardStatsAlone: {
+    marginBottom: 9,
+  },
 
   // ── Challenge chips (Instagram Story Highlights Style) ──
   chipsScroll: {
@@ -6000,7 +6079,11 @@ const S = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   chipsContent: {
-    paddingLeft: GALLERY_PADDING,     // Aligns first tile with left edge of gallery below
+    // Centred under the title and stats while they fit. Once they overflow, the
+    // row is simply wider than the screen and scrolls from its left edge.
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingLeft: GALLERY_PADDING,
     paddingRight: GALLERY_PADDING,
     gap: CHIP_STRIP_GAP,
     paddingTop: 0,

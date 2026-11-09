@@ -25,7 +25,7 @@ import { upgradePriceLabel } from '@/features/payments/upgrade-catalogue';
 import { UpgradeError, eventPlanKeys, upgradeEventPlan } from '@/services/event-plan';
 import { celebrationKeys } from '@/services/celebrations';
 import { upgradeSummary, type FeatureKey } from './event-entitlements';
-import { FEATURE_PITCHES, PitchHighlights } from './feature-pitch';
+import { FEATURE_PITCHES, PitchHighlights, type FeaturePitch } from './feature-pitch';
 import { colours, layout, radii, REVEAL_TRACK_GRADIENT, spacing } from '@/design';
 
 const UPGRADE_SHADER = [
@@ -76,14 +76,14 @@ export interface UpgradeSheetProps {
    * the thing is worse than offering nothing.
    */
   options: PaywallPlan[];
+  /** The package selected to begin with. The first of `options` if not given. */
+  defaultPlanId?: PaywallPlan['id'];
   /** e.g. `Unlock Guestbook`. Says what the host was reaching for. */
   title: string;
-  /** For a host who came for something more specific than the package's name. */
-  heading?: string;
-  /** Why the package on offer answers that. Depends on which one is selected. */
-  summaryFor?: (plan: PaywallPlan) => string;
   /** The locked feature this is selling, which shows it off if it has a pitch. */
   feature?: FeatureKey;
+  /** A pitch that depends on which package is selected, in place of a feature's. */
+  pitchFor?: (plan: PaywallPlan) => FeaturePitch;
   /** Below the upgrade button, for what a host can do instead of buying. */
   footer?: ReactNode;
   onClose: () => void;
@@ -99,10 +99,10 @@ export function UpgradeSheet({
   celebrationId,
   currentPlan,
   options,
+  defaultPlanId,
   title,
-  heading: headingOverride,
-  summaryFor,
   feature,
+  pitchFor,
   footer,
   onClose,
   onUpgraded,
@@ -110,25 +110,26 @@ export function UpgradeSheet({
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
-  const [selectedId, setSelectedId] = useState<string | null>(options[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    defaultPlanId ?? options[0]?.id ?? null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selected = options.find((plan) => plan.id === selectedId) ?? options[0] ?? null;
   const isSingleOption = options.length === 1;
   const isStillsPlus = selected?.isRecommended ?? false;
-  const pitch = feature ? FEATURE_PITCHES[feature] : undefined;
+  const pitch =
+    pitchFor && selected ? pitchFor(selected) : feature ? FEATURE_PITCHES[feature] : undefined;
   const heading =
     pitch?.heading ??
-    headingOverride ??
     (isStillsPlus ? 'Upgrade to Stills+' : `Upgrade to ${selected?.displayName ?? ''}`);
   const defaultCopy = isStillsPlus
     ? 'Unlock premium features for your event.'
     : selected
       ? upgradeSummary(currentPlan, selected)
       : title;
-  const supportingCopy =
-    pitch?.summary ?? (selected && summaryFor ? summaryFor(selected) : defaultCopy);
+  const supportingCopy = pitch?.summary ?? defaultCopy;
 
   const buy = useCallback(async () => {
     if (!selected || busy) return;
@@ -173,10 +174,10 @@ export function UpgradeSheet({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={busy ? undefined : onClose} />
 
-        <View style={[S.sheet, { paddingBottom: insets.bottom + spacing.base }]}>
+        <View style={[S.sheet, pitch && S.sheetWithHero, { paddingBottom: insets.bottom + spacing.base }]}>
           {pitch ? (
             <View style={S.pitchHero}>
-              <pitch.Hero />
+              <pitch.Hero from={currentPlan} to={selected} />
             </View>
           ) : null}
           <View style={[S.sheetHandle, pitch && S.sheetHandleOverHero]} />
@@ -319,6 +320,8 @@ const S = StyleSheet.create({
     maxHeight: '85%',
     overflow: 'hidden',
   },
+  // The art takes room the packages would otherwise be squeezed out of.
+  sheetWithHero: { maxHeight: '92%' },
   sheetHandle: {
     width: 38,
     height: 4,

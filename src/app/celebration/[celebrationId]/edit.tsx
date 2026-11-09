@@ -24,7 +24,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { colours, fontFamilies, layout, spacing, radii, REVEAL_TRACK_GRADIENT } from '@/design';
 import { shouldBlockHostRouteOnWeb } from '@/lib/platform-guards';
+import { AppSwitch } from '@/components/forms/app-switch';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
+import {
+  useEventFeatureSwitches,
+  useSaveEventFeatureSwitch,
+} from '@/features/entitlements/use-event-feature-switches';
 import {
   upgradesForFeature,
   type FeatureKey,
@@ -94,6 +99,8 @@ export default function EditEventScreen() {
   // same order on every render, and the early return below would skip these
   // on the first pass and run them on the second.
   const entitlements = useEventEntitlements(String(celebrationId));
+  const featureSwitches = useEventFeatureSwitches(String(celebrationId));
+  const saveFeatureSwitch = useSaveEventFeatureSwitch(String(celebrationId));
   const [upgradeRequest, setUpgradeRequest] = useState<{
     feature: FeatureKey;
     title: string;
@@ -405,7 +412,7 @@ export default function EditEventScreen() {
 
         <View style={[styles.section, styles.photoSettingsSection]}>
           <AppText variant="eyebrow" tone="secondary" style={styles.sectionHeader}>
-            Photo settings
+            Photo and video settings
           </AppText>
 
           <View style={styles.card}>
@@ -433,6 +440,27 @@ export default function EditEventScreen() {
 
             <View style={styles.separator} />
 
+            {entitlements.has('video') ? (
+              <>
+                <View style={styles.row}>
+                  <View style={styles.rowLabelContainer}>
+                    <AppText variant="labelLarge" style={styles.rowLabel}>Allow Videos</AppText>
+                    <AppText variant="bodySmall" style={styles.rowValue}>
+                      {featureSwitches.videos ? 'Guests can film videos' : 'Photos only'}
+                    </AppText>
+                  </View>
+                  <AppSwitch
+                    accessibilityLabel="Allow Videos"
+                    value={featureSwitches.videos}
+                    disabled={featureSwitches.isLoading}
+                    onValueChange={(videos) => saveFeatureSwitch.mutate({ videos })}
+                  />
+                </View>
+
+                <View style={styles.separator} />
+              </>
+            ) : null}
+
             <Pressable
               onPress={() =>
                 openGated('challenges', 'Unlock Challenges', () => handleEditField('challenges'))
@@ -459,7 +487,11 @@ export default function EditEventScreen() {
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Guestbook</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>
-                  {entitlements.has('guestbook') ? 'Edit message' : topTierName()}
+                  {entitlements.has('guestbook')
+                    ? featureSwitches.guestbook
+                      ? 'Edit message'
+                      : 'Off'
+                    : topTierName()}
                 </AppText>
               </View>
               {entitlements.has('guestbook') ? <ChevronRightIcon /> : <UpgradePill />}

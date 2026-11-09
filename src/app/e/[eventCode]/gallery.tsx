@@ -36,6 +36,7 @@ import {
 } from '@/services/guest-session';
 import { deleteGuestPhoto } from '@/services/guest-media-upload';
 import { requireSupabase, isBackendConfigured } from '@/lib/supabase/client';
+import { uploadFailureCopy } from '@/features/media/upload-failure';
 
 const EVENT_HEADER_ICON = require('../../../../assets/brand/event-nav-mark.png');
 const EVENT_HEADER_ICON_ASPECT_RATIO = 1230 / 1278;
@@ -181,7 +182,8 @@ export default function GuestGalleryScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (err) {
       console.error('Upload failed:', err);
-      setUploadError(err instanceof Error ? err.message : 'Upload failed. Please try again.');
+      const { title, message } = uploadFailureCopy('photo', err);
+      setUploadError(`${title}. ${message}`);
       setUploadPhase(null);
     }
   };

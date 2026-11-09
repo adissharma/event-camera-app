@@ -304,7 +304,8 @@ export function LightArchInvitationCover({
           ref={scrollRef}
           contentContainerStyle={S.scrollContent}
           contentInsetAdjustmentBehavior="automatic"
-          automaticallyAdjustKeyboardInsets
+          // No `automaticallyAdjustKeyboardInsets`: the KeyboardAvoidingView around
+          // this already makes room, and doing both leaves a keyboard-sized gap.
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}

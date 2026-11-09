@@ -113,9 +113,13 @@ async function signCoverPath(path: string): Promise<string | null> {
  * The renderable source for one event cover.
  *
  * Falls back to the placeholder while a signed URL is in flight and if signing
- * fails, so a screen never renders an empty frame.
+ * fails, so a screen never renders an empty frame. A screen that would rather
+ * show nothing than a stock photo passes `null` as the placeholder.
  */
-export function useCoverSource(path: string | null | undefined) {
+export function useCoverSource(
+  path: string | null | undefined,
+  placeholder: typeof FALLBACK_COVER = FALLBACK_COVER,
+) {
   const immediate = resolveCoverSync(path);
   const [signed, setSigned] = useState<string | null>(() =>
     path && !immediate ? signedUrlCache.get(path)?.url ?? null : null,
@@ -149,7 +153,7 @@ export function useCoverSource(path: string | null | undefined) {
 
   if (immediate) return immediate;
   if (signed) return { uri: signed };
-  return FALLBACK_COVER;
+  return placeholder;
 }
 
 /**

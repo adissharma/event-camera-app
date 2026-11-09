@@ -58,6 +58,8 @@ import {
 } from '@/features/media/web-mirrored-video-track';
 import type { MediaSource } from '@/types/database';
 import { eventAllowsVideoCapture } from '@/features/media/event-media';
+import { uploadFailureCopy, type UploadFailureKind } from '@/features/media/upload-failure';
+import { useEventFeatureSwitches } from '@/features/entitlements/use-event-feature-switches';
 import { normaliseMimeType } from '@/features/media/storage-paths';
 import { useCameraAccess } from '@/features/media/camera-status';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
@@ -132,19 +134,9 @@ type PendingChallengePost = {
   mimeType?: string | null;
 };
 
-function formatUploadFailure(mediaType: 'photo' | 'video' | 'audio', error: unknown) {
-  const fallback = `Your ${mediaType} could not be uploaded. Please try again.`;
-  if (!(error instanceof Error) || !error.message) return fallback;
-  if (error.message.includes('camera_roll_limit_reached')) {
-    return "You've added as many photos from your camera roll as this event allows. Photos you take here still count.";
-  }
-  if (error.message.includes('video_limit_reached')) {
-    return "You've posted all the videos this event allows. You can still take photos.";
-  }
-  if (error.message.includes('guestbook_messages_unavailable')) {
-    return "This event's Guestbook isn't taking messages.";
-  }
-  return `${fallback}\n\n${error.message}`;
+function alertUploadFailure(kind: UploadFailureKind, error: unknown) {
+  const { title, message } = uploadFailureCopy(kind, error);
+  Alert.alert(title, message);
 }
 
 function getWebCameraVideoElement(container: unknown): HTMLVideoElement | null {
@@ -173,28 +165,30 @@ function getPreferredWebRecorderMimeType(): string | undefined {
   return candidates.find((candidate) => MediaRecorder.isTypeSupported(candidate));
 }
 
-function InlineVideoPreview({ uri, autoPlay = false }: { uri: string; autoPlay?: boolean }) {
+/**
+ * Plays the recording back as soon as it exists, on a loop, so there is never a
+ * frozen first frame to work out what to do with. Stops while it posts.
+ */
+function InlineVideoPreview({ uri, paused }: { uri: string; paused: boolean }) {
   const player = useVideoPlayer({ uri }, (instance) => {
-    instance.loop = false;
-    if (autoPlay) {
-      // Mobile browsers routinely block a non-muted, programmatic play()
-      // call unless it runs synchronously inside a direct user gesture —
-      // and mounting this preview after a recording stops never qualifies,
-      // even though a real gesture (tapping stop) triggered it moments
-      // earlier. Starting muted is the standard, reliable way around that:
-      // the browser always permits a muted autoplay. Unmuting immediately
-      // after succeeds on most engines, since the video is already playing
-      // on a screen the guest is actively interacting with; on the few
-      // engines that still hold it muted, it simply stays muted with the
-      // native controls' own volume button right there to unmute manually.
-      instance.muted = true;
-      instance.play();
-      instance.muted = false;
-      return;
-    }
+    instance.loop = true;
+    // Mobile browsers refuse a non-muted play() outside a direct user gesture,
+    // and mounting this after a recording stops never counts as one. Starting
+    // muted is always allowed; unmuting straight after works on most engines,
+    // and the rest stay muted with the volume control right there.
+    instance.muted = true;
+    instance.play();
     instance.muted = false;
-    instance.pause();
   });
+
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status === 'readyToPlay' && !paused) player.play();
+  });
+
+  useEffect(() => {
+    if (paused) player.pause();
+    else player.play();
+  }, [paused, player]);
 
   return (
     <View style={S.inlineVideoPreviewWrap}>
@@ -403,7 +397,9 @@ export default function CameraScreen() {
   // The Guestbook is a distinct feature from the main gallery's photo/video
   // toggle — a host disabling video contributions for the gallery should not
   // silently break Guestbook video messages, so this bypasses that gate.
-  const videoCaptureEnabled = isGuestbookCapture || eventAllowsVideoCapture(primarySession);
+  const featureSwitches = useEventFeatureSwitches(celebrationId);
+  const videoCaptureEnabled =
+    isGuestbookCapture || (eventAllowsVideoCapture(primarySession) && featureSwitches.videos);
 
 
   // ── Upload pipeline ──
@@ -453,7 +449,8 @@ export default function CameraScreen() {
     isGuestbookCapture &&
     isGuest &&
     !entitlements.isLoading &&
-    !entitlements.has('guestbookMessages');
+    !featureSwitches.isLoading &&
+    (!entitlements.has('guestbookMessages') || !featureSwitches.guestbook);
   useEffect(() => {
     if (guestbookClosed) returnFromCamera();
   }, [guestbookClosed, returnFromCamera]);
@@ -1110,7 +1107,7 @@ export default function CameraScreen() {
       } catch (e) {
         console.error(`Failed to upload ${source} photo:`, e);
         setUploadPhase(null);
-        Alert.alert('Upload failed', formatUploadFailure('photo', e));
+        alertUploadFailure('photo', e);
         // The server never received it — only the local, session-only
         // thumbnail needs undoing.
         setPhotos(photos);
@@ -1426,7 +1423,7 @@ export default function CameraScreen() {
       // `effectivePreview.uri`, if compression produced a second file) both
       // still exist on disk, so Retake still has something to discard and
       // the recording is never silently lost.
-      Alert.alert('Upload failed', formatUploadFailure(mediaKind, error));
+      alertUploadFailure(mediaKind, error);
     } finally {
       setIsUploading(false);
       setPostingStage('idle');
@@ -1544,7 +1541,7 @@ export default function CameraScreen() {
     } catch (error) {
       console.error('Failed to post challenge photo:', error);
       setUploadPhase(null);
-      Alert.alert('Upload failed', formatUploadFailure('photo', error));
+      alertUploadFailure('photo', error);
       return false;
     } finally {
       setIsUploading(false);
@@ -2241,7 +2238,6 @@ export default function CameraScreen() {
         <UploadStatus
           phase={uploadPhase ?? 'complete'}
           mediaType={completedUpload ?? (postingStage === 'idle' ? 'photo' : videoPreview?.kind ?? 'video')}
-          mode="overlay"
         />
       ) : null}
 
@@ -2485,7 +2481,7 @@ export default function CameraScreen() {
               {/* `autoPlay` is web-only by explicit instruction — native's
                   call site is untouched here, so its behaviour cannot
                   change. */}
-              <InlineVideoPreview uri={videoPreview.uri} autoPlay={isWeb} />
+              <InlineVideoPreview uri={videoPreview.uri} paused={isUploading} />
               <View style={S.challengePreviewScrim} pointerEvents="none" />
             </>
           )}

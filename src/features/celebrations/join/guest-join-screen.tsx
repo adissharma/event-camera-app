@@ -336,7 +336,8 @@ function ClassicJoinScreen({
           style={{ flex: 1 }}
           contentContainerStyle={S.scrollContent}
           contentInsetAdjustmentBehavior="automatic"
-          automaticallyAdjustKeyboardInsets
+          // No `automaticallyAdjustKeyboardInsets`: the KeyboardAvoidingView around
+          // this already makes room, and doing both leaves a keyboard-sized gap.
           keyboardShouldPersistTaps="handled"
           // Scrolls only as far as the focused field needs, so the CTA below
           // it stays on screen rather than being pushed out of reach.

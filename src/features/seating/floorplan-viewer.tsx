@@ -125,6 +125,14 @@ export function FloorplanViewer({
     transform: [{ translateX: x.value }, { translateY: y.value }, { scale: scale.value }],
   }));
 
+  // Keeps the same object for the same size. On the web an image reloads when its
+  // `onLoad` changes, so a new object each time would load it round and round.
+  function rememberNaturalSize(width: number, height: number) {
+    setNatural((current) =>
+      current?.width === width && current?.height === height ? current : { width, height },
+    );
+  }
+
   function onLayout(event: LayoutChangeEvent) {
     const { width, height } = event.nativeEvent.layout;
     setFrame((current) => (current?.width === width && current?.height === height ? current : { width, height }));
@@ -153,9 +161,16 @@ export function FloorplanViewer({
                 source={{ uri }}
                 style={StyleSheet.absoluteFill}
                 resizeMode="contain"
-                onLoad={(event) =>
-                  setNatural({ width: event.nativeEvent.source.width, height: event.nativeEvent.source.height })
-                }
+                onLoad={(event) => {
+                  // Native reports the size here. The web's load event doesn't,
+                  // and with no size to work from every drag was limited to nothing.
+                  const size = event.nativeEvent.source;
+                  if (size?.width && size?.height) {
+                    rememberNaturalSize(size.width, size.height);
+                  } else {
+                    Image.getSize(uri, rememberNaturalSize);
+                  }
+                }}
               />
             </Animated.View>
           ) : null}

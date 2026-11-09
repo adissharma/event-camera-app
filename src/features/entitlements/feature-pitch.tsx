@@ -5,6 +5,7 @@ import Svg, { Path } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
 import { REVEAL_TRACK_GRADIENT, spacing, useMotion } from '@/design';
+import type { PaywallPlan } from '@/features/payments/plan-catalogue';
 import type { FeatureKey } from './event-entitlements';
 
 /**
@@ -20,7 +21,13 @@ export interface FeaturePitch {
   summary: string;
   /** Two short facts, ticked. */
   highlights: readonly string[];
-  Hero: ComponentType;
+  Hero: ComponentType<PitchHeroProps>;
+}
+
+/** The move on offer, for art that depends on which package is selected. */
+export interface PitchHeroProps {
+  from: PaywallPlan | null;
+  to: PaywallPlan | null;
 }
 
 /** Matches the sheet, so the art dissolves into it. */
@@ -366,6 +373,101 @@ function SeatingHero() {
   );
 }
 
+/** A crowd around the new limit, as offsets from the middle of the art. */
+const GUEST_FACES: readonly { x: number; y: number; size: number; source: ImageSourcePropType }[] = [
+  { x: -78, y: -30, size: 54, source: require('../../../assets/sample-event/01.jpg') },
+  { x: 78, y: -30, size: 54, source: require('../../../assets/sample-event/02.jpg') },
+  { x: -70, y: 28, size: 46, source: require('../../../assets/sample-event/03.jpg') },
+  { x: 72, y: 28, size: 46, source: require('../../../assets/sample-event/04.jpg') },
+  { x: -140, y: 2, size: 46, source: require('../../../assets/sample-event/05.jpg') },
+  { x: 140, y: 2, size: 46, source: require('../../../assets/sample-event/06.jpg') },
+  { x: -186, y: -38, size: 38, source: require('../../../assets/sample-event/07.jpg') },
+  { x: 186, y: -38, size: 38, source: require('../../../assets/sample-event/03.jpg') },
+  { x: -190, y: 40, size: 34, source: require('../../../assets/sample-event/02.jpg') },
+  { x: 190, y: 40, size: 34, source: require('../../../assets/sample-event/01.jpg') },
+];
+/** Lifted clear of the pill. */
+const GUEST_CROWD_LIFT = -18;
+const GUEST_LIMIT_SIZE = 88;
+
+function GuestFace({ index, entrance }: { index: number; entrance: Animated.Value }) {
+  const face = GUEST_FACES[index]!;
+  // Nearest first, so the crowd spreads outwards from the number.
+  const start = index * 0.06;
+  const scale = entrance.interpolate({
+    inputRange: [start, Math.min(start + 0.4, 1)],
+    outputRange: [0.3, 1],
+    extrapolate: 'clamp',
+  });
+  return (
+    <Animated.View
+      style={[
+        S.face,
+        {
+          width: face.size,
+          height: face.size,
+          borderRadius: face.size / 2,
+          opacity: scale,
+          transform: [
+            { translateX: face.x },
+            { translateY: face.y + GUEST_CROWD_LIFT },
+            { scale },
+          ],
+        },
+      ]}
+    >
+      <Image source={face.source} style={S.tileImage} resizeMode="cover" />
+    </Animated.View>
+  );
+}
+
+function guestAllowanceLabel(plan: PaywallPlan | null): string {
+  return typeof plan?.guestLimit === 'number' ? String(plan.guestLimit) : '∞';
+}
+
+function GuestsHero({ from, to }: PitchHeroProps) {
+  const entrance = useEntrance();
+  const toLabel = to?.guestLimit === 'unlimited' ? 'Unlimited guests' : `${to?.guestLimit} guests`;
+  const scale = entrance.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] });
+  return (
+    <HeroBackdrop source={require('../../../assets/sample-event/05.jpg')}>
+      {GUEST_FACES.map((_, index) => (
+        <GuestFace key={index} index={index} entrance={entrance} />
+      ))}
+      <Animated.View
+        style={[S.guestLimitWrap, { transform: [{ translateY: GUEST_CROWD_LIFT }, { scale }] }]}
+      >
+        <LinearGradient
+          colors={GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={S.guestLimit}
+        >
+          <AppText style={S.guestLimitText}>{guestAllowanceLabel(to)}</AppText>
+        </LinearGradient>
+      </Animated.View>
+      <Animated.View
+        style={[
+          S.yourSeat,
+          {
+            opacity: entrance,
+            transform: [
+              { translateY: entrance.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+            ],
+          },
+        ]}
+      >
+        <AppText variant="bodySmall" style={S.yourSeatText}>
+          {typeof from?.guestLimit === 'number' ? `${from.guestLimit} → ${toLabel}` : toLabel}
+        </AppText>
+      </Animated.View>
+    </HeroBackdrop>
+  );
+}
+
+/** The art for an upgrade sold on room for more guests. */
+export const GUESTS_PITCH_HERO = GuestsHero;
+
 export const FEATURE_PITCHES: Partial<Record<FeatureKey, FeaturePitch>> = {
   guestbook: {
     heading: 'The words you’ll want to keep',
@@ -538,6 +640,24 @@ const S = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   yourSeatText: { color: '#0B0B0C', fontWeight: '600' },
+  face: {
+    position: 'absolute',
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.28)',
+    backgroundColor: '#1A1A1D',
+  },
+  guestLimitWrap: {
+    position: 'absolute',
+    width: GUEST_LIMIT_SIZE,
+    height: GUEST_LIMIT_SIZE,
+    borderRadius: GUEST_LIMIT_SIZE / 2,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  guestLimit: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  guestLimitText: { color: '#FFFFFF', fontSize: 40, lineHeight: 48, fontWeight: '700' },
   highlights: { gap: spacing.xs },
   highlight: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   tick: {

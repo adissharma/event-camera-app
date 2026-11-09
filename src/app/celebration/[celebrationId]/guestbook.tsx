@@ -26,6 +26,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Path, Rect } from 'react-native-svg';
 
@@ -52,6 +53,8 @@ import { FeatureGate } from '@/features/entitlements/feature-gate';
 import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
 import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
+import { useEventFeatureSwitches } from '@/features/entitlements/use-event-feature-switches';
+import { useCoverSource } from '@/features/celebrations/cover-source';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
 import { SAMPLE_COVER, isSampleCelebrationId } from '@/features/celebrations/sample-event';
 import { resolveSignedUrls } from '@/features/media/signed-url-cache';
@@ -61,15 +64,21 @@ type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
 /** What `fetch*Guestbook` fills in when the host has not written their own. */
 const GUESTBOOK_DEFAULT_INSTRUCTIONS = 'Leave a message for the host.';
 
-/** Thickness of the gradient frame around the Guestbook. */
-const BORDER_WIDTH = 2;
+const COVER_BLUR_RADIUS = 70;
+const TEXT_SHADE_COLORS = [
+  'rgba(11, 11, 12, 0)',
+  'rgba(11, 11, 12, 0.6)',
+  'rgba(11, 11, 12, 0.6)',
+  'rgba(11, 11, 12, 0)',
+] as const;
+const TEXT_SHADE_STOPS = [0.2, 0.36, 0.88, 0.97] as const;
+const HAS_LIQUID_GLASS = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 /**
  * An approximation of the display's corner radius, in points.
  *
- * The gradient frame below hugs the screen edge, so on a phone with rounded
- * corners a square frame runs straight into the display mask and loses its
- * corners. Matching the curve keeps the whole frame on screen.
+ * The glass frame below sits just inside the screen edge, so on a phone with
+ * rounded corners its curve has to follow the display's.
  *
  * Neither React Native nor Expo exposes the real radius — on iOS it is a
  * private `UIScreen` property — so this infers it from the top safe-area
@@ -98,6 +107,35 @@ function useScreenCornerRadius(): number {
   if (insets.top >= 30) return 48;
   // Home-button iPhones and iPads: genuinely square.
   return 0;
+}
+
+/**
+ * The gallery card's clear glass over a sharp photograph, shaped to the screen
+ * itself so it warps the picture along every edge. The photograph is darkened
+ * behind the text only, leaving the edges bright enough for the warp to show. Off iOS 26, and always on the
+ * web, a fine light edge stands in.
+ */
+function GuestbookGlassFrame({ cornerRadius }: { cornerRadius: number }) {
+  const frameStyle = [StyleSheet.absoluteFill, { borderRadius: cornerRadius }];
+  const borderRadius = cornerRadius;
+
+  if (HAS_LIQUID_GLASS) {
+    return (
+      <View pointerEvents="none" style={frameStyle}>
+        <GlassView
+          glassEffectStyle="clear"
+          colorScheme="dark"
+          style={[StyleSheet.absoluteFill, { borderRadius }]}
+        />
+        <LinearGradient
+          colors={TEXT_SHADE_COLORS}
+          locations={TEXT_SHADE_STOPS}
+          style={[StyleSheet.absoluteFill, { borderRadius }]}
+        />
+      </View>
+    );
+  }
+  return <View pointerEvents="none" style={[frameStyle, styles.glassFrameFallback]} />;
 }
 
 function GuestbookHeroIcon({ size = 32, color = '#FFFFFF' }) {
@@ -136,9 +174,22 @@ function GuestbookScreenContent() {
 
   const isHost = (detail?.viewerRole ?? 'guest') === 'host';
   const isSample = isSampleCelebrationId(String(celebrationId));
-  // Free includes the Guestbook page but not guests recording on it: they can
-  // open the cover full screen and read the host's message, nothing more.
   const messagesOpen = isSample || entitlements.has('guestbookMessages');
+  const featureSwitches = useEventFeatureSwitches(String(celebrationId));
+  const coverSource = useCoverSource(detail?.celebration.cover_storage_path, null);
+
+  // A guest only gets here through a link once there is nothing to leave a
+  // message in. The event's own screen no longer offers the way in.
+  const guestHasNoGuestbook =
+    Boolean(detail) &&
+    !isHost &&
+    !isSample &&
+    !entitlements.isLoading &&
+    !featureSwitches.isLoading &&
+    (!messagesOpen || !featureSwitches.guestbook);
+  useEffect(() => {
+    if (guestHasNoGuestbook) router.replace(`/celebration/${celebrationId}` as never);
+  }, [guestHasNoGuestbook, router, celebrationId]);
 
   const hostQuery = useQuery({
     queryKey: ['guestbook', 'host', String(celebrationId)],
@@ -230,8 +281,8 @@ function GuestbookScreenContent() {
     ? 'Guests record a short video message for the couple. Each one is private — only the host ever sees them.'
     : messagesOpen
     ? payload?.guestbook.instructions?.trim() || GUESTBOOK_DEFAULT_INSTRUCTIONS
-    : // Without messages, the stock invitation to leave one would be a promise
-      // with no button behind it. A host's own words are kept as they wrote them.
+    : // The host's view while messages are locked, where the stock invitation
+      // would be a promise with no button behind it.
       payload?.guestbook.instructions?.trim() &&
         payload.guestbook.instructions.trim() !== GUESTBOOK_DEFAULT_INSTRUCTIONS
       ? payload.guestbook.instructions.trim()
@@ -240,9 +291,7 @@ function GuestbookScreenContent() {
   const footnote = isSample
     ? 'Sample album — messages from this event are not shown.'
     : !messagesOpen
-    ? isHost
-      ? 'Guests can open this page. Upgrade and they can leave you a video message too.'
-      : undefined
+    ? undefined
     : isHost
     ? resolvedMessages.length === 0
       ? 'No one has left a message yet. Messages here are private to you.'
@@ -295,35 +344,26 @@ function GuestbookScreenContent() {
 
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={['#C13584', '#8B5CF6', '#F77737', '#FCAF45']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[StyleSheet.absoluteFill, { borderRadius: cornerRadius }]}
-        pointerEvents="none"
-      />
-      {/* Concentric with the frame: an inner radius one border-width smaller
-          keeps the gradient an even thickness the whole way round the curve. */}
-      <View
-        style={[
-          styles.innerRoot,
-          { borderRadius: Math.max(0, cornerRadius - BORDER_WIDTH) },
-        ]}
-      >
+      <View style={styles.innerRoot}>
         {isLoading && !payload ? (
           <View style={styles.loading}>
             <ActivityIndicator color={colours.textSecondary} />
           </View>
         ) : (
           <StoryViewer
-            // Challenges blur a photo from the event behind their intro; the
-            // Guestbook normally has no cover to do that with. The example
-            // does, so it gets the same treatment rather than flat black.
+            // Sharp where Liquid Glass is available, because the glass needs
+            // detail to bend. Without it, the blur keeps the text readable.
             backdrop={
-              isSample
-                ? { kind: 'blurredImage' as const, source: SAMPLE_COVER }
+              isSample || coverSource
+                ? {
+                    kind: 'blurredImage' as const,
+                    source: isSample ? SAMPLE_COVER : coverSource,
+                    blurRadius: HAS_LIQUID_GLASS ? 0 : COVER_BLUR_RADIUS,
+                    drift: HAS_LIQUID_GLASS,
+                  }
                 : { kind: 'solid', color: '#0B0B0C' }
             }
+            introFrame={<GuestbookGlassFrame cornerRadius={cornerRadius} />}
             // The host picks an emoji in Guestbook settings; the book glyph is
             // the fallback for a Guestbook that has never been configured.
             icon={
@@ -473,12 +513,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0B0B0C',
   },
-  /** Inset all round so the gradient behind it reads as a border. */
   innerRoot: {
     flex: 1,
-    margin: BORDER_WIDTH,
     backgroundColor: '#0B0B0C',
     overflow: 'hidden',
+  },
+  glassFrameFallback: {
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.26)',
   },
   loading: {
     flex: 1,

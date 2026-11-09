@@ -1,5 +1,6 @@
 import {
   entitlementsForPlanKey,
+  guestUpgradeHighlights,
   upgradeForFeature,
   upgradeGains,
   upgradeSummary,
@@ -12,6 +13,20 @@ import { getPaywallPlan } from '@/features/payments/plan-catalogue';
 const small = getPaywallPlan('small_event')!;
 const stories = getPaywallPlan('stories')!;
 const plus = getPaywallPlan('stories_plus')!;
+
+describe('what a guest-limit upgrade brings besides guests', () => {
+  it('leaves the guests to the art and keeps to two short facts', () => {
+    const highlights = guestUpgradeHighlights(small, plus);
+    expect(highlights).toHaveLength(2);
+    expect(highlights.some((highlight) => highlight.endsWith(' guests'))).toBe(false);
+    expect(highlights[0]).toMatch(/^[A-Z0-9]/);
+  });
+
+  it('falls back to the guests when that is all there is', () => {
+    const roomier = { ...small, guestLimit: 50 } as typeof small;
+    expect(guestUpgradeHighlights(small, roomier)).toEqual(['50 guests']);
+  });
+});
 
 describe('what an event includes', () => {
   it('reads the package off the key the event was published on', () => {

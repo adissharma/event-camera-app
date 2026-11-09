@@ -297,45 +297,58 @@ function HomeUpcomingEventCard({
   onContentHeight?: (height: number) => void;
   onPress: () => void;
 }) {
-  const coverSource = useCoverSource(celebration.coverStoragePath);
+  // No stock photo while the host's own cover is on its way: the black behind
+  // the card is a better wait than someone else's picture.
+  const coverSource = useCoverSource(celebration.coverStoragePath, null);
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Open ${celebration.title}`}
       onPress={onPress}
-      style={({ pressed }) => [{ width, height }, pressed && styles.cardPressed]}
+      style={{ width, height }}
     >
-      <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      {/* Keeps the time, logo and profile button readable on a bright cover. */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']}
-        style={styles.upcomingHeroTopFade}
-        pointerEvents="none"
-      />
-      {/* Only enough to hold the title: the photograph carries on to the foot. */}
-      <LinearGradient
-        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.65)']}
-        locations={[0.5, 0.74, 1]}
-        style={StyleSheet.absoluteFill}
-        pointerEvents="none"
-      />
-      <View
-        style={[styles.upcomingHeroContent, { bottom: contentBottom }]}
-        onLayout={(event) => onContentHeight?.(event.nativeEvent.layout.height)}
-      >
-        <AppText
-          variant="displayLarge"
-          style={styles.upcomingHeroTitle}
-          numberOfLines={3}
-        >
-          {celebration.title}
-        </AppText>
-        <OrganicCountdownPill
-          label={formatUpcomingTimeLeft(celebration)}
-          gradientId={`upcoming-countdown-${celebration.id}`}
-        />
-      </View>
+      {({ pressed }) => (
+        <>
+          {coverSource ? (
+            <Image source={coverSource} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          ) : null}
+          {/* Keeps the time, logo and profile button readable on a bright cover. */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']}
+            style={styles.upcomingHeroTopFade}
+            pointerEvents="none"
+          />
+          {/* Only enough to hold the title: the photograph carries on to the foot. */}
+          <LinearGradient
+            colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.3)', 'rgba(0,0,0,0.65)']}
+            locations={[0.5, 0.74, 1]}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+          />
+          <View
+            style={[styles.upcomingHeroContent, { bottom: contentBottom }]}
+            onLayout={(event) => onContentHeight?.(event.nativeEvent.layout.height)}
+          >
+            <AppText
+              variant="displayLarge"
+              style={styles.upcomingHeroTitle}
+              numberOfLines={3}
+            >
+              {celebration.title}
+            </AppText>
+            <OrganicCountdownPill
+              label={formatUpcomingTimeLeft(celebration)}
+              gradientId={`upcoming-countdown-${celebration.id}`}
+            />
+          </View>
+          {/* A dark layer rather than a lower opacity, so a press can only ever
+              darken the card and never show anything through it. */}
+          {pressed ? (
+            <View style={[StyleSheet.absoluteFill, styles.cardPressedScrim]} pointerEvents="none" />
+          ) : null}
+        </>
+      )}
     </Pressable>
   );
 }
@@ -1219,8 +1232,8 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: colours.textPrimary,
   },
-  cardPressed: {
-    opacity: 0.88,
+  cardPressedScrim: {
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   upcomingHeroTopFade: {
     position: 'absolute',

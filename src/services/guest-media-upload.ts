@@ -10,6 +10,7 @@ import {
 } from '@/features/media/storage-paths';
 import { readLocalMediaBytes } from '@/features/media/read-local-image';
 import { downscalePhotoForUpload } from '@/features/media/photo-downscale';
+import { isConnectionFailure } from '@/features/media/upload-failure';
 import type { MediaSource, MediaType } from '@/types/database';
 
 /**
@@ -69,6 +70,36 @@ export interface DeleteGuestPhotoResult {
   shotsUsed: number;
 }
 
+/** How long to wait before each automatic retry of a dropped request. */
+const CONNECTION_RETRY_DELAYS_MS = [500, 1500];
+
+/**
+ * Sends a request again if the connection dropped, and only then.
+ *
+ * A dropped request may still have reached the server, so this is only safe
+ * for the steps below, each of which can be repeated without taking effect
+ * twice.
+ */
+async function retryingDroppedConnection<T extends { error: { message: string } | null }>(
+  send: () => PromiseLike<T>,
+): Promise<T> {
+  let result = await send();
+  for (const delayMs of CONNECTION_RETRY_DELAYS_MS) {
+    if (!result.error || !isConnectionFailure(result.error.message)) return result;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    result = await send();
+  }
+  return result;
+}
+
+/**
+ * The id a capture keeps until it has posted, by its local file.
+ *
+ * The server recognises a repeated id as the same photo. A fresh id on every
+ * attempt is what let each retry reserve another of the guest's shots.
+ */
+const clientMediaIdsInFlight = new Map<string, string>();
+
 export async function uploadGuestMedia(
   params: UploadGuestMediaParams,
 ): Promise<UploadGuestMediaResult> {
@@ -105,19 +136,22 @@ export async function uploadGuestMedia(
     throw new Error(`${mediaLabel} upload aborted: local file is empty (${params.localUri}).`);
   }
 
-  const { data: intentData, error: intentError } = await (client as any).rpc(
-    'create_guest_media_upload_intent',
-    {
+  const earlierClientMediaId = clientMediaIdsInFlight.get(params.localUri);
+  const clientMediaId = earlierClientMediaId ?? Crypto.randomUUID();
+  clientMediaIdsInFlight.set(params.localUri, clientMediaId);
+
+  const { data: intentData, error: intentError } = await retryingDroppedConnection<any>(() =>
+    (client as any).rpc('create_guest_media_upload_intent', {
       p_event_code: params.eventCode,
       p_guest_token: params.guestToken,
-      p_client_media_id: Crypto.randomUUID(),
+      p_client_media_id: clientMediaId,
       p_media_type: mediaType,
       p_source: params.source,
       p_mime_type: mimeType,
       p_file_size_bytes: fileSizeBytes,
       p_captured_at: params.capturedAt ?? new Date().toISOString(),
       p_metadata: params.metadata ?? {},
-    },
+    }),
   );
 
   if (intentError) throw new Error(`Guest ${mediaLabel} upload intent failed: ${intentError.message}`);
@@ -130,15 +164,24 @@ export async function uploadGuestMedia(
     thumbnail_storage_path: string | null;
   };
 
-  const { error: uploadError } = await client.storage
-    .from(intent.bucket)
-    .upload(intent.storage_path, bytes, {
+  let uploadAttempts = 0;
+  const { error: uploadError } = await retryingDroppedConnection(() => {
+    uploadAttempts += 1;
+    return client.storage.from(intent.bucket).upload(intent.storage_path, bytes, {
       contentType: mimeType,
       upsert: false,
       cacheControl: IMMUTABLE_CACHE_SECONDS,
     });
+  });
 
-  if (uploadError) throw new Error(`Guest ${mediaLabel} storage upload failed: ${uploadError.message}`);
+  // On a repeat, "already exists" means an earlier attempt got through and
+  // only its answer was lost.
+  const alreadyArrived =
+    (uploadAttempts > 1 || earlierClientMediaId !== undefined) &&
+    /already exists|duplicate/i.test(uploadError?.message ?? '');
+  if (uploadError && !alreadyArrived) {
+    throw new Error(`Guest ${mediaLabel} storage upload failed: ${uploadError.message}`);
+  }
 
   // Best-effort and entirely separate from the media upload above: a failed
   // or skipped thumbnail never blocks or fails the post itself — the grid
@@ -163,9 +206,8 @@ export async function uploadGuestMedia(
     }
   }
 
-  const { data: finalizeData, error: finalizeError } = await (client as any).rpc(
-    'finalize_guest_media_upload',
-    {
+  const { data: finalizeData, error: finalizeError } = await retryingDroppedConnection<any>(() =>
+    (client as any).rpc('finalize_guest_media_upload', {
       p_media_item_id: intent.media_item_id,
       p_guest_token: params.guestToken,
       p_file_size_bytes: fileSizeBytes ?? bytes.byteLength,
@@ -176,10 +218,12 @@ export async function uploadGuestMedia(
       p_height: downscaled?.height ?? params.height ?? null,
       p_duration_ms: params.durationMs ?? null,
       p_thumbnail_uploaded: thumbnailUploaded,
-    },
+    }),
   );
 
   if (finalizeError) throw new Error(`Guest ${mediaLabel} finalisation failed: ${finalizeError.message}`);
+
+  clientMediaIdsInFlight.delete(params.localUri);
 
   const result = finalizeData as {
     media_item_id: string;

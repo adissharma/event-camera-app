@@ -192,6 +192,24 @@ export function upgradeGains(from: PaywallPlan | null, to: PaywallPlan): string[
 }
 
 /** One sentence saying what the upgrade buys, built from the gains above. */
+/**
+ * What else a guest-limit upgrade brings, as short ticked facts.
+ *
+ * The extra guests are left out unless they are all there is, because the art
+ * above these already says so.
+ */
+export function guestUpgradeHighlights(
+  from: PaywallPlan | null,
+  to: PaywallPlan,
+  limit = 2,
+): string[] {
+  const gains = upgradeGains(from, to);
+  const extras = gains.filter((gain) => !gain.endsWith(' guests'));
+  return (extras.length > 0 ? extras : gains)
+    .slice(0, limit)
+    .map((gain) => `${gain.charAt(0).toUpperCase()}${gain.slice(1)}`);
+}
+
 export function upgradeSummary(from: PaywallPlan | null, to: PaywallPlan): string {
   const gains = upgradeGains(from, to);
   if (gains.length === 0) return `Upgrade to ${to.displayName}.`;
