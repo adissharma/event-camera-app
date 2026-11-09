@@ -522,7 +522,7 @@ function EventScreen() {
                 <img data-src={blurredPrint(id)} alt="" />
                 <span className="ev-lock-in" data-group="cellLockIn">
                   <i><Lock /></i>
-                  <small data-group="cellLockText">Revealed in 8h 12m</small>
+                  <small data-group="cellLockText">Reveals in 8h 12m</small>
                 </span>
               </span>
             </span>
