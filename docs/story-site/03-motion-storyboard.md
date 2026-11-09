@@ -145,3 +145,7 @@ The hero has the phone on screen from the start, open on the chosen party's even
 On desktop, a thin line across the foot of the page has a small break for each section. It fills as you scroll. The sections' names appear on hover, and each one jumps to its section.
 
 The story was cut to about 43 units from about 72 after testing with a mouse wheel, and desktop now uses less scroll per unit than touch. Seating skips the typing and doesn't return to the seat tab. Challenges dim the phone around the strip before the tap, and run two dares rather than three. The live gallery is gone, the counter and locked gallery are shorter, and the album's flying photos are gone.
+
+## Short laptop screens
+
+Between 521px and 759px tall on desktop, the type and logo follow the height as well as the width, the hero drops to its headline and button with the occasions rotating by themselves, and the camera holds on the whole scene instead of pushing in. The spotlights do the pointing, the roofline stays below the words, and the QR card and photos start under the copy.

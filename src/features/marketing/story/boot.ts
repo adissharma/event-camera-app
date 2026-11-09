@@ -96,8 +96,8 @@ export function bootStory(root: HTMLElement): () => void {
     tab.addEventListener('click', onUcClick);
     tab.addEventListener('focus', onUcFocus);
   });
-  // Phones have no buttons, so the mock fades through the parties by itself while the hero's up.
-  const noButtons = window.matchMedia('(max-width: 759px), (max-aspect-ratio: 9/10), (max-height: 520px)');
+  // Phones and short laptops have no buttons, so the mock fades through the parties by itself while the hero's up.
+  const noButtons = window.matchMedia('(max-width: 759px), (max-aspect-ratio: 9/10), (max-height: 759px)');
   let ucLanded = false;
   const ucClock = setInterval(() => {
     if (!root.classList.contains('in-phone')) return;

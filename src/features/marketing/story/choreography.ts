@@ -14,7 +14,7 @@ export interface Layout {
   h: number;
   /** Height that's always visible, with a phone's toolbars showing. */
   vis: number;
-  /** On a phone, how far down the stage the longest scene's words reach. */
+  /** On a phone or a short laptop, how far down the stage the longest scene's words reach. */
   copyEnd?: number;
   m: boolean;
 }
@@ -140,7 +140,13 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const tl = new Timeline();
   const m = layout.m;
   const scenes = ['s2', 's3', 's4', 's5', 's6', 's7'].map((name) => els[`ch:${name}`]);
-  const L: Layout = { ...layout, copyEnd: m ? Math.max(...scenes.map((c) => c.offsetTop + c.offsetHeight)) : 0 };
+  /**
+   * A short laptop screen: the room only just fits under the words, so pushing in would
+   * bring the villa up behind them. The camera holds on the whole scene and the spotlights
+   * do the pointing. Its height matches the short-screen block in story.css.
+   */
+  const short = !m && layout.h > 520 && layout.h < 760;
+  const L: Layout = { ...layout, copyEnd: m || short ? Math.max(...scenes.map((c) => c.offsetTop + c.offsetHeight)) : 0 };
   /**
    * Desktop's room is wide and busy, so each scene pushes in on its subject and lets
    * everything else fall into shadow. Phones are close already, and a landscape phone
@@ -155,7 +161,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const dancer = figure('dad');
   const homeM = Math.max(HOME_M, dancer.x + figureSize(dancer).w / 2 + 40 - (wide(L).vh * L.w) / L.h / 2);
   const widest = wide(L, m ? homeM : undefined);
-  const home = spot ? { ...widest, cy: widest.cy - (L.h * 0.07 * widest.vh) / L.h } : widest;
+  // On a short screen, low enough for the roof to clear the hero's button, within a limit
+  // that keeps the guests at the front in the picture.
+  const roofOnScreen = L.h / 2 + ((ROOF_TOP - widest.cy) * L.h) / widest.vh;
+  const heroEnds = short ? els['ch:s1'].offsetTop + els['ch:s1'].offsetHeight : 0;
+  const drop = short ? Math.min(L.h * 0.1, Math.max(L.h * 0.07, heroEnds + 16 - roofOnScreen)) : L.h * 0.07;
+  const home = spot || short ? { ...widest, cy: widest.cy - (drop * widest.vh) / L.h } : widest;
   const cam = { ...home };
   const night = { v: 0 };
   const figureLights: FigureLight[] = [];
@@ -297,16 +308,16 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   };
   // Pushed in, there's no empty sky behind the words, so they bring their own shade.
   const shadeIn = (s: { zoom: number }) => {
-    if (spot) tl.to(els.copyShade, { opacity: 1 }, s.zoom, 0.6, 'none');
+    if (spot && !short) tl.to(els.copyShade, { opacity: 1 }, s.zoom, 0.6, 'none');
   };
   const shadeOut = (at: number) => {
-    if (spot) tl.to(els.copyShade, { opacity: 0 }, at, LEAVE, 'none');
+    if (spot && !short) tl.to(els.copyShade, { opacity: 0 }, at, LEAVE, 'none');
   };
 
   // ---- S2. Join: their everyday camera, your QR code, and they're in.
   const s2 = section('s2', 0.2, undefined, FROM_HERO);
   tl.to(els.phone, { opacity: 0 }, 0.32, 0.16, 'none');
-  camTo(closer(L, m ? PLACES.entrance.x + 120 : PLACES.entrance.x), s2.zoom);
+  if (!short) camTo(closer(L, m ? PLACES.entrance.x + 120 : PLACES.entrance.x), s2.zoom);
   // The festoon lights come on as the guests arrive, and stay on all night.
   tl.to(els.festoonGlow, { glow: 1 }, s2.at + 0.1, 0.6, 'none');
   // The room falls away, and the invitation and the phone have the stage.
@@ -321,9 +332,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const invH = Math.max(60, Math.min(182, L.vis * 0.24, lowest + 24 - invTop));
   const scanPhoneY = m ? invTop + invH - 24 : anchor.y;
   phoneIn({ ...anchor, y: scanPhoneY }, s2);
+  const invScale = Math.min(1.08, (L.h * 0.52) / 396);
+  // Never higher than the end of the words, with room for its tilt.
+  const invCentre = short ? Math.max(L.h * 0.63, (L.copyEnd ?? 0) + 28 + 198 * invScale) : L.h * 0.63;
   const invPose = m
     ? { x: L.w * 0.5 - 143, y: invTop + invH / 2 - 198, scale: invH / 396, rot: -4 }
-    : { x: L.w * 0.42 - 143, y: L.h * 0.63 - 198, scale: Math.min(1.08, (L.h * 0.52) / 396), rot: -4 };
+    : { x: L.w * 0.42 - 143, y: invCentre - 198, scale: invScale, rot: -4 };
   tl.start(els.invRoom, { ...invPose, opacity: 0 });
   tl.to(els.invRoom, { opacity: 1 }, s2.phone, 0.35, 'none');
 
@@ -370,7 +384,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   phoneOut(s3.at);
   const crowd = figure('easelCrowd');
   // The whole crowd in frame: on a phone that needs the wider view.
-  const crowdShot = m ? wide(L, crowd.x) : spot ? framed(L, crowd.x, crowd.y - crowd.h / 2, 1300, 0.5) : closer(L, crowd.x);
+  const crowdShot = m ? wide(L, crowd.x) : short ? home : spot ? framed(L, crowd.x, crowd.y - crowd.h / 2, 1300, 0.5) : closer(L, crowd.x);
   camTo(crowdShot, s3.zoom);
   const crowdLight = lightFigure('easelCrowd');
   tl.to(crowdLight, { a: 1 }, s3.light, 0.5, 'out3');
@@ -521,7 +535,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
       t: at,
       x: source.x,
       y: source.y,
-      to: { x: Math.max(70, Math.min(L.w - 70, face.x + (i % 2 ? 30 : -30))), y: Math.max(m ? 360 : 170, face.y - (m ? 90 : 70) - (i % 3) * 30) },
+      to: { x: Math.max(70, Math.min(L.w - 70, face.x + (i % 2 ? 30 : -30))), y: Math.max(m ? 360 : short ? (L.copyEnd ?? 0) + 160 * printScale : 170, face.y - (m ? 90 : 70) - (i % 3) * 30) },
       s: printScale,
       rot: [-8, 6, -4, 9, -6][i],
     });
@@ -555,7 +569,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   momentLights.forEach((glow) => tl.to(glow, { a: 0 }, s5.at, LEAVE, 'none'));
   const crew = figure('dareCrew');
   if (m) camTo(closer(L, crew.x), s5.zoom);
-  if (spot) camTo(framed(L, crew.x, crew.y - 300, 1140, 0.27), s5.zoom);
+  if (spot && !short) camTo(framed(L, crew.x, crew.y - 300, 1140, 0.27), s5.zoom);
   shadeIn(s5);
   const crewLight = lightFigure('dareCrew');
   tl.to(crewLight, { a: 1 }, s5.light, 0.5, 'out3');
@@ -627,7 +641,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   // She's been on the terrace all night: now she's the one in the light.
   const speaker = figure('guestVoice');
   if (m) camTo(closer(L, speaker.x), s6.zoom);
-  if (spot) camTo(framed(L, speaker.x, speaker.y - 300, 1280, 0.28), s6.zoom);
+  if (spot && !short) camTo(framed(L, speaker.x, speaker.y - 300, 1280, 0.28), s6.zoom);
   shadeIn(s6);
   const speakerLight = lightFigure('guestVoice');
   tl.to(speakerLight, { a: 1 }, s6.light, 0.5, 'out3');
