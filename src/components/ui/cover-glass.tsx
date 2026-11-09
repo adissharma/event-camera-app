@@ -15,7 +15,8 @@ export interface CoverGlassProps {
 /**
  * The glass behind a card that sits on an event cover. Fills its parent, as
  * `EventGlass` does. On a device that is the real glass, which reads what is
- * behind it for itself; see `cover-glass.web.tsx` for the browser.
+ * behind it for itself; see `cover-glass.web.tsx` for the browser, where only
+ * desktop gets the bent glass and mobile web stays on the tinted blur.
  */
 export function CoverGlass(_props: CoverGlassProps) {
   return <EventGlass />;
