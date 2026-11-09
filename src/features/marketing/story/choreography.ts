@@ -41,6 +41,8 @@ export interface Story {
   /** How dark it is: 0 is the sunset, 1 is full night. */
   night: { v: number };
   /** When the use case tabs are on screen. */
+  /** Where one scroll comes to rest: the top, the moment each next slide starts to take over, and the end. */
+  stops: number[];
   /** Where the camera starts: the last slide frames its terrace the same way. */
   heroCam: { cx: number; cy: number; vh: number };
   /** The moment each scene's still is captured at, for the linear page. */
@@ -290,7 +292,9 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const ZOOM_FOR = 0.8;
   /** Out of the hero the whole scene's already showing, so only the words and the phone change. */
   const FROM_HERO: Beat = { title: 0.1, light: 0.4, zoom: 0.55, phone: 0.75, ready: 1.35 };
+  const slideChanges: number[] = [];
   const section = (name: string, at: number, leaving?: string, beat = BEAT, dim?: number) => {
+    if (leaving) slideChanges.push(at);
     if (leaving) chOut(`ch:${leaving}`, at, 0.2);
     if (beat !== FROM_HERO) tl.to(cam, home, at, 0.7, 'inOut');
     if (dim !== undefined) tl.to(night, { v: dim }, at, 0.45, 'none');
@@ -906,5 +910,5 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     s8: T - 0.3,
   };
 
-  return { tl, T, labels, cam, figureLights, night, heroCam: home, stills };
+  return { tl, T, labels, stops: [0, ...slideChanges, T], cam, figureLights, night, heroCam: home, stills };
 }

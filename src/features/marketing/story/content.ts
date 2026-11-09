@@ -47,7 +47,7 @@ export const CHAPTERS = {
   s4: { label: 'Photos', title: 'Every guest is\nyour photographer.', body: 'Your photographer can’t be everywhere. Your guests are, catching the moments you miss.', alt: 'Night has fallen over the terrace. Guests take photos on their phones, each flash lights up a patch of the party, and a real photograph appears above it.' },
   s5: { label: 'Challenges', title: 'Photo challenges\nget everyone shooting.', body: 'Set prompts like Happy Tears and Best Dressed, or pick a ready-made pack for your event.', alt: 'A phone showing the challenges Happy Tears, Best Dressed and Caught in the Act, while guests go to absurd lengths to get the shot.' },
   s6: { label: 'Guestbook', title: 'A guestbook\nyou can actually hear.', body: 'Guests leave private voice or video messages: your mum in tears, your best friend at 1am.', alt: 'A guest in the lit terrace records a voice message on her phone, with its waveform on the Stills guestbook screen.' },
-  s7: { label: 'Disposable', title: 'Make every shot count.\nThe reveal’s worth it.', body: 'Everyone gets one roll, and no peeking. Wake up to the whole night, developed.', alt: 'The Stills camera zooms in on its remaining-shots counter, which runs down to zero. The gallery locks, the sun comes up on an empty terrace, and with just the couple left, every photo is revealed.' },
+  s7: { label: 'Disposable', title: 'Make every shot count.\nThe reveal’s worth it.', body: 'Go disposable: one roll each, no peeking till morning. Or share every shot live. Your call.', alt: 'The Stills camera zooms in on its remaining-shots counter, which runs down to zero. The gallery locks, the sun comes up on an empty terrace, and with just the couple left, every photo is revealed.' },
   s8: { label: 'Album', title: 'Your guests are already\ntaking the photos.', body: 'Get every photo, video and message in one album. All you need is a QR code.', alt: 'The morning after. Last night’s couple sit on the empty terrace, looking through the album on the phone.' },
   s9: { label: 'Parties', title: 'Any party with\nmore than one phone.', alt: 'Tabs for birthdays, bachelor and bachelorette parties, and holidays, each with its own setting and its own event on a phone.' },
 };
@@ -59,6 +59,16 @@ export const CLOSE = {
 };
 
 /** Checked against the code: see the fact check in docs/story-site/07-storyline-and-copy.md. */
+/** Teases what's next once a slide has finished, in order: after Guests join, and so on to after the last. */
+export const KEEP_GOING = [
+  'Keep {verb}, your table’s waiting',
+  'Keep {verb}, the party’s starting',
+  'Keep {verb} for the dares',
+  'Keep {verb}, someone’s got a speech',
+  'Keep {verb}, the best bit’s next',
+  'Keep {verb}, we’ve got answers',
+];
+
 export const FAQS = [
   { q: 'Do my guests need to download anything?', a: 'No. On a recent iPhone the QR code opens Stills as an App Clip, with nothing to install. On other phones it opens in the browser. Guests type their name and start shooting, with no account and no password.' },
   { q: 'What do I need to create an event?', a: 'The Stills app for iPhone, which is free to download. An Android app is coming soon.' },
