@@ -203,6 +203,8 @@ body { overflow: visible !important; margin: 0; }
 .story-live .ch { text-shadow: 0 1px 14px rgba(62, 14, 120, .6); }
 .story-live .ch-s1 { width: min(54vw, 1000px); opacity: 1; }
 .story-live .ch-s1 .h-xl { max-width: none; font-size: clamp(34px, 4.7vw, 84px); }
+/* Wide enough for the hero's two sentences to sit on two lines. */
+.story-live .ch-s1 .b-l { max-width: 34em; }
 /* The story ends inside the disposable scene now; this slide is only for the linear page. */
 .story-live .ch-s8 { display: none; }
 .story-live .ch-s8 .h-lg { font-size: clamp(30px, 3.6vw, 56px); }
@@ -256,19 +258,19 @@ body { overflow: visible !important; margin: 0; }
 /* Where you are in the story: a thin line across the foot of the page, with a small break between
    sections. It fills as you scroll, so what's behind is white, and what's ahead shows what's left.
    The sections' names come up on hover, or when a keyboard reaches them. */
-.chapters { display: none; position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; gap: 4px; align-items: flex-start; padding: 28px var(--gutter) 14px; font-size: 14px; line-height: 18px; background: linear-gradient(transparent calc(100% - 34px), rgba(11, 8, 24, .72)); }
-.chapters::before { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(transparent, rgba(11, 8, 24, .9) 24px); opacity: 0; transition: opacity .2s; }
-.chapters:hover::before, .chapters:focus-within::before { opacity: 1; }
-.chapters span { opacity: 0; transition: opacity .2s; }
-.chapters:hover span, .chapters:focus-within span { opacity: 1; }
+/* The progress rail, down the right-hand edge, the way the page moves. It thickens while a slide plays. */
+.chapters { display: none; position: absolute; top: 0; bottom: 0; right: 0; z-index: 30; flex-direction: column; justify-content: center; gap: 0; padding-right: 14px; font-size: 14px; line-height: 18px; pointer-events: none; }
 .story-live .chapters { display: flex; }
 .story-live .chapters:focus-within { opacity: 1 !important; }
-.chapters button { all: unset; box-sizing: border-box; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; cursor: pointer; color: rgba(255, 255, 255, .62); white-space: nowrap; transition: color .2s; }
-.chapters button:hover, .chapters button[aria-current='true'] { color: #fff; }
-.chapters button[aria-current='true'] { font-weight: 600; }
-.chapters button:focus-visible { outline: 2px solid #fff; outline-offset: 3px; border-radius: 4px; }
-.chapters b { display: block; height: 2px; background: rgba(255, 255, 255, .28); }
-.chapters i { display: block; height: 100%; background: #fff; transform: scaleX(0); transform-origin: 0 50%; }
+.chapters button { all: unset; box-sizing: border-box; position: relative; display: flex; justify-content: flex-end; width: 28px; height: 50px; padding: 3px 0; cursor: pointer; pointer-events: auto; color: #fff; }
+.chapters b { display: block; width: 3px; height: 100%; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, .3); box-shadow: 0 0 6px rgba(22, 10, 54, .35); transition: width .35s cubic-bezier(.2, .8, .2, 1), background .35s; }
+.chapters i { display: block; width: 100%; height: 100%; background: #fff; transform: scaleY(0); transform-origin: 50% 0; }
+.chapters.moving b { width: 6px; background: rgba(255, 255, 255, .42); }
+/* The names, beside the rail while the pointer's on it. */
+.chapters span { position: absolute; right: 22px; top: 50%; translate: 0 -50%; padding: 4px 10px; border-radius: 999px; background: rgba(22, 10, 54, .78); white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.chapters:hover span, .chapters:focus-within span { opacity: 1; }
+.chapters button[aria-current='true'] span { font-weight: 600; }
+.chapters button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; border-radius: 4px; }
 
 /* ---------- invitation ---------- */
 .inv { background: #f4efe6; color: #17150f; text-align: center; font-family: 'Isolde', serif; display: flex; flex-direction: column; align-items: center; }
@@ -460,10 +462,9 @@ body { overflow: visible !important; margin: 0; }
 }
 /* Smaller screens: the bar without its labels, up above a phone's toolbar so it's always in sight. */
 @media (max-width: 1099px) {
-  .story-live .chapters { gap: 3px; padding: 22px 10px calc(100lvh - 100svh + 9px); background: linear-gradient(transparent, rgba(11, 8, 24, .82) 18px); pointer-events: none; }
-  .story-live .chapters::before, .story-live .chapters span { display: none; }
-  .story-live .chapters button { gap: 0; }
-  .story-live .chapters b { height: 3px; background: rgba(255, 255, 255, .34); border-radius: 2px; }
+  .story-live .chapters { padding-right: 8px; }
+  .story-live .chapters span { display: none; }
+  .story-live .chapters button { width: 16px; height: 34px; padding: 2px 0; pointer-events: none; }
 }
 
 @media (max-width: 759px), (max-aspect-ratio: 9/10) {
@@ -506,7 +507,7 @@ body { overflow: visible !important; margin: 0; }
 .story-live .sun { translate: 0 1500px; }
 .story-live .ch-s1 .h-xl, .story-live .ch-s1 .b-l, .story-live .ch-s1 .uc-hero, .story-live .ch-s1 .cta-row { translate: 0 36px; opacity: 0; }
 .story-live .scroll-hint, .story-live .hint-band { translate: 0 100%; }
-.story-live .chapters { translate: 0 100%; }
+.story-live .chapters { translate: 150% 0; }
 .story-live .phone { translate: 0 110vh; transition: translate 1.15s cubic-bezier(.16, 1, .3, 1); }
 .story.in-phone .phone { translate: 0 0; }
 .story.in-venue .intro-venue, .story.in-people .intro-person, .story.in-sky .clouds, .story.in-sky .sun,

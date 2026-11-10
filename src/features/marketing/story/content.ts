@@ -41,7 +41,7 @@ export const CTA = {
  * One idea per scene: the headline makes the promise and the body proves it.
  */
 export const CHAPTERS = {
-  s1: { title: 'Turn every phone into\na disposable camera.', body: 'The shared camera app for weddings and parties.', alt: 'A bold black and white print of a wedding on the terrace of an Italian villa, under a hot pink and violet sunset.' },
+  s1: { title: 'Turn every phone into\na disposable camera.', body: 'Stills is the private shared camera for weddings and parties. Guests scan your QR, no app needed, and every shot lands in one album.', alt: 'A bold black and white print of a wedding on the terrace of an Italian villa, under a hot pink and violet sunset.' },
   s2: { label: 'Join', title: 'Guests join\nwith one scan.', body: 'No app download, no account, no password needed. They scan your QR code and they’re in.', alt: 'A phone scanning the QR code on a paper invitation, then opening the Stills join screen for Olivia and Daniel’s wedding.' },
   s3: { label: 'Seating', title: 'A seating chart\non every phone.', body: 'No crowd round the easel. Guests scan, find their table and zoom into your floor plan.', alt: 'A crowd of confused guests squeeze round a paper seating chart on an easel. It turns into one big QR code and the crowd is gone. The Find your table screen shows Ayla at Table 7, and the host’s floor plan zooms in.' },
   s4: { label: 'Photos', title: 'Every guest is\nyour photographer.', body: 'Your photographer can’t be everywhere. Your guests are, catching the moments you miss.', alt: 'Night has fallen over the terrace. Guests take photos on their phones, each flash lights up a patch of the party, and a real photograph appears above it.' },

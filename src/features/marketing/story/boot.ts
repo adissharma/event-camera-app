@@ -21,6 +21,8 @@ const HURRY = 3;
 const BACK_SECONDS = 0.3;
 /** The last slide has the most to get through. */
 const LAST_SLIDE = 1.3;
+/** How long the progress rail stays thick once the story stops moving. */
+const RAIL_SETTLES = 500;
 /** How long after the clouds and sun the hero's scroll prompt comes in, on page load. */
 const HINT_AFTER_SKY = 700;
 /** How long a finished slide sits before teasing the next one. */
@@ -243,7 +245,7 @@ export function bootStory(root: HTMLElement): () => void {
       const done = (Math.max(0, Math.min(1, (t - from) / (to - from)))).toFixed(3);
       if (fill.dataset.done === done) return;
       fill.dataset.done = done;
-      fill.style.transform = `scaleX(${done})`;
+      fill.style.transform = `scaleY(${done})`;
     });
   }
 
@@ -398,6 +400,7 @@ export function bootStory(root: HTMLElement): () => void {
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
     if (play) {
+      railMoving();
       playhead += dt * play.rate * play.dir;
       const arrived = play.dir > 0 ? playhead >= play.to : playhead <= play.to;
       if (arrived) playhead = play.to;
@@ -418,11 +421,20 @@ export function bootStory(root: HTMLElement): () => void {
     const diff = goal - current;
     const settled = Math.abs(diff) < 0.001;
     current = settled ? goal : current + diff * (1 - Math.exp(-dt * SMOOTHING));
+    if (!settled) railMoving();
     if (dirty || !settled) {
       apply(current);
       dirty = false;
     }
     if (!settled) kick();
+  }
+
+  /** The rail thickens while the story moves, and goes thin again a moment after it stops. */
+  let railTimer: ReturnType<typeof setTimeout> | undefined;
+  function railMoving() {
+    els.chapters.classList.add('moving');
+    clearTimeout(railTimer);
+    railTimer = setTimeout(() => els.chapters.classList.remove('moving'), RAIL_SETTLES);
   }
 
   function kick() {
@@ -700,6 +712,7 @@ export function bootStory(root: HTMLElement): () => void {
     clearInterval(ucClock);
     clearTimeout(resizeTimer);
     clearTimeout(repaintTimer);
+    clearTimeout(railTimer);
     hidePrompt();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);

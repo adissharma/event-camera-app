@@ -20,7 +20,7 @@ Stills is new and nobody's heard of it, so the page says what it is first: a sha
 
 **Turn every phone into a disposable camera.**
 
-The shared camera app for weddings and parties.
+Stills is the private shared camera for weddings and parties. Guests scan your QR, no app needed, and every shot lands in one album.
 
 *On phones the hero is centred, with no description, just the headline, the button and the mock.*
 
