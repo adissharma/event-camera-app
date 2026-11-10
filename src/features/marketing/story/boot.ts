@@ -587,6 +587,8 @@ export function bootStory(root: HTMLElement): () => void {
 
   const playTo = (to: number, rate: number, dir: 1 | -1, then?: () => void) => {
     hidePrompt();
+    // A phone hides the terrace behind the other parties only while the hero's up.
+    if (carousel) root.classList.remove('uc-plain');
     if (!play) playhead = current;
     playingAt = pageTop(to);
     play = { to, rate, dir, then };
@@ -766,6 +768,8 @@ export function bootStory(root: HTMLElement): () => void {
   }
   function enterCarousel() {
     if ((play ? playhead : current) > 0.02) return;
+    // The story is the wedding's: whichever party the hero was showing, its terrace comes back.
+    showUseCase(0);
     const from = paused;
     paused = null;
     if (from && from.t > story.stops[1] * 0.2) resumeStory(from);
