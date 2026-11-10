@@ -427,8 +427,14 @@ export function bootStory(root: HTMLElement): () => void {
     return Math.max(0, Math.min(story.T, (window.scrollY - start) / (UNIT_VH * layout.h)));
   }
 
+  /** The one rule for the next chevron: whenever the story isn't playing, it pulses. */
+  function syncNudge() {
+    if (carousel) els.carNext.classList.toggle('nudge', !play && current >= CHEVRONS_FROM);
+  }
+
   function frame(now: number) {
     raf = 0;
+    syncNudge();
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
     if (play) {
@@ -569,7 +575,7 @@ export function bootStory(root: HTMLElement): () => void {
   function hidePrompt() {
     clearTimeout(promptTimer);
     els.keepGoing.classList.remove('on');
-    els.carNext.classList.remove('nudge');
+
   }
   function schedulePrompt(stop: number) {
     hidePrompt();
@@ -578,7 +584,7 @@ export function bootStory(root: HTMLElement): () => void {
       els.keepGoingText.textContent = KEEP_GOING[stop - 1].replace('{verb}', swipes ? 'swiping' : 'scrolling');
       els.keepGoing.classList.add('on');
       // In the carousel the next chevron pulses, to show the story carries on sideways.
-      if (carousel) els.carNext.classList.add('nudge');
+
     }, carousel ? 0 : PROMPT_AFTER);
   }
   const onKeepGoing = () => {
