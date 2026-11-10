@@ -291,6 +291,12 @@ export function StoryMarkup() {
                 <span data-el="keepGoingText" />
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
               </button>
+              <button type="button" className="car-arrow car-prev" data-el="carPrev" aria-label="Previous slide">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+              </button>
+              <button type="button" className="car-arrow car-next" data-el="carNext" aria-label="Next slide">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7" /></svg>
+              </button>
               <nav className="chapters" data-el="chapters" aria-label="Chapters">
                 {chapters.map(({ k, label }) => (
                   <button key={k} type="button" data-group="chapter" data-chapter={k}>
