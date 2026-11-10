@@ -157,3 +157,5 @@ One scroll, swipe or key press plays a whole slide at its own pace and stops at 
 A second after a slide finishes, a glowing line teases the next one ("Keep scrolling, your table's waiting"), and clicking it moves on. Going back recognises each new flick, even during the last one's momentum.
 
 The birthday, bach and holiday scenes sink on desktop so their skylines sit below the hero's button, as the terrace does, without cropping the people's faces.
+
+Progress is a rail down the right-hand edge, one segment per slide, filling downwards. It thickens from 3px to 6px while a slide plays and settles back half a second after. On desktop, pointing at it shows the slide names.
