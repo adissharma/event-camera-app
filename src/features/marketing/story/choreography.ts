@@ -17,6 +17,8 @@ export interface Layout {
   /** On a phone or a short laptop, how far down the stage the longest scene's words reach. */
   copyEnd?: number;
   m: boolean;
+  /** Phones' carousel: the hero scrolls away up the screen before the slides take over. */
+  carousel?: boolean;
 }
 
 /** Light that falls on one figure alone, in its exact shape: a world-space box and how bright, 0 to 1. */
@@ -271,7 +273,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(els.hintBand, { opacity: 0 }, 0.02, 0.2, 'none');
   tl.start(els.chapters, { alpha: 0 });
   tl.to(els.chapters, { alpha: 1 }, 0.25, 0.25, 'none');
-  tl.to(els['ch:s1'], { alpha: 0 }, 0.03, 0.2, 'none');
+  // In the carousel the hero scrolls away: its words and phone go up off the top of the screen.
+  const scrollAway = L.carousel ? -L.h : 0;
+  if (L.carousel) tl.to(els['ch:s1'], { alpha: 0, y: scrollAway * 0.6 }, 0.03, 0.5, 'in');
+  else tl.to(els['ch:s1'], { alpha: 0 }, 0.03, 0.2, 'none');
+  if (L.carousel) tl.to(els.phone, { y: heroY + scrollAway }, 0.03, 0.55, 'in');
   // Whichever party was showing, the story itself is the wedding: the terrace comes back,
   // and the event closes up into its icon on the home screen.
   tl.start(els.ucStage, { opacity: 1 });
@@ -298,7 +304,10 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     if (leaving) chOut(`ch:${leaving}`, at, 0.2);
     if (beat !== FROM_HERO) tl.to(cam, home, at, 0.7, 'inOut');
     if (dim !== undefined) tl.to(night, { v: dim }, at, 0.45, 'none');
-    ch(`ch:${name}`, at + beat.title, 0.25, 14);
+    // Out of the hero in the carousel, the first words rise up the screen as if scrolled to.
+    const scrolledIn = name === 's2' && L.carousel;
+    if (scrolledIn) ch(`ch:${name}`, at + 0.05, 0.55, L.h * 0.55);
+    else ch(`ch:${name}`, at + beat.title, 0.25, 14);
     labels[name] = at + beat.title;
     return { at, blank: at + LEAVE + 0.05, light: at + beat.light, zoom: at + beat.zoom, phone: at + beat.phone, ready: at + beat.ready };
   };
@@ -320,7 +329,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
 
   // ---- S2. Join: their everyday camera, your QR code, and they're in.
   const s2 = section('s2', 0.2, undefined, FROM_HERO);
-  tl.to(els.phone, { opacity: 0 }, 0.32, 0.16, 'none');
+  tl.to(els.phone, { opacity: 0 }, L.carousel ? 0.5 : 0.32, L.carousel ? 0.08 : 0.16, 'none');
   if (!short) camTo(closer(L, m ? PLACES.entrance.x + 120 : PLACES.entrance.x), s2.zoom);
   // The festoon lights come on as the guests arrive, and stay on all night.
   tl.to(els.festoonGlow, { glow: 1 }, s2.at + 0.1, 0.6, 'none');
