@@ -16,15 +16,18 @@ import { WORLD } from './world';
 
 const SMOOTHING = 7.5;
 /**
- * On phones, after the hero the slides become a carousel: swipe sideways through the story,
- * or straight down past it to the FAQs. An experiment: set to false to go back to one slide
- * per vertical swipe. Adding ?classic to the address shows the old way without changing it.
+ * After the hero the slides become a carousel, on phones and desktop alike: sideways through the
+ * story (a swipe, the chevrons, a trackpad's sideways scroll or the arrow keys), or straight down
+ * past it to the FAQs. Set to false to go back to one slide per vertical scroll. Adding ?classic
+ * to the address shows the old way without changing it.
  */
 const CAROUSEL_ON_PHONES = true;
 /** Where Guests join starts in the carousel, once the hero has scrolled away: going back to it plays from here. */
 const GUESTS_START = 0.7;
 /** How far into the story the chevrons appear: once the hero has scrolled away. */
 const CHEVRONS_FROM = 0.35;
+/** Back to the hero: how long the slide's words fall away before the scene turns over beneath the veil. */
+const HERO_SWAP_MS = 160;
 /** How long a slide's words and phone take to drop away before the hero comes back. */
 const STORY_LEAVES_MS = 240;
 /** How far a finger travels sideways before it counts as a swipe across. */
@@ -125,7 +128,6 @@ export function bootStory(root: HTMLElement): () => void {
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const carousel =
     CAROUSEL_ON_PHONES &&
-    window.matchMedia('(pointer: coarse)').matches &&
     !reducedMotion.matches &&
     !new URLSearchParams(window.location.search).has('classic');
   root.classList.toggle('carousel', carousel);
@@ -425,8 +427,14 @@ export function bootStory(root: HTMLElement): () => void {
     return Math.max(0, Math.min(story.T, (window.scrollY - start) / (UNIT_VH * layout.h)));
   }
 
+  /** The one rule for the next chevron: whenever the story isn't playing, it pulses. */
+  function syncNudge() {
+    if (carousel) els.carNext.classList.toggle('nudge', !play && current >= CHEVRONS_FROM);
+  }
+
   function frame(now: number) {
     raf = 0;
+    syncNudge();
     const dt = Math.min(0.05, (now - last) / 1000 || 0.016);
     last = now;
     if (play) {
@@ -567,7 +575,7 @@ export function bootStory(root: HTMLElement): () => void {
   function hidePrompt() {
     clearTimeout(promptTimer);
     els.keepGoing.classList.remove('on');
-    els.carNext.classList.remove('nudge');
+
   }
   function schedulePrompt(stop: number) {
     hidePrompt();
@@ -576,7 +584,7 @@ export function bootStory(root: HTMLElement): () => void {
       els.keepGoingText.textContent = KEEP_GOING[stop - 1].replace('{verb}', swipes ? 'swiping' : 'scrolling');
       els.keepGoing.classList.add('on');
       // In the carousel the next chevron pulses, to show the story carries on sideways.
-      if (carousel) els.carNext.classList.add('nudge');
+
     }, carousel ? 0 : PROMPT_AFTER);
   }
   const onKeepGoing = () => {
@@ -615,8 +623,8 @@ export function bootStory(root: HTMLElement): () => void {
     if (carousel) {
       // Up and down only move between the hero and the carousel; anything else is the page's.
       if (window.scrollY > pageTop(0) + 2) return false;
-      // Down while a carousel slide plays is for the page; down out of the hero is ours.
-      if (play) return dir < 0 || play.to <= story.stops[1];
+      // Down is the page's as soon as the hero has gone, even while Guests join is still playing.
+      if (play) return dir < 0 || playhead < CHEVRONS_FROM;
       const t = target();
       return dir > 0 ? t < story.stops[1] - 0.02 : t > 0.02;
     }
@@ -632,6 +640,7 @@ export function bootStory(root: HTMLElement): () => void {
   let wheelTrough = 0;
   let lastFired = 0;
   let lastWheelAcross = 0;
+  let wheelTaken = false;
   const onWheel = (e: WheelEvent) => {
     if (e.ctrlKey) return;
     // A trackpad's sideways scroll moves through the carousel like a swipe across.
@@ -655,7 +664,10 @@ export function bootStory(root: HTMLElement): () => void {
     wheelTrough = fresh || !settled ? speed : Math.min(wheelTrough, speed);
     lastWheel = e.timeStamp;
     wheelDir = dir;
-    if (!storyTakes(dir)) return;
+    // The rest of a scroll the story has taken stays the story's, so a flick out of the hero
+    // doesn't carry on past Guests join into the FAQs.
+    if (fresh) wheelTaken = storyTakes(dir);
+    if (!wheelTaken) return;
     e.preventDefault();
     if (fresh) {
       lastFired = e.timeStamp;
@@ -714,18 +726,24 @@ export function bootStory(root: HTMLElement): () => void {
     play = null;
     hidePrompt();
     clearTimeout(leaveTimer);
-    // At once: the hero is drawn on the very next frame, its words and phone dropping into place.
-    playhead = 0;
-    current = 0;
-    carouselT = 0;
-    dirty = true;
-    // The hero always opens on the wedding, whichever party it was showing before.
-    showUseCase(0);
-    restartUcClock();
+    // The slide's words and phone start falling away at once; under a soft veil the terrace
+    // becomes the hero's, and its words and phone come down into place.
     root.classList.remove('story-leave', 'hero-leave', 'story-return', 'hero-return');
     void root.offsetWidth;
-    root.classList.add('hero-return');
-    kick();
+    root.classList.add('story-leave');
+    leaveTimer = setTimeout(() => {
+      playhead = 0;
+      current = 0;
+      carouselT = 0;
+      dirty = true;
+      // The hero always opens on the wedding, whichever party it was showing before.
+      showUseCase(0);
+      restartUcClock();
+      root.classList.remove('story-leave');
+      void root.offsetWidth;
+      root.classList.add('hero-return');
+      kick();
+    }, HERO_SWAP_MS);
   }
   /** Back into the story exactly where it was paused: the hero goes up and away, the story rises back in and carries on. */
   function resumeStory(from: { t: number; to: number | null }) {
