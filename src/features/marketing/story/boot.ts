@@ -782,7 +782,11 @@ export function bootStory(root: HTMLElement): () => void {
   function backSlide(from: number) {
     const showing = play ? story.stops.indexOf(play.to) : story.stops.findIndex((t) => Math.abs(t - from) < 0.02);
     const previous = showing - 1;
-    if (previous < 1) return;
+    // Back from Guests join, the first slide, is back up to the hero.
+    if (previous < 1) {
+      if (showing === 1) toHero();
+      return;
+    }
     const start = previous === 1 ? GUESTS_START : story.stops[previous - 1];
     play = null;
     playhead = start;

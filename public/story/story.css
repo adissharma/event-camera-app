@@ -772,5 +772,4 @@ body { overflow: visible !important; margin: 0; }
 @keyframes car-ring { from { opacity: 1; scale: 1; } to { opacity: 0; scale: 1.9; } }
 .story-live .story.carousel .car-arrow { display: grid; }
 .story.carousel.in-carousel .car-arrow { opacity: 1; visibility: visible; }
-.story.carousel.carousel-first .car-prev { opacity: 0; visibility: hidden; }
 .story .car-arrow:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
