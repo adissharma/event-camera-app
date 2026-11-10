@@ -220,9 +220,10 @@ body { overflow: visible !important; margin: 0; }
 .keep-going { all: unset; box-sizing: border-box; display: none; position: absolute; left: 50%; bottom: calc(100lvh - 100svh + 34px); z-index: 22; translate: -50% 0; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px; background: rgba(22, 10, 54, .72); color: #fff; white-space: nowrap; font-family: 'Isolde', Georgia, serif; font-size: clamp(17px, 1.5vw, 21px); line-height: 1.15; cursor: pointer; opacity: 0; visibility: hidden; transition: opacity .35s, visibility .35s; }
 .keep-going svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 .story-live .keep-going { display: inline-flex; }
-.keep-going.on { opacity: 1; visibility: visible; animation: keep-glow 2.2s ease-in-out infinite; }
+.keep-going.on { opacity: 1; visibility: visible; box-shadow: 0 0 18px rgba(229, 72, 205, .7), inset 0 0 0 1px rgba(255, 255, 255, .35); animation: keep-breathe 2.4s ease-in-out .4s infinite; }
 .story .keep-going:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-@keyframes keep-glow { 0%, 100% { box-shadow: 0 0 8px rgba(229, 72, 205, .45), inset 0 0 0 1px rgba(255, 255, 255, .22); } 50% { box-shadow: 0 0 26px rgba(229, 72, 205, .95), inset 0 0 0 1px rgba(255, 255, 255, .5); } }
+/* The whole prompt breathes in and out, starting once it has faded in. */
+@keyframes keep-breathe { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 .story .scroll-hint:focus-visible { outline: 2px solid #fff; outline-offset: -6px; }
 .hint-text { white-space: nowrap; text-shadow: 0 1px 14px rgba(22, 10, 54, .8); font-family: 'Isolde', Georgia, serif; font-size: clamp(24px, 2.2vw, 32px); line-height: 1.15; }
 .hint-swipe { display: none; }
@@ -509,7 +510,7 @@ body { overflow: visible !important; margin: 0; }
 .story-live .phone { translate: 0 110vh; transition: translate 1.15s cubic-bezier(.16, 1, .3, 1); }
 .story.in-phone .phone { translate: 0 0; }
 .story.in-venue .intro-venue, .story.in-people .intro-person, .story.in-sky .clouds, .story.in-sky .sun,
-.story.in-copy .scroll-hint, .story.in-copy .hint-band, .story.in-copy .chapters { translate: 0 0; }
+.story.in-hint .scroll-hint, .story.in-hint .hint-band, .story.in-people .chapters { translate: 0 0; }
 .story.in-copy .ch-s1 .h-xl, .story.in-copy .ch-s1 .b-l, .story.in-copy .ch-s1 .uc-hero, .story.in-copy .ch-s1 .cta-row { translate: 0 0; opacity: 1; }
 .story.intro-skip * { transition: none !important; }
 
@@ -632,10 +633,19 @@ body { overflow: visible !important; margin: 0; }
 /* Every party but the wedding has its own place, over the terrace, on the morning-after sky. */
 .uc-scene { position: absolute; inset: 0; opacity: 0; transition: opacity .45s; background: linear-gradient(180deg, #5a3fc0 0%, #9a55d6 26%, #ef86c0 52%, #ffb98a 76%, #ffe0a0 100%); }
 .uc-away .uc-scene { opacity: 1; }
-.uc-sun { position: absolute; left: 56%; bottom: 26%; width: min(46vh, 30vw); aspect-ratio: 1; border-radius: 50%; background: #fffdf8; box-shadow: 0 0 120px 40px rgba(255, 236, 220, .35); }
+.uc-sun { translate: 0 var(--uc-drop, 0px); position: absolute; left: 56%; bottom: 26%; width: min(46vh, 30vw); aspect-ratio: 1; border-radius: 50%; background: #fffdf8; box-shadow: 0 0 120px 40px rgba(255, 236, 220, .35); }
 /* The drawings' own empty sky keeps the copy clear, so they're shown whole on wide screens. */
 .uc-setting { position: absolute; left: 0; right: 0; bottom: -17%; width: 100%; aspect-ratio: 2 / 1; object-fit: cover; object-position: 50% 100%; opacity: 0; translate: 0 50px; transition: opacity .3s, translate .6s cubic-bezier(.16, 1, .3, 1); }
 .uc-setting.on { opacity: 1; translate: 0 0; }
+/* Desktop: the next party fades in over the last, which only goes once it's covered, so the sky never
+   shows through between them. Changing by itself it takes its time; a click is quicker but still soft. */
+@media (min-width: 760px) and (min-aspect-ratio: 9/10) and (min-height: 521px) {
+  .uc-setting, .party { transition: opacity .3s ease-in .7s, translate .6s cubic-bezier(.16, 1, .3, 1) .7s; }
+  .uc-setting.on, .party.on { z-index: 1; transition: opacity .7s ease-in-out, translate .7s cubic-bezier(.16, 1, .3, 1); }
+  .uc-scene { transition: opacity .7s ease-in-out; }
+  .story.uc-auto .uc-setting, .story.uc-auto .party { transition-delay: 1.2s; }
+  .story.uc-auto .uc-setting.on, .story.uc-auto .party.on, .story.uc-auto .uc-scene { transition-duration: 1.2s; transition-delay: 0s; }
+}
 
 .party { position: absolute; inset: 0; opacity: 0; transition: opacity .3s; }
 .party.on { opacity: 1; }

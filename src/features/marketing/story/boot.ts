@@ -21,6 +21,8 @@ const HURRY = 3;
 const BACK_SECONDS = 0.3;
 /** The last slide has the most to get through. */
 const LAST_SLIDE = 1.3;
+/** How long after the clouds and sun the hero's scroll prompt comes in, on page load. */
+const HINT_AFTER_SKY = 700;
 /** How long a finished slide sits before teasing the next one. */
 const PROMPT_AFTER = 1000;
 /** A pause this long between wheel events starts a new gesture; a trackpad's momentum never leaves one. */
@@ -37,6 +39,12 @@ const NEAR_END_VH = 0.25;
 const SWIPE = 16;
 /** Past a section's words on the sky, with the whole scene showing and nothing started yet. */
 const SECTION_LANDS = 0.9;
+/** How far down the party scenes' tallest parts start, as a share of the picture. */
+const SETTING_SKYLINE = 0.15;
+/** Clear sky between the hero's button and a party scene. */
+const SETTING_GAP = 16;
+/** Sinking a party scene stops here, so the people's faces stay in the picture. */
+const SETTING_MIN_SHOWN = 0.62;
 /** How long a phone's mock stays on each party, in ms. */
 const UC_DWELL = 4500;
 /** Behind the FAQs, once the story's over. */
@@ -80,9 +88,9 @@ function loadImages(root: HTMLElement, plate: HTMLImageElement) {
     return Promise.allSettled(images.map((img) => img.decode()));
   };
   const venue = Promise.race([plate.decode().catch(() => {}), wait(3000)]);
-  const people = venue.then(() => batch('figure'));
-  const screens = people.then(() => batch('phone'));
-  void screens.then(() => batch('figure-late')).then(() => batch('print'));
+  const screens = venue.then(() => batch('phone'));
+  const people = screens.then(() => batch('figure'));
+  void people.then(() => batch('figure-late')).then(() => batch('print'));
   return { venue, people, screens };
 }
 
@@ -98,6 +106,7 @@ export function bootStory(root: HTMLElement): () => void {
   const chapterFills = group('chapterFill');
 
   // The kinds of party: each button brings its setting and its event on the phone.
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const ucTabs = group('ucTab') as HTMLButtonElement[];
   const ucLayers = [group('ucSetting'), group('ucPhone')];
   let ucShown = -1;
@@ -114,23 +123,55 @@ export function bootStory(root: HTMLElement): () => void {
     root.classList.toggle('uc-plain', ucShown !== 0 && window.scrollY <= 4 && (!story || target() < 0.02));
     if (story) syncChrome();
   }
-  const onUcClick = (e: Event) => showUseCase(ucTabs.indexOf(e.currentTarget as HTMLButtonElement));
+  const onUcClick = (e: Event) => {
+    root.classList.remove('uc-auto');
+    showUseCase(ucTabs.indexOf(e.currentTarget as HTMLButtonElement));
+    restartUcClock();
+  };
   const onUcFocus = () => scrollToTime(0);
   ucTabs.forEach((tab) => {
     tab.addEventListener('click', onUcClick);
     tab.addEventListener('focus', onUcFocus);
   });
-  // Phones and short laptops have no buttons, so the mock fades through the parties by itself while the hero's up.
+  // The parties fade through by themselves while the hero's up. Phones and short laptops have no
+  // buttons, so it's the only way they see them. With a mouse, resting on the phone holds the party.
   const noButtons = window.matchMedia('(max-width: 759px), (max-aspect-ratio: 9/10), (max-height: 759px)');
   let ucLanded = false;
-  const ucClock = setInterval(() => {
+  let overPhone = false;
+  function ucTick() {
     if (!root.classList.contains('in-phone')) return;
     // The first event gets a full turn once the phone's landed.
-    if (ucLanded && noButtons.matches && !document.hidden && target() < 0.1) {
+    const allowed = noButtons.matches || !reducedMotion.matches;
+    // Never on to a scene that hasn't arrived yet, or it would pop in half way through.
+    const next = ucLayers[0][(ucShown + 1) % ucTabs.length];
+    const ready = !(next instanceof HTMLImageElement) || (next.complete && next.naturalWidth > 0);
+    if (ucLanded && allowed && ready && !overPhone && !document.hidden && target() < 0.1) {
+      root.classList.add('uc-auto');
       showUseCase((ucShown + 1) % ucTabs.length);
     }
     ucLanded = true;
-  }, UC_DWELL);
+  }
+  let ucClock = setInterval(ucTick, UC_DWELL);
+  function restartUcClock() {
+    clearInterval(ucClock);
+    ucClock = setInterval(ucTick, UC_DWELL);
+  }
+  // Tracked by position, because the phone's layer lets the pointer through to the page.
+  function setOverPhone(over: boolean) {
+    if (over === overPhone) return;
+    overPhone = over;
+    // A full turn after they let go, rather than changing the moment they leave.
+    if (!over) restartUcClock();
+  }
+  const onPointerMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse' || !story || target() >= 0.1) {
+      setOverPhone(false);
+      return;
+    }
+    const r = els.phone.getBoundingClientRect();
+    setOverPhone(e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom);
+  };
+  const onPointerLeave = () => setOverPhone(false);
 
   let story!: Story;
   let layout: Layout;
@@ -147,7 +188,24 @@ export function bootStory(root: HTMLElement): () => void {
   let playhead = 0;
   /** Where the page should be while a slide plays. Anywhere else, and something else moved it. */
   let playingAt = 0;
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  /** Like the terrace, the other parties' scenes sit low enough to leave the hero's words on clear sky. */
+  function placeSettings() {
+    const hero = els['ch:s1'];
+    const heroEnds = hero.offsetTop + els.heroCta.offsetTop + els.heroCta.offsetHeight;
+    let deepest = 0;
+    for (const el of ucLayers[0]) {
+      if (el.tagName !== 'IMG') continue;
+      el.style.bottom = '';
+      if (layout.m) continue;
+      const wanted = heroEnds + SETTING_GAP - (el.offsetTop + el.offsetHeight * SETTING_SKYLINE);
+      const most = layout.h - el.offsetHeight * SETTING_MIN_SHOWN - el.offsetTop;
+      const drop = Math.max(0, Math.min(wanted, most));
+      el.style.bottom = `${parseFloat(getComputedStyle(el).bottom) - drop}px`;
+      deepest = Math.max(deepest, drop);
+    }
+    els.ucStage.style.setProperty('--uc-drop', `${deepest}px`);
+  }
 
   function measure() {
     const rect = els.stage.getBoundingClientRect();
@@ -166,6 +224,7 @@ export function bootStory(root: HTMLElement): () => void {
     root.dataset.labels = JSON.stringify(story.labels);
     root.dataset.unit = String(UNIT_VH * layout.h);
     root.dataset.stills = JSON.stringify(story.stills);
+    placeSettings();
     placeClose();
     // Safari can go on showing the phone's old screen after a rebuild, until something repaints it.
     clearTimeout(repaintTimer);
@@ -412,7 +471,7 @@ export function bootStory(root: HTMLElement): () => void {
 
   /**
    * The opening, one layer at a time: sky and logo are there from the first paint,
-   * then the venue rises, then the words, then the people, then the clouds and sun.
+   * then the venue rises, then the phone, then the words, then the people, clouds and sun, then the scroll prompt.
    * Each step waits for its art, so a slow connection never slides up nothing, but
    * the words come early: they're what a visitor is waiting for.
    */
@@ -424,23 +483,25 @@ export function bootStory(root: HTMLElement): () => void {
     if (current > 0.05) {
       // Reloaded partway down the page: nothing to introduce.
       root.classList.add('intro-skip');
-      for (const name of ['in-venue', 'in-people', 'in-sky', 'in-copy', 'in-phone']) step(name);
+      for (const name of ['in-venue', 'in-people', 'in-sky', 'in-copy', 'in-phone', 'in-hint']) step(name);
       return;
     }
     // On a very slow connection the words don't wait for the venue either.
     void wait(1800).then(() => step('in-copy'));
     await venue;
     step('in-venue');
-    await wait(450);
+    await Promise.all([Promise.race([screens, wait(3500)]), wait(450)]);
+    step('in-phone');
+    await wait(500);
     step('in-copy');
     await Promise.all([Promise.race([people, wait(2500)]), wait(500)]);
     step('in-people');
     const clouds = els.clouds as unknown as HTMLImageElement;
     await Promise.all([Promise.race([clouds.decode().catch(() => {}), wait(1500)]), wait(800)]);
     step('in-sky');
-    // Last of all, once the rest has settled and its screen has loaded: the phone.
-    await Promise.all([Promise.race([screens, wait(3500)]), wait(900)]);
-    step('in-phone');
+    // Last of all, the invitation to carry on.
+    await wait(HINT_AFTER_SKY);
+    step('in-hint');
     // Everything's in place. If they still haven't scrolled, show them it moves.
     await wait(1200);
     if (!introStopped && window.scrollY <= 4) els.stage.classList.add('nudging');
@@ -624,6 +685,8 @@ export function bootStory(root: HTMLElement): () => void {
 
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', onResize);
+  window.addEventListener('pointermove', onPointerMove, { passive: true });
+  document.documentElement.addEventListener('pointerleave', onPointerLeave);
   window.addEventListener('wheel', onWheel, { passive: false });
   window.addEventListener('touchstart', onTouchStart, { passive: true });
   window.addEventListener('touchmove', onTouchMove, { passive: false });
@@ -640,6 +703,8 @@ export function bootStory(root: HTMLElement): () => void {
     hidePrompt();
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
+    window.removeEventListener('pointermove', onPointerMove);
+    document.documentElement.removeEventListener('pointerleave', onPointerLeave);
     window.removeEventListener('wheel', onWheel);
     window.removeEventListener('touchstart', onTouchStart);
     window.removeEventListener('touchmove', onTouchMove);

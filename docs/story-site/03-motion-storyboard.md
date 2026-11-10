@@ -155,3 +155,5 @@ Between 521px and 759px tall on desktop, the type and logo follow the height as 
 One scroll, swipe or key press plays a whole slide at its own pace and stops at the moment the next slide would take over. Scrolling again while it plays hurries it to the end, and scrolling back returns to the previous stop in 0.3 seconds, one stop per gesture. The last slide runs 1.3× faster. After the last stop the page scrolls normally into the FAQs. With reduced motion on, the story keeps following the scroll position instead.
 
 A second after a slide finishes, a glowing line teases the next one ("Keep scrolling, your table's waiting"), and clicking it moves on. Going back recognises each new flick, even during the last one's momentum.
+
+The birthday, bach and holiday scenes sink on desktop so their skylines sit below the hero's button, as the terrace does, without cropping the people's faces.

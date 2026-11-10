@@ -436,9 +436,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(crowdLight, { a: 0 }, SWAP, 0.14, 'out');
   const qrLight = lightFigure('easelQr');
   tl.to(qrLight, { a: 1 }, SWAP + 0.08, 0.3, 'out');
-  // And the answer is on the phone: her table, then the floor plan.
-  phoneIn(anchor, { blank: s3.blank, phone: SWAP + 0.55 });
-  const PLAN = SWAP + 1.45;
+  // And the answer is on the phone: her table, then the floor plan. On a phone, where the
+  // mock covers the easel, it has the stage to itself for a moment first so it registers.
+  const EASEL_HOLD = m ? 1 : 0;
+  phoneIn(anchor, { blank: s3.blank, phone: SWAP + 0.55 + EASEL_HOLD });
+  const PLAN = SWAP + 1.45 + EASEL_HOLD;
   const planBox = inPhone(els.seatPlan, els.screen);
   const PLAN_ZOOM = 2.5;
   const PLAN_W = 300;
