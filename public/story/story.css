@@ -748,9 +748,13 @@ body { overflow: visible !important; margin: 0; }
 .story.carousel .keep-going { bottom: calc(100lvh - 100svh + 40px); }
 /* Its arrow points the way the slides go: a swipe to the left. */
 .story.carousel .keep-going svg { rotate: 90deg; }
-/* Back to the hero, at once: its words and phone come down into place. */
-.story.hero-return .ch-s1, .story.hero-return .phone { animation: hero-return .6s cubic-bezier(.22, .8, .3, 1); }
-@keyframes hero-return { from { translate: 0 -40vh; opacity: 0; } }
+/* Back to the hero: the slide's words fall away, a soft veil covers the scene turning over, and the hero's words come down. */
+.story.story-leave .ch, .story.story-leave .phone, .story.story-leave .print, .story.story-leave .lift, .story.story-leave .inv-room-w { animation: story-leave .32s cubic-bezier(.4, 0, .6, 1) forwards; }
+@keyframes story-leave { to { translate: 0 14vh; opacity: 0; } }
+.story.hero-return .stage-in::after { content: ''; position: absolute; inset: 0; z-index: 35; background: #2a1160; pointer-events: none; animation: hero-veil .7s ease-out forwards; }
+@keyframes hero-veil { from { opacity: .55; } to { opacity: 0; } }
+.story.hero-return .ch-s1, .story.hero-return .phone { animation: hero-return .75s cubic-bezier(.22, .8, .3, 1); }
+@keyframes hero-return { from { translate: 0 -24vh; opacity: 0; } }
 /* Down from the hero into the paused story: the hero's words and phone go up, then the story's rise back in. */
 .story.hero-leave .ch-s1, .story.hero-leave .phone { animation: hero-leave .24s cubic-bezier(.55, 0, .75, .4) forwards; }
 @keyframes hero-leave { to { translate: 0 -45vh; opacity: 0; } }
@@ -773,3 +777,19 @@ body { overflow: visible !important; margin: 0; }
 .story-live .story.carousel .car-arrow { display: grid; }
 .story.carousel.in-carousel .car-arrow { opacity: 1; visibility: visible; }
 .story .car-arrow:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* ---------- the carousel on desktop ---------- */
+@media (min-width: 760px) and (min-aspect-ratio: 9/10) {
+  /* Bigger chevrons, in from the edges, and the progress lines are clickable with their names above. */
+  .car-arrow { width: 52px; height: 52px; margin-top: -26px; }
+  .car-arrow svg { width: 24px; height: 24px; }
+  .car-prev { left: 24px; }
+  .car-next { right: 24px; }
+  .story-live .story.carousel .chapters { bottom: 22px; }
+  .story.carousel .chapters button { width: 54px; height: 22px; padding: 0 4px; pointer-events: auto; }
+  .story.carousel .chapters span { display: block; right: auto; left: 50%; top: auto; bottom: 20px; translate: -50% 0; }
+  /* Just the name of the line under the pointer, so they never crowd each other. */
+  .story.carousel .chapters:hover span { opacity: 0; }
+  .story.carousel .chapters button:hover span, .story.carousel .chapters button:focus-visible span { opacity: 1; }
+  .story.carousel .car-arrow:hover { background: rgba(22, 10, 54, .8); }
+}
