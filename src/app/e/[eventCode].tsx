@@ -220,7 +220,7 @@ export default function GuestEntryScreen() {
     <View style={S.root}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <ScrollView
           style={{ flex: 1 }}

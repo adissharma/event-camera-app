@@ -286,7 +286,7 @@ export default function JoinEventScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={{ flex: PASTE_FLEX }}
       >
         <View style={[S.paste, { paddingBottom: insets.bottom + spacing.md }]}>

@@ -113,6 +113,14 @@ export async function purchaseOrThrow(
   provider: PaymentProvider,
   productKey: string,
 ): Promise<PurchaseReceipt | null> {
+  // A store that cannot transact here at all (Android before Play Billing is
+  // configured) is not a passing outage, so it must not read "try again shortly".
+  if (!(await provider.isAvailable())) {
+    throw new PublicationError(
+      'Packages can’t be bought on this device yet. You can still create the event for free.',
+      'purchase',
+    );
+  }
   const [product] = await provider.getProducts([productKey]);
   if (!product) {
     throw new PublicationError(

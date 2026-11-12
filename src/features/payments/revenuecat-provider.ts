@@ -55,6 +55,26 @@ const planKeyByProductId = new Map<string, string>([
 
 const productCache = new Map<string, PurchasesStoreProduct>();
 
+/**
+ * The store RevenueCat fronts on this device, and the public SDK key for it.
+ *
+ * Product ids are shared: Play accepts the same `com.potoevents…` ids as the
+ * App Store, and `verify-purchase` picks the store from `receipt.platform`.
+ */
+const STORE_PLATFORM = Platform.OS === 'android' ? 'google_play' : 'apple_app_store';
+const STORE_NAME = Platform.OS === 'android' ? 'Google Play' : 'App Store';
+
+function storeApiKey(): string | undefined {
+  if (Platform.OS === 'ios') return REVENUECAT_CONFIG.iosApiKey;
+  if (Platform.OS === 'android') return REVENUECAT_CONFIG.androidApiKey;
+  return undefined;
+}
+
+/** True when RevenueCat can transact here: a native platform with its key set. */
+export function hasStoreApiKey(): boolean {
+  return Boolean(storeApiKey());
+}
+
 let configurePromise: Promise<void> | null = null;
 
 function isPurchasesError(error: unknown): error is PurchasesError {
@@ -65,11 +85,9 @@ async function ensureConfigured() {
   if (configurePromise) return configurePromise;
 
   configurePromise = (async () => {
-    if (Platform.OS !== 'ios') {
-      throw new Error('RevenueCat purchases are only configured for iOS right now.');
-    }
-    if (!REVENUECAT_CONFIG.iosApiKey) {
-      throw new Error('RevenueCat iOS API key is missing.');
+    const apiKey = storeApiKey();
+    if (!apiKey) {
+      throw new Error(`RevenueCat ${STORE_NAME} API key is missing.`);
     }
 
     await Purchases.setLogLevel(__DEV__ ? LOG_LEVEL.DEBUG : LOG_LEVEL.WARN);
@@ -85,7 +103,7 @@ async function ensureConfigured() {
     // and `logIn` below promotes it once a session exists.
     const userId = await currentUserId();
     Purchases.configure({
-      apiKey: REVENUECAT_CONFIG.iosApiKey,
+      apiKey,
       appUserID: userId,
       // Have the SDK check the signature on RevenueCat's own responses, so a
       // tampered reply is visible rather than trusted. INFORMATIONAL, not
@@ -124,7 +142,7 @@ async function currentUserId(): Promise<string | null> {
  * the account that is asking to be upgraded.
  */
 export async function identifyPurchaser(): Promise<void> {
-  if (Platform.OS !== 'ios' || !REVENUECAT_CONFIG.iosApiKey) return;
+  if (!hasStoreApiKey()) return;
   const userId = await currentUserId();
   if (!userId) return;
   try {
@@ -152,17 +170,17 @@ function toPurchaseProduct(planKey: string, product: PurchasesStoreProduct): Pur
 
 function toReceipt(result: Awaited<ReturnType<typeof Purchases.purchaseStoreProduct>>): PurchaseReceipt {
   return {
-    platform: 'apple_app_store',
+    platform: STORE_PLATFORM,
     platformProductId: result.productIdentifier,
     platformTransactionId: result.transaction.transactionIdentifier,
   };
 }
 
 export const revenueCatPaymentProvider: PaymentProvider = {
-  platform: 'apple_app_store',
+  platform: STORE_PLATFORM,
 
   async isAvailable() {
-    return Platform.OS === 'ios' && Boolean(REVENUECAT_CONFIG.iosApiKey);
+    return hasStoreApiKey();
   },
 
   async getProducts(planKeys) {
@@ -177,7 +195,7 @@ export const revenueCatPaymentProvider: PaymentProvider = {
     const products = await Purchases.getProducts(productIds, PRODUCT_CATEGORY.NON_SUBSCRIPTION);
     products.forEach((product) => productCache.set(product.identifier, product));
 
-    // StoreKit silently omits products it will not sell — wrong bundle id,
+    // StoreKit (and Play) silently omit products it will not sell — wrong bundle id,
     // metadata incomplete, agreements unsigned, not yet propagated. The array
     // just comes back short, and the caller can only report "unavailable"
     // without ever learning which id the store declined to return.
@@ -238,7 +256,7 @@ export const revenueCatPaymentProvider: PaymentProvider = {
         code: isPurchasesError(error) ? String(error.code) : 'purchase_failed',
         message: isPurchasesError(error)
           ? error.message
-          : 'The App Store purchase could not be completed.',
+          : `The ${STORE_NAME} purchase could not be completed.`,
       };
     }
   },
@@ -250,7 +268,7 @@ export const revenueCatPaymentProvider: PaymentProvider = {
     return customerInfo.nonSubscriptionTransactions
       .filter((transaction) => planKeyByProductId.has(transaction.productIdentifier))
       .map((transaction) => ({
-        platform: 'apple_app_store',
+        platform: STORE_PLATFORM,
         platformProductId: transaction.productIdentifier,
         platformTransactionId: transaction.transactionIdentifier,
       }));

@@ -48,6 +48,15 @@ describe('purchaseOrThrow', () => {
     expect(purchases).toEqual([]);
   });
 
+  it('says the store is unavailable, without buying, when the device cannot transact', async () => {
+    const { provider, purchases } = providerReturning([product]);
+    provider.isAvailable = async () => false;
+    await expect(purchaseOrThrow(provider, 'com.example.plan')).rejects.toThrow(
+      'can’t be bought on this device yet',
+    );
+    expect(purchases).toEqual([]);
+  });
+
   it('reports the stage as "purchase" so the caller can tell it apart from a publish failure', async () => {
     const { provider } = providerReturning([]);
     await expect(purchaseOrThrow(provider, 'com.example.plan')).rejects.toMatchObject({

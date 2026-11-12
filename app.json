@@ -100,6 +100,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/with-android-project-name",
       "./plugins/with-clip-js-bundle",
       "./plugins/with-clip-live-activity",
       "@bacons/apple-targets",

@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   View,
@@ -96,7 +95,7 @@ function SetLimitSheet({ eventSessionId, plan, guestsJoined, onClose }: GuestLim
   return (
     <Modal visible animationType="slide" transparent onRequestClose={onClose}>
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
         style={S.backdrop}
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />

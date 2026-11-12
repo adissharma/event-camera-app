@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
-  Platform,
   ScrollView,
   View,
   type ViewStyle,
@@ -117,7 +116,7 @@ export function Screen({
       <View style={{ flex: 1, backgroundColor }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior="padding"
         >
           {body}
         </KeyboardAvoidingView>
@@ -129,7 +128,7 @@ export function Screen({
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior="padding"
     >
       {body}
       {stickyActionBlock}

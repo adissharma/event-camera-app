@@ -34,6 +34,7 @@ const INLINED_ENV: Record<string, string | undefined> = {
   EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
   EXPO_PUBLIC_IS_APP_CLIP: process.env.EXPO_PUBLIC_IS_APP_CLIP,
   EXPO_PUBLIC_REVENUECAT_IOS_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY,
+  EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY: process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY,
   EXPO_PUBLIC_ENABLE_REAL_PURCHASES: process.env.EXPO_PUBLIC_ENABLE_REAL_PURCHASES,
 };
 
@@ -73,6 +74,8 @@ export const IS_APP_CLIP =
 
 export const REVENUECAT_CONFIG = {
   iosApiKey: env('EXPO_PUBLIC_REVENUECAT_IOS_API_KEY'),
+  /** RevenueCat's Google Play public SDK key (`goog_…`). Unset until Play Billing is set up. */
+  androidApiKey: env('EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY'),
   purchasesEnabled: env('EXPO_PUBLIC_ENABLE_REAL_PURCHASES') === 'true',
 } as const;
 

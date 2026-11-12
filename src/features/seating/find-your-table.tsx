@@ -107,7 +107,7 @@ export function FindYourTable({
       <GestureHandlerRootView style={S.root}>
       <KeyboardAvoidingView
         style={S.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior="padding"
       >
         <View style={[S.header, { paddingTop: Platform.OS === 'ios' ? spacing.lg : insets.top + spacing.base }]}>
           <AppText variant="titleLarge">Find your table</AppText>
