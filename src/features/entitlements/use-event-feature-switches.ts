@@ -8,10 +8,10 @@ import {
   type EventFeatureSwitches,
 } from '@/services/event-feature-switches';
 
-const ALL_ON: EventFeatureSwitches = { guestbook: true, videos: true };
+const ALL_ON: EventFeatureSwitches = { guestbook: true, videos: true, challenges: true };
 
 /**
- * Whether the host wants the Guestbook and videos at this event.
+ * Whether the host wants the Guestbook, videos and Challenges at this event.
  *
  * Off until the answer arrives, so a guest never glimpses a tab that then
  * disappears. Once the read has finished, an event with no answer counts as on:
@@ -31,6 +31,7 @@ export function useEventFeatureSwitches(
   return {
     guestbook: data?.guestbook ?? !isLoading,
     videos: data?.videos ?? !isLoading,
+    challenges: data?.challenges ?? !isLoading,
     isLoading,
   };
 }

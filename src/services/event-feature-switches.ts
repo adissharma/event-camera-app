@@ -10,6 +10,7 @@ import { requireSupabase } from '@/lib/supabase/client';
 export interface EventFeatureSwitches {
   guestbook: boolean;
   videos: boolean;
+  challenges: boolean;
 }
 
 export const eventFeatureSwitchKeys = {
@@ -23,8 +24,15 @@ export async function fetchEventFeatureSwitches(
     p_celebration_id: celebrationId,
   });
   if (error) throw error;
-  const row = (data as { guestbook_enabled: boolean; videos_enabled: boolean }[])[0];
-  return { guestbook: row?.guestbook_enabled ?? true, videos: row?.videos_enabled ?? true };
+  const row = (
+    data as { guestbook_enabled: boolean; videos_enabled: boolean; challenges_enabled?: boolean }[]
+  )[0];
+  return {
+    guestbook: row?.guestbook_enabled ?? true,
+    videos: row?.videos_enabled ?? true,
+    // Absent until the challenges switch migration is applied.
+    challenges: row?.challenges_enabled ?? true,
+  };
 }
 
 export async function saveEventFeatureSwitch(
@@ -36,6 +44,7 @@ export async function saveEventFeatureSwitch(
     .update({
       ...(patch.guestbook === undefined ? {} : { guestbook_enabled: patch.guestbook }),
       ...(patch.videos === undefined ? {} : { videos_enabled: patch.videos }),
+      ...(patch.challenges === undefined ? {} : { challenges_enabled: patch.challenges }),
     })
     .eq('id', celebrationId);
   if (error) throw error;

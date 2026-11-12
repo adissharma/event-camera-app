@@ -94,7 +94,7 @@ describe('hero entitlement rows', () => {
     for (const plan of PAYWALL_PLANS) {
       const rows = planFeatureRows(plan);
       expect(rows[3]!.included).toBe(plan.videos);
-      expect(rows[4]!.included).toBe(plan.guestbook);
+      expect(rows[4]!.included).toBe(plan.guestbookMessages);
       expect(rows[5]!.included).toBe(plan.challenges);
     }
   });

@@ -28,3 +28,8 @@ build/
 # Raw illustration sources and their tooling; the web build only needs public/story.
 assets/story-source/
 docs/story-site/
+
+# Web checkout is off for now, so its endpoints are not deployed at all.
+api/web-checkout.ts
+api/web-checkout-status.ts
+api/stripe-webhook.ts

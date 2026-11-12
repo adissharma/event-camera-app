@@ -36,6 +36,11 @@ import {
 import { ChallengesEmptyState } from '@/features/celebrations/challenges-empty-state';
 import { FeatureGate } from '@/features/entitlements/feature-gate';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
+import {
+  useEventFeatureSwitches,
+  useSaveEventFeatureSwitch,
+} from '@/features/entitlements/use-event-feature-switches';
+import { AppSwitch } from '@/components/forms/app-switch';
 
 // ── Models & Presets ──
 
@@ -131,6 +136,10 @@ function ChallengeDragHandle({
 
 function ViewChallengesScreenContent() {
   const { celebrationId } = useLocalSearchParams<{ celebrationId: string }>();
+  const featureSwitches = useEventFeatureSwitches(String(celebrationId));
+  const saveFeatureSwitch = useSaveEventFeatureSwitch(String(celebrationId));
+  // While the switch is still loading, show the list as on rather than dimmed.
+  const challengesOn = featureSwitches.challenges || featureSwitches.isLoading;
   const router = useRouter();
   const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
@@ -360,6 +369,28 @@ function ViewChallengesScreenContent() {
         <View style={{ width: 44 }} />
       </View>
 
+      <View style={S.switchWrap}>
+        <View style={S.switchCard}>
+          <View style={S.switchLabel}>
+            <AppText variant="labelLarge" style={S.progressTitle}>Show Challenges</AppText>
+            <AppText variant="bodySmall" tone="secondary">
+              {challengesOn ? 'On for guests' : 'Hidden from guests and your event page'}
+            </AppText>
+          </View>
+          <AppSwitch
+            accessibilityLabel="Show Challenges"
+            value={challengesOn}
+            disabled={featureSwitches.isLoading}
+            onValueChange={(challenges) => saveFeatureSwitch.mutate({ challenges })}
+          />
+        </View>
+      </View>
+
+      {/* Switched off, the list stays as it was, ready for switching back on. */}
+      <View
+        style={[S.body, !challengesOn && S.off]}
+        pointerEvents={challengesOn ? 'auto' : 'none'}
+      >
       {challenges.length === 0 ? (
         <View style={S.emptyWrapper}>
           <ChallengesEmptyState onPress={handleAddChallenges} />
@@ -474,6 +505,7 @@ function ViewChallengesScreenContent() {
         />
       </View>
       )}
+      </View>
     </Screen>
   );
 }
@@ -481,6 +513,31 @@ function ViewChallengesScreenContent() {
 /* eslint-enable react-hooks/refs */
 
 const S = StyleSheet.create({
+  switchWrap: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    backgroundColor: '#0B0B0C',
+  },
+  switchCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: '#161617',
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: '#242426',
+  },
+  switchLabel: {
+    flex: 1,
+    gap: spacing.xxs,
+  },
+  body: {
+    flex: 1,
+  },
+  off: {
+    opacity: 0.4,
+  },
   center: {
     flex: 1,
     alignItems: 'center',

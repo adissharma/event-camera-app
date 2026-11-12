@@ -14,6 +14,9 @@ import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
 import { validateStep } from '../draft/validation';
 import { buildEditPatch } from './edit-patch';
+import { STEP_INFO } from './step-info';
+import { StepInfoSheet } from './step-info-sheet';
+import { InfoIcon } from '@/components/ui/icons';
 import { updateEventSettings, celebrationDetailKeys } from '@/services/celebration-detail';
 import { celebrationKeys } from '@/services/celebrations';
 import Svg, { Path } from 'react-native-svg';
@@ -113,6 +116,8 @@ export function CreationStepScreen({
   }));
 
   const [saving, setSaving] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const info = STEP_INFO[step];
 
   const index = CREATION_STEPS.indexOf(step);
   const total = CREATION_STEPS.length;
@@ -198,8 +203,28 @@ export function CreationStepScreen({
             <View style={styles.progressCenter}>
               {!isEditing && <ProgressThread current={index + 1} total={total} />}
             </View>
-            <View style={styles.headerSide} />
+            <View style={styles.headerSide}>
+              {info ? (
+                <Pressable
+                  onPress={() => setInfoOpen(true)}
+                  style={styles.backBtn}
+                  hitSlop={4}
+                  accessibilityRole="button"
+                  accessibilityLabel={`About this step: ${info.title}`}
+                >
+                  <InfoIcon color={colours.brandPrimary} />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
+          {info ? (
+            <StepInfoSheet
+              info={info}
+              visible={infoOpen}
+              onClose={() => setInfoOpen(false)}
+              showChangeLater={!isEditing}
+            />
+          ) : null}
         </View>
       }
       stickyAction={

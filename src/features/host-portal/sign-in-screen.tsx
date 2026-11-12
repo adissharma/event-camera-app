@@ -196,12 +196,6 @@ export default function HostSignInScreen() {
         )}
       </View>
 
-      <Link href="/host/new" accessibilityRole="link">
-        <AppText variant="label" tone="brand">
-          New to Stills.? Create an event
-        </AppText>
-      </Link>
-
       <View style={S.footer}>
         <AppText variant="caption" tone="secondary" align="center">
           This is for event hosts. Guests join from their phone with the event&apos;s QR code or link.

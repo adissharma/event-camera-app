@@ -4,7 +4,7 @@
  * Presentation is deliberately the challenge story viewer, so the Guestbook
  * reads as one more thing to do at the event rather than a separate feature.
  * The only visual departure is the backdrop: a challenge blurs a photo from
- * the event, and the Guestbook has no cover of its own, so it uses flat black.
+ * the event, and the Guestbook moves its own tile's gradient.
  *
  * Privacy is enforced in the database, not here. `get_guest_guestbook` returns
  * only the calling guest's own submissions and `get_host_guestbook` is gated on
@@ -54,9 +54,9 @@ import { upgradesForFeature } from '@/features/entitlements/event-entitlements';
 import { UpgradeSheet } from '@/features/entitlements/upgrade-sheet';
 import { useEventEntitlements } from '@/features/entitlements/use-event-entitlements';
 import { useEventFeatureSwitches } from '@/features/entitlements/use-event-feature-switches';
-import { useCoverSource } from '@/features/celebrations/cover-source';
+import { GUESTBOOK_GRADIENT } from '@/features/celebrations/challenge-gradients';
 import { useIsEventHost } from '@/features/entitlements/use-event-role';
-import { SAMPLE_COVER, isSampleCelebrationId } from '@/features/celebrations/sample-event';
+import { isSampleCelebrationId } from '@/features/celebrations/sample-event';
 import { resolveSignedUrls } from '@/features/media/signed-url-cache';
 
 type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
@@ -64,14 +64,13 @@ type ResolvedMessage = GuestbookMessageRecord & { signedUrl: string };
 /** What `fetch*Guestbook` fills in when the host has not written their own. */
 const GUESTBOOK_DEFAULT_INSTRUCTIONS = 'Leave a message for the host.';
 
-const COVER_BLUR_RADIUS = 70;
 const TEXT_SHADE_COLORS = [
   'rgba(11, 11, 12, 0)',
-  'rgba(11, 11, 12, 0.6)',
-  'rgba(11, 11, 12, 0.6)',
+  'rgba(11, 11, 12, 0.34)',
+  'rgba(11, 11, 12, 0.34)',
   'rgba(11, 11, 12, 0)',
 ] as const;
-const TEXT_SHADE_STOPS = [0.2, 0.36, 0.88, 0.97] as const;
+const TEXT_SHADE_STOPS = [0.1, 0.36, 0.7, 0.98] as const;
 const HAS_LIQUID_GLASS = isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
 
 /**
@@ -110,8 +109,8 @@ function useScreenCornerRadius(): number {
 }
 
 /**
- * The gallery card's clear glass over a sharp photograph, shaped to the screen
- * itself so it warps the picture along every edge. The photograph is darkened
+ * The gallery card's clear glass over the moving gradient, shaped to the screen
+ * itself so it warps the colour along every edge. The gradient is darkened
  * behind the text only, leaving the edges bright enough for the warp to show. Off iOS 26, and always on the
  * web, a fine light edge stands in.
  */
@@ -135,7 +134,15 @@ function GuestbookGlassFrame({ cornerRadius }: { cornerRadius: number }) {
       </View>
     );
   }
-  return <View pointerEvents="none" style={[frameStyle, styles.glassFrameFallback]} />;
+  return (
+    <View pointerEvents="none" style={[frameStyle, styles.glassFrameFallback]}>
+      <LinearGradient
+        colors={TEXT_SHADE_COLORS}
+        locations={TEXT_SHADE_STOPS}
+        style={[StyleSheet.absoluteFill, { borderRadius }]}
+      />
+    </View>
+  );
 }
 
 function GuestbookHeroIcon({ size = 32, color = '#FFFFFF' }) {
@@ -176,7 +183,6 @@ function GuestbookScreenContent() {
   const isSample = isSampleCelebrationId(String(celebrationId));
   const messagesOpen = isSample || entitlements.has('guestbookMessages');
   const featureSwitches = useEventFeatureSwitches(String(celebrationId));
-  const coverSource = useCoverSource(detail?.celebration.cover_storage_path, null);
 
   // A guest only gets here through a link once there is nothing to leave a
   // message in. The event's own screen no longer offers the way in.
@@ -278,7 +284,7 @@ function GuestbookScreenContent() {
     Boolean(activeMessage) && (isHost || Boolean(guestMeta?.guestToken));
 
   const description = isSample
-    ? 'Guests record a short video message for the couple. Each one is private — only the host ever sees them.'
+    ? 'Little video messages from guests, just for the host.'
     : messagesOpen
     ? payload?.guestbook.instructions?.trim() || GUESTBOOK_DEFAULT_INSTRUCTIONS
     : // The host's view while messages are locked, where the stock invitation
@@ -289,14 +295,14 @@ function GuestbookScreenContent() {
       : 'Thank you for celebrating with us.';
 
   const footnote = isSample
-    ? 'Sample album — messages from this event are not shown.'
+    ? 'On your own events, messages will appear here.'
     : !messagesOpen
     ? undefined
     : isHost
     ? resolvedMessages.length === 0
-      ? 'No one has left a message yet. Messages here are private to you.'
+      ? 'No messages yet. They\'ll be just for you.'
       : `${resolvedMessages.length} private message${resolvedMessages.length === 1 ? '' : 's'}, visible only to you.`
-    : 'Your message is private and only visible to the host.';
+    : 'Only the host will see this.';
 
   function openRecorder() {
     router.push({
@@ -351,18 +357,7 @@ function GuestbookScreenContent() {
           </View>
         ) : (
           <StoryViewer
-            // Sharp where Liquid Glass is available, because the glass needs
-            // detail to bend. Without it, the blur keeps the text readable.
-            backdrop={
-              isSample || coverSource
-                ? {
-                    kind: 'blurredImage' as const,
-                    source: isSample ? SAMPLE_COVER : coverSource,
-                    blurRadius: HAS_LIQUID_GLASS ? 0 : COVER_BLUR_RADIUS,
-                    drift: HAS_LIQUID_GLASS,
-                  }
-                : { kind: 'solid', color: '#0B0B0C' }
-            }
+            backdrop={{ kind: 'gradient', colors: GUESTBOOK_GRADIENT }}
             introFrame={<GuestbookGlassFrame cornerRadius={cornerRadius} />}
             // The host picks an emoji in Guestbook settings; the book glyph is
             // the fallback for a Guestbook that has never been configured.

@@ -45,9 +45,8 @@ export interface PaywallPlan {
   /** The Guestbook page: its cover, the host's message and settings. */
   guestbook: boolean;
   /**
-   * Whether guests can record a message into the Guestbook. Free has the page
-   * but not this: guests can open the cover full screen, and only Stills+
-   * lets them leave something on it.
+   * Whether guests can record a message into the Guestbook. Without this they
+   * don't see a Guestbook at all; the host is offered the upgrade instead.
    */
   guestbookMessages: boolean;
   challenges: boolean;
@@ -280,12 +279,10 @@ export function planFeatureRows(plan: PaywallPlan): PlanFeatureRow[] {
     { key: 'videos', label: videosLabel(plan.videosPerGuest), included: plan.videos },
     {
       key: 'guestbook',
-      label: !plan.guestbook
-        ? 'No guestbook'
-        : plan.guestbookMessages
-        ? 'Guestbook'
-        : 'Guestbook, no messages',
-      included: plan.guestbook,
+      // Guests only see a Guestbook they can leave a message in, so a package
+      // without messages doesn't count as having one.
+      label: plan.guestbookMessages ? 'Guestbook' : 'No guestbook',
+      included: plan.guestbookMessages,
     },
     {
       key: 'challenges',

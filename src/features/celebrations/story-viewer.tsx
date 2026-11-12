@@ -4,7 +4,7 @@
  * Both features present the same thing: an intro slide that explains the brief,
  * followed by one slide per submission, with tap-to-advance, swipe up or down to
  * dismiss, and a per-slide overflow menu. They differ only in their backdrop
- * (Challenges blur a cover photo, the Guestbook is flat black) and their copy,
+ * (Challenges blur a cover photo, the Guestbook has a moving gradient) and their copy,
  * so everything else lives here rather than in two places.
  *
  * `activeSlideIndex` is controlled by the caller because the owner of the
@@ -13,7 +13,7 @@
  * gesture are internal — nothing outside needs to read them.
  */
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -23,6 +23,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type ImageSourcePropType,
 } from 'react-native';
@@ -35,8 +36,9 @@ import ReanimatedAnimated, {
 import { PanGestureHandler } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEventListener } from 'expo';
+import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, RadialGradient, Rect, Stop } from 'react-native-svg';
 
 import { AppText } from '@/components/ui/text';
 import { CloseIcon } from '@/components/ui/icons';
@@ -258,14 +260,6 @@ export function StoryVideoSlide({
 
 // ── Backdrop ──
 
-/** Enlarged so the picture's edges stay off screen wherever it wanders. */
-const DRIFT_SCALE = 1.4;
-const DRIFT_X = 44;
-const DRIFT_Y = 72;
-/** Unequal, so the path keeps changing rather than tracing one line. */
-const DRIFT_X_HALF_MS = 5200;
-const DRIFT_Y_HALF_MS = 7400;
-
 function useDrift(value: Animated.Value, halfCycleMs: number, enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;
@@ -282,39 +276,159 @@ function useDrift(value: Animated.Value, halfCycleMs: number, enabled: boolean) 
   }, [enabled, halfCycleMs, value]);
 }
 
-function BlurredBackdrop({
-  source,
-  blurRadius,
-  drift,
+function BlurredBackdrop({ source }: { source: ImageSourcePropType }) {
+  return (
+    <Image
+      source={source}
+      style={[ABSOLUTE_FILL, { width: '100%', height: '100%' }]}
+      resizeMode="cover"
+      blurRadius={35}
+    />
+  );
+}
+
+/**
+ * Offset from the centre, and how much of the pool's colour remains there. A bell
+ * curve, so no pool ever shows an outline: only ever a change of colour.
+ */
+const POOL_STOPS = [
+  ['0', 1],
+  ['0.2', 0.88],
+  ['0.4', 0.6],
+  ['0.6', 0.3],
+  ['0.8', 0.08],
+  ['1', 0],
+] as const;
+
+/** One soft pool of colour, wandering around a point on the screen. */
+function GradientPool({
+  color,
+  peakOpacity = 0.95,
+  sizeFraction,
+  centre,
+  travel,
+  halfCycleMs,
+  moves,
 }: {
-  source: ImageSourcePropType;
-  blurRadius: number;
-  drift: boolean;
+  color: string;
+  peakOpacity?: number;
+  /** Across, as a fraction of the screen's longer side. */
+  sizeFraction: number;
+  /** Where it rests, as fractions of the screen. */
+  centre: { x: number; y: number };
+  /** How far it wanders either way, as fractions of the screen. */
+  travel: { x: number; y: number };
+  /** Unequal between the axes, so its path keeps changing rather than tracing one line. */
+  halfCycleMs: { x: number; y: number };
+  moves: boolean;
 }) {
-  const { reduceMotion } = useMotion();
-  const isDrifting = drift && !reduceMotion;
+  const { width, height } = useWindowDimensions();
+  const gradientId = `gradient-pool-${useId().replace(/:/g, '')}`;
+  // From an end of the swing: a loop resets to its starting value each time round,
+  // so starting anywhere else makes the pool jump back there.
   const [x] = useState(() => new Animated.Value(0));
   const [y] = useState(() => new Animated.Value(0));
-  useDrift(x, DRIFT_X_HALF_MS, isDrifting);
-  useDrift(y, DRIFT_Y_HALF_MS, isDrifting);
+  useDrift(x, halfCycleMs.x, moves);
+  useDrift(y, halfCycleMs.y, moves);
+
+  const size = Math.max(width, height) * sizeFraction;
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        width: size,
+        height: size,
+        left: width * centre.x - size / 2,
+        top: height * centre.y - size / 2,
+        transform: [
+          {
+            translateX: x.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-width * travel.x, width * travel.x],
+            }),
+          },
+          {
+            translateY: y.interpolate({
+              inputRange: [0, 1],
+              outputRange: [-height * travel.y, height * travel.y],
+            }),
+          },
+        ],
+      }}
+    >
+      <Svg width={size} height={size}>
+        <Defs>
+          <RadialGradient id={gradientId} cx="50%" cy="50%" r="50%">
+            {POOL_STOPS.map(([offset, strength]) => (
+              <Stop
+                key={offset}
+                offset={offset}
+                stopColor={color}
+                stopOpacity={peakOpacity * strength}
+              />
+            ))}
+          </RadialGradient>
+        </Defs>
+        <Rect width={size} height={size} fill={`url(#${gradientId})`} />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+/**
+ * The Guestbook tile's gradient, at the size of the screen and in motion: its own
+ * diagonal underneath, with pools of the same three colours and its soft highlight
+ * wandering over it. Built from views rather than a Skia shader so that it runs
+ * unchanged in the App Clip and on the web.
+ */
+function GradientBackdrop({ colors }: { colors: readonly [string, string, string] }) {
+  const { reduceMotion } = useMotion();
+  const moves = !reduceMotion;
 
   return (
-    <Animated.Image
-      source={source}
-      style={[
-        ABSOLUTE_FILL,
-        { width: '100%', height: '100%' },
-        isDrifting && {
-          transform: [
-            { translateX: x.interpolate({ inputRange: [0, 1], outputRange: [-DRIFT_X, DRIFT_X] }) },
-            { translateY: y.interpolate({ inputRange: [0, 1], outputRange: [-DRIFT_Y, DRIFT_Y] }) },
-            { scale: DRIFT_SCALE },
-          ],
-        },
-      ]}
-      resizeMode="cover"
-      blurRadius={blurRadius}
-    />
+    <View style={[ABSOLUTE_FILL, { overflow: 'hidden' }]} pointerEvents="none">
+      <LinearGradient
+        colors={colors}
+        locations={[0, 0.52, 1]}
+        start={{ x: 0.08, y: 0.08 }}
+        end={{ x: 0.92, y: 0.92 }}
+        style={ABSOLUTE_FILL}
+      />
+      <GradientPool
+        color={colors[1]}
+        sizeFraction={1.3}
+        centre={{ x: 0.3, y: 0.32 }}
+        travel={{ x: 0.42, y: 0.2 }}
+        halfCycleMs={{ x: 4300, y: 6100 }}
+        moves={moves}
+      />
+      <GradientPool
+        color={colors[2]}
+        sizeFraction={1.15}
+        centre={{ x: 0.72, y: 0.7 }}
+        travel={{ x: 0.5, y: 0.26 }}
+        halfCycleMs={{ x: 5300, y: 3900 }}
+        moves={moves}
+      />
+      <GradientPool
+        color={colors[0]}
+        sizeFraction={1.05}
+        centre={{ x: 0.75, y: 0.22 }}
+        travel={{ x: 0.45, y: 0.24 }}
+        halfCycleMs={{ x: 6700, y: 4700 }}
+        moves={moves}
+      />
+      <GradientPool
+        color="#FFFFFF"
+        peakOpacity={0.12}
+        sizeFraction={0.9}
+        centre={{ x: 0.22, y: 0.14 }}
+        travel={{ x: 0.3, y: 0.12 }}
+        halfCycleMs={{ x: 5900, y: 4100 }}
+        moves={moves}
+      />
+    </View>
   );
 }
 
@@ -332,17 +446,11 @@ export type StorySlideItem = {
 
 /**
  * The intro slide's backdrop. Challenges blur a still from the event; the
- * Guestbook has no cover of its own and uses flat black instead.
+ * Guestbook moves its tile's gradient.
  */
 export type StoryBackdrop =
-  | {
-      kind: 'blurredImage';
-      source: ImageSourcePropType;
-      blurRadius?: number;
-      /** Wanders slowly, so glass drawn over it has something to bend. */
-      drift?: boolean;
-    }
-  | { kind: 'solid'; color: string };
+  | { kind: 'blurredImage'; source: ImageSourcePropType }
+  | { kind: 'gradient'; colors: readonly [string, string, string] };
 
 export type StoryViewerProps = {
   backdrop: StoryBackdrop;
@@ -487,13 +595,9 @@ export function StoryViewer({
       <ReanimatedAnimated.View style={[S.overlay, overlayAnimatedStyle]}>
         {activeSlideIndex === 0 ? (
           backdrop.kind === 'blurredImage' ? (
-            <BlurredBackdrop
-              source={backdrop.source}
-              blurRadius={backdrop.blurRadius ?? 35}
-              drift={backdrop.drift ?? false}
-            />
+            <BlurredBackdrop source={backdrop.source} />
           ) : (
-            <View style={[ABSOLUTE_FILL, { backgroundColor: backdrop.color }]} />
+            <GradientBackdrop colors={backdrop.colors} />
           )
         ) : customSlide ? (
           customSlide
@@ -524,9 +628,8 @@ export function StoryViewer({
             {
               backgroundColor:
                 activeSlideIndex === 0
-                  ? // Drifting means glass is drawn over it, which brings its own
-                    // wash. The usual scrim on top of that hides what it bends.
-                    backdrop.kind === 'blurredImage' && backdrop.drift
+                  ? // Dark enough already. The usual scrim only muddies the colours.
+                    backdrop.kind === 'gradient'
                     ? 'rgba(0, 0, 0, 0.08)'
                     : 'rgba(0, 0, 0, 0.40)'
                   : 'rgba(11, 11, 12, 0.25)',

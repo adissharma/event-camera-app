@@ -470,7 +470,11 @@ export default function EditEventScreen() {
               <View style={styles.rowLabelContainer}>
                 <AppText variant="labelLarge" style={styles.rowLabel}>Challenges</AppText>
                 <AppText variant="bodySmall" style={styles.rowValue}>
-                  {entitlements.has('challenges') ? 'Manage Challenges' : topTierName()}
+                  {entitlements.has('challenges')
+                    ? featureSwitches.challenges
+                      ? 'Manage Challenges'
+                      : 'Off'
+                    : topTierName()}
                 </AppText>
               </View>
               {entitlements.has('challenges') ? <ChevronRightIcon /> : <UpgradePill />}

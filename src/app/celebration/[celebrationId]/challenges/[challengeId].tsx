@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { returnToEventGallery } from '@/lib/navigation/event-gallery';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import Svg, { Path, Circle } from 'react-native-svg';
@@ -317,7 +319,10 @@ export default function ChallengeFormScreen() {
       });
 
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      router.back();
+      // A new challenge is shown where it now lives. An edit goes back to the list
+      // it was opened from, in case there are more to change.
+      if (isEdit) router.back();
+      else returnToEventGallery(router, String(celebrationId));
     } catch {
       Alert.alert('Error', 'Failed to save challenge.');
     } finally {

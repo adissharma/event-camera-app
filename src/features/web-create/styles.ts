@@ -14,7 +14,7 @@ const semibold = typography.heading.fontFamily;
  * keyboard, screen readers and the platform date picker all come for free.
  */
 export const WEB_CREATE_CSS = `
-.wc-root { min-height: 100vh; background: ${colours.background}; color: ${colours.textPrimary}; font-family: ${text}; }
+.wc-root { flex: 1 1 auto; height: 100%; min-height: 0; overflow-y: auto; overscroll-behavior-y: contain; background: ${colours.background}; color: ${colours.textPrimary}; font-family: ${text}; }
 .wc-root *, .wc-root *::before, .wc-root *::after { box-sizing: border-box; }
 .wc-visually-hidden { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 

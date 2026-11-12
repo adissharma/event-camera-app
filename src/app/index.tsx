@@ -37,7 +37,7 @@ import {
 } from '@/features/onboarding/still-intro';
 import { fitDisplayFace, fontFamilies, layout, radii, spacing, useMotion } from '@/design';
 import { copy } from '@/i18n';
-import { VideoSplash } from '@/features/onboarding/video-splash';
+import { FilmIntro } from '@/features/onboarding/film-intro';
 
 /**
  * Welcome — the first screen on a cold start, and on the very first launch,
@@ -1159,13 +1159,16 @@ export default function WelcomeScreen() {
   if (showVideoSplash === true) {
     return (
       <View style={{ flex: 1, backgroundColor: BLACK }}>
-        <VideoSplash onSettled={handleVideoSettled} />
-        <LegacyWelcomeScreen
-          disableIntro
-          transparent
-          hideWordmark
-          showAuthControls={authVisible && isSignedIn}
-        />
+        <FilmIntro onSettled={handleVideoSettled} />
+        {/* Lets taps through to the intro, which a tap skips, until it is over. */}
+        <View style={StyleSheet.absoluteFill} pointerEvents={authVisible ? 'auto' : 'none'}>
+          <LegacyWelcomeScreen
+            disableIntro
+            transparent
+            hideWordmark
+            showAuthControls={authVisible && isSignedIn}
+          />
+        </View>
       </View>
     );
   }

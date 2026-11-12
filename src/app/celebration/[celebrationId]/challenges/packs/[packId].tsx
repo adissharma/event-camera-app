@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { colours, layout, radii, spacing } from '@/design';
 import { celebrationDetailKeys } from '@/services/celebration-detail';
 import { isBackendConfigured } from '@/lib/supabase/client';
+import { returnToEventGallery } from '@/lib/navigation/event-gallery';
 import { createChallenge, legacyChallengesKey, listChallenges } from '@/services/challenges';
 import { ChallengeIconSVG, normalizeChallengeIconValue } from '@/features/celebrations/challenge-icons';
 import { findChallengePack } from '@/features/celebrations/challenge-packs';
@@ -136,10 +137,10 @@ export default function ChallengePackPreviewScreen() {
 
       if (notices.length > 0) {
         Alert.alert('Challenges added', notices.join(' '), [
-          { text: 'OK', onPress: () => router.replace(`/celebration/${celebrationId}/challenges`) },
+          { text: 'OK', onPress: () => returnToEventGallery(router, celebrationIdStr) },
         ]);
       } else {
-        router.replace(`/celebration/${celebrationId}/challenges`);
+        returnToEventGallery(router, celebrationIdStr);
       }
     } catch (error) {
       console.error('[challenge-packs] failed to add pack', error);

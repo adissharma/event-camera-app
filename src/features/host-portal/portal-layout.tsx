@@ -8,10 +8,9 @@ import { CentredState, PORTAL_CSS } from './ui';
 const SIGN_IN_PATH = '/host/sign-in';
 
 /**
- * Pages a signed-out visitor may see. Creating an event asks for an account at
- * the end, once the host has something worth saving, not at the door.
+ * Pages a signed-out visitor may see.
  */
-const PUBLIC_PATHS = new Set([SIGN_IN_PATH, '/host/new']);
+const PUBLIC_PATHS = new Set([SIGN_IN_PATH]);
 
 /**
  * The host web portal's root: the one gate between the public web and every

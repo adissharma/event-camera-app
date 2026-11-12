@@ -120,18 +120,21 @@ export const SAMPLE_PHOTOS: readonly SampleMedia[] = [
     source: require('../../../assets/sample-event/04.jpg'),
     displayName: 'Dan',
     minutesIntoDay: 485,
+    challengeId: SAMPLE_CHALLENGE_IDS.happyTears,
   },
   {
     id: 'sample-photo-7',
     source: require('../../../assets/sample-event/07.jpg'),
     displayName: 'Ellie',
     minutesIntoDay: 125,
+    challengeId: SAMPLE_CHALLENGE_IDS.bestDressed,
   },
   {
     id: 'sample-photo-5',
     source: require('../../../assets/sample-event/05.jpg'),
     displayName: 'Priya',
     minutesIntoDay: 315,
+    challengeId: SAMPLE_CHALLENGE_IDS.happyTears,
   },
   {
     id: 'sample-photo-1',

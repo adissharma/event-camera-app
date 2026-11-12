@@ -130,6 +130,16 @@ export function EyeIcon({ size = 16, color = colours.textPrimary }: IconProps) {
   );
 }
 
+export function InfoIcon({ size = 18, color = colours.textPrimary }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Circle cx={12} cy={12} r={9.25} stroke={color} strokeWidth={1.8} />
+      <Path d="M12 11v5.5" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <Circle cx={12} cy={7.75} r={1.2} fill={color} />
+    </Svg>
+  );
+}
+
 export function CloseIcon({ size = 16, color = colours.textPrimary }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">

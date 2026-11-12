@@ -17,6 +17,8 @@ export interface Layout {
   /** On a phone or a short laptop, how far down the stage the longest scene's words reach. */
   copyEnd?: number;
   m: boolean;
+  /** Phones' carousel: the hero scrolls away up the screen before the slides take over. */
+  carousel?: boolean;
 }
 
 /** Light that falls on one figure alone, in its exact shape: a world-space box and how bright, 0 to 1. */
@@ -271,7 +273,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(els.hintBand, { opacity: 0 }, 0.02, 0.2, 'none');
   tl.start(els.chapters, { alpha: 0 });
   tl.to(els.chapters, { alpha: 1 }, 0.25, 0.25, 'none');
-  tl.to(els['ch:s1'], { alpha: 0 }, 0.03, 0.2, 'none');
+  // In the carousel the hero scrolls away: its words and phone go up off the top of the screen.
+  const scrollAway = L.carousel ? -L.h : 0;
+  if (L.carousel) tl.to(els['ch:s1'], { alpha: 0, y: scrollAway * 0.6 }, 0.03, 0.5, 'in');
+  else tl.to(els['ch:s1'], { alpha: 0 }, 0.03, 0.2, 'none');
+  if (L.carousel) tl.to(els.phone, { y: heroY + scrollAway }, 0.03, 0.55, 'in');
   // Whichever party was showing, the story itself is the wedding: the terrace comes back,
   // and the event closes up into its icon on the home screen.
   tl.start(els.ucStage, { opacity: 1 });
@@ -298,7 +304,10 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     if (leaving) chOut(`ch:${leaving}`, at, 0.2);
     if (beat !== FROM_HERO) tl.to(cam, home, at, 0.7, 'inOut');
     if (dim !== undefined) tl.to(night, { v: dim }, at, 0.45, 'none');
-    ch(`ch:${name}`, at + beat.title, 0.25, 14);
+    // Out of the hero in the carousel, the first words rise up the screen as if scrolled to.
+    const scrolledIn = name === 's2' && L.carousel;
+    if (scrolledIn) ch(`ch:${name}`, at + 0.05, 0.55, L.h * 0.55);
+    else ch(`ch:${name}`, at + beat.title, 0.25, 14);
     labels[name] = at + beat.title;
     return { at, blank: at + LEAVE + 0.05, light: at + beat.light, zoom: at + beat.zoom, phone: at + beat.phone, ready: at + beat.ready };
   };
@@ -320,7 +329,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
 
   // ---- S2. Join: their everyday camera, your QR code, and they're in.
   const s2 = section('s2', 0.2, undefined, FROM_HERO);
-  tl.to(els.phone, { opacity: 0 }, 0.32, 0.16, 'none');
+  tl.to(els.phone, { opacity: 0 }, L.carousel ? 0.5 : 0.32, L.carousel ? 0.08 : 0.16, 'none');
   if (!short) camTo(closer(L, m ? PLACES.entrance.x + 120 : PLACES.entrance.x), s2.zoom);
   // The festoon lights come on as the guests arrive, and stay on all night.
   tl.to(els.festoonGlow, { glow: 1 }, s2.at + 0.1, 0.6, 'none');
@@ -384,7 +393,8 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   showScreen('join', CARD + 1.05, 0.25);
 
   // ---- S3. Seating: the crowd round the paper chart, gone the moment it's a QR code.
-  const s3 = section('s3', CARD + 1.95, 's2', BEAT, DIM);
+  // Each slide hands over as soon as it's done, with no stretch where nothing moves.
+  const s3 = section('s3', CARD + 1.45, 's2', BEAT, DIM);
   phoneOut(s3.at);
   const crowd = figure('easelCrowd');
   // The whole crowd in frame: on a phone that needs the wider view.
@@ -436,9 +446,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(crowdLight, { a: 0 }, SWAP, 0.14, 'out');
   const qrLight = lightFigure('easelQr');
   tl.to(qrLight, { a: 1 }, SWAP + 0.08, 0.3, 'out');
-  // And the answer is on the phone: her table, then the floor plan.
-  phoneIn(anchor, { blank: s3.blank, phone: SWAP + 0.55 });
-  const PLAN = SWAP + 1.45;
+  // And the answer is on the phone: her table, then the floor plan. On a phone, where the
+  // mock covers the easel, it has the stage to itself for a moment first so it registers.
+  const EASEL_HOLD = m ? 1 : 0;
+  phoneIn(anchor, { blank: s3.blank, phone: SWAP + 0.55 + EASEL_HOLD });
+  const PLAN = SWAP + 1.45 + EASEL_HOLD;
   const planBox = inPhone(els.seatPlan, els.screen);
   const PLAN_ZOOM = 2.5;
   const PLAN_W = 300;
@@ -448,7 +460,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   const planInsetY = (planBox.h - PLAN_H * planFit) / 2;
   const planPanX = -planBox.w * 0.08;
   const planPanY = -planBox.h * 1.3;
-  const seatedAt = PLAN + 2;
+  const seatedAt = PLAN + 1.55;
 
   // Ayla, who'll be shooting from her seat in the next scene.
   const aylaSize = figureSize(figure('ayla'));
@@ -494,7 +506,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   tl.to(planCam, { x: planPanX, y: planPanY, scale: PLAN_ZOOM }, PLAN + 0.8, 0.6, 'inOut');
 
   // ---- S4. Photos: night falls under the words, the phone's put away, and the whole party is shooting.
-  const s4 = section('s4', seatedAt + 0.6, 's3');
+  const s4 = section('s4', seatedAt + 0.1, 's3');
   phoneOut(s4.at);
   shadeOut(s4.at);
   tl.to(night, { v: 1 }, s4.at, 0.7, 'none');
@@ -519,9 +531,11 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
         { who: 'ayla', moment: 'dad', lensAt: aylaLens },
         { who: 'ayla', moment: 'cake', lensAt: aylaLens },
       ];
-  type FlashRecord = { t: number; x: number; y: number; to: { x: number; y: number }; s: number; rot: number };
+  /** `print` is which of the guests' photos it is, in the desktop order: girl and dog, hug, singalong, dad, cake. */
+  type FlashRecord = { t: number; print: number; x: number; y: number; to: { x: number; y: number }; s: number; rot: number };
   const records: FlashRecord[] = [];
-  let at = s4.ready - 0.2;
+  // The first flash comes as night falls, or on a phone as soon as the camera has reached the party.
+  let at = m ? s4.zoom + 0.5 : s4.at + 0.9;
   const momentLights: FigureLight[] = [];
   SHOTS.forEach((s, i) => {
     const moment = figure(s.moment);
@@ -537,16 +551,18 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     const printScale = (m ? 0.46 : Math.min(1, L.w / 1500)) * Math.min(1, L.h / 760);
     records.push({
       t: at,
+      // A phone only has the last three moments, so it takes the last three photos.
+      print: m ? i + 2 : i,
       x: source.x,
       y: source.y,
-      to: { x: Math.max(70, Math.min(L.w - 70, face.x + (i % 2 ? 30 : -30))), y: Math.max(m ? 360 : short ? (L.copyEnd ?? 0) + 160 * printScale : 170, face.y - (m ? 90 : 70) - (i % 3) * 30) },
+      to: { x: Math.max(70, Math.min(L.w - 70, face.x + (i % 2 ? 30 : -30))), y: Math.max(m ? (L.copyEnd ?? 0) + 18 + 146 * printScale : short ? (L.copyEnd ?? 0) + 160 * printScale : 170, face.y - (m ? 90 : 70) - (i % 3) * 30) },
       s: printScale,
       rot: [-8, 6, -4, 9, -6][i],
     });
     at += m ? 0.55 : 0.42;
   });
   // Spread out so no two overlap, keeping each near the moment it caught, and all on screen.
-  if (!m) {
+  {
     const order = [...records].sort((a, b) => a.to.x - b.to.x);
     const gap = (r: FlashRecord) => 220 * r.s * 1.06;
     for (let i = 1; i < order.length; i++) order[i].to.x = Math.max(order[i].to.x, order[i - 1].to.x + (gap(order[i - 1]) + gap(order[i])) / 2);
@@ -563,7 +579,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   }
 
   // ---- S5. Challenges: the row of them lit on the event page, one tapped, one photo taken.
-  const s5 = section('s5', at + 0.8, 's4', BEAT, 1);
+  const s5 = section('s5', at + (m ? 0.45 : 0.6), 's4', BEAT, 1);
   // The fresh camera waits underneath the event page, until the disposable scene needs it.
   tl.set(screen('camera'), { opacity: 1 }, s5.blank);
   tl.set(screen('dare'), { opacity: 1 }, s5.blank);
@@ -637,7 +653,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   });
 
   // ---- S6. Guestbook: one guest, one message, and the only thing moving is her voice.
-  const s6 = section('s6', FIRE + 1.15, 's5');
+  const s6 = section('s6', FIRE + 0.6, 's5');
   phoneOut(s6.at);
   shadeOut(s6.at);
   darePrints.forEach((el) => tl.to(el, { opacity: 0 }, s6.at, LEAVE - 0.05, 'none'));
@@ -667,7 +683,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   hidden(els.thumb1, els.thumb2, els.thumb3, els.vfMono, els.camFade, els.camFlash, els.vf3);
 
   // ---- S7. Disposable: a fresh roll, and the room falls away to leave only the counter, going down to nothing.
-  const s7 = section('s7', SPEAK + 2.5, 's6');
+  const s7 = section('s7', SPEAK + 2.3, 's6');
   phoneOut(s7.at);
   shadeOut(s7.at);
   tl.to(speakerLight, { a: 0 }, s7.at, LEAVE, 'none');
@@ -825,7 +841,7 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
     const startPose = { x: cxS + Math.cos(fromAngle) * R0 * 1.5, y: cyS + Math.sin(fromAngle) * R0 * 1.5 };
     const rot0 = ((i * 47) % 50) - 25;
     const backIndex = i - frontCount;
-    const record = backIndex >= 0 && backIndex < records.length ? records[backIndex] : null;
+    const record = backIndex >= 0 ? (records.find((r) => r.print === backIndex) ?? null) : null;
     const grid = isFront ? cellRect(i) : null;
 
     tl.drive(el, (t): Pose | null => {
@@ -897,12 +913,12 @@ export function buildStory(els: Els, group: (name: string) => HTMLElement[], lay
   }
 
   // The album's the last thing in the story: from here the page just scrolls on to the FAQs.
-  const T = revealAt(REVEALED - 1) + 1.6;
+  const T = revealAt(REVEALED - 1) + 0.6;
 
   const stills = {
     s1: 0,
     s2: CARD + 0.65,
-    s3: seatedAt - 0.2,
+    s3: seatedAt - 0.1,
     s4: s5.at - 0.3,
     s5: FIRE + 0.8,
     s6: SPEAK + 1.8,

@@ -135,7 +135,14 @@ import {
   hasSeenChallengePacksIntro,
   markChallengePacksIntroSeen,
 } from '@/features/celebrations/challenge-packs-intro-modal';
-import { ChallengesEmptyCard } from '@/features/celebrations/challenges-empty-card';
+import {
+  ChallengeAddTile,
+  ChallengeGhostTile,
+  ChallengesEmptyCaption,
+  EMPTY_STRIP_EXAMPLES,
+  useChallengesEmptyDismissed,
+} from '@/features/celebrations/challenges-empty-strip';
+import { CHALLENGE_GRADIENTS } from '@/features/celebrations/challenge-gradients';
 import { useEventCountdown } from '@/features/celebrations/event-countdown';
 import { EventStatStrip } from '@/features/celebrations/event-stat-strip';
 import { useCoverSource, FALLBACK_COVER } from '@/features/celebrations/cover-source';
@@ -241,14 +248,6 @@ const CHIP_STRIP_GAP = 4;
 // 0–100 square. Give their SVG canvas breathing room instead of clipping the
 // interesting part of the silhouette at its boundary.
 const CHALLENGE_BLOB_BLEED = 4;
-const CHALLENGE_GRADIENTS = [
-  ['#1A0A42', '#5A2FC7', '#FF6A55'],
-  ['#082B74', '#2860C8', '#E53C96'],
-  ['#230A4F', '#5A21A8', '#D03B85'],
-  ['#8C184E', '#8C1EC1', '#351674'],
-  ['#0B4D65', '#293F9D', '#7421B8'],
-  ['#C53B5C', '#9621C7', '#F67B3D'],
-] as const;
 // A consistent footprint, with individually shaped Bezier edges that give
 // each tile a subtle, floating blob silhouette.
 const CHALLENGE_BLOB_PATHS = [
@@ -1853,6 +1852,14 @@ export function EventDetailView({
   const [heroMediaTrack, setHeroMediaTrack] = useState<'photo' | 'video'>('photo');
   const heroNavPhotos = heroMediaTrack === 'video' ? heroVideosOnly : heroPhotosOnly;
   const [challenges, setChallenges] = useState<Challenge[]>(() => previewMode?.challenges ?? []);
+  // Switched off, Challenges leave the event page entirely: no tiles for
+  // guests and no suggestions for the host. A locked event still shows the
+  // add tile, since that is how the host finds out they exist.
+  const challengesOn = featureSwitches.challenges || !challengesUnlocked;
+  const visibleChallenges = challengesOn ? challenges : [];
+  /** A host with no challenges yet sees example tiles and an add slot in the strip. */
+  const showChallengesEmpty = isHost && challengesOn && challenges.length === 0;
+  const [challengesEmptyDismissed, dismissChallengesEmpty] = useChallengesEmptyDismissed(celebration.id);
   const [challengePacksIntroVisible, setChallengePacksIntroVisible] = useState(false);
   const [shareVisible, setShareVisible] = useState(false);
   const [saveVisible, setSaveVisible] = useState(false);
@@ -1949,6 +1956,20 @@ export function EventDetailView({
   }, []);
 
   const loadChallengeSubmissions = useCallback(async (challenge: Challenge) => {
+    // The example album's photos are bundled, so there is nothing to sign.
+    if (isSampleCelebrationId(String(celebration.id))) {
+      return SAMPLE_PHOTOS.filter((photo) => photo.challengeId === challenge.id).map((photo) => ({
+        id: photo.id,
+        uri: sampleAssetUri(photo.source),
+        takenBy: photo.displayName,
+        postedAt: sampleCapturedAt(photo),
+        submissionId: photo.id,
+        challengeId: challenge.id,
+        isMine: false,
+        mediaType: 'photo' as const,
+      }));
+    }
+
     if (isBackendConfigured && detail?.challengePhotos) {
       const matching = detail.challengePhotos
         .filter((item) => item.challengeId === challenge.id)
@@ -3497,6 +3518,12 @@ export function EventDetailView({
     setChallengePacksIntroVisible(true);
   }
 
+  /** Every part of the empty challenge strip opens challenges, or the upgrade first. */
+  function openChallengesFromEmpty() {
+    if (challengesUnlocked) void handleAddChallenge();
+    else requestUpgrade('challenges', 'Unlock Challenges', handleAddChallenge);
+  }
+
   async function handleChallengePacksGetStarted() {
     await markChallengePacksIntroSeen();
     void goToChallengePacks();
@@ -4563,7 +4590,7 @@ export function EventDetailView({
               !isHost &&
                 !showGuestbook &&
                 !showSeating &&
-                challenges.length === 0 &&
+                visibleChallenges.length === 0 &&
                 !showRecapBanner &&
                 !guestName &&
                 S.cardStatsAlone,
@@ -4633,15 +4660,7 @@ export function EventDetailView({
             </View>
           )}
 
-          {isHost && challenges.length === 0 && !showGuestbook ? (
-            <View style={S.challengesEmptyBannerWrap}>
-              <ChallengesEmptyCard
-                onPress={handleAddChallenge}
-                hasSiblingChip={false}
-                tileSize={selectorTileSize}
-              />
-            </View>
-          ) : (showGuestbook || showSeating || challenges.length > 0 || (isHost && challenges.length === 0)) ? (
+          {(showGuestbook || showSeating || visibleChallenges.length > 0 || showChallengesEmpty) ? (
             // Wraps the strip rather than its content: `contentContainerStyle`
             // is an ordinary style prop, so an animated value handed to it
             // arrives at the transform unresolved and throws at render.
@@ -4655,10 +4674,7 @@ export function EventDetailView({
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[
-                S.chipsContent,
-                isHost && challenges.length === 0 && { gap: GALLERY_PADDING },
-              ]}
+              contentContainerStyle={S.chipsContent}
               style={S.chipsScroll}
             >
               {showGuestbook && (
@@ -4700,21 +4716,34 @@ export function EventDetailView({
                 </Pressable>
               )}
 
-              {isHost && challenges.length === 0 && (
-                <View style={!challengesUnlocked ? S.chipLocked : undefined}>
-                  <ChallengesEmptyCard
-                    onPress={() => {
-                      if (challengesUnlocked) handleAddChallenge();
-                      else requestUpgrade('challenges', 'Unlock Challenges', handleAddChallenge);
-                    }}
-                    hasSiblingChip={showGuestbook}
-                    tileSize={selectorTileSize}
+              {showChallengesEmpty && (
+                <>
+                  {!challengesEmptyDismissed && EMPTY_STRIP_EXAMPLES.map((emoji, order) => (
+                    <ChallengeGhostTile
+                      key={emoji}
+                      emoji={emoji}
+                      order={order}
+                      size={selectorTileSize}
+                      onPress={openChallengesFromEmpty}
+                      renderTile={(icon) => (
+                        <ChallengeGradientCircle
+                          index={order + 1 + (showSeating ? 1 : 0)}
+                          size={selectorTileSize}
+                        >
+                          {icon}
+                        </ChallengeGradientCircle>
+                      )}
+                    />
+                  ))}
+                  <ChallengeAddTile
+                    size={selectorTileSize}
+                    onPress={openChallengesFromEmpty}
+                    badge={!challengesUnlocked ? <LockedBadge /> : undefined}
                   />
-                  {!challengesUnlocked ? <LockedBadge /> : null}
-                </View>
+                </>
               )}
 
-              {challenges.map((challenge, index) => (
+              {visibleChallenges.map((challenge, index) => (
                   <Pressable
                     key={challenge.id}
                     style={({ pressed }) => [S.chipWrap, { width: selectorTileSize }, pressed && { opacity: 0.75 }]}
@@ -4733,6 +4762,12 @@ export function EventDetailView({
                   </Pressable>
               ))}
             </ScrollView>
+            {showChallengesEmpty && !challengesEmptyDismissed ? (
+              <ChallengesEmptyCaption
+                onPress={openChallengesFromEmpty}
+                onDismiss={dismissChallengesEmpty}
+              />
+            ) : null}
             </Animated.View>
           ) : null}
           </Animated.View>
@@ -6072,11 +6107,6 @@ const S = StyleSheet.create({
     marginTop: spacing.md,
     marginBottom: 13,
     overflow: 'visible',
-  },
-  challengesEmptyBannerWrap: {
-    paddingHorizontal: GALLERY_PADDING,
-    marginTop: 20,
-    paddingBottom: spacing.xs,
   },
   chipsContent: {
     // Centred under the title and stats while they fit. Once they overflow, the
