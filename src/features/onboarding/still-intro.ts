@@ -29,7 +29,7 @@ const SEEN_KEY = '__seen_still_intro';
  * writes it on completion, so the real path stays exercised and flipping this
  * one constant restores the shipping behaviour with nothing else to undo.
  */
-export const REPLAY_INTRO_EVERY_LAUNCH = true;
+export const REPLAY_INTRO_EVERY_LAUNCH = false;
 
 export async function hasSeenStillIntro(): Promise<boolean> {
   if (REPLAY_INTRO_EVERY_LAUNCH) return false;
@@ -69,23 +69,25 @@ export async function clearStillIntroSeen(): Promise<void> {
  */
 
 /**
- * The opening slide, as paragraphs of lines.
+ * The opening slide, as paragraphs of lines, each line in the parts it
+ * arrives in.
  *
  * The nesting is the spacing: lines inside a group sit tight because they are
  * one sentence continuing, and the gap between groups is the pause between
- * thoughts. Each line is revealed on its own, so the grouping is about where
- * the eye rests, not about what arrives when.
+ * thoughts. Most lines arrive whole; the two that turn on a phrase — "And in
+ * that stillness," and "Together," — arrive in two parts, the phrase first and
+ * the rest of the sentence after it, in place on the same line.
  */
-export const SLIDE_ONE_GROUPS: readonly (readonly string[])[] = [
-  ['Some moments make time stand still.', 'And in that stillness, life feels wonderfully full.'],
-  ['Yet every eye sees something different.', 'Together, they make the moment whole.'],
+export const SLIDE_ONE_GROUPS: readonly (readonly (readonly string[])[])[] = [
+  [['Some moments make time stand still.'], ['And in that stillness, ', 'life feels wonderfully full.']],
+  [['Yet every eye sees something different.'], ['Together, ', 'they make the moment whole.']],
 ] as const;
 
-/** Flattened, because the reveals are numbered across the whole slide. */
-export const SLIDE_ONE_LINES = SLIDE_ONE_GROUPS.flat();
+/** Each line whole, for anything that shows the poem a line at a time. */
+export const SLIDE_ONE_LINES = SLIDE_ONE_GROUPS.flat().map((parts) => parts.join(''));
 
 /** The promise, alone on a slide because it is the turn the poem is built on. */
-export const SLIDE_TWO_LINE = 'We hope Still can keep it close to you';
+export const SLIDE_TWO_LINE = 'We hope Stills can keep those moments close to you';
 
 /** The nudge that says the reader can move on rather than wait. */
 export const CONTINUE_HINT = 'Tap to continue';
@@ -161,9 +163,13 @@ export interface Reveal {
  * that they still read as one sentence.
  */
 export const REVEALS: readonly Reveal[] = [
+  // One per part of slide one, in reading order. An opening phrase holds
+  // just long enough to land before the rest of its sentence follows it.
+  { slide: 1, part: 'line', hold: 2000 },
+  { slide: 1, part: 'line', hold: 1100 },
   { slide: 1, part: 'line', hold: 2000 },
   { slide: 1, part: 'line', hold: 2000 },
-  { slide: 1, part: 'line', hold: 2000 },
+  { slide: 1, part: 'line', hold: 1100 },
   { slide: 1, part: 'line', hold: 2000 },
 
   // Alone on its slide, so it holds a beat longer than a line among others.

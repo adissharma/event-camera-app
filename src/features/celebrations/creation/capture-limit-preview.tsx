@@ -106,6 +106,8 @@ export function CaptureLimitPreview({ limit }: CaptureLimitPreviewProps) {
 
   return (
     <Animated.View
+      // Named so the web page can fade the edges with a mask over its own sky.
+      nativeID="capture-preview"
       style={S.frame}
       accessibilityLabel="Guest camera capture-limit preview"
     >
@@ -156,12 +158,14 @@ export function CaptureLimitPreview({ limit }: CaptureLimitPreviewProps) {
       <LinearGradient
         colors={[colours.background, 'rgba(11,11,12,0.72)', 'rgba(11,11,12,0)']}
         locations={[0, 0.36, 1]}
+        nativeID="capture-preview-fade-top"
         style={S.topFade}
         pointerEvents="none"
       />
       <LinearGradient
         colors={['rgba(11,11,12,0)', 'rgba(11,11,12,0.72)', colours.background]}
         locations={[0, 0.64, 1]}
+        nativeID="capture-preview-fade-bottom"
         style={S.bottomFade}
         pointerEvents="none"
       />

@@ -66,6 +66,11 @@ export interface GuestCoverPreviewProps {
   compact?: boolean;
   /** Shows the Preview button. Off for the peeking neighbour cards. */
   editable?: boolean;
+  /**
+   * Leaves the minutes off the time left ("212d 9h" rather than "212d 9h
+   * 27m"), for small side-by-side previews where they are only noise.
+   */
+  hideCountdownMinutes?: boolean;
   isFullScreen?: boolean;
   onPreview?: () => void;
 }
@@ -92,6 +97,7 @@ export function GuestCoverPreview({
   theme,
   compact = false,
   editable = false,
+  hideCountdownMinutes = false,
   isFullScreen = false,
   onPreview,
 }: GuestCoverPreviewProps) {
@@ -102,7 +108,7 @@ export function GuestCoverPreview({
   // (a bucket path) render here at all.
   const coverSource = useCoverSource(draft.coverLocalUri ?? draft.coverStoragePath);
   const title = draft.title.trim() || 'Your event';
-  const countdownLabel = formatRemaining(draft.endsAt);
+  const countdownLabel = formatRemaining(draft.endsAt, hideCountdownMinutes);
   const shotsLeftLabel =
     draft.shotLimitPerGuest === null
       ? '∞'
@@ -249,7 +255,7 @@ function ScaledJoinScreen({ children }: { children: React.ReactNode }) {
   );
 }
 
-function formatRemaining(endsAt: string | null): string {
+function formatRemaining(endsAt: string | null, hideMinutes = false): string {
   if (!endsAt) return '—';
 
   const remaining = new Date(endsAt).getTime() - Date.now();
@@ -260,7 +266,7 @@ function formatRemaining(endsAt: string | null): string {
   const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
   const minutes = totalMinutes % 60;
 
-  if (days > 0) return `${days}d ${hours}h ${minutes}m`;
-  if (hours > 0) return `${hours}h ${minutes}m`;
+  if (days > 0) return hideMinutes ? `${days}d ${hours}h` : `${days}d ${hours}h ${minutes}m`;
+  if (hours > 0) return hideMinutes ? `${hours}h` : `${hours}h ${minutes}m`;
   return `${minutes}m`;
 }

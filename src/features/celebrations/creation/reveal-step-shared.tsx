@@ -1,4 +1,4 @@
-import { Image, Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, View } from 'react-native';
 
 import { DisposablePhoto } from '@/components/media/disposable-photo';
 import { LockIcon } from '@/components/ui/icons';
@@ -10,6 +10,8 @@ import {
   CREATION_GALLERY_PREVIEW_MONO_IMAGES,
 } from '@/features/celebrations/creation/gallery-preview-assets';
 import { LinearGradient } from 'expo-linear-gradient';
+
+import { useStepWidth } from './flow-host';
 
 const PREVIEW_MAX_WIDTH = 340;
 const PREVIEW_GAP = 6;
@@ -32,7 +34,7 @@ const PREVIEW_AUTHORS = ['James', 'Sophia', 'Liam', 'Olivia'] as const;
  * height follows the screen width.
  */
 export function useRevealPreviewHeight(): number {
-  const { width: screenWidth } = useWindowDimensions();
+  const screenWidth = useStepWidth();
   const previewWidth = Math.min(PREVIEW_MAX_WIDTH, screenWidth - layout.gutter * 2);
   const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
   return cellWidth * 1.25 + PREVIEW_GAP + SECOND_ROW_PEEK;
@@ -52,7 +54,7 @@ export function RevealPreview({
    */
   treatment?: SupportedPhotoTreatment;
 }) {
-  const { width: screenWidth } = useWindowDimensions();
+  const screenWidth = useStepWidth();
   const previewWidth = Math.min(PREVIEW_MAX_WIDTH, screenWidth - layout.gutter * 2);
   const cellWidth = (previewWidth - PREVIEW_GAP) / 2;
   const cellHeight = cellWidth * 1.25;
@@ -69,6 +71,9 @@ export function RevealPreview({
   return (
     <View style={styles.previewContainer}>
       <View
+        // Named so the web page, which draws steps over its own sky, can fade
+        // this with a mask instead of the canvas-coloured gradient below.
+        nativeID="reveal-preview"
         style={[
           styles.galleryPreview,
           {
@@ -131,6 +136,7 @@ export function RevealPreview({
           ))}
         </View>
         <LinearGradient
+          nativeID="reveal-preview-fade"
           pointerEvents="none"
           colors={['rgba(11,11,12,0)', colours.background, colours.background]}
           locations={[0, 0.55, 1]}

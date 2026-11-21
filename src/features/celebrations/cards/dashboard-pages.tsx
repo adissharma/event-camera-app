@@ -89,6 +89,7 @@ export function DashboardPages({
   const dragStart = useSharedValue(0);
   const startedOnPrevious = useSharedValue(false);
   const movesPage = useSharedValue(false);
+  const directionDecided = useSharedValue(false);
   const scrollY = useSharedValue(0);
   const bounce = useSharedValue(0);
 
@@ -125,18 +126,28 @@ export function DashboardPages({
         // A sideways swipe belongs to the events on the first page.
         .failOffsetX([-12, 12])
         .simultaneousWithExternalGesture(scroll)
-        .onStart((event) => {
+        .onStart(() => {
           scheduleOnRN(setIsVerticalSwipe, true);
           dragStart.value = offset.value;
           startedOnPrevious.value = offset.value <= -screenHeight / 2;
+          directionDecided.value = false;
+          movesPage.value = false;
+        })
+        .onChange((event) => {
           // Decided once, for the whole swipe. Upwards from the first page, or
           // downwards from the top of the list. Anything else scrolls the list,
           // even if that carries it to its top: only a fresh swipe goes back.
-          movesPage.value = startedOnPrevious.value
-            ? scrollY.value <= 0 && event.translationY > 0
-            : event.translationY < 0;
-        })
-        .onChange((event) => {
+          //
+          // Read on the first movement rather than in `onStart`: Android
+          // reports a translation of 0 at activation (iOS is already past the
+          // activation offset), which would rule every swipe out there.
+          if (!directionDecided.value) {
+            if (event.translationY === 0) return;
+            directionDecided.value = true;
+            movesPage.value = startedOnPrevious.value
+              ? scrollY.value <= 0 && event.translationY > 0
+              : event.translationY < 0;
+          }
           if (!movesPage.value) return;
           offset.value = Math.min(Math.max(dragStart.value + event.translationY, -screenHeight), 0);
         })
@@ -152,6 +163,7 @@ export function DashboardPages({
           scheduleOnRN(setIsVerticalSwipe, false);
         }),
     [
+      directionDecided,
       dragStart,
       movesPage,
       offset,

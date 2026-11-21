@@ -59,7 +59,7 @@ function reducer(state: CreationDraft, action: DraftAction): CreationDraft {
   }
 }
 
-interface DraftContextValue {
+export interface DraftContextValue {
   draft: CreationDraft;
   /** False until any persisted draft has been read from disk. */
   isRestoring: boolean;
@@ -213,6 +213,24 @@ export function CreationDraftProvider({ children }: { children: ReactNode }) {
     [draft, isRestoring, wasRestored, update, reset],
   );
 
+  return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
+}
+
+/**
+ * Hands the step screens a draft kept somewhere else.
+ *
+ * The web form keeps its own, in the browser and not tied to a user, because
+ * its host signs in at the very end (see `features/web-create/use-web-draft`).
+ * Wrapping the steps in this lets it run the app's own step screens, unchanged,
+ * against that draft.
+ */
+export function HostedCreationDraftProvider({
+  value,
+  children,
+}: {
+  value: DraftContextValue;
+  children: ReactNode;
+}) {
   return <DraftContext.Provider value={value}>{children}</DraftContext.Provider>;
 }
 

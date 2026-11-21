@@ -14,6 +14,7 @@ import {
   spacing,
   useMotion,
 } from '@/design';
+import { CREATING_BLOB } from './creating-blob';
 
 /**
  * The creation reveal: a single coordinated sequence that carries the host
@@ -259,7 +260,6 @@ export function useRevealSequence({
   );
 }
 
-const CREATING_BLOB = require('../../../../assets/video/welcome-blob.mov');
 const GRAIN = require('../../../../assets/images/textures/dust-1.png');
 
 /**

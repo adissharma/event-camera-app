@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { LOCALE_CONFIG } from '@/config/app-config';
 import { RECOMMENDED_PLAN_ID, getPaywallPlan } from '@/features/payments/plan-catalogue';
 import {
+  CREATION_STEPS,
   DRAFT_VERSION,
   createEmptyDraft,
   type CreationDraft,
@@ -24,7 +25,11 @@ import {
 const STORAGE_KEY = 'stills:web-create-draft';
 const SAVE_DELAY_MS = 300;
 
-export const WEB_CREATE_STEPS = ['event', 'look', 'guests', 'package', 'review'] as const;
+/**
+ * The app's own steps, in the app's order, then the one the web adds: signing
+ * in and paying, which the app does inside its paywall.
+ */
+export const WEB_CREATE_STEPS = [...CREATION_STEPS, 'review'] as const;
 export type WebCreateStep = (typeof WEB_CREATE_STEPS)[number];
 
 interface Stored {
@@ -44,7 +49,6 @@ function freshDraft(): CreationDraft {
   return {
     ...createEmptyDraft(null, deviceTimezone()),
     themeSlug: 'editorial',
-    shotLimitPerGuest: 16,
     planKey: getPaywallPlan(RECOMMENDED_PLAN_ID)?.catalogueKey ?? null,
   };
 }
@@ -57,14 +61,14 @@ function load(): Stored {
       if (parsed.draft?.version === DRAFT_VERSION && parsed.step) {
         return {
           draft: { ...freshDraft(), ...parsed.draft },
-          step: WEB_CREATE_STEPS.includes(parsed.step) ? parsed.step : 'event',
+          step: WEB_CREATE_STEPS.includes(parsed.step) ? parsed.step : 'name',
         };
       }
     }
   } catch {
     // Unreadable or blocked storage starts a clean form.
   }
-  return { draft: freshDraft(), step: 'event' };
+  return { draft: freshDraft(), step: 'name' };
 }
 
 function save(value: Stored) {
@@ -129,7 +133,7 @@ export function useWebDraft() {
   /** Starts a clean form, for when the saved one has already become an event. */
   const restart = useCallback(() => {
     clearWebDraft();
-    setState({ draft: freshDraft(), step: 'event' });
+    setState({ draft: freshDraft(), step: 'name' });
   }, []);
 
   const flush = useCallback(() => {
@@ -139,7 +143,7 @@ export function useWebDraft() {
   return {
     isReady: state !== null,
     draft: state?.draft ?? null,
-    step: state?.step ?? 'event',
+    step: state?.step ?? 'name',
     update,
     commit,
     goTo,

@@ -14,6 +14,7 @@ import { CREATION_STEPS, type CreationStep } from '../draft/types';
 import { useCreationDraft } from '../draft/store';
 import { validateStep } from '../draft/validation';
 import { buildEditPatch } from './edit-patch';
+import { useCreationFlowHost } from './flow-host';
 import { STEP_INFO } from './step-info';
 import { StepInfoSheet } from './step-info-sheet';
 import { InfoIcon } from '@/components/ui/icons';
@@ -102,6 +103,7 @@ export function CreationStepScreen({
 }: CreationStepScreenProps) {
   const router = useRouter();
   const navigation = useNavigation();
+  const host = useCreationFlowHost();
   const queryClient = useQueryClient();
   const { draft } = useCreationDraft();
   const { width } = useWindowDimensions();
@@ -177,22 +179,47 @@ export function CreationStepScreen({
       } finally {
         setSaving(false);
       }
+    } else if (host) {
+      host.goNext();
     } else {
       if (resolvedNext) router.push(resolvedNext as never);
     }
   };
+
+  // Laid out as a page by the web host on a desktop: the question, the reason
+  // for it, and the control. Progress, Back and Continue belong to the page.
+  if (host?.chrome === 'page') {
+    const line = supporting ?? host.supporting;
+    return (
+      <View style={styles.page}>
+        <View style={styles.pageHeading}>
+          <AppText variant="displayLarge" align="center" accessibilityRole="header" style={styles.pageTitle}>
+            {heading}
+          </AppText>
+          {line ? (
+            <AppText variant="bodyLarge" tone="secondary" align="center">
+              {line}
+            </AppText>
+          ) : null}
+        </View>
+        <View style={styles.pageBody}>{children}</View>
+      </View>
+    );
+  }
 
   return (
     <Screen
       scrollable={scrollable}
       contentStyle={scrollable ? undefined : { flex: 1 }}
       stickyActionSeparator={false}
+      backgroundColor={host?.backgroundColor}
+      stickyActionBackgroundColor={host?.backgroundColor}
       fixedHeader={
         <View style={styles.fixedHeader}>
           <View style={styles.headerRow}>
             <View style={styles.headerSide}>
               <Pressable
-                onPress={() => navigation.goBack()}
+                onPress={() => (host ? host.goBack() : navigation.goBack())}
                 style={styles.backBtn}
                 accessibilityRole="button"
                 accessibilityLabel="Go back"
@@ -290,6 +317,21 @@ export function CreationStepScreen({
 }
 
 const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    gap: spacing.xxl,
+  },
+  pageHeading: {
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  pageTitle: {
+    fontSize: 40,
+    lineHeight: 46,
+  },
+  pageBody: {
+    flex: 1,
+  },
   fixedHeader: {
     gap: spacing.xl,
     paddingBottom: spacing.xl,

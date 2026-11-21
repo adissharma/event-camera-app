@@ -26,6 +26,7 @@ import { PanGestureHandler } from 'react-native-gesture-handler';
 import { DeviceFrame } from '@/components/media/device-frame';
 import { CloseIcon } from '@/components/ui/icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useStepWidth } from './flow-host';
 import { GuestCoverPreview, parseCoverTheme } from './guest-cover-preview';
 import { colours, easing, spacing, useMotion } from '@/design';
 import type { CreationDraft } from '../draft/types';
@@ -53,7 +54,7 @@ export function ThemeCarousel({
   selectedSlug,
   onSelect,
 }: ThemeCarouselProps) {
-  const { width } = useWindowDimensions();
+  const width = useStepWidth();
   const motion = useMotion();
   const selectedIndex = Math.max(
     0,

@@ -10,6 +10,7 @@ import { useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, typ
 import {
   Animated,
   ActivityIndicator,
+  BackHandler,
   Easing,
   FlatList,
   InteractionManager,
@@ -3257,6 +3258,20 @@ export function EventDetailView({
       heroPanX.setValue(0);
     });
   }
+
+  // Android's back gesture closes the photo or video, as swiping it away does.
+  // The viewer is drawn over the gallery rather than being a screen of its own,
+  // so without this, back left the event and landed on the dashboard.
+  const closeHeroViewerRef = useRef(closeHeroViewer);
+  closeHeroViewerRef.current = closeHeroViewer;
+  useEffect(() => {
+    if (!heroVisible) return undefined;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      closeHeroViewerRef.current();
+      return true;
+    });
+    return () => subscription.remove();
+  }, [heroVisible]);
 
   // Keep responder stable via useRef to avoid jank on every swipe, but use
   // separate refs to keep handlers current. A responder built with

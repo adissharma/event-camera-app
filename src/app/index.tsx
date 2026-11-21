@@ -4,12 +4,13 @@ import {
   Easing,
   Pressable,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
   type LayoutChangeEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
+import Svg, { Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -20,9 +21,9 @@ import { useAuth } from '@/features/auth/context';
 import { fetchMyProfile, firstNameFrom, updateDisplayName } from '@/services/profile';
 import { resetToAuthenticatedRoot } from '@/lib/navigation/session-root';
 import {
-  CONTINUE_HINT,
   FINAL_LINE,
   FINAL_STEP,
+  CONTINUE_HINT,
   INTRO_TIMINGS,
   REVEALS,
   SLIDE_ONE_GROUPS,
@@ -37,7 +38,7 @@ import {
 } from '@/features/onboarding/still-intro';
 import { fitDisplayFace, fontFamilies, layout, radii, spacing, useMotion } from '@/design';
 import { copy } from '@/i18n';
-import { FilmIntro } from '@/features/onboarding/film-intro';
+import { STILL_LETTERS_PATH } from '@/components/brand/still-letters-path';
 
 /**
  * Welcome — the first screen on a cold start, and on the very first launch,
@@ -56,10 +57,10 @@ import { FilmIntro } from '@/features/onboarding/film-intro';
 const BLACK = '#000000';
 
 /** The paragraphs. Sized so a whole slide fits without crowding its edges. */
-const PARAGRAPH_SIZE = 26;
-const PARAGRAPH_LEADING = 38;
+const PARAGRAPH_SIZE = 21;
+const PARAGRAPH_LEADING = 30;
 /** Space between paragraphs — the pause between them, made visible. */
-const PARAGRAPH_GAP = 30;
+const PARAGRAPH_GAP = 24;
 
 /**
  * The closing three lines, set a little larger as the poem turns.
@@ -69,8 +70,8 @@ const PARAGRAPH_GAP = 30;
  * tail would meet the edge before it finished fading and would read as
  * cropped rather than as disappearing.
  */
-const CLOSING_SIZE = 30;
-const CLOSING_LEADING = 42;
+const CLOSING_SIZE = 24;
+const CLOSING_LEADING = 34;
 
 /** The wordmark's size once the sentence has resolved into it. */
 const MARK_SIZE = 46;
@@ -115,49 +116,125 @@ function Wordmark({
    */
   onStopWidth?: (width: number) => void;
 }) {
-  const face = fitDisplayFace({
-    fontFamily: fontFamilies.display,
-    color: '#FFFFFF',
-    fontSize: size,
-    lineHeight,
-    letterSpacing: -0.3,
-  });
+  // Points per artwork pixel, so the logo's capitals stand as tall as the
+  // sentence's would at this type size.
+  const pt = (size * LOGO_CAP_PER_EM) / LOGO_ART.capHeight;
+  const markWidth = (LOGO_ART.stillEnd - LOGO_ART.left) * pt;
+  const stopWidth = (LOGO_ART.right - LOGO_ART.stillEnd) * pt;
+  // The text baseline within a line box of this height, so the artwork sits
+  // on the same line as the comma and the words after it.
+  const baselineY = lineHeight / 2 + size * LOGO_BASELINE_FROM_CENTRE;
 
-  /**
-   * The mark's own width, so the stop can be placed at a pixel offset.
-   *
-   * `left: '100%'` reads better but does not survive every parent: under a
-   * centring container the percentage resolved against nothing and the stop
-   * was not painted at all — silently, and only on the cold-open screen,
-   * because that is the one path whose parent centres. A measured number
-   * resolves the same way wherever this is mounted.
-   */
-  const [markWidth, setMarkWidth] = useState(0);
+  useEffect(() => {
+    onStopWidth?.(stopWidth);
+  }, [onStopWidth, stopWidth]);
 
   return (
-    <View onLayout={onLayout} collapsable={false}>
-      <Text
-        style={face}
-        numberOfLines={1}
-        allowFontScaling={false}
-        onLayout={(event) => {
-          const { width } = event.nativeEvent.layout;
-          setMarkWidth((current) => (Math.abs(current - width) < 0.5 ? current : width));
+    <View
+      onLayout={onLayout}
+      collapsable={false}
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={FINAL_LINE.mark}
+    >
+      <StillLetters pt={pt} height={lineHeight} baselineY={baselineY} />
+      <Animated.View
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: markWidth,
+          opacity: stopOpacity,
         }}
       >
-        {FINAL_LINE.mark}
-      </Text>
-      <Animated.Text
-        style={[
-          face,
-          { position: 'absolute', top: 0, left: markWidth },
-          { opacity: stopOpacity },
-        ]}
-        allowFontScaling={false}
-        onLayout={(event) => onStopWidth?.(event.nativeEvent.layout.width)}
-      >
-        {FINAL_LINE.stop}
-      </Animated.Text>
+        <LogoCrop
+          pt={pt}
+          from={LOGO_ART.stillEnd}
+          to={LOGO_ART.right}
+          height={lineHeight}
+          baselineY={baselineY}
+        />
+      </Animated.View>
+    </View>
+  );
+}
+
+/**
+ * The supplied logo artwork and where its parts fall, in its own pixels.
+ * "Still" runs to `stillEnd`; the "s" and the gradient dot are the rest.
+ */
+const LOGO_IMAGE = require('../../assets/brand/logo-lockup.png');
+const LOGO_ART = {
+  width: 1974,
+  height: 797,
+  left: 99,
+  stillEnd: 1426,
+  right: 1900,
+  baseline: 748,
+  capHeight: 655,
+} as const;
+/** Cap height of the display face, as a fraction of its size. */
+const LOGO_CAP_PER_EM = 0.68;
+/** How far below a line box's middle the display face's baseline falls, per em. */
+const LOGO_BASELINE_FROM_CENTRE = 0.3;
+/**
+ * "Still", as a vector traced from the logo.
+ *
+ * The word grows from sentence size into the logo, and a bitmap grown on
+ * screen goes soft. An outline is redrawn sharp at every size.
+ */
+function StillLetters({
+  pt,
+  height,
+  baselineY,
+}: {
+  pt: number;
+  height: number;
+  baselineY: number;
+}) {
+  return (
+    <Svg width={(LOGO_ART.stillEnd - LOGO_ART.left) * pt} height={height}>
+      <Path
+        d={STILL_LETTERS_PATH}
+        fill={LOGO_LETTER_COLOUR}
+        transform={`translate(${-LOGO_ART.left * pt} ${baselineY - LOGO_ART.baseline * pt}) scale(${pt})`}
+      />
+    </Svg>
+  );
+}
+
+/** The letters' colour in the artwork, so the traced word and the bitmap "s." match. */
+const LOGO_LETTER_COLOUR = '#FDFDFD';
+
+/**
+ * One horizontal slice of the logo artwork, sitting on a text baseline. Used
+ * for the "s." and the gradient dot, which only ever appear at rest.
+ */
+function LogoCrop({
+  pt,
+  from,
+  to,
+  height,
+  baselineY,
+}: {
+  pt: number;
+  from: number;
+  to: number;
+  height: number;
+  baselineY: number;
+}) {
+  return (
+    <View style={{ width: (to - from) * pt, height, overflow: 'hidden' }}>
+      <Image
+        source={LOGO_IMAGE}
+        contentFit="fill"
+        style={{
+          position: 'absolute',
+          left: -from * pt,
+          top: baselineY - LOGO_ART.baseline * pt,
+          width: LOGO_ART.width * pt,
+          height: LOGO_ART.height * pt,
+        }}
+      />
     </View>
   );
 }
@@ -168,12 +245,15 @@ function LegacyWelcomeScreen({
   showAuthControls = true,
   transparent = false,
   onControlsTopLayout,
+  onIntroComplete,
 }: {
   disableIntro?: boolean;
   hideWordmark?: boolean;
   showAuthControls?: boolean;
   transparent?: boolean;
   onControlsTopLayout?: (top: number) => void;
+  /** Once the poem has resolved into the wordmark, or straight away when it does not play. */
+  onIntroComplete?: () => void;
 }) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -209,6 +289,13 @@ function LegacyWelcomeScreen({
   /** Which reveal we are on, across both slides. `Infinity` once the intro is over. */
   const [step, setStep] = useState(0);
   const [morphing, setMorphing] = useState(false);
+  /**
+   * "Tap to continue", shown once the first slide has finished filling. The
+   * first slide waits for a tap; the rest of the poem plays through.
+   */
+  const hintIn = useRef(new Animated.Value(0)).current;
+  /** The first slide is full and waiting; the only time a tap does anything. */
+  const [awaitingTap, setAwaitingTap] = useState(false);
 
   /**
    * One opacity per revealed unit, created once.
@@ -229,16 +316,6 @@ function LegacyWelcomeScreen({
    * lifting the last statement out while the two above it clear.
    */
   const slideOut = useRef([new Animated.Value(1), new Animated.Value(1)]).current;
-  /**
-   * One filling line per slide, so the poem declares its own length.
-   *
-   * The original brief ruled out progress indicators; this is the exception it
-   * asked for afterwards, and it earns its place by answering a real question
-   * — "how much more of this is there?" — that eight silent reveals otherwise
-   * leave open. Two hairlines rather than dots or a percentage: it says *two
-   * slides* at a glance and nothing else.
-   */
-  const slideProgress = useRef(SLIDE_RANGES.map(() => new Animated.Value(0))).current;
   /** 0 = the sentence in place. 1 = the wordmark, centred. */
   const morph = useRef(new Animated.Value(0)).current;
   const controlsIn = useRef(new Animated.Value(0)).current;
@@ -394,65 +471,77 @@ function LegacyWelcomeScreen({
 
   const measured = rowBox !== null && markBox !== null;
 
+  /**
+   * Where the word sits in the sentence, as an offset from where the logo
+   * comes to rest — the starting point for the full-size logo that stands in
+   * for it.
+   */
+  const markStart = useMemo(() => {
+    if (!rowBox || !markBox) return { x: 0, y: 0 };
+    return {
+      x: rowBox.x + markBox.x + markBox.width / 2 - (screenWidth / 2 - settledStopWidth / 2),
+      y: rowBox.y + rowBox.height / 2 - markCentreY,
+    };
+  }, [rowBox, markBox, screenWidth, settledStopWidth, markCentreY]);
+
   // ── The sequence ──────────────────────────────────────────────────────────
 
   const runMorph = useCallback(() => {
     if (morphStarted.current) return;
     morphStarted.current = true;
     setMorphing(true);
-    Animated.sequence([
-      Animated.timing(morph, {
-        toValue: 1,
-        duration: ms(INTRO_TIMINGS.MORPH_DURATION),
-        easing: EASE,
-        useNativeDriver: true,
-      }),
-      // The full stop arrives with the wordmark at rest, inside the pause
-      // rather than after it — so the silence before the login controls is
-      // the length it was, and the punctuation happens during it.
-      Animated.parallel([
-        Animated.timing(stopIn, {
+    Animated.timing(morph, {
+      toValue: 1,
+      duration: ms(INTRO_TIMINGS.MORPH_DURATION),
+      easing: EASE,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (!finished) return;
+      Animated.sequence([
+        // The full stop arrives with the wordmark at rest, inside the pause
+        // rather than after it — so the silence before the login controls is
+        // the length it was, and the punctuation happens during it.
+        Animated.parallel([
+          Animated.timing(stopIn, {
+            toValue: 1,
+            duration: ms(INTRO_TIMINGS.STOP_FADE_IN),
+            easing: EASE,
+            useNativeDriver: true,
+          }),
+          Animated.delay(ms(INTRO_TIMINGS.SETTLE_PAUSE)),
+        ]),
+        Animated.timing(controlsIn, {
           toValue: 1,
-          duration: ms(INTRO_TIMINGS.STOP_FADE_IN),
+          duration: ms(INTRO_TIMINGS.CONTROLS_FADE_IN),
           easing: EASE,
           useNativeDriver: true,
         }),
-        Animated.delay(ms(INTRO_TIMINGS.SETTLE_PAUSE)),
-      ]),
-      Animated.timing(controlsIn, {
-        toValue: 1,
-        duration: ms(INTRO_TIMINGS.CONTROLS_FADE_IN),
-        easing: EASE,
-        useNativeDriver: true,
-      }),
-    ]).start(({ finished }) => {
-      if (!finished) return;
-      setStep(Infinity);
-      setMorphing(false);
-      void markStillIntroSeen();
+      ]).start(({ finished: settled }) => {
+        if (!settled) return;
+        setStep(Infinity);
+        setMorphing(false);
+        void markStillIntroSeen();
+      });
     });
   }, [morph, controlsIn, stopIn, ms]);
 
   /**
-   * One reveal forward, whether the timer asked or a thumb did.
+   * The tap that moves on from the first slide once it is full.
    *
-   * Unlike a crossfade sequence there is nothing to fade out first — the next
-   * paragraph simply arrives beneath the last — so a tap takes effect on the
-   * frame it lands. The debounce is therefore the only thing standing between
-   * a resting thumb and a skipped paragraph.
+   * Taps at any other moment do nothing, so the poem always plays at its own
+   * pace. The debounce keeps a resting thumb from counting twice.
    */
   const advance = useCallback(() => {
-    if (introEnabled !== true || morphing) return;
+    // Only the pause at the end of the first slide answers a tap; the poem
+    // keeps its own pace everywhere else.
+    if (introEnabled !== true || morphing || !awaitingTap) return;
     const now = Date.now();
     if (now - lastAdvanceAt.current < INTRO_TIMINGS.TAP_DEBOUNCE) return;
     lastAdvanceAt.current = now;
 
-    if (step >= FINAL_STEP) {
-      if (measured) runMorph();
-      return;
-    }
+    setAwaitingTap(false);
     setStep((index) => index + 1);
-  }, [introEnabled, morphing, step, measured, runMorph]);
+  }, [introEnabled, morphing, awaitingTap]);
 
   /**
    * Reveal the current unit and start its clock.
@@ -523,47 +612,53 @@ function LegacyWelcomeScreen({
         : entrance,
     );
 
-    /*
-     * Each line creeps across its screen, one reveal's worth at a time, taking
-     * exactly as long as that reveal does.
-     *
-     * Linear, and stretched over the whole hold rather than over a short fade:
-     * a segment finishes precisely as the next begins, so consecutive segments
-     * read as one unbroken travel at a constant speed. Filling quickly and
-     * then waiting — which is what a short eased timing does — is what made it
-     * lurch.
-     *
-     * A tap simply re-targets mid-segment. The bar keeps moving; it just
-     * covers the remaining distance at a different rate.
-     */
-    animations.push(
-      ...SLIDE_RANGES.map(({ first, count }, index) =>
-        Animated.timing(slideProgress[index]!, {
-          toValue: Math.max(0, Math.min(1, (step - first + 1) / count)),
-          duration: holdMs,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }),
-      ),
-    );
-
     const running = Animated.parallel(animations);
     running.start();
 
-    const timer = setTimeout(() => {
-      if (step >= FINAL_STEP) runMorph();
-      else setStep((index) => index + 1);
-    }, holdMs);
+    // The hint belongs to the finished first slide; a new reveal takes it away.
+    Animated.timing(hintIn, {
+      toValue: 0,
+      duration: ms(200),
+      easing: EASE,
+      useNativeDriver: true,
+    }).start();
+
+    // The first slide waits for a tap once it is full, and says so. After
+    // that the poem plays through on its own, and the closing line runs
+    // straight on into the wordmark.
+    const waitsForTap = entering.slide === 1 && REVEALS[step + 1]?.slide !== 1;
+    let hint: Animated.CompositeAnimation | null = null;
+    const timer = setTimeout(
+      () => {
+        if (waitsForTap) {
+          setAwaitingTap(true);
+          hint = Animated.timing(hintIn, {
+            toValue: 1,
+            duration: ms(500),
+            easing: EASE,
+            useNativeDriver: true,
+          });
+          hint.start();
+        } else if (step >= FINAL_STEP) runMorph();
+        else setStep((index) => index + 1);
+      },
+      waitsForTap ? Math.min(holdMs, ms(1200)) : holdMs,
+    );
 
     return () => {
       clearTimeout(timer);
       running.stop();
+      hint?.stop();
     };
-  }, [step, introEnabled, morphing, reveals, slideOut, slideProgress, ms, runMorph]);
+  }, [step, introEnabled, morphing, reveals, slideOut, hintIn, ms, runMorph]);
 
   // ── Auth ──────────────────────────────────────────────────────────────────
 
   const introComplete = introEnabled === false || step === Infinity;
+
+  useEffect(() => {
+    if (introComplete) onIntroComplete?.();
+  }, [introComplete, onIntroComplete]);
 
   const handlePostSignIn = useCallback(async () => {
     try {
@@ -661,6 +756,7 @@ function LegacyWelcomeScreen({
   // ── Render ────────────────────────────────────────────────────────────────
 
   const introRunning = introEnabled === true && step !== Infinity;
+  const currentSlide = REVEALS[Math.min(step, FINAL_STEP)]?.slide ?? 1;
   const showIntro = introEnabled !== null;
   /**
    * Each screen outlives the step that ends it.
@@ -714,17 +810,31 @@ function LegacyWelcomeScreen({
 
   return (
     <View style={[S.screen, transparent && { backgroundColor: 'transparent' }]}>
+      {/* "Tap to continue", under the first slide once it is full. */}
+      {slideOneMounted ? (
+        <Animated.View
+          style={[
+            S.hint,
+            { bottom: insets.bottom + spacing.lg + 22, opacity: hintIn },
+          ]}
+          pointerEvents="none"
+        >
+          <AppText variant="caption" align="center" style={S.hintText}>
+            {CONTINUE_HINT}
+          </AppText>
+        </Animated.View>
+      ) : null}
+
+      {/* Carousel dots: which of the three slides this is. */}
       {introRunning ? (
         <Animated.View
-          style={[S.progress, { top: insets.top + spacing.md, opacity: chromeOut }]}
+          style={[S.dots, { bottom: insets.bottom + spacing.lg, opacity: chromeOut }]}
           pointerEvents="none"
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         >
-          {slideProgress.map((fill, index) => (
-            <View key={index} style={S.progressTrack}>
-              <Animated.View style={[S.progressFill, { transform: [{ scaleX: fill }] }]} />
-            </View>
+          {SLIDE_RANGES.map(({ slide }) => (
+            <View key={slide} style={[S.dot, slide === currentSlide && S.dotActive]} />
           ))}
         </Animated.View>
       ) : null}
@@ -738,21 +848,51 @@ function LegacyWelcomeScreen({
       {slideOneMounted ? (
         <Animated.View style={[S.slide, { opacity: slideOut[0] }]} pointerEvents="none">
           {SLIDE_ONE_GROUPS.map((group, groupIndex) => {
-            // Lines are numbered across the whole slide, not within a group —
+            // Parts are numbered across the whole slide, not within a group —
             // the reveals are one sequence and the grouping is only layout.
-            const offset = SLIDE_ONE_GROUPS.slice(0, groupIndex).reduce(
-              (total, previous) => total + previous.length,
-              0,
-            );
+            let reveal = SLIDE_ONE_GROUPS.slice(0, groupIndex)
+              .flat()
+              .reduce((total, parts) => total + parts.length, 0);
             return (
               <View key={groupIndex} style={S.lineGroup}>
-                {group.map((line, lineIndex) => (
-                  <Animated.View key={lineIndex} style={{ opacity: reveals[offset + lineIndex] }}>
-                    <AppText align="left" style={S.paragraph} accessibilityLiveRegion="polite">
-                      {line}
-                    </AppText>
-                  </Animated.View>
-                ))}
+                {group.map((parts, lineIndex) => {
+                  const first = reveal;
+                  reveal += parts.length;
+                  // A line in parts is drawn once per part, stacked, each
+                  // copy showing only its own part. Every copy holds the whole
+                  // sentence, so all of them wrap identically and the second
+                  // part lands exactly where it belongs after the first.
+                  return (
+                    <View key={lineIndex}>
+                      {parts.map((_, partIndex) => (
+                        <Animated.View
+                          key={partIndex}
+                          style={[
+                            partIndex > 0 && StyleSheet.absoluteFill,
+                            { opacity: reveals[first + partIndex] },
+                          ]}
+                          accessibilityElementsHidden={partIndex > 0}
+                          importantForAccessibility={partIndex > 0 ? 'no-hide-descendants' : 'auto'}
+                        >
+                          <AppText
+                            align="left"
+                            style={S.paragraph}
+                            accessibilityLabel={parts.join('')}
+                          >
+                            {parts.map((text, index) => (
+                              <AppText
+                                key={index}
+                                style={[S.paragraph, index !== partIndex && S.hiddenPart]}
+                              >
+                                {text}
+                              </AppText>
+                            ))}
+                          </AppText>
+                        </Animated.View>
+                      ))}
+                    </View>
+                  );
+                })}
               </View>
             );
           })}
@@ -767,25 +907,6 @@ function LegacyWelcomeScreen({
               {SLIDE_TWO_LINE}
             </AppText>
           </Animated.View>
-        </Animated.View>
-      ) : null}
-
-      {/*
-        The hint, across the two reading slides. Quieter than the poem: it is
-        an affordance, not a line of it, and it goes once the statements start
-        — by then the sequence is finishing itself.
-      */}
-      {slideOneMounted || slideTwoMounted ? (
-        <Animated.View
-          style={[
-            S.hint,
-            { bottom: insets.bottom + spacing.xl, opacity: reveals[0] },
-          ]}
-          pointerEvents="none"
-        >
-          <AppText variant="caption" align="center" style={S.hintText}>
-            {CONTINUE_HINT}
-          </AppText>
         </Animated.View>
       ) : null}
 
@@ -813,30 +934,53 @@ function LegacyWelcomeScreen({
               S.finalRow,
               {
                 transform: [
-                  { translateX: morph.interpolate({ inputRange: [0, 1], outputRange: [0, travel.x] }) },
-                  { translateY: morph.interpolate({ inputRange: [0, 1], outputRange: [0, travel.y] }) },
-                  { scale: morph.interpolate({ inputRange: [0, 1], outputRange: [1, MARK_SCALE] }) },
+                  {
+                    translateX: morph.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, travel.x],
+                    }),
+                  },
+                  {
+                    translateY: morph.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0, travel.y],
+                    }),
+                  },
+                  {
+                    scale: morph.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, MARK_SCALE],
+                    }),
+                  },
                 ],
               },
             ]}
           >
             {/* Measured here rather than inside `Wordmark`, so the rect is
                 relative to the row the travel is computed against. */}
-            <Animated.View onLayout={measureRow} style={{ opacity: reveals[SLIDE_THREE_START] }}>
-              <Wordmark
-                size={CLOSING_SIZE}
-                lineHeight={CLOSING_LEADING}
-                stopOpacity={stopIn}
-                onStopWidth={setStopWidth}
-                onLayout={(event) => {
-                  const { x, width } = event.nativeEvent.layout;
-                  setMarkBox((box) =>
-                    box && Math.abs(box.x - x) < 0.5 && Math.abs(box.width - width) < 0.5
-                      ? box
-                      : { x, width },
-                  );
-                }}
-              />
+            <Animated.View
+              onLayout={measureRow}
+              style={{ opacity: reveals[SLIDE_THREE_START] }}
+            >
+              {/* Laid out for its measurements but never seen: the word on
+                  screen is the full-size logo below, shrunk to sit here. A
+                  bitmap scaled up blurs; one scaled down stays sharp. */}
+              <View style={{ opacity: 0 }}>
+                <Wordmark
+                  size={CLOSING_SIZE}
+                  lineHeight={CLOSING_LEADING}
+                  stopOpacity={0}
+                  onStopWidth={setStopWidth}
+                  onLayout={(event) => {
+                    const { x, width } = event.nativeEvent.layout;
+                    setMarkBox((box) =>
+                      box && Math.abs(box.x - x) < 0.5 && Math.abs(box.width - width) < 0.5
+                        ? box
+                        : { x, width },
+                    );
+                  }}
+                />
+              </View>
             </Animated.View>
 
             {/*
@@ -899,7 +1043,7 @@ function LegacyWelcomeScreen({
         transform during the intro; on a cold open it buys a visible jump and
         nothing else.
       */}
-      {showIntro && !introEnabled && controlsTop !== null && !hideWordmark ? (
+      {showIntro && (!introEnabled || slideThreeMounted) && controlsTop !== null && !hideWordmark ? (
         <View
           style={[S.settledMark, { top: insets.top, height: controlsTop - insets.top }]}
           pointerEvents="none"
@@ -911,12 +1055,50 @@ function LegacyWelcomeScreen({
             sitting right of the middle. Both paths land in the same place.
           */}
           <View style={{ transform: [{ translateX: -settledStopWidth / 2 }] }}>
-            <Wordmark
-              size={MARK_SIZE}
-              lineHeight={Math.round(CLOSING_LEADING * MARK_SCALE)}
-              stopOpacity={1}
-              onStopWidth={setSettledStopWidth}
-            />
+            {/*
+              During the intro this is also the word in the sentence: drawn at
+              logo size, shrunk and moved onto the hidden word's spot, then
+              brought back to rest as the sentence grows. Its path matches the
+              row's exactly — both move linearly with \`morph\`.
+            */}
+            <View style={{ opacity: !introEnabled || measured ? 1 : 0 }}>
+              <Animated.View
+                style={
+                  introEnabled
+                    ? {
+                        opacity: reveals[SLIDE_THREE_START],
+                        transform: [
+                          {
+                            translateX: morph.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [markStart.x, 0],
+                            }),
+                          },
+                          {
+                            translateY: morph.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [markStart.y, 0],
+                            }),
+                          },
+                          {
+                            scale: morph.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [1 / MARK_SCALE, 1],
+                            }),
+                          },
+                        ],
+                      }
+                    : undefined
+                }
+              >
+                <Wordmark
+                  size={MARK_SIZE}
+                  lineHeight={CLOSING_LEADING * MARK_SCALE}
+                  stopOpacity={introEnabled ? stopIn : 1}
+                  onStopWidth={setSettledStopWidth}
+                />
+              </Animated.View>
+            </View>
           </View>
         </View>
       ) : null}
@@ -948,7 +1130,13 @@ function LegacyWelcomeScreen({
       ) : null}
 
       <Animated.View
-        style={[S.controls, { paddingBottom: insets.bottom + spacing.base, opacity: controlsIn }]}
+        style={[
+          S.controls,
+          {
+            paddingBottom: insets.bottom + spacing.base,
+            opacity: showAuthControls ? controlsIn : 0,
+          },
+        ]}
         pointerEvents={introRunning || !showAuthControls ? 'none' : 'box-none'}
         // Fires whether or not the block is visible, so the wordmark knows
         // where to sit long before the controls fade in.
@@ -996,13 +1184,13 @@ function LegacyWelcomeScreen({
         The whole screen is the control. No button, no progress dots — the
         sequence should read as titles, and titles do not ask to be operated.
       */}
-      {introRunning ? (
+      {introRunning && awaitingTap ? (
         <Pressable
           style={StyleSheet.absoluteFill}
           onPress={advance}
           accessibilityRole="button"
           accessibilityLabel="Continue"
-          accessibilityHint="Reveals the next line"
+          accessibilityHint="Continues the introduction"
         />
       ) : null}
     </View>
@@ -1059,6 +1247,8 @@ const S = StyleSheet.create({
    * separate statements that happen to be near each other.
    */
   lineGroup: { alignSelf: 'stretch', alignItems: 'flex-start' },
+  /** The parts of a line that another stacked copy is showing. */
+  hiddenPart: { color: 'transparent' },
 
   /** The tap affordance: at the foot of the screen, and quieter than the poem. */
   hint: { position: 'absolute', left: layout.gutter, right: layout.gutter },
@@ -1079,28 +1269,21 @@ const S = StyleSheet.create({
    */
   finalRow: { flexDirection: 'row', alignSelf: 'flex-start' },
 
-  progress: {
+  dots: {
     position: 'absolute',
-    left: layout.gutter,
-    right: layout.gutter,
+    left: 0,
+    right: 0,
     flexDirection: 'row',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 8,
   },
-
-  progressTrack: {
-    flex: 1,
-    height: 1.5,
+  dot: {
+    width: 6,
+    height: 6,
     borderRadius: radii.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.14)',
-    overflow: 'hidden',
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
   },
-  progressFill: {
-    width: '100%',
-    height: '100%',
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
-    transformOrigin: 'left center',
-  },
+  dotActive: { backgroundColor: 'rgba(255, 255, 255, 0.9)' },
 
   controls: {
     position: 'absolute',
@@ -1151,25 +1334,17 @@ export default function WelcomeScreen() {
     };
   }, []);
 
-  const handleVideoSettled = useCallback((played: boolean) => {
-    setAuthVisible(true);
-    if (played) void markStillIntroSeen();
-  }, []);
+  // The poem marks itself seen when it finishes.
+  const handleIntroComplete = useCallback(() => setAuthVisible(true), []);
 
+  // First launch: the poem on plain black, a line at a time, resolving into
+  // the wordmark. (The film intro is parked in features/onboarding/film-intro.)
   if (showVideoSplash === true) {
     return (
-      <View style={{ flex: 1, backgroundColor: BLACK }}>
-        <FilmIntro onSettled={handleVideoSettled} />
-        {/* Lets taps through to the intro, which a tap skips, until it is over. */}
-        <View style={StyleSheet.absoluteFill} pointerEvents={authVisible ? 'auto' : 'none'}>
-          <LegacyWelcomeScreen
-            disableIntro
-            transparent
-            hideWordmark
-            showAuthControls={authVisible && isSignedIn}
-          />
-        </View>
-      </View>
+      <LegacyWelcomeScreen
+        showAuthControls={authVisible && isSignedIn}
+        onIntroComplete={handleIntroComplete}
+      />
     );
   }
 

@@ -93,12 +93,7 @@ export function AccountPanel({ onBeforeRedirect }: { onBeforeRedirect: () => voi
 
   return (
     <div className="wc-account">
-      <div>
-        <div className="wc-label">Your account</div>
-        <p className="wc-help">
-          Your event is saved to this account. Use the same sign-in in the Stills. app to manage it.
-        </p>
-      </div>
+      <p className="wc-help">Use the same sign-in in the Stills. app to manage your event.</p>
 
       {error ? (
         <div className="wc-notice wc-notice-error" role="alert">

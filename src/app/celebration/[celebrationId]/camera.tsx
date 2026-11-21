@@ -833,13 +833,17 @@ export default function CameraScreen() {
    */
   const previewViewportOffset = useVisualViewportOffset();
 
-  // Listen for keyboard show/hide to adjust spacing on iOS.
+  // Lifts the caption and Post above the keyboard. Android sends only the `Did`
+  // events, so listening for `Will` alone left the caption under the keyboard
+  // there; and being edge-to-edge, Android no longer shrinks the window for it.
   useEffect(() => {
     if (isWeb) return undefined;
-    const showListener = Keyboard.addListener('keyboardWillShow', (e) => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showListener = Keyboard.addListener(showEvent, (e) => {
       setKeyboardHeight(e.endCoordinates.height);
     });
-    const hideListener = Keyboard.addListener('keyboardWillHide', () => {
+    const hideListener = Keyboard.addListener(hideEvent, () => {
       setKeyboardHeight(0);
     });
     return () => {

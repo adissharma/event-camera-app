@@ -17,6 +17,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Dimensions,
   Easing,
   Image,
@@ -525,6 +526,19 @@ export function StoryViewer({
   // cross the bridge — the swipe stays smooth while a video decodes.
   const dragY = useSharedValue(0);
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Android's back gesture closes the story, as the close button does. The story
+  // is drawn over the screen that opened it rather than being a screen itself, so
+  // without this, back skipped past it and left the event altogether.
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      onDismissRef.current();
+      return true;
+    });
+    return () => subscription.remove();
+  }, []);
   useEffect(
     () => () => {
       if (dismissTimerRef.current !== null) clearTimeout(dismissTimerRef.current);

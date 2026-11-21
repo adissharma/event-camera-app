@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { ImageIcon, PlusIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { ThemeCarousel } from '@/features/celebrations/creation/theme-carousel';
+import { useCreationFlowHost } from '@/features/celebrations/creation/flow-host';
 import { CreationStepScreen } from '@/features/celebrations/creation/step-screen';
 import { useCreationDraft } from '@/features/celebrations/draft/store';
 import { listCoverTemplateThemes, themeKeys } from '@/services/themes';
@@ -30,6 +31,7 @@ import { isBackendConfigured } from '@/lib/supabase/client';
 export default function CoverStep() {
   const { draft, update } = useCreationDraft();
   const router = useRouter();
+  const host = useCreationFlowHost();
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
   async function handleSave() {
@@ -65,6 +67,11 @@ export default function CoverStep() {
 
   async function pickImage() {
     setPermissionError(null);
+
+    if (host?.pickCover) {
+      host.pickCover();
+      return;
+    }
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -134,7 +141,7 @@ export default function CoverStep() {
               <View style={{ flex: 1 }}>
                 <Button
                   label={copy.common.next}
-                  onPress={() => router.push('/create/photo-limit')}
+                  onPress={() => (host ? host.goNext() : router.push('/create/photo-limit'))}
                   haptic
                 />
               </View>

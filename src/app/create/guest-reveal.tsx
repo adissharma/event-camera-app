@@ -5,7 +5,9 @@ import { RevealTimingToggle } from '@/components/forms/reveal-timing-toggle';
 import { PencilIcon } from '@/components/ui/icons';
 import { AppText } from '@/components/ui/text';
 import { colours, fontFamilies, layout, spacing } from '@/design';
+import { useCreationFlowHost } from '@/features/celebrations/creation/flow-host';
 import { GuestRevealDelaySheet } from '@/features/celebrations/creation/guest-reveal-delay-sheet';
+import { RevealTimeline } from '@/features/celebrations/creation/reveal-timeline';
 import {
   RevealPreview,
   useRevealPreviewHeight,
@@ -24,6 +26,8 @@ export default function GuestRevealStep() {
   const { draft, update } = useCreationDraft();
   const [sheetOpen, setSheetOpen] = useState(false);
   const previewHeight = useRevealPreviewHeight();
+  // Laid out as a web page on a desktop, the reveal is drawn as a timeline.
+  const asTimeline = useCreationFlowHost()?.chrome === 'page';
   const isAfterMe = draft.guestRevealChoice !== 'never';
 
   /**
@@ -145,7 +149,9 @@ export default function GuestRevealStep() {
             What guests will be told stands in its place, so the host can see
             how their choice lands.
           */}
-          {isAfterMe ? (
+          {isAfterMe && asTimeline ? (
+            <RevealTimeline draft={draft} onEditGuests={() => setSheetOpen(true)} />
+          ) : isAfterMe ? (
             <RevealPreview locked={isLocked} />
           ) : (
             <View style={[S.neverState, { height: previewHeight }]}>
@@ -159,7 +165,8 @@ export default function GuestRevealStep() {
           )}
 
           <View style={S.summarySlot}>
-            {summaryText() ? (
+            {/* The timeline carries the same link in its own words. */}
+            {summaryText() && !asTimeline ? (
               <View style={S.summaryRow}>
                 <AppText variant="bodySmall">Guests see photos </AppText>
                 <Pressable
