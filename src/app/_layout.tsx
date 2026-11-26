@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { CormorantGaramond_500Medium_Italic } from '@expo-google-fonts/cormorant-garamond/500Medium_Italic';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -14,6 +15,7 @@ import {
   InstrumentSans_700Bold,
   useFonts,
 } from '@expo-google-fonts/instrument-sans';
+import { Analytics } from '@vercel/analytics/react';
 
 import { colours } from '@/design';
 import { queryClient } from '@/lib/query-client';
@@ -134,6 +136,7 @@ export default function RootLayout() {
           </AuthContextProvider>
         </QueryClientProvider>
       </SafeAreaProvider>
+      {Platform.OS === 'web' && <Analytics />}
     </GestureHandlerRootView>
   );
 }
